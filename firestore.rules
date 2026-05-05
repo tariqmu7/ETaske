@@ -1,0 +1,78 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} { allow read, write: if false; }
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() &&
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin') ||
+         (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true));
+    }
+
+    function isApproved() {
+      return isAuthenticated() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.status == 'Approved';
+    }
+
+    function getUserTeamId() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('teamId', 'NONE');
+    }
+
+    function isValidUrl(url) {
+      return url is string && (url.matches("^https://.*") || url.matches("^http://.*"));
+    }
+
+    function isValidTask(data) {
+      return data.keys().hasAll(['taskName', 'status', 'userId', 'teamId', 'createdAt', 'updatedAt']) &&
+             data.taskName is string && data.taskName.size() >= 1 && data.taskName.size() <= 200 &&
+             data.status in ['In Progress', 'Done', 'Pending'] &&
+             data.userId is string &&
+             data.teamId is string &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             (!('statusUpdate' in data) || (data.statusUpdate is string && data.statusUpdate.size() <= 1000)) &&
+             (!('notes' in data) || (data.notes is list && data.notes.size() <= 100)) &&
+             (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 200)) &&
+             (!('requiredAction' in data) || (data.requiredAction is string && data.requiredAction.size() <= 2000)) &&
+             (!('previewImage' in data) || (data.previewImage is string && data.previewImage.size() <= 2097152));
+    }
+
+    match /tasks/{taskId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId());
+      
+      allow create: if (isAdmin() || (isApproved() && request.resource.data.teamId == getUserTeamId())) && isValidTask(request.resource.data);
+      
+      allow update: if (isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId())) &&
+                      isValidTask(request.resource.data) &&
+                      request.resource.data.teamId == resource.data.teamId &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      
+      allow delete: if isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId());
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isApproved();
+      
+      allow create: if (isAdmin() || (isOwner(userId) &&
+                       request.resource.data.keys().hasAll(['email', 'status', 'role']) &&
+                       request.resource.data.status == 'Pending' &&
+                       request.resource.data.role == 'Member'));
+                       
+      allow update: if isAdmin() ||
+                       (isOwner(userId) &&
+                        request.resource.data.diff(resource.data).affectedKeys().hasAny(['displayName', 'photoURL', 'lastSeen']) &&
+                        (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['status', 'role', 'teamId', 'email'])));
+    }
+  }
+}

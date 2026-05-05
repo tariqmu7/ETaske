@@ -1,0 +1,5 @@
+{
+  "name": "Task Follow-up Dashboard",
+  "description": "A real-time task management dashboard with Excel export, email tracking, and status updates.",
+  "requestFramePermissions": []
+}

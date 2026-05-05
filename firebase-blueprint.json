@@ -1,0 +1,49 @@
+{
+  "entities": {
+    "Task": {
+      "title": "Task",
+      "description": "A task follow-up entry",
+      "type": "object",
+      "properties": {
+        "taskName": { "type": "string" },
+        "status": { "type": "string" },
+        "description": { "type": "string" },
+        "statusUpdate": { "type": "string" },
+        "assignee": { "type": "string" },
+        "requiredAction": { "type": "string" },
+        "notes": { "type": "array" },
+        "previewImage": { "type": "string" },
+        "userId": { "type": "string" },
+        "teamId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["taskName", "status", "userId", "teamId", "createdAt", "updatedAt"]
+    },
+    "User": {
+      "title": "User",
+      "description": "A user profile with role, team, and approval status",
+      "type": "object",
+      "properties": {
+        "displayName": { "type": "string" },
+        "email": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Approved", "Rejected"] },
+        "role": { "type": "string", "enum": ["Admin", "Member"] },
+        "teamId": { "type": "string" },
+        "lastSeen": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "status", "role"]
+    }
+  },
+  "firestore": {
+    "/tasks/{taskId}": {
+      "schema": "Task",
+      "description": "Collection of tasks"
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of user profiles"
+    }
+  }
+}
