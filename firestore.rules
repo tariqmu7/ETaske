@@ -43,9 +43,15 @@ service cloud.firestore {
              (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
              (!('statusUpdate' in data) || (data.statusUpdate is string && data.statusUpdate.size() <= 1000)) &&
              (!('notes' in data) || (data.notes is list && data.notes.size() <= 100)) &&
+             (!('assignedTo' in data) || (data.assignedTo is string && data.assignedTo.size() <= 200)) &&
              (!('assignee' in data) || (data.assignee is string && data.assignee.size() <= 200)) &&
+             (!('waitingOn' in data) || (data.waitingOn is string && data.waitingOn.size() <= 200)) &&
              (!('requiredAction' in data) || (data.requiredAction is string && data.requiredAction.size() <= 2000)) &&
-             (!('previewImage' in data) || (data.previewImage is string && data.previewImage.size() <= 2097152));
+             (!('dueDate' in data) || data.dueDate == null || (data.dueDate is string && data.dueDate.size() <= 100)) &&
+             (!('priority' in data) || data.priority in ['Low', 'Medium', 'High', 'Urgent']) &&
+             (!('attachedFile' in data) || (data.attachedFile is string && data.attachedFile.size() <= 6000000)) &&
+             (!('attachedFileName' in data) || (data.attachedFileName is string && data.attachedFileName.size() <= 500)) &&
+             (!('serialNumber' in data) || (data.serialNumber is string && data.serialNumber.size() <= 50));
     }
 
     match /tasks/{taskId} {

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   collection, 
   query, 
@@ -15,7 +15,8 @@ import {
   serverTimestamp, 
   orderBy,
   where,
-  Timestamp
+  Timestamp,
+  deleteField
 } from 'firebase/firestore';
 import { signOut, User } from 'firebase/auth';
 import { db, auth } from './lib/firebase';
@@ -23,7 +24,6 @@ import { AppUser, Task, TaskNote, ACTION_OPTIONS, STATUS_UPDATE_OPTIONS, Operati
 import { 
   Plus, 
   Download, 
-  Mail, 
   FileText, 
   Trash2, 
   Edit2, 
@@ -40,7 +40,8 @@ import {
   CheckSquare,
   Square,
   PlusCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  Calendar
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { motion, AnimatePresence } from 'motion/react';
@@ -87,8 +88,8 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [assigneeFilter, setAssigneeFilter] = useState<string>('All');
-  const [currentView, setCurrentView] = useState<'department' | 'my-assignments'>('department');
+  const [assignedToFilter, setAssignedToFilter] = useState<string>('All');
+  const [currentView, setCurrentView] = useState<'department' | 'my-assignments' | 'outstanding'>('department');
   const [error, setError] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
 
@@ -98,10 +99,15 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     status: 'Pending' as Task['status'],
     description: '',
     statusUpdate: STATUS_UPDATE_OPTIONS[0],
-    assignee: '',
+    assignedTo: '',
+    waitingOn: '',
     requiredAction: ACTION_OPTIONS[0],
     notes: [] as TaskNote[],
-    previewImage: ''
+    dueDate: '',
+    priority: 'Medium' as NonNullable<Task['priority']>,
+    attachedFile: '',
+    attachedFileName: '',
+    serialNumber: ''
   });
   const [newNoteText, setNewNoteText] = useState('');
 
@@ -132,41 +138,88 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     return () => unsubscribe();
   }, [user, appUser]);
 
+  // Notifications logic
+  const previousTasksRef = useRef<Task[]>([]);
+
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+      Notification.requestPermission();
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!user || previousTasksRef.current.length === 0) {
+      previousTasksRef.current = tasks;
+      return;
+    }
+
+    const previousTasksMap = new Map(previousTasksRef.current.map(t => [t.id, t]));
+    
+    tasks.forEach(task => {
+      const prevTask = previousTasksMap.get(task.id);
+      
+      const assigned = task.assignedTo || task.assignee;
+      const prevAssigned = prevTask?.assignedTo || prevTask?.assignee;
+
+      const isNewlyAssigned = assigned === user.displayName && prevAssigned !== user.displayName;
+      const isNewlyWaitingOn = task.waitingOn === user.displayName && prevTask?.waitingOn !== user.displayName;
+
+      if ('Notification' in window && Notification.permission === 'granted') {
+        if (isNewlyAssigned) {
+          new Notification('New Task Assigned', {
+            body: `You have been assigned to: ${task.taskName}`
+          });
+        }
+        if (isNewlyWaitingOn) {
+          new Notification('Action Required', {
+            body: `Task "${task.taskName}" is now waiting on you.`
+          });
+        }
+      }
+    });
+
+    previousTasksRef.current = tasks;
+  }, [tasks, user]);
+
   // --- Handlers ---
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.size > 700 * 1024) {
+      alert('File is too large. Max size is 700KB.');
+      return;
+    }
+
     const reader = new FileReader();
     reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_WIDTH = 800;
-        const MAX_HEIGHT = 800;
-        let width = img.width;
-        let height = img.height;
+      const dataUrl = event.target?.result as string;
+      const fileName = file.name;
+      
+      let nextSerial = '';
+      const numbersInName = fileName.match(/\d/g);
+      if (numbersInName && numbersInName.length >= 3) {
+        nextSerial = numbersInName.slice(0, 3).join('');
+      } else {
+        let maxSerial = 0;
+        tasks.forEach(t => {
+          if (t.serialNumber) {
+            const num = parseInt(t.serialNumber.replace(/\D/g, ''), 10);
+            if (!isNaN(num) && num > maxSerial) {
+              maxSerial = num;
+            }
+          }
+        });
+        nextSerial = String(maxSerial + 1).padStart(3, '0');
+      }
 
-        if (width > height) {
-          if (width > MAX_WIDTH) {
-            height *= MAX_WIDTH / width;
-            width = MAX_WIDTH;
-          }
-        } else {
-          if (height > MAX_HEIGHT) {
-            width *= MAX_HEIGHT / height;
-            height = MAX_HEIGHT;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        setFormData(prev => ({ ...prev, previewImage: dataUrl }));
-      };
-      img.src = event.target?.result as string;
+      setFormData(prev => ({ 
+        ...prev, 
+        attachedFile: dataUrl,
+        attachedFileName: fileName,
+        serialNumber: nextSerial
+      }));
     };
     reader.readAsDataURL(file);
   };
@@ -176,19 +229,31 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     
     const currentUserId = user?.uid;
 
-    const taskData = {
+    const taskData: any = {
       taskName: formData.taskName,
       status: formData.status,
       description: formData.description,
       statusUpdate: formData.statusUpdate,
-      assignee: formData.assignee,
+      assignedTo: formData.assignedTo,
+      waitingOn: formData.waitingOn,
       requiredAction: formData.requiredAction,
       notes: formData.notes,
-      ...(formData.previewImage ? { previewImage: formData.previewImage } : {}),
+      dueDate: formData.dueDate || null,
+      priority: formData.priority,
       userId: currentUserId,
       teamId: appUser.teamId || 'NONE',
       updatedAt: serverTimestamp(),
     };
+
+    if (formData.attachedFile) {
+      taskData.attachedFile = formData.attachedFile;
+      taskData.attachedFileName = formData.attachedFileName;
+      taskData.serialNumber = formData.serialNumber;
+    } else if (editingTask) {
+      taskData.attachedFile = deleteField();
+      taskData.attachedFileName = deleteField();
+      taskData.serialNumber = deleteField();
+    }
 
     try {
       if (editingTask) {
@@ -235,6 +300,21 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     setTaskToDelete(task);
   };
 
+  const handleDeleteAttachment = async (task: Task) => {
+    if (!window.confirm('Are you sure you want to delete this attachment?')) return;
+    try {
+      await updateDoc(doc(db, 'tasks', task.id), {
+        attachedFile: deleteField(),
+        attachedFileName: deleteField(),
+        serialNumber: deleteField(),
+        updatedAt: serverTimestamp()
+      });
+    } catch (err: any) {
+      console.error(err);
+      alert('Error deleting attachment: ' + err.message);
+    }
+  };
+
   const openModal = (task?: Task) => {
     if (task) {
       setEditingTask(task);
@@ -243,10 +323,15 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
         status: task.status,
         description: task.description || '',
         statusUpdate: task.statusUpdate || STATUS_UPDATE_OPTIONS[0],
-        assignee: task.assignee || '',
+        assignedTo: task.assignedTo || task.assignee || '',
+        waitingOn: task.waitingOn || '',
         requiredAction: task.requiredAction || ACTION_OPTIONS[0],
         notes: task.notes || [],
-        previewImage: task.previewImage || ''
+        dueDate: task.dueDate || '',
+        priority: task.priority || 'Medium',
+        attachedFile: task.attachedFile || '',
+        attachedFileName: task.attachedFileName || '',
+        serialNumber: task.serialNumber || ''
       });
     } else {
       setEditingTask(null);
@@ -255,10 +340,15 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
         status: 'Pending',
         description: '',
         statusUpdate: STATUS_UPDATE_OPTIONS[0],
-        assignee: '',
+        assignedTo: '',
+        waitingOn: '',
         requiredAction: ACTION_OPTIONS[0],
         notes: [],
-        previewImage: ''
+        dueDate: '',
+        priority: 'Medium',
+        attachedFile: '',
+        attachedFileName: '',
+        serialNumber: ''
       });
     }
     setNewNoteText('');
@@ -274,8 +364,10 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
   const exportToExcel = () => {
     const dataToExport = tasks.map(t => ({
       'Task Name': t.taskName,
+      'Priority': t.priority || 'Medium',
       'Status': t.status,
-      'Assignee': t.assignee || '',
+      'Assigned To': t.assignedTo || t.assignee || '',
+      'Waiting On': t.waitingOn || '',
       'Required Action': t.requiredAction || '',
       'Description': t.description,
       'Sub-tasks': (t.notes || []).map(n => `[${n.isCompleted ? 'x' : ' '}] ${n.text}`).join('\n'),
@@ -294,8 +386,13 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
+      const assigned = t.assignedTo || t.assignee;
       if (currentView === 'my-assignments') {
-        if (!user || !user.displayName || t.assignee !== user.displayName) {
+        if (!user || !user.displayName || assigned !== user.displayName) {
+          return false;
+        }
+      } else if (currentView === 'outstanding') {
+        if (!user || !user.displayName || t.waitingOn !== user.displayName) {
           return false;
         }
       }
@@ -303,13 +400,13 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
       const matchesSearch = t.taskName.toLowerCase().includes(searchQuery.toLowerCase()) ||
                           t.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = statusFilter === 'All' || t.status === statusFilter;
-      const matchesAssignee = assigneeFilter === 'All' || (t.assignee && t.assignee === assigneeFilter);
-      return matchesSearch && matchesStatus && matchesAssignee;
+      const matchesAssignedTo = assignedToFilter === 'All' || (assigned && assigned === assignedToFilter);
+      return matchesSearch && matchesStatus && matchesAssignedTo;
     });
-  }, [tasks, searchQuery, statusFilter, assigneeFilter, currentView, user]);
+  }, [tasks, searchQuery, statusFilter, assignedToFilter, currentView, user]);
 
   const uniqueAssignees = useMemo(() => {
-    const list = new Set(tasks.map(t => t.assignee).filter(Boolean));
+    const list = new Set(tasks.map(t => t.assignedTo || t.assignee).filter(Boolean));
     return Array.from(list) as string[];
   }, [tasks]);
 
@@ -378,6 +475,21 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
           >
             My Assignments
           </button>
+          <button
+            onClick={() => {
+              if (!user) {
+                alert("Please sign in to view your outstanding tasks.");
+                return;
+              }
+              setCurrentView('outstanding');
+            }}
+            className={cn(
+              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-all",
+              currentView === 'outstanding' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 shadow-none transparent"
+            )}
+          >
+            Outstanding
+          </button>
         </div>
 
         {/* Actions Bar */}
@@ -411,11 +523,11 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
             <div className="relative" style={{ display: currentView === 'department' ? 'block' : 'none' }}>
               <UserCircle2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
               <select 
-                value={assigneeFilter}
-                onChange={(e) => setAssigneeFilter(e.target.value)}
+                value={assignedToFilter}
+                onChange={(e) => setAssignedToFilter(e.target.value)}
                 className="pl-10 pr-8 py-2 bg-white border border-neutral-200 rounded-xl text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-neutral-900/5 transition-all cursor-pointer max-w-[150px] truncate"
               >
-                <option value="All">All Assignees</option>
+                <option value="All">All Assigned To</option>
                 {uniqueAssignees.map(assignee => (
                   <option key={assignee} value={assignee}>{assignee}</option>
                 ))}
@@ -464,19 +576,61 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                 exit={{ opacity: 0, scale: 0.95 }}
                 className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
               >
-                {task.previewImage && (
-                  <div className="mb-4 -mx-6 -mt-2">
-                    <img src={task.previewImage} alt="Task preview" className="w-full h-32 object-cover" />
+                {task.attachedFile && (
+                  <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex items-center justify-between gap-3">
+                    <div className="flex flex-col overflow-hidden">
+                      <span className="text-xs font-bold text-neutral-400 uppercase">Attached File</span>
+                      <span className="text-sm font-medium text-neutral-700 truncate">{task.attachedFileName}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {task.serialNumber && (
+                        <span className="px-2 py-1 bg-white border border-neutral-200 rounded text-xs font-mono text-neutral-600">
+                          #{task.serialNumber}
+                        </span>
+                      )}
+                      <a 
+                        href={task.attachedFile} 
+                        download={task.attachedFileName}
+                        onClick={(e) => e.stopPropagation()}
+                        className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                        title="Download File"
+                      >
+                        <Download className="w-4 h-4" />
+                      </a>
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteAttachment(task);
+                        }}
+                        className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors"
+                        title="Delete Attachment"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="flex items-start justify-between mb-4">
-                  <div className={cn(
-                    "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
-                    task.status === 'Done' ? "bg-green-50 text-green-600" :
-                    task.status === 'In Progress' ? "bg-blue-50 text-blue-600" :
-                    "bg-amber-50 text-amber-600"
-                  )}>
-                    {task.status}
+                  <div className="flex flex-wrap gap-2">
+                    <div className={cn(
+                      "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                      task.status === 'Done' ? "bg-green-50 text-green-600" :
+                      task.status === 'In Progress' ? "bg-blue-50 text-blue-600" :
+                      "bg-amber-50 text-amber-600"
+                    )}>
+                      {task.status}
+                    </div>
+                    {task.priority && (
+                      <div className={cn(
+                        "px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                        task.priority === 'Urgent' ? "bg-red-100 text-red-700" :
+                        task.priority === 'High' ? "bg-orange-100 text-orange-700" :
+                        task.priority === 'Medium' ? "bg-blue-50 text-blue-700" :
+                        "bg-neutral-100 text-neutral-600"
+                      )}>
+                        Priority: {task.priority}
+                      </div>
+                    )}
                   </div>
                   <div className="flex gap-1 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100">
                     <button 
@@ -494,23 +648,40 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
                 </div>
 
-                <h3 className="text-lg font-bold mb-2 line-clamp-1">{task.taskName}</h3>
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="px-2 py-0.5 bg-neutral-100 text-neutral-500 border border-neutral-200 rounded text-[10px] font-mono leading-tight">
+                    {task.id.slice(0, 5).toUpperCase()}
+                  </span>
+                  <h3 className="text-lg font-bold line-clamp-1">{task.taskName}</h3>
+                </div>
                 <p className="text-neutral-500 text-sm mb-3 line-clamp-2 min-h-[2.5rem]">
                   {task.description || "No description provided."}
                 </p>
 
-                {(task.assignee || task.requiredAction) && (
+                {(task.assignedTo || task.assignee || task.waitingOn || task.requiredAction || task.dueDate) && (
                   <div className="flex flex-col gap-2 mb-4">
-                    {task.assignee && (
+                    {(task.assignedTo || task.assignee) && (
                       <div className="flex items-center gap-2 text-xs font-medium text-purple-700 bg-purple-50 px-2.5 py-1.5 rounded-lg w-fit">
                         <UserCircle2 className="w-4 h-4" />
-                        Waiting on: {task.assignee}
+                        Assigned to: {task.assignedTo || task.assignee}
+                      </div>
+                    )}
+                    {task.waitingOn && (
+                      <div className="flex items-center gap-2 text-xs font-medium text-pink-700 bg-pink-50 px-2.5 py-1.5 rounded-lg w-fit">
+                        <UserCircle2 className="w-4 h-4" />
+                        Waiting on: {task.waitingOn}
                       </div>
                     )}
                     {task.requiredAction && (
-                      <div className="flex items-start gap-2 text-xs font-medium text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg">
+                      <div className="flex items-start gap-2 text-xs font-medium text-rose-700 bg-rose-50 px-2.5 py-1.5 rounded-lg w-fit">
                         <ListTodo className="w-4 h-4 shrink-0 mt-0.5" />
                         <span className="line-clamp-2">Action: {task.requiredAction}</span>
+                      </div>
+                    )}
+                    {task.dueDate && (
+                      <div className="flex items-center gap-2 text-xs font-medium text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg w-fit">
+                        <Calendar className="w-4 h-4 shrink-0" />
+                        Due: {new Date(task.dueDate).toLocaleDateString()}
                       </div>
                     )}
                   </div>
@@ -542,7 +713,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
                 )}
 
-                <div className="space-y-3 pt-4 border-t border-neutral-100">
+                <div className="space-y-3 pt-4 border-t border-neutral-100 mt-4">
                   <div className="bg-neutral-50 rounded-xl p-3 mt-2">
                     <div className="text-[10px] font-bold text-neutral-400 uppercase mb-1 flex items-center gap-1">
                       <Clock className="w-3 h-3" />
@@ -551,6 +722,14 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                     <p className="text-sm text-neutral-700 italic">
                       "{task.statusUpdate || "No updates yet."}"
                     </p>
+                  </div>
+                  <div className="flex justify-between items-center text-[10px] text-neutral-400 uppercase font-semibold pt-1">
+                    <div>
+                      Started: {task.createdAt?.toDate().toLocaleDateString()}
+                    </div>
+                    <div>
+                      Updated: {task.updatedAt?.toDate().toLocaleDateString()}
+                    </div>
                   </div>
                 </div>
               </motion.div>
@@ -608,14 +787,31 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
 
                   <div>
-                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Waiting On (Assignee)</label>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Assigned To</label>
                     <div className="relative">
                       <select 
-                        value={formData.assignee}
-                        onChange={(e) => setFormData({ ...formData, assignee: e.target.value })}
+                        value={formData.assignedTo}
+                        onChange={(e) => setFormData({ ...formData, assignedTo: e.target.value })}
                         className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900/5 appearance-none"
                       >
                         <option value="">None / Unassigned</option>
+                        {projectUsers.filter(u => u.status === 'Approved').map(u => (
+                          <option key={u.id} value={u.displayName}>{u.displayName}</option>
+                        ))}
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Waiting On</label>
+                    <div className="relative">
+                      <select 
+                        value={formData.waitingOn}
+                        onChange={(e) => setFormData({ ...formData, waitingOn: e.target.value })}
+                        className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900/5 appearance-none"
+                      >
+                        <option value="">None</option>
                         {projectUsers.filter(u => u.status === 'Approved').map(u => (
                           <option key={u.id} value={u.displayName}>{u.displayName}</option>
                         ))}
@@ -641,6 +837,33 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
 
                   <div>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Due Date</label>
+                    <input 
+                      type="date" 
+                      value={formData.dueDate}
+                      onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                      className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900/5 appearance-none"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Priority</label>
+                    <div className="relative">
+                      <select 
+                        value={formData.priority}
+                        onChange={(e) => setFormData({ ...formData, priority: e.target.value as NonNullable<Task['priority']> })}
+                        className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900/5 appearance-none"
+                      >
+                        <option value="Low">Low</option>
+                        <option value="Medium">Medium</option>
+                        <option value="High">High</option>
+                        <option value="Urgent">Urgent</option>
+                      </select>
+                      <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 pointer-events-none" />
+                    </div>
+                  </div>
+
+                  <div>
                     <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Status</label>
                     <div className="relative">
                       <select 
@@ -657,30 +880,45 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
 
                   <div className="col-span-full">
-                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Attach Preview Image</label>
-                    <div className="flex items-center gap-4">
-                      {formData.previewImage && (
-                        <div className="relative w-16 h-16 rounded-xl overflow-hidden border border-neutral-200 shrink-0">
-                          <img src={formData.previewImage} alt="Preview" className="w-full h-full object-cover" />
+                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Attached File & Serial</label>
+                    <div className="flex flex-col gap-4">
+                      {formData.attachedFile && (
+                        <div className="relative p-4 rounded-xl border border-neutral-200 bg-neutral-50 shrink-0">
+                          <div className="text-sm font-medium text-neutral-800 line-clamp-1">{formData.attachedFileName}</div>
                           <button 
                             type="button" 
-                            onClick={() => setFormData({ ...formData, previewImage: '' })}
-                            className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity"
+                            onClick={() => setFormData({ ...formData, attachedFile: '', attachedFileName: '', serialNumber: '' })}
+                            className="absolute top-2 right-2 text-neutral-400 hover:text-red-500 transition-colors"
                           >
-                            <X className="w-4 h-4 text-white" />
+                            <X className="w-5 h-5" />
                           </button>
                         </div>
                       )}
-                      <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors w-full sm:w-auto text-sm font-medium">
-                        <ImageIcon className="w-5 h-5 text-neutral-400" />
-                        <span>Choose Image</span>
-                        <input 
-                          type="file" 
-                          accept="image/*" 
-                          onChange={handleImageUpload}
-                          className="hidden" 
-                        />
-                      </label>
+                      
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors w-full sm:w-auto text-sm font-medium">
+                          <FileText className="w-5 h-5 text-neutral-400" />
+                          <span>{formData.attachedFile ? 'Replace File' : 'Attach File'}</span>
+                          <input 
+                            type="file" 
+                            accept="*/*"
+                            onChange={handleFileUpload}
+                            className="hidden"
+                          />
+                        </label>
+                        
+                        {formData.attachedFile && (
+                          <div className="flex items-center gap-3 ml-auto">
+                            <span className="text-sm font-bold text-neutral-400 uppercase hidden sm:inline">Serial No.</span>
+                            <input 
+                              type="text" 
+                              value={formData.serialNumber}
+                              onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
+                              className="px-3 py-2 bg-neutral-50 border border-neutral-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-neutral-900/5 text-sm font-mono w-24 text-center"
+                            />
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 

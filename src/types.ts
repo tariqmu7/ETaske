@@ -16,16 +16,25 @@ export interface TaskNote {
   isCompleted: boolean;
 }
 
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export const PRIORITY_OPTIONS: TaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
+
 export interface Task {
   id: string;
   taskName: string;
   status: 'In Progress' | 'Done' | 'Pending';
   description: string;
   statusUpdate: string;
-  assignee?: string;
+  assignedTo?: string;
+  waitingOn?: string;
   requiredAction?: string;
   notes?: TaskNote[];
-  previewImage?: string;
+  dueDate?: string;
+  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
+  attachedFile?: string;
+  attachedFileName?: string;
+  serialNumber?: string;
   userId: string;
   teamId: string;
   createdAt: Timestamp;
