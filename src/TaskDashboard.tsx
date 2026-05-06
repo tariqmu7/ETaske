@@ -82,16 +82,39 @@ interface Props {
   onLogout: () => void;
 }
 
+const getImageUrl = (url: string) => {
+  if (url.includes('drive.google.com/uc') || url.includes('docs.google.com/uc')) {
+    const match = url.match(/[?&]id=([^&]+)/);
+    if (match) {
+      return `https://drive.google.com/thumbnail?id=${match[1]}&sz=w1000`;
+    }
+  }
+  return url;
+};
+
 export default function TaskDashboard({ user, appUser, projectUsers, onLogout }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [fullscreenImage, setFullscreenImage] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [assignedToFilter, setAssignedToFilter] = useState<string>('All');
-  const [currentView, setCurrentView] = useState<'department' | 'my-assignments' | 'outstanding'>('department');
+  const isSuperUser = user?.email === 'n.anwar@eprom.com' || user?.email === 'tarekmoh123@gmail.com';
+
+  const [currentView, setCurrentView] = useState<'department' | 'my-assignments' | 'outstanding'>(
+    isSuperUser ? 'department' : 'my-assignments'
+  );
+
+  useEffect(() => {
+    if (!isSuperUser && currentView === 'department') {
+      setCurrentView('my-assignments');
+    }
+  }, [isSuperUser, currentView]);
+
   const [error, setError] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -153,13 +176,13 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
       return;
     }
 
-    const previousTasksMap = new Map(previousTasksRef.current.map(t => [t.id, t]));
+    const previousTasksMap = new Map<string, Task>(previousTasksRef.current.map(t => [t.id, t]));
     
     tasks.forEach(task => {
       const prevTask = previousTasksMap.get(task.id);
       
-      const assigned = task.assignedTo || task.assignee;
-      const prevAssigned = prevTask?.assignedTo || prevTask?.assignee;
+      const assigned = task.assignedTo;
+      const prevAssigned = prevTask?.assignedTo;
 
       const isNewlyAssigned = assigned === user.displayName && prevAssigned !== user.displayName;
       const isNewlyWaitingOn = task.waitingOn === user.displayName && prevTask?.waitingOn !== user.displayName;
@@ -183,43 +206,82 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
 
   // --- Handlers ---
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 700 * 1024) {
-      alert('File is too large. Max size is 700KB.');
+    const GOOGLE_SCRIPT_URL = (import.meta as any).env.VITE_GOOGLE_SCRIPT_URL || '';
+    if (!GOOGLE_SCRIPT_URL && file.size > 700 * 1024) {
+      alert('File is too large. Max size is 700KB. Configure a Google Script URL in Settings to allow larger files via Google Drive.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const dataUrl = event.target?.result as string;
-      const fileName = file.name;
-      
-      let nextSerial = '';
-      const numbersInName = fileName.match(/\d/g);
-      if (numbersInName && numbersInName.length >= 3) {
-        nextSerial = numbersInName.slice(0, 3).join('');
-      } else {
-        let maxSerial = 0;
-        tasks.forEach(t => {
-          if (t.serialNumber) {
-            const num = parseInt(t.serialNumber.replace(/\D/g, ''), 10);
-            if (!isNaN(num) && num > maxSerial) {
-              maxSerial = num;
-            }
+    setIsUploading(true);
+    const fileName = file.name;
+
+    let nextSerial = '';
+    const numbersInName = fileName.match(/\d/g);
+    if (numbersInName && numbersInName.length >= 3) {
+      nextSerial = numbersInName.slice(0, 5).join('');
+    } else {
+      let maxSerial = 0;
+      tasks.forEach(t => {
+        if (t.serialNumber) {
+          const num = parseInt(t.serialNumber.replace(/\D/g, ''), 10);
+          if (!isNaN(num) && num > maxSerial) {
+            maxSerial = num;
           }
-        });
-        nextSerial = String(maxSerial + 1).padStart(3, '0');
+        }
+      });
+      nextSerial = String(maxSerial + 1).padStart(3, '0');
+    }
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const dataUrl = event.target?.result as string;
+
+      if (GOOGLE_SCRIPT_URL) {
+        try {
+          const res = await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            body: JSON.stringify({
+              filename: file.name,
+              mimeType: file.type,
+              base64: dataUrl
+            })
+          });
+          const result = await res.json();
+          if (result.status === 'success') {
+            setFormData(prev => ({ 
+              ...prev, 
+              attachedFile: result.url,
+              attachedFileName: fileName,
+              serialNumber: nextSerial
+            }));
+            setIsUploading(false);
+            return; // Success!
+          } else {
+            console.error('GS Error:', result.message);
+            alert('Google Script Error: ' + result.message);
+          }
+        } catch (err) {
+          console.error('Fetch error:', err);
+          alert('Failed to connect to Google Script. Check the console.');
+        }
       }
 
-      setFormData(prev => ({ 
-        ...prev, 
-        attachedFile: dataUrl,
-        attachedFileName: fileName,
-        serialNumber: nextSerial
-      }));
+      // Fallback
+      if (file.size > 700 * 1024) {
+         alert("Upload failed. File too large for fallback storage.");
+      } else {
+        setFormData(prev => ({ 
+          ...prev, 
+          attachedFile: dataUrl,
+          attachedFileName: fileName,
+          serialNumber: nextSerial
+        }));
+      }
+      setIsUploading(false);
     };
     reader.readAsDataURL(file);
   };
@@ -323,7 +385,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
         status: task.status,
         description: task.description || '',
         statusUpdate: task.statusUpdate || STATUS_UPDATE_OPTIONS[0],
-        assignedTo: task.assignedTo || task.assignee || '',
+        assignedTo: task.assignedTo || '',
         waitingOn: task.waitingOn || '',
         requiredAction: task.requiredAction || ACTION_OPTIONS[0],
         notes: task.notes || [],
@@ -366,7 +428,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
       'Task Name': t.taskName,
       'Priority': t.priority || 'Medium',
       'Status': t.status,
-      'Assigned To': t.assignedTo || t.assignee || '',
+      'Assigned To': t.assignedTo || '',
       'Waiting On': t.waitingOn || '',
       'Required Action': t.requiredAction || '',
       'Description': t.description,
@@ -386,7 +448,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
 
   const filteredTasks = useMemo(() => {
     return tasks.filter(t => {
-      const assigned = t.assignedTo || t.assignee;
+      const assigned = t.assignedTo;
       if (currentView === 'my-assignments') {
         if (!user || !user.displayName || assigned !== user.displayName) {
           return false;
@@ -406,60 +468,28 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
   }, [tasks, searchQuery, statusFilter, assignedToFilter, currentView, user]);
 
   const uniqueAssignees = useMemo(() => {
-    const list = new Set(tasks.map(t => t.assignedTo || t.assignee).filter(Boolean));
+    const list = new Set(tasks.map(t => t.assignedTo).filter(Boolean));
     return Array.from(list) as string[];
   }, [tasks]);
 
   // --- Render Helpers ---
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900 font-sans">
-      {/* Header */}
-      <header className="bg-white border-bottom border-neutral-200 sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-neutral-900 rounded-lg flex items-center justify-center">
-              <CheckCircle2 className="w-5 h-5 text-white" />
-            </div>
-            <h1 className="text-lg font-bold tracking-tight hidden sm:block">Task Dashboard</h1>
-          </div>
-
-          <div className="flex items-center gap-4">
-            {user && (
-              <div className="flex items-center gap-4">
-                <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-neutral-100 rounded-full">
-                  {user.photoURL ? (
-                    <img src={user.photoURL} className="w-6 h-6 rounded-full" alt="" referrerPolicy="no-referrer" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-neutral-200" />
-                  )}
-                  <span className="text-sm font-medium text-neutral-700">{user.displayName}</span>
-                </div>
-                <button 
-                  onClick={onLogout}
-                  className="p-2 text-neutral-400 hover:text-neutral-600 hover:bg-neutral-100 rounded-lg transition-colors"
-                  title="Logout"
-                >
-                  <LogOut className="w-5 h-5" />
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </header>
-
+    <div className="text-neutral-900 font-sans">
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {/* View Tabs */}
-        <div className="flex items-center gap-2 mb-8 bg-neutral-100 p-1.5 rounded-xl w-fit">
-          <button
-            onClick={() => setCurrentView('department')}
-            className={cn(
-              "px-5 py-2.5 rounded-lg text-sm font-semibold transition-all",
-              currentView === 'department' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 shadow-none transparent"
-            )}
-          >
-            Department Tasks
-          </button>
+        <div className="flex flex-wrap items-center gap-2 mb-8 bg-neutral-100 p-1.5 rounded-xl w-fit">
+          {isSuperUser && (
+            <button
+              onClick={() => setCurrentView('department')}
+              className={cn(
+                "px-5 py-2.5 rounded-lg text-sm font-semibold transition-all",
+                currentView === 'department' ? "bg-white text-neutral-900 shadow-sm" : "text-neutral-500 hover:text-neutral-700 hover:bg-neutral-200/50 shadow-none transparent"
+              )}
+            >
+              Department Tasks
+            </button>
+          )}
           <button
             onClick={() => {
               if (!user) {
@@ -574,39 +604,59 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                 initial={{ opacity: 0, scale: 0.95 }}
                 animate={{ opacity: 1, scale: 1 }}
                 exit={{ opacity: 0, scale: 0.95 }}
-                className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group"
+                onClick={() => openModal(task)}
+                className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group cursor-pointer"
               >
                 {task.attachedFile && (
-                  <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex items-center justify-between gap-3">
-                    <div className="flex flex-col overflow-hidden">
-                      <span className="text-xs font-bold text-neutral-400 uppercase">Attached File</span>
-                      <span className="text-sm font-medium text-neutral-700 truncate">{task.attachedFileName}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {task.serialNumber && (
-                        <span className="px-2 py-1 bg-white border border-neutral-200 rounded text-xs font-mono text-neutral-600">
-                          #{task.serialNumber}
-                        </span>
-                      )}
-                      <a 
-                        href={task.attachedFile} 
-                        download={task.attachedFileName}
-                        onClick={(e) => e.stopPropagation()}
-                        className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
-                        title="Download File"
-                      >
-                        <Download className="w-4 h-4" />
-                      </a>
-                      <button 
+                  <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex flex-col gap-3">
+                    {(task.attachedFile.startsWith('data:image/') || (task.attachedFile.includes('drive.google.com/uc') && task.attachedFileName.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i))) && (
+                      <div 
+                        className="w-full h-48 flex items-center justify-center rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100 cursor-zoom-in"
                         onClick={(e) => {
                           e.stopPropagation();
-                          handleDeleteAttachment(task);
+                          setFullscreenImage(task.attachedFile);
                         }}
-                        className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors"
-                        title="Delete Attachment"
                       >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                        <img 
+                          src={getImageUrl(task.attachedFile)} 
+                          alt={task.attachedFileName} 
+                          className="max-w-full max-h-full object-contain mix-blend-multiply" 
+                          referrerPolicy="no-referrer"
+                        />
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex flex-col overflow-hidden">
+                        <span className="text-xs font-bold text-neutral-400 uppercase">Attached File</span>
+                        <span className="text-sm font-medium text-neutral-700 truncate">{task.attachedFileName}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {task.serialNumber && (
+                          <span className="px-2 py-1 bg-white border border-neutral-200 rounded text-xs font-mono text-neutral-600">
+                            #{task.serialNumber}
+                          </span>
+                        )}
+                        <a 
+                          href={task.attachedFile} 
+                          download={task.attachedFileName}
+                          target={task.attachedFile.includes('drive.google.com') ? "_blank" : "_self"}
+                          onClick={(e) => e.stopPropagation()}
+                          className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-blue-600 hover:border-blue-200 transition-colors"
+                          title="Download File"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteAttachment(task);
+                          }}
+                          className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors"
+                          title="Delete Attachment"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -634,13 +684,19 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </div>
                   <div className="flex gap-1 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100">
                     <button 
-                      onClick={() => openModal(task)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openModal(task);
+                      }}
                       className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg"
                     >
                       <Edit2 className="w-4 h-4" />
                     </button>
                     <button 
-                      onClick={() => handleDelete(task)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(task);
+                      }}
                       className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -658,12 +714,12 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   {task.description || "No description provided."}
                 </p>
 
-                {(task.assignedTo || task.assignee || task.waitingOn || task.requiredAction || task.dueDate) && (
+                {(task.assignedTo || task.waitingOn || task.requiredAction || task.dueDate) && (
                   <div className="flex flex-col gap-2 mb-4">
-                    {(task.assignedTo || task.assignee) && (
+                    {task.assignedTo && (
                       <div className="flex items-center gap-2 text-xs font-medium text-purple-700 bg-purple-50 px-2.5 py-1.5 rounded-lg w-fit">
                         <UserCircle2 className="w-4 h-4" />
-                        Assigned to: {task.assignedTo || task.assignee}
+                        Assigned to: {task.assignedTo}
                       </div>
                     )}
                     {task.waitingOn && (
@@ -693,7 +749,10 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                       <div 
                         key={note.id} 
                         className="flex items-start gap-2 group/note cursor-pointer"
-                        onClick={() => handleToggleNote(task.id, note.id)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleToggleNote(task.id, note.id);
+                        }}
                       >
                         <button className="mt-0.5 text-neutral-400 group-hover/note:text-neutral-900 transition-colors">
                           {note.isCompleted ? (
@@ -897,11 +956,21 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                       
                       <div className="flex items-center gap-4">
                         <label className="flex items-center justify-center gap-2 px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl cursor-pointer hover:bg-neutral-100 transition-colors w-full sm:w-auto text-sm font-medium">
-                          <FileText className="w-5 h-5 text-neutral-400" />
-                          <span>{formData.attachedFile ? 'Replace File' : 'Attach File'}</span>
+                          {isUploading ? (
+                            <>
+                              <div className="w-5 h-5 border-2 border-neutral-400 border-t-neutral-800 rounded-full animate-spin" />
+                              <span>Uploading...</span>
+                            </>
+                          ) : (
+                            <>
+                              <FileText className="w-5 h-5 text-neutral-400" />
+                              <span>{formData.attachedFile ? 'Replace File' : 'Attach File'}</span>
+                            </>
+                          )}
                           <input 
                             type="file" 
                             accept="*/*"
+                            disabled={isUploading}
                             onChange={handleFileUpload}
                             className="hidden"
                           />
@@ -1059,6 +1128,32 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
               </div>
             </motion.div>
           </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {fullscreenImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 p-4"
+            onClick={() => setFullscreenImage(null)}
+          >
+            <button 
+              className="absolute top-4 right-4 p-2 text-white/70 hover:text-white bg-white/10 hover:bg-white/20 rounded-full transition-colors"
+              onClick={() => setFullscreenImage(null)}
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={getImageUrl(fullscreenImage)}
+              alt="Fullscreen view"
+              className="max-w-[95vw] max-h-[95vh] object-contain"
+              referrerPolicy="no-referrer"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </motion.div>
         )}
       </AnimatePresence>
     </div>

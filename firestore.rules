@@ -15,7 +15,7 @@ service cloud.firestore {
       return isAuthenticated() &&
         ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
           get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'Admin') ||
-         (request.auth.token.email == "tarekmoh123@gmail.com" && request.auth.token.email_verified == true));
+         ((request.auth.token.email == "tarekmoh123@gmail.com" || request.auth.token.email == "n.anwar@eprom.com") && request.auth.token.email_verified == true));
     }
 
     function isApproved() {
@@ -61,6 +61,38 @@ service cloud.firestore {
       
       allow update: if (isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId())) &&
                       isValidTask(request.resource.data) &&
+                      request.resource.data.teamId == resource.data.teamId &&
+                      request.resource.data.createdAt == resource.data.createdAt;
+      
+      allow delete: if isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId());
+    }
+
+    function isValidFollowUp(data) {
+      return data.keys().hasAll(['dateIssued', 'subject', 'assignedPersonnel', 'status', 'userId', 'teamId', 'createdAt', 'updatedAt']) &&
+             data.dateIssued is string && data.dateIssued.size() <= 100 &&
+             data.subject is string && data.subject.size() <= 500 &&
+             (!('description' in data) || (data.description is string && data.description.size() <= 2000)) &&
+             data.assignedPersonnel is string && data.assignedPersonnel.size() <= 200 &&
+             (!('endDate' in data) || (data.endDate is string && data.endDate.size() <= 100)) &&
+             (!('actionRequired' in data) || (data.actionRequired is string && data.actionRequired.size() <= 2000)) &&
+             (!('actionTakenSoFar' in data) || (data.actionTakenSoFar is string && data.actionTakenSoFar.size() <= 2000)) &&
+             (!('attachedFile' in data) || (data.attachedFile is string && data.attachedFile.size() <= 6000000)) &&
+             (!('attachedFileName' in data) || (data.attachedFileName is string && data.attachedFileName.size() <= 500)) &&
+             (!('serialNumber' in data) || (data.serialNumber is string && data.serialNumber.size() <= 5)) &&
+             data.status in ['Pending', 'Approved', 'Returned', 'Closed'] &&
+             data.userId is string &&
+             data.teamId is string &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /followUps/{followUpId} {
+      allow read: if isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId());
+      
+      allow create: if (isAdmin() || (isApproved() && request.resource.data.teamId == getUserTeamId())) && isValidFollowUp(request.resource.data);
+      
+      allow update: if (isAdmin() || (isApproved() && resource.data.teamId == getUserTeamId())) &&
+                      isValidFollowUp(request.resource.data) &&
                       request.resource.data.teamId == resource.data.teamId &&
                       request.resource.data.createdAt == resource.data.createdAt;
       

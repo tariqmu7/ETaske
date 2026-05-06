@@ -41,6 +41,27 @@ export interface Task {
   updatedAt: Timestamp;
 }
 
+export interface FollowUp {
+  id: string;
+  dateIssued: string;
+  subject: string;
+  description: string;
+  assignedPersonnel: string;
+  endDate: string;
+  actionRequired: string;
+  actionTakenSoFar: string;
+  status: 'Pending' | 'Approved' | 'Returned' | 'Closed';
+  attachedFile?: string;
+  attachedFileName?: string;
+  serialNumber?: string;
+  userId: string;
+  teamId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export const FOLLOWUP_STATUS_OPTIONS = ['Pending', 'Approved', 'Returned', 'Closed'] as const;
+
 export const ACTION_OPTIONS = [
   'None',
   'Needs Approval',
