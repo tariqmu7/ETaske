@@ -115,9 +115,9 @@ export default function App() {
   if (appUser.displayName === 'Unknown User' || !appUser.displayName) {
     return (
       <UsernameSetupScreen 
-        onSave={async (newName) => {
+        onSave={async (newName, newPhoneNumber) => {
           const userRef = doc(db, 'users', user.uid);
-          await updateDoc(userRef, { displayName: newName });
+          await updateDoc(userRef, { displayName: newName, phoneNumber: newPhoneNumber });
         }}
       />
     );

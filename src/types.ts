@@ -6,8 +6,9 @@ export interface AppUser {
   email: string;
   photoURL: string;
   status: 'Pending' | 'Approved' | 'Rejected';
-  role: 'Admin' | 'Member';
+  role: 'Admin' | 'Member' | 'Manager';
   teamId?: string;
+  phoneNumber?: string;
 }
 
 export interface TaskNote {

@@ -173,38 +173,63 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !appUser) return;
 
     const previousTasksMap = new Map<string, Task>(previousTasksRef.current.map(t => [t.id, t]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
     tasks.forEach(task => {
-      // 1. New Assignments and Waiting On (Skip on initial load)
+      // 1. Notifications for creating/updating (Skip on initial load)
       if (previousTasksRef.current.length > 0) {
         const prevTask = previousTasksMap.get(task.id);
         const assigned = task.assignedTo;
-        const prevAssigned = prevTask?.assignedTo;
+        
+        const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
+        const isAssignee = assigned === appUser.displayName;
+        const isWaitingOn = task.waitingOn === appUser.displayName;
+        const shouldNotify = isManagerOrAdmin || isAssignee || isWaitingOn;
 
-        const isNewlyAssigned = assigned === user.displayName && prevAssigned !== user.displayName;
-        const isNewlyWaitingOn = task.waitingOn === user.displayName && prevTask?.waitingOn !== user.displayName;
+        if (shouldNotify && 'Notification' in window && Notification.permission === 'granted') {
+          // Avoid self-notifications
+          const skipSelfNotify = (task as any).updatedBy === user.uid;
 
-        if ('Notification' in window && Notification.permission === 'granted') {
-          if (isNewlyAssigned) {
-            new Notification('New Task Assigned', {
-              body: `You have been assigned to: ${task.taskName}`
-            });
-          }
-          if (isNewlyWaitingOn) {
-            new Notification('Action Required', {
-              body: `Task "${task.taskName}" is now waiting on you.`
-            });
+          if (!skipSelfNotify) {
+            if (!prevTask) {
+              new Notification('New Task Created', {
+                body: `Task: ${task.taskName}\nAssigned to: ${assigned || 'Unassigned'}`
+              });
+            } else {
+              const statusChanged = prevTask.status !== task.status;
+              const assigneeChanged = prevTask.assignedTo !== assigned;
+              const waitingOnChanged = prevTask.waitingOn !== task.waitingOn;
+              
+              // We use a basic JSON stringify check to see if other fields changed, or just rely on updatedAt if present.
+              // We'll prioritize the specific notifications:
+              if (assigneeChanged) {
+                new Notification('Task Reassigned', {
+                  body: `Task "${task.taskName}" reassigned to: ${assigned || 'Unassigned'}`
+                });
+              } else if (statusChanged) {
+                new Notification('Task Status Changed', {
+                  body: `Task "${task.taskName}" is now ${task.status}`
+                });
+              } else if (waitingOnChanged && isWaitingOn) {
+                new Notification('Action Required', {
+                  body: `Task "${task.taskName}" is now waiting on you.`
+                });
+              } else if (prevTask.updatedAt !== task.updatedAt || JSON.stringify(prevTask) !== JSON.stringify(task)) {
+                new Notification('Task Updated', {
+                  body: `Task "${task.taskName}" was updated.`
+                });
+              }
+            }
           }
         }
       }
 
       // 2. Nearing Due Date
-      if (task.assignedTo === user.displayName && task.dueDate && task.status !== 'Done') {
+      if (task.assignedTo === appUser.displayName && task.dueDate && task.status !== 'Done') {
         const dueDateVal = new Date(task.dueDate);
         dueDateVal.setHours(0, 0, 0, 0);
         const diffTime = dueDateVal.getTime() - today.getTime();
@@ -222,7 +247,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     });
 
     previousTasksRef.current = tasks;
-  }, [tasks, user]);
+  }, [tasks, user, appUser]);
 
   // --- Handlers ---
 
@@ -325,6 +350,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
       userId: currentUserId,
       teamId: appUser.teamId || 'NONE',
       updatedAt: serverTimestamp(),
+      updatedBy: currentUserId,
     };
 
     if (formData.attachedFile) {

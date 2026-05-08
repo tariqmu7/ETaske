@@ -287,29 +287,54 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
   }, []);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !appUser) return;
 
     const previousFollowUpsMap = new Map<string, FollowUp>(previousFollowUpsRef.current.map(t => [t.id, t]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     followUps.forEach(item => {
-      // 1. New Assignment (Only check if previousFollowUpsRef is NOT empty, to avoid spam on initial load)
+      // 1. Notifications for creating/updating (Skip on initial load)
       if (previousFollowUpsRef.current.length > 0) {
         const prevItem = previousFollowUpsMap.get(item.id);
-        const isNewlyAssigned = item.assignedPersonnel === user.displayName && prevItem?.assignedPersonnel !== user.displayName;
+        const assigned = item.assignedPersonnel;
+        
+        const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
+        const isAssignee = assigned === appUser.displayName;
+        const shouldNotify = isManagerOrAdmin || isAssignee;
 
-        if ('Notification' in window && Notification.permission === 'granted') {
-          if (isNewlyAssigned) {
-            new Notification('New Follow-up Assigned', {
-              body: `You have been assigned to follow up on: ${item.subject}`
-            });
+        if (shouldNotify && 'Notification' in window && Notification.permission === 'granted') {
+          const skipSelfNotify = (item as any).updatedBy === user.uid;
+
+          if (!skipSelfNotify) {
+            if (!prevItem) {
+              new Notification('New Follow-up Created', {
+                body: `Subject: ${item.subject}\nAssigned to: ${assigned || 'Unassigned'}`
+              });
+            } else {
+              const statusChanged = prevItem.status !== item.status;
+              const assigneeChanged = prevItem.assignedPersonnel !== assigned;
+              
+              if (assigneeChanged) {
+                new Notification('Follow-up Reassigned', {
+                  body: `Follow-up "${item.subject}" reassigned to: ${assigned || 'Unassigned'}`
+                });
+              } else if (statusChanged) {
+                new Notification('Follow-up Status Changed', {
+                  body: `Follow-up "${item.subject}" is now ${item.status}`
+                });
+              } else if (prevItem.updatedAt !== item.updatedAt || JSON.stringify(prevItem) !== JSON.stringify(item)) {
+                new Notification('Follow-up Updated', {
+                  body: `Follow-up "${item.subject}" was updated.`
+                });
+              }
+            }
           }
         }
       }
 
       // 2. Nearing End Date (Check always, including initial load, but keep track so we only notify once per session)
-      if (item.assignedPersonnel === user.displayName && item.endDate && item.status !== 'Closed' && item.status !== 'Approved') {
+      if (item.assignedPersonnel === appUser.displayName && item.endDate && item.status !== 'Closed' && item.status !== 'Approved') {
         const endDateVal = new Date(item.endDate);
         endDateVal.setHours(0, 0, 0, 0);
         const diffTime = endDateVal.getTime() - today.getTime();
@@ -327,7 +352,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
     });
 
     previousFollowUpsRef.current = followUps;
-  }, [followUps, user]);
+  }, [followUps, user, appUser]);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -453,6 +478,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
       userId: currentUserId,
       teamId: appUser.teamId || 'NONE',
       updatedAt: serverTimestamp(),
+      updatedBy: currentUserId,
     };
 
     if (formData.attachedFile) {

@@ -11,7 +11,8 @@ interface Props {
 export default function AdminDashboard({ users }: Props) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState('');
-  const [editRole, setEditRole] = useState<'Admin' | 'Member'>('Member');
+  const [editRole, setEditRole] = useState<'Admin' | 'Member' | 'Manager'>('Member');
+  const [editPhoneNumber, setEditPhoneNumber] = useState('');
 
   const updateUserStatus = async (userId: string, status: 'Approved' | 'Rejected') => {
     try {
@@ -26,7 +27,8 @@ export default function AdminDashboard({ users }: Props) {
     try {
       await updateDoc(doc(db, 'users', userId), { 
         teamId: editTeamId,
-        role: editRole
+        role: editRole,
+        phoneNumber: editPhoneNumber
       });
       setEditingUserId(null);
     } catch (e) {
@@ -39,6 +41,7 @@ export default function AdminDashboard({ users }: Props) {
     setEditingUserId(user.id);
     setEditTeamId(user.teamId || '');
     setEditRole(user.role || 'Member');
+    setEditPhoneNumber(user.phoneNumber || '');
   };
 
   return (
@@ -74,6 +77,7 @@ export default function AdminDashboard({ users }: Props) {
                       <div>
                         <div className="font-semibold text-neutral-900">{u.displayName || 'No Name'}</div>
                         <div className="text-xs text-neutral-500">{u.email}</div>
+                        {u.phoneNumber && <div className="text-xs text-neutral-400 mt-0.5">{u.phoneNumber}</div>}
                       </div>
                     </div>
                   </td>
@@ -101,10 +105,11 @@ export default function AdminDashboard({ users }: Props) {
                       <div className="space-y-2">
                         <select 
                           value={editRole} 
-                          onChange={e => setEditRole(e.target.value as 'Admin'|'Member')}
+                          onChange={e => setEditRole(e.target.value as 'Admin'|'Member'|'Manager')}
                           className="w-full px-2 py-1 border rounded text-xs"
                         >
                           <option value="Member">Member</option>
+                          <option value="Manager">Manager</option>
                           <option value="Admin">Admin</option>
                         </select>
                         <input 
@@ -112,6 +117,13 @@ export default function AdminDashboard({ users }: Props) {
                           placeholder="Team / Dept" 
                           value={editTeamId} 
                           onChange={e => setEditTeamId(e.target.value)}
+                          className="w-full px-2 py-1 border rounded text-xs"
+                        />
+                        <input 
+                          type="text" 
+                          placeholder="Phone Number (e.g. +2010...)" 
+                          value={editPhoneNumber} 
+                          onChange={e => setEditPhoneNumber(e.target.value)}
                           className="w-full px-2 py-1 border rounded text-xs"
                         />
                       </div>

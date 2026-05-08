@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 
-export default function UsernameSetupScreen({ onSave }: { onSave: (name: string) => Promise<void> }) {
+export default function UsernameSetupScreen({ onSave }: { onSave: (name: string, phoneNumber: string) => Promise<void> }) {
   const [name, setName] = useState('');
+  const [phoneNumber, setPhoneNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -11,7 +12,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string)
     
     setSubmitting(true);
     try {
-      await onSave(trimmed);
+      await onSave(trimmed, phoneNumber.trim());
     } catch (err) {
       console.error(err);
       setSubmitting(false);
@@ -22,10 +23,10 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string)
     <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
       <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-neutral-200">
         <h2 className="text-2xl font-bold mb-2">Welcome!</h2>
-        <p className="text-neutral-500 text-sm mb-6">Please choose a display name to continue to the application.</p>
+        <p className="text-neutral-500 text-sm mb-6">Please enter your details to continue to the application.</p>
         
         <form onSubmit={handleSubmit}>
-          <div className="mb-6">
+          <div className="mb-4">
             <label className="block text-sm font-medium text-neutral-700 mb-2">
               Display Name
             </label>
@@ -37,6 +38,20 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string)
               placeholder="e.g. Jane Doe"
               disabled={submitting}
               autoFocus
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <label className="block text-sm font-medium text-neutral-700 mb-2">
+              WhatsApp Phone Number
+            </label>
+            <input 
+              type="tel" 
+              className="w-full px-4 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-neutral-900" 
+              value={phoneNumber} 
+              onChange={e => setPhoneNumber(e.target.value)}
+              placeholder="e.g. +201000000000"
+              disabled={submitting}
               required
             />
           </div>
