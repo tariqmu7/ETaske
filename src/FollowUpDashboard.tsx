@@ -25,11 +25,162 @@ import {
   X,
   FileText,
   AlertCircle,
-  Download
+  Download,
+  ChevronDown,
+  Check,
+  ChevronLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { User } from 'firebase/auth';
+
+function SearchableCombobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  groups,
+}: {
+  value: string;
+  onChange: (val: string) => void;
+  options?: string[];
+  placeholder: string;
+  groups?: { label: string; options: string[] }[];
+}) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) setSearch(value);
+  }, [isOpen, value]);
+
+  const normalizedSearch = search.trim().toLowerCase();
+  let showAdd = false;
+
+  const renderOptions = () => {
+    if (groups) {
+      let hasExactMatch = false;
+      const elements = groups.map(group => {
+        const filtered = group.options.filter(opt => opt.toLowerCase().includes(normalizedSearch));
+        if (group.options.some(opt => opt.toLowerCase() === normalizedSearch)) hasExactMatch = true;
+        
+        if (filtered.length === 0) return null;
+        return (
+          <div key={group.label} className="py-2">
+            <div className="px-4 py-1.5 text-xs font-bold text-neutral-400 uppercase tracking-wider bg-neutral-50/50 border-y border-neutral-100">{group.label}</div>
+            {filtered.map(opt => (
+              <div 
+                key={opt}
+                onClick={() => { onChange(opt); setIsOpen(false); setSearch(opt); }}
+                className="px-4 py-2 hover:bg-neutral-100 cursor-pointer text-sm flex items-center justify-between group/opt"
+              >
+                <span>{opt}</span>
+                {value === opt && <Check className="w-4 h-4 text-blue-600" />}
+              </div>
+            ))}
+          </div>
+        );
+      });
+      showAdd = normalizedSearch !== '' && !hasExactMatch;
+      return elements;
+    } else if (options) {
+      const filtered = options.filter(opt => opt.toLowerCase().includes(normalizedSearch));
+      const hasExactMatch = options.some(opt => opt.toLowerCase() === normalizedSearch);
+      showAdd = normalizedSearch !== '' && !hasExactMatch;
+
+      return (
+        <div className="py-2">
+          {filtered.length > 0 ? filtered.map(opt => (
+            <div 
+              key={opt}
+              onClick={() => { onChange(opt); setIsOpen(false); setSearch(opt); }}
+              className="px-4 py-2 hover:bg-neutral-100 cursor-pointer text-sm flex items-center justify-between group/opt"
+            >
+              <span>{opt}</span>
+              {value === opt && <Check className="w-4 h-4 text-blue-600" />}
+            </div>
+          )) : (
+            !showAdd && <div className="px-4 py-3 text-sm text-neutral-500 text-center">No options found.</div>
+          )}
+        </div>
+      )
+    }
+  };
+
+  const renderedOpts = renderOptions();
+
+  return (
+    <div className="relative w-full" ref={wrapperRef}>
+      <div 
+        className="flex items-center w-full px-4 py-2 bg-neutral-50 border border-neutral-200 rounded-xl focus-within:ring-2 focus-within:ring-neutral-900/5 focus-within:bg-white transition-colors cursor-text min-h-[44px]"
+        onClick={() => { setIsOpen(true); }}
+      >
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value);
+            setIsOpen(true);
+            onChange(e.target.value);
+          }}
+          onFocus={() => {
+            setIsOpen(true);
+            setSearch(value); 
+          }}
+          placeholder={placeholder}
+          className="w-full bg-transparent focus:outline-none text-sm text-neutral-800 placeholder:text-neutral-400"
+        />
+        {value && !isOpen && (
+          <X 
+            className="w-4 h-4 text-neutral-400 hover:text-neutral-600 shrink-0 ml-2 cursor-pointer" 
+            onClick={(e) => { e.stopPropagation(); onChange(''); setSearch(''); setIsOpen(true); }} 
+          />
+        )}
+        <ChevronDown 
+          className={cn("w-4 h-4 text-neutral-400 shrink-0 ml-2 transition-transform cursor-pointer hover:text-neutral-600", isOpen && "rotate-180")}
+          onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }} 
+        />
+      </div>
+      
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -5 }}
+            transition={{ duration: 0.15 }}
+            className="absolute z-50 w-full mt-2 bg-white border border-neutral-200 rounded-xl shadow-xl max-h-64 overflow-y-auto"
+          >
+            {renderedOpts}
+            
+            {showAdd && (
+              <div 
+                onClick={() => { onChange(search.trim()); setIsOpen(false); }}
+                className="px-4 py-3 hover:bg-blue-50 cursor-pointer text-sm font-medium text-blue-600 flex items-center gap-2 border-t border-neutral-100 bg-neutral-50/50 transition-colors sticky bottom-0"
+              >
+                <div className="w-6 h-6 rounded-md bg-blue-100 flex items-center justify-center shrink-0">
+                  <Plus className="w-4 h-4 text-blue-700" /> 
+                </div>
+                Create "{search.trim()}"
+              </div>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
 
 function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: FirestoreErrorInfo = {
@@ -79,12 +230,16 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
   const [assignedToFilter, setAssignedToFilter] = useState<string>('All');
   const [error, setError] = useState<string | null>(null);
   const [itemToDelete, setItemToDelete] = useState<FollowUp | null>(null);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<FollowUp | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedDepartment, setSelectedDepartment] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     dateIssued: new Date().toISOString().split('T')[0],
     subject: '',
-    description: '',
+    sentFrom: '',
+    department: '',
+    subCategory: '',
     assignedPersonnel: '',
     endDate: '',
     actionRequired: '',
@@ -123,6 +278,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
 
   // Notifications logic
   const previousFollowUpsRef = useRef<FollowUp[]>([]);
+  const notifiedNearEndDatesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -131,23 +287,41 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
   }, []);
 
   useEffect(() => {
-    if (!user || previousFollowUpsRef.current.length === 0) {
-      previousFollowUpsRef.current = followUps;
-      return;
-    }
+    if (!user) return;
 
     const previousFollowUpsMap = new Map<string, FollowUp>(previousFollowUpsRef.current.map(t => [t.id, t]));
-    
-    followUps.forEach(item => {
-      const prevItem = previousFollowUpsMap.get(item.id);
-      
-      const isNewlyAssigned = item.assignedPersonnel === user.displayName && prevItem?.assignedPersonnel !== user.displayName;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        if (isNewlyAssigned) {
-          new Notification('New Follow-up Assigned', {
-            body: `You have been assigned to follow up on: ${item.subject}`
-          });
+    followUps.forEach(item => {
+      // 1. New Assignment (Only check if previousFollowUpsRef is NOT empty, to avoid spam on initial load)
+      if (previousFollowUpsRef.current.length > 0) {
+        const prevItem = previousFollowUpsMap.get(item.id);
+        const isNewlyAssigned = item.assignedPersonnel === user.displayName && prevItem?.assignedPersonnel !== user.displayName;
+
+        if ('Notification' in window && Notification.permission === 'granted') {
+          if (isNewlyAssigned) {
+            new Notification('New Follow-up Assigned', {
+              body: `You have been assigned to follow up on: ${item.subject}`
+            });
+          }
+        }
+      }
+
+      // 2. Nearing End Date (Check always, including initial load, but keep track so we only notify once per session)
+      if (item.assignedPersonnel === user.displayName && item.endDate && item.status !== 'Closed' && item.status !== 'Approved') {
+        const endDateVal = new Date(item.endDate);
+        endDateVal.setHours(0, 0, 0, 0);
+        const diffTime = endDateVal.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays <= 3 && !notifiedNearEndDatesRef.current.has(item.id)) {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Follow-up Nearing End Date', {
+              body: `"${item.subject}" is due in ${diffDays} day(s).`
+            });
+          }
+          notifiedNearEndDatesRef.current.add(item.id);
         }
       }
     });
@@ -235,11 +409,21 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
     reader.readAsDataURL(file);
   };
 
+  const uniqueSentFrom = useMemo(() => {
+    const list = new Set(followUps.map(t => t.sentFrom || t.description).filter(Boolean));
+    return Array.from(list) as string[];
+  }, [followUps]);
+
+  const uniqueSubCategories = useMemo(() => {
+    const list = new Set(followUps.map(t => t.subCategory || t.epromProjectName).filter(Boolean));
+    return Array.from(list) as string[];
+  }, [followUps]);
+
   const filteredItems = useMemo(() => {
     return followUps.filter(t => {
       if (searchQuery && 
           !t.subject.toLowerCase().includes(searchQuery.toLowerCase()) && 
-          !(t.description || '').toLowerCase().includes(searchQuery.toLowerCase())) {
+          !(t.sentFrom || t.description || '').toLowerCase().includes(searchQuery.toLowerCase())) {
         return false;
       }
       if (statusFilter !== 'All' && t.status !== statusFilter) {
@@ -258,7 +442,9 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
     const taskData: any = {
       dateIssued: formData.dateIssued,
       subject: formData.subject,
-      description: formData.description,
+      sentFrom: formData.sentFrom,
+      department: formData.department,
+      subCategory: formData.subCategory,
       assignedPersonnel: formData.assignedPersonnel,
       endDate: formData.endDate,
       actionRequired: formData.actionRequired,
@@ -300,15 +486,16 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
     setItemToDelete(item);
   };
 
-  const handleDeleteAttachment = async (item: FollowUp) => {
-    if (!window.confirm('Are you sure you want to delete this attachment?')) return;
+  const handleDeleteAttachment = async () => {
+    if (!attachmentToDelete) return;
     try {
-      await updateDoc(doc(db, 'followUps', item.id), {
+      await updateDoc(doc(db, 'followUps', attachmentToDelete.id), {
         attachedFile: deleteField(),
         attachedFileName: deleteField(),
         serialNumber: deleteField(),
         updatedAt: serverTimestamp()
       });
+      setAttachmentToDelete(null);
     } catch (err: any) {
       console.error(err);
       alert('Error deleting attachment: ' + err.message);
@@ -333,7 +520,9 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
       setFormData({
         dateIssued: item.dateIssued,
         subject: item.subject,
-        description: item.description || '',
+        sentFrom: item.sentFrom || item.description || '',
+        department: item.department || '',
+        subCategory: item.subCategory || item.epromProjectName || '',
         assignedPersonnel: item.assignedPersonnel,
         endDate: item.endDate || '',
         actionRequired: item.actionRequired || '',
@@ -348,7 +537,9 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
       setFormData({
         dateIssued: new Date().toISOString().split('T')[0],
         subject: '',
-        description: '',
+        sentFrom: '',
+        department: '',
+        subCategory: '',
         assignedPersonnel: '',
         endDate: '',
         actionRequired: '',
@@ -445,141 +636,227 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
         </button>
       </div>
 
-      {/* Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <AnimatePresence>
-          {filteredItems.map(item => (
-            <motion.div 
-              key={item.id}
-              layout
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              onClick={() => openModal(item)}
-              className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative flex flex-col h-full cursor-pointer"
-            >
-              <div className="flex-1">
-                {item.attachedFile && (
-                  <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex flex-col gap-3">
-                    {(item.attachedFile.startsWith('data:image/') || (item.attachedFile.includes('drive.google.com/uc') && item.attachedFileName.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i))) && (
-                      <div 
-                        className="w-full h-48 flex items-center justify-center rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100 cursor-zoom-in"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setFullscreenImage(item.attachedFile);
-                        }}
-                      >
-                        <img 
-                          src={getImageUrl(item.attachedFile)} 
-                          alt={item.attachedFileName} 
-                          className="max-w-full max-h-full object-contain mix-blend-multiply" 
-                          referrerPolicy="no-referrer"
-                        />
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex flex-col overflow-hidden">
-                        <span className="text-xs font-bold text-neutral-400 uppercase">Attached File</span>
-                        <span className="text-sm font-medium text-neutral-700 truncate">{item.attachedFileName}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {item.serialNumber && (
-                          <span className="px-2 py-1 bg-white border border-neutral-200 rounded text-xs font-mono text-neutral-600">
-                            #{item.serialNumber}
-                          </span>
-                        )}
-                        <a 
-                          href={item.attachedFile} 
-                          download={item.attachedFileName}
-                          target={item.attachedFile.includes('drive.google.com') ? "_blank" : "_self"}
-                          onClick={(e) => e.stopPropagation()}
-                          className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-blue-600 hover:border-blue-200 transition-colors shrink-0"
-                          title="Download File"
-                        >
-                          <Download className="w-4 h-4" />
-                        </a>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleDeleteAttachment(item);
-                          }}
-                          className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors shrink-0"
-                          title="Delete Attachment"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
+      <div className="space-y-12">
+        {(() => {
+          if (filteredItems.length === 0) return null;
+
+          const groupedByDepartment = filteredItems.reduce((acc, item) => {
+            let groupName = item.department || 'Uncategorized';
+            const cat = item.subCategory || item.epromProjectName;
+            if (item.department && cat) {
+              groupName = `${item.department} - ${cat}`;
+            }
+            if (!acc[groupName]) acc[groupName] = [];
+            acc[groupName].push(item);
+            return acc;
+          }, {} as Record<string, FollowUp[]>);
+
+          if (!selectedDepartment) {
+            // Show Departments Grid
+            return (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {(Object.entries(groupedByDepartment) as [string, FollowUp[]][]).sort(([a], [b]) => a.localeCompare(b)).map(([dept, items]) => (
+                  <motion.div 
+                    key={dept}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    onClick={() => setSelectedDepartment(dept)}
+                    className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col items-center justify-center text-center gap-4 min-h-[200px]"
+                  >
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
+                      <FileText className="w-8 h-8" />
                     </div>
+                    <div>
+                      <h3 className="text-xl font-bold text-neutral-900 line-clamp-2">{dept}</h3>
+                      <p className="text-neutral-500 mt-1">{items.length} Follow-ups</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            );
+          }
+
+          const departmentItems = groupedByDepartment[selectedDepartment] || [];
+
+          // Group by assignedPersonnel
+          const groupedByAssignee = departmentItems.reduce((acc, item) => {
+            const assignee = item.assignedPersonnel || 'Unassigned';
+            if (!acc[assignee]) acc[assignee] = [];
+            acc[assignee].push(item);
+            return acc;
+          }, {} as Record<string, FollowUp[]>);
+
+          return (
+            <div className="space-y-8">
+              <div className="flex flex-col gap-4">
+                <button 
+                  onClick={() => setSelectedDepartment(null)}
+                  className="flex items-center gap-2 text-sm font-medium text-neutral-500 hover:text-neutral-900 transition-colors w-max"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                  Back to Departments
+                </button>
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
                   </div>
-                )}
-              
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex flex-wrap gap-2">
-                  <div className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border", getStatusColor(item.status))}>
-                    {item.status}
-                  </div>
-                </div>
-                <div className="flex gap-1 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100">
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      openModal(item);
-                    }}
-                    className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(item);
-                    }}
-                    className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
+                  <h2 className="text-2xl font-bold text-neutral-900">{selectedDepartment}</h2>
+                  <span className="text-sm font-medium text-neutral-500 bg-neutral-100 px-3 py-1 rounded-full">{departmentItems.length} items</span>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2 mb-2">
-                <span className="px-2 py-0.5 bg-neutral-100 text-neutral-500 border border-neutral-200 rounded text-[10px] font-mono leading-tight">
-                  {item.id.slice(0, 5).toUpperCase()}
-                </span>
-                <h3 className="text-lg font-bold line-clamp-1" title={item.subject}>{item.subject}</h3>
-              </div>
-              <p className="text-neutral-500 text-sm mb-3 line-clamp-2 min-h-[2.5rem]">
-                {item.description || "No description provided."}
-              </p>
-              </div>
+              {(Object.entries(groupedByAssignee) as [string, FollowUp[]][]).sort(([a], [b]) => a.localeCompare(b)).map(([assignee, items]) => (
+                <div key={assignee} className="space-y-4">
+                  <h3 className="text-lg font-bold text-neutral-800 flex items-center gap-2 border-b border-neutral-200 pb-2">
+                    {assignee} <span className="text-sm font-normal text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">{items.length}</span>
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <AnimatePresence>
+                      {items.map(item => (
+                        <motion.div 
+                          key={item.id}
+                          layout
+                          initial={{ opacity: 0, scale: 0.95 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          exit={{ opacity: 0, scale: 0.95 }}
+                          onClick={() => openModal(item)}
+                          className="bg-white border border-neutral-200 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all group relative flex flex-col h-full cursor-pointer"
+                        >
+                          <div className="flex-1">
+                            {item.attachedFile && (
+                              <div className="mb-4 bg-neutral-50 rounded-xl p-3 border border-neutral-100 flex flex-col gap-3">
+                                {(item.attachedFile.startsWith('data:image/') || (item.attachedFile.includes('drive.google.com/uc') && item.attachedFileName?.match(/\.(jpeg|jpg|gif|png|webp|bmp|svg)$/i))) && (
+                                  <div 
+                                    className="w-full h-48 flex items-center justify-center rounded-lg overflow-hidden border border-neutral-200 bg-neutral-100 cursor-zoom-in"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFullscreenImage(item.attachedFile);
+                                    }}
+                                  >
+                                    <img 
+                                      src={getImageUrl(item.attachedFile)} 
+                                      alt={item.attachedFileName} 
+                                      className="max-w-full max-h-full object-contain mix-blend-multiply" 
+                                      referrerPolicy="no-referrer"
+                                    />
+                                  </div>
+                                )}
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex flex-col overflow-hidden">
+                                    <span className="text-xs font-bold text-neutral-400 uppercase">Attached File</span>
+                                    <span className="text-sm font-medium text-neutral-700 truncate">{item.attachedFileName}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    {item.serialNumber && (
+                                      <span className="px-2 py-1 bg-white border border-neutral-200 rounded text-xs font-mono text-neutral-600">
+                                        #{item.serialNumber}
+                                      </span>
+                                    )}
+                                    <a 
+                                      href={item.attachedFile} 
+                                      download={item.attachedFileName}
+                                      target={item.attachedFile.includes('drive.google.com') ? "_blank" : "_self"}
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-blue-600 hover:border-blue-200 transition-colors shrink-0"
+                                      title="Download File"
+                                    >
+                                      <Download className="w-4 h-4" />
+                                    </a>
+                                    <button 
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setAttachmentToDelete(item);
+                                      }}
+                                      className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors shrink-0"
+                                      title="Delete Attachment"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          
+                            <div className="flex items-start justify-between mb-4">
+                              <div className="flex flex-wrap gap-2">
+                              <div className={cn("px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border", getStatusColor(item.status))}>
+                                {item.status}
+                              </div>
+                            </div>
+                            <div className="flex gap-1 transition-opacity opacity-100 md:opacity-0 md:group-hover:opacity-100">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openModal(item);
+                                }}
+                                className="p-1.5 text-neutral-400 hover:text-neutral-900 hover:bg-neutral-50 rounded-lg"
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(item);
+                                }}
+                                className="p-1.5 text-neutral-400 hover:text-red-600 hover:bg-red-50 rounded-lg"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
 
-              <div className="bg-neutral-50 rounded-xl p-3 mt-4 space-y-2">
-                <div className="flex justify-between items-center text-[10px] font-bold text-neutral-400 uppercase">
-                  <span>Assigned Personnel</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-5 h-5 rounded-full bg-neutral-200 flex items-center justify-center text-[10px] text-neutral-600 font-bold">
-                    {item.assignedPersonnel[0] || '?'}
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="px-2 py-0.5 bg-neutral-100 text-neutral-500 border border-neutral-200 rounded text-[10px] font-mono leading-tight">
+                              {item.id.slice(0, 5).toUpperCase()}
+                            </span>
+                            <h3 className="text-lg font-bold line-clamp-1" title={item.subject}>{item.subject}</h3>
+                          </div>
+                          <p className="text-neutral-500 text-sm mb-3 line-clamp-2 min-h-[2.5rem]">
+                            {(item.sentFrom || item.description) ? (
+                              <>
+                                <span className="font-semibold text-neutral-600">Sent From:</span> {item.sentFrom || item.description}
+                              </>
+                            ) : (
+                              "No sender info."
+                            )}
+                          </p>
+                          </div>
+
+                          <div className="bg-neutral-50 rounded-xl p-3 mt-4 space-y-2">
+                            <div className="flex justify-between items-center text-[10px] font-bold text-neutral-400 uppercase">
+                              <span>Assigned Personnel</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 rounded-full bg-neutral-200 flex items-center justify-center text-[10px] text-neutral-600 font-bold">
+                                {item.assignedPersonnel[0] || '?'}
+                              </div>
+                              <span className="text-sm font-medium text-neutral-700">{item.assignedPersonnel || 'Unassigned'}</span>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2 mt-2">
+                            <div className="bg-neutral-50 rounded-xl p-3">
+                              <div className="text-[10px] font-bold text-neutral-400 uppercase mb-1">Issued</div>
+                              <div className="text-xs font-medium text-neutral-700">{new Date(item.dateIssued).toLocaleDateString()}</div>
+                            </div>
+                            {item.endDate && (
+                              <div className="bg-neutral-50 rounded-xl p-3">
+                                <div className="text-[10px] font-bold text-neutral-400 uppercase mb-1">End Date</div>
+                                <div className="text-xs font-medium text-neutral-700">{new Date(item.endDate).toLocaleDateString()}</div>
+                              </div>
+                            )}
+                          </div>
+
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
                   </div>
-                  <span className="text-sm font-medium text-neutral-700">{item.assignedPersonnel || 'Unassigned'}</span>
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 mt-2">
-                <div className="bg-neutral-50 rounded-xl p-3">
-                  <div className="text-[10px] font-bold text-neutral-400 uppercase mb-1">Issued</div>
-                  <div className="text-xs font-medium text-neutral-700">{new Date(item.dateIssued).toLocaleDateString()}</div>
-                </div>
-                {item.endDate && (
-                  <div className="bg-neutral-50 rounded-xl p-3">
-                    <div className="text-[10px] font-bold text-neutral-400 uppercase mb-1">End Date</div>
-                    <div className="text-xs font-medium text-neutral-700">{new Date(item.endDate).toLocaleDateString()}</div>
-                  </div>
-                )}
-              </div>
-
-            </motion.div>
-          ))}
-        </AnimatePresence>
+              ))}
+            </div>
+          );
+        })()}
       </div>
 
       {filteredItems.length === 0 && (
@@ -622,15 +899,36 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
                     />
                   </div>
 
-                  <div className="col-span-full">
-                    <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Description</label>
-                    <textarea 
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      placeholder="Task or document details..."
-                      rows={3}
-                      className="w-full px-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900/5 resize-none"
-                    />
+                  <div className="col-span-full grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Sent From</label>
+                      <SearchableCombobox 
+                        value={formData.sentFrom || ''}
+                        onChange={(val) => setFormData({ ...formData, sentFrom: val })}
+                        options={uniqueSentFrom}
+                        placeholder="Search or add sender..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Department</label>
+                      <SearchableCombobox 
+                        value={formData.department || ''}
+                        onChange={(val) => setFormData({ ...formData, department: val, subCategory: '' })}
+                        options={['HQ', 'External', 'EPROM Project', ...Array.from(new Set(followUps.map(f => f.department).filter(d => Boolean(d) && d !== 'HQ' && d !== 'External' && d !== 'EPROM Project'))) as string[]]}
+                        placeholder="Search or add department..."
+                      />
+                    </div>
+
+                      <div className="col-span-full">
+                        <label className="block text-xs font-bold text-neutral-400 uppercase mb-2">Subcategory</label>
+                        <SearchableCombobox 
+                          value={formData.subCategory || ''}
+                          onChange={(val) => setFormData({ ...formData, subCategory: val })}
+                          options={uniqueSubCategories}
+                          placeholder="Search or add subcategory..."
+                        />
+                      </div>
                   </div>
 
                   <div>
@@ -780,6 +1078,44 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {attachmentToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm" onClick={() => setAttachmentToDelete(null)} />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden z-10"
+            >
+              <div className="p-6">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-neutral-900 mb-2">Delete Attachment?</h3>
+                <p className="text-neutral-500 mb-8">
+                  Are you sure you want to delete the attached file "{attachmentToDelete.attachedFileName}"? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAttachmentToDelete(null)}
+                    className="flex-1 px-4 py-2 bg-neutral-100 text-neutral-700 font-medium rounded-xl hover:bg-neutral-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAttachment}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

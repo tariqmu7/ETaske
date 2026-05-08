@@ -114,6 +114,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
 
   const [error, setError] = useState<string | null>(null);
   const [taskToDelete, setTaskToDelete] = useState<Task | null>(null);
+  const [attachmentToDelete, setAttachmentToDelete] = useState<Task | null>(null);
   const [isUploading, setIsUploading] = useState(false);
 
   // Form State
@@ -163,6 +164,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
 
   // Notifications logic
   const previousTasksRef = useRef<Task[]>([]);
+  const notifiedNearEndDatesRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
@@ -171,32 +173,50 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
   }, []);
 
   useEffect(() => {
-    if (!user || previousTasksRef.current.length === 0) {
-      previousTasksRef.current = tasks;
-      return;
-    }
+    if (!user) return;
 
     const previousTasksMap = new Map<string, Task>(previousTasksRef.current.map(t => [t.id, t]));
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
     tasks.forEach(task => {
-      const prevTask = previousTasksMap.get(task.id);
-      
-      const assigned = task.assignedTo;
-      const prevAssigned = prevTask?.assignedTo;
+      // 1. New Assignments and Waiting On (Skip on initial load)
+      if (previousTasksRef.current.length > 0) {
+        const prevTask = previousTasksMap.get(task.id);
+        const assigned = task.assignedTo;
+        const prevAssigned = prevTask?.assignedTo;
 
-      const isNewlyAssigned = assigned === user.displayName && prevAssigned !== user.displayName;
-      const isNewlyWaitingOn = task.waitingOn === user.displayName && prevTask?.waitingOn !== user.displayName;
+        const isNewlyAssigned = assigned === user.displayName && prevAssigned !== user.displayName;
+        const isNewlyWaitingOn = task.waitingOn === user.displayName && prevTask?.waitingOn !== user.displayName;
 
-      if ('Notification' in window && Notification.permission === 'granted') {
-        if (isNewlyAssigned) {
-          new Notification('New Task Assigned', {
-            body: `You have been assigned to: ${task.taskName}`
-          });
+        if ('Notification' in window && Notification.permission === 'granted') {
+          if (isNewlyAssigned) {
+            new Notification('New Task Assigned', {
+              body: `You have been assigned to: ${task.taskName}`
+            });
+          }
+          if (isNewlyWaitingOn) {
+            new Notification('Action Required', {
+              body: `Task "${task.taskName}" is now waiting on you.`
+            });
+          }
         }
-        if (isNewlyWaitingOn) {
-          new Notification('Action Required', {
-            body: `Task "${task.taskName}" is now waiting on you.`
-          });
+      }
+
+      // 2. Nearing Due Date
+      if (task.assignedTo === user.displayName && task.dueDate && task.status !== 'Done') {
+        const dueDateVal = new Date(task.dueDate);
+        dueDateVal.setHours(0, 0, 0, 0);
+        const diffTime = dueDateVal.getTime() - today.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        if (diffDays >= 0 && diffDays <= 3 && !notifiedNearEndDatesRef.current.has(task.id)) {
+          if ('Notification' in window && Notification.permission === 'granted') {
+            new Notification('Task Nearing Due Date', {
+              body: `"${task.taskName}" is due in ${diffDays} day(s).`
+            });
+          }
+          notifiedNearEndDatesRef.current.add(task.id);
         }
       }
     });
@@ -362,15 +382,16 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
     setTaskToDelete(task);
   };
 
-  const handleDeleteAttachment = async (task: Task) => {
-    if (!window.confirm('Are you sure you want to delete this attachment?')) return;
+  const handleDeleteAttachment = async () => {
+    if (!attachmentToDelete) return;
     try {
-      await updateDoc(doc(db, 'tasks', task.id), {
+      await updateDoc(doc(db, 'tasks', attachmentToDelete.id), {
         attachedFile: deleteField(),
         attachedFileName: deleteField(),
         serialNumber: deleteField(),
         updatedAt: serverTimestamp()
       });
+      setAttachmentToDelete(null);
     } catch (err: any) {
       console.error(err);
       alert('Error deleting attachment: ' + err.message);
@@ -649,7 +670,7 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteAttachment(task);
+                            setAttachmentToDelete(task);
                           }}
                           className="p-2 bg-white border border-neutral-200 rounded-lg text-neutral-500 hover:text-red-600 hover:border-red-200 transition-colors"
                           title="Delete Attachment"
@@ -1096,6 +1117,43 @@ export default function TaskDashboard({ user, appUser, projectUsers, onLogout }:
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {attachmentToDelete && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 backdrop-blur-sm p-4">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden"
+            >
+              <div className="p-6">
+                <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mb-6">
+                  <Trash2 className="w-6 h-6 text-red-600" />
+                </div>
+                <h3 className="text-xl font-bold text-neutral-900 mb-2">Delete Attachment?</h3>
+                <p className="text-neutral-500 mb-8">
+                  Are you sure you want to delete the attached file "{attachmentToDelete.attachedFileName}"? This action cannot be undone.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setAttachmentToDelete(null)}
+                    className="flex-1 px-4 py-2 bg-neutral-100 text-neutral-700 font-medium rounded-xl hover:bg-neutral-200 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteAttachment}
+                    className="flex-1 px-4 py-2 bg-red-600 text-white font-medium rounded-xl hover:bg-red-700 transition-colors"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

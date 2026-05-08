@@ -45,7 +45,11 @@ export interface FollowUp {
   id: string;
   dateIssued: string;
   subject: string;
-  description: string;
+  description?: string; // Kept as optional for backward compatibility
+  sentFrom?: string;
+  department?: string;
+  subCategory?: string;
+  epromProjectName?: string; // Kept for backward compatibility
   assignedPersonnel: string;
   endDate: string;
   actionRequired: string;
