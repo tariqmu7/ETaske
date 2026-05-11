@@ -308,7 +308,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
 
           if (!skipSelfNotify) {
             if (!prevItem) {
-              new Notification('New Follow-up Created', {
+              new Notification('New Corresponding Created', {
                 body: `Subject: ${item.subject}\nAssigned to: ${assigned || 'Unassigned'}`
               });
             } else {
@@ -316,16 +316,16 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
               const assigneeChanged = prevItem.assignedPersonnel !== assigned;
               
               if (assigneeChanged) {
-                new Notification('Follow-up Reassigned', {
-                  body: `Follow-up "${item.subject}" reassigned to: ${assigned || 'Unassigned'}`
+                new Notification('Corresponding Reassigned', {
+                  body: `Corresponding "${item.subject}" reassigned to: ${assigned || 'Unassigned'}`
                 });
               } else if (statusChanged) {
-                new Notification('Follow-up Status Changed', {
-                  body: `Follow-up "${item.subject}" is now ${item.status}`
+                new Notification('Corresponding Status Changed', {
+                  body: `Corresponding "${item.subject}" is now ${item.status}`
                 });
               } else if (prevItem.updatedAt !== item.updatedAt || JSON.stringify(prevItem) !== JSON.stringify(item)) {
-                new Notification('Follow-up Updated', {
-                  body: `Follow-up "${item.subject}" was updated.`
+                new Notification('Corresponding Updated', {
+                  body: `Corresponding "${item.subject}" was updated.`
                 });
               }
             }
@@ -342,7 +342,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
 
         if (diffDays >= 0 && diffDays <= 3 && !notifiedNearEndDatesRef.current.has(item.id)) {
           if ('Notification' in window && Notification.permission === 'granted') {
-            new Notification('Follow-up Nearing End Date', {
+            new Notification('Corresponding Nearing End Date', {
               body: `"${item.subject}" is due in ${diffDays} day(s).`
             });
           }
@@ -658,7 +658,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
           className="bg-neutral-900 hover:bg-neutral-800 text-white px-5 py-2.5 rounded-xl font-medium transition-all shadow-lg shadow-neutral-900/20 flex items-center justify-center gap-2"
         >
           <Plus className="w-4 h-4" />
-          <span>New Follow-up</span>
+          <span>New Corresponding</span>
         </button>
       </div>
 
@@ -667,11 +667,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
           if (filteredItems.length === 0) return null;
 
           const groupedByDepartment = filteredItems.reduce((acc, item) => {
-            let groupName = item.department || 'Uncategorized';
-            const cat = item.subCategory || item.epromProjectName;
-            if (item.department && cat) {
-              groupName = `${item.department} - ${cat}`;
-            }
+            const groupName = item.department || 'Uncategorized';
             if (!acc[groupName]) acc[groupName] = [];
             acc[groupName].push(item);
             return acc;
@@ -695,7 +691,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
                     </div>
                     <div>
                       <h3 className="text-xl font-bold text-neutral-900 line-clamp-2">{dept}</h3>
-                      <p className="text-neutral-500 mt-1">{items.length} Follow-ups</p>
+                      <p className="text-neutral-500 mt-1">{items.length} Correspondings</p>
                     </div>
                   </motion.div>
                 ))}
@@ -705,11 +701,11 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
 
           const departmentItems = groupedByDepartment[selectedDepartment] || [];
 
-          // Group by assignedPersonnel
-          const groupedByAssignee = departmentItems.reduce((acc, item) => {
-            const assignee = item.assignedPersonnel || 'Unassigned';
-            if (!acc[assignee]) acc[assignee] = [];
-            acc[assignee].push(item);
+          // Group by Sub Category
+          const groupedBySubCategory = departmentItems.reduce((acc, item) => {
+            const subCat = item.subCategory || item.epromProjectName || 'Uncategorized';
+            if (!acc[subCat]) acc[subCat] = [];
+            acc[subCat].push(item);
             return acc;
           }, {} as Record<string, FollowUp[]>);
 
@@ -732,10 +728,10 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
                 </div>
               </div>
 
-              {(Object.entries(groupedByAssignee) as [string, FollowUp[]][]).sort(([a], [b]) => a.localeCompare(b)).map(([assignee, items]) => (
-                <div key={assignee} className="space-y-4">
+              {(Object.entries(groupedBySubCategory) as [string, FollowUp[]][]).sort(([a], [b]) => a.localeCompare(b)).map(([subCategory, items]) => (
+                <div key={subCategory} className="space-y-4">
                   <h3 className="text-lg font-bold text-neutral-800 flex items-center gap-2 border-b border-neutral-200 pb-2">
-                    {assignee} <span className="text-sm font-normal text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">{items.length}</span>
+                    {subCategory} <span className="text-sm font-normal text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-full">{items.length}</span>
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     <AnimatePresence>
@@ -889,7 +885,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
         <div className="text-center py-20 bg-white border border-neutral-200 rounded-3xl border-dashed">
           <FileText className="w-12 h-12 text-neutral-300 mx-auto mb-4" />
           <h3 className="text-lg font-bold text-neutral-900 mb-1">No documents found</h3>
-          <p className="text-neutral-500">Create a new follow-up to get started.</p>
+          <p className="text-neutral-500">Create a new corresponding to get started.</p>
         </div>
       )}
 
@@ -905,7 +901,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
               className="relative w-full max-w-2xl max-h-[90vh] bg-white rounded-3xl shadow-2xl flex flex-col overflow-hidden"
             >
               <div className="px-6 py-4 sm:px-8 sm:py-6 border-b border-neutral-100 flex items-center justify-between shrink-0">
-                <h2 className="text-xl font-bold">{editingItem ? 'Edit Follow-up' : 'New Follow-up'}</h2>
+                <h2 className="text-xl font-bold">{editingItem ? 'Edit Corresponding' : 'New Corresponding'}</h2>
                 <button type="button" onClick={closeModal} className="p-2 hover:bg-neutral-100 rounded-full transition-colors">
                   <X className="w-5 h-5" />
                 </button>
@@ -1100,7 +1096,7 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
                     type="submit" 
                     className="flex-1 px-6 py-3 bg-neutral-900 hover:bg-neutral-800 text-white font-medium rounded-xl transition-colors shadow-lg shadow-neutral-900/20"
                   >
-                    {editingItem ? 'Save Changes' : 'Create Follow-up'}
+                    {editingItem ? 'Save Changes' : 'Create Corresponding'}
                   </button>
                 </div>
               </form>
@@ -1160,8 +1156,8 @@ export default function FollowUpDashboard({ user, appUser, projectUsers }: Props
               <div className="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Trash2 className="w-8 h-8" />
               </div>
-              <h3 className="text-xl font-bold mb-2">Delete Follow-up?</h3>
-              <p className="text-neutral-500 mb-8">This action cannot be undone. Are you sure you want to delete this document follow-up?</p>
+              <h3 className="text-xl font-bold mb-2">Delete Corresponding?</h3>
+              <p className="text-neutral-500 mb-8">This action cannot be undone. Are you sure you want to delete this document corresponding?</p>
               <div className="flex gap-3">
                 <button 
                   onClick={() => setItemToDelete(null)}

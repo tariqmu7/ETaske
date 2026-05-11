@@ -180,7 +180,7 @@ export default function App() {
             )}
           >
             <FileClock className="w-4 h-4" />
-            Follow-ups
+            Correspondings
           </button>
         </div>
 
