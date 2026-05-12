@@ -47,12 +47,13 @@ const emptyForm = () => ({
   subject: '',
   body: '',
   sentFrom: '',
-  department: DEPARTMENT_OPTIONS[0],
-  subCategory: '',
+  department: 'None',
+  subCategory: 'None',
   category: 'Internal' as CorrespondingCategory,
   priority: 'Medium' as Corresponding['priority'],
   dateReceived: new Date().toISOString().split('T')[0],
   deadline: '',
+  actions: 'None',
   attachedFile: '',
   attachedFileName: '',
   serialNumber: '',
@@ -142,7 +143,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
   const closeModal = () => { setIsModalOpen(false); setEditing(null); };
 
-  const set = (k: string, v: string) => setFormData(p => ({ ...p, [k]: v }));
+  const set = (f: string, v: any) => setFormData(p => ({ ...p, [f]: v }));
+
+  const handleOtherSelection = (field: string, value: string) => {
+    if (value === 'Other...') {
+      const custom = prompt(`Enter custom value for ${field}:`);
+      if (custom) {
+        set(field, custom);
+      }
+    } else {
+      set(field, value);
+    }
+  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -321,6 +333,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
                     }}>{item.category}</span>
                   )}
+                  {item.actions && item.actions !== 'None' && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                      borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
+                      border: '1px solid #fecaca'
+                    }}>{item.actions}</span>
+                  )}
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
@@ -409,27 +429,27 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                   {/* Subject */}
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">Subject *</label>
-                    <input className="input" required value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
+                    <label className="input-label">Subject</label>
+                    <input className="input" value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
                   </div>
                   {/* Body */}
                   <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">Body / Description *</label>
-                    <textarea className="input" required rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder="Describe the content of the correspondence…" />
+                    <label className="input-label">Body / Description</label>
+                    <textarea className="input" rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder="Describe the content of the correspondence…" />
                   </div>
                   {/* Sent From */}
                   <div>
-                    <label className="input-label">Sent From *</label>
-                    <input className="input" required value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder="Organization or person…" />
+                    <label className="input-label">Sent From</label>
+                    <input className="input" value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder="Organization or person…" />
                   </div>
                   {/* Category */}
                   <div>
-                    <label className="input-label">Category *</label>
+                    <label className="input-label">Category</label>
                     <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content' }}>
                       {CATEGORY_OPTIONS.map(c => (
                         <button
                           key={c} type="button"
-                          onClick={() => set('category', c)}
+                          onClick={() => handleOtherSelection('category', c)}
                           style={{
                             padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
                             background: formData.category === c ? 'var(--accent)' : 'transparent',
@@ -465,16 +485,29 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   {/* Department */}
                   <div>
                     <label className="input-label">Department</label>
-                    <select className="input" value={formData.department} onChange={e => { set('department', e.target.value); set('subCategory', ''); }}>
+                    <select className="input" value={formData.department} onChange={e => { handleOtherSelection('department', e.target.value); set('subCategory', 'None'); }}>
                       {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
                     </select>
                   </div>
                   {/* Sub-category */}
                   <div>
                     <label className="input-label">Sub-Category / Project</label>
-                    <select className="input" value={formData.subCategory} onChange={e => set('subCategory', e.target.value)}>
-                      <option value="">Select Option...</option>
-                      {dynamicSubCategories.map(s => <option key={s} value={s}>{s}</option>)}
+                    <input 
+                      className="input" 
+                      list="corrSubCategoryList"
+                      placeholder="Search or type project..."
+                      value={formData.subCategory} 
+                      onChange={e => set('subCategory', e.target.value)} 
+                    />
+                    <datalist id="corrSubCategoryList">
+                      {dynamicSubCategories.map(s => <option key={s} value={s} />)}
+                    </datalist>
+                  </div>
+                  {/* Actions */}
+                  <div>
+                    <label className="input-label">Actions</label>
+                    <select className="input" value={formData.actions} onChange={e => set('actions', e.target.value)}>
+                      {['None', 'For info', 'SR for approval', 'Action needed'].map(a => <option key={a} value={a}>{a}</option>)}
                     </select>
                   </div>
                   {/* Date received */}

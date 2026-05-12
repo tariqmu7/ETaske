@@ -23,7 +23,7 @@ export interface AppUser {
 
 export type CorrespondingStatus = 'Unread' | 'Reviewing' | 'Assigned' | 'Closed';
 
-export type CorrespondingCategory = 'Project' | 'Internal' | 'External';
+export type CorrespondingCategory = 'Project' | 'Internal' | 'External' | 'Other...';
 
 export interface Corresponding {
   id: string;
@@ -37,6 +37,7 @@ export interface Corresponding {
   priority: TaskPriority;
   dateReceived: string;
   deadline?: string;
+  actions?: string;
   // Attachments
   attachedFile?: string;
   attachedFileName?: string;
@@ -152,16 +153,7 @@ export interface AppNotification {
 
 export const STATUS_OPTIONS: TaskStatus[] = ['Pending', 'In Progress', 'Done', 'Archived'];
 
-export const ACTION_OPTIONS = [
-  'None',
-  'Needs Approval',
-  'Please Review',
-  'Follow Up',
-  'Action Required',
-  'Development',
-  'Testing',
-  'Deployment',
-];
+export const ACTION_OPTIONS = ['None', 'For info', 'SR for approval', 'Action needed'];
 
 export const STATUS_UPDATE_OPTIONS = [
   'Not Started',
@@ -174,6 +166,7 @@ export const STATUS_UPDATE_OPTIONS = [
 ];
 
 export const DEPARTMENT_OPTIONS = [
+  'None',
   'Legal Department',
   'Finance Department',
   'PR',
@@ -182,18 +175,21 @@ export const DEPARTMENT_OPTIONS = [
   'Technical Support',
   'CEO Office',
   'Medical Department',
+  'Other...'
 ];
 
 export const PROJECT_OPTIONS = [
+  'None',
   'AMOC', 'APC', 'APRC', 'AGIBA', 'ANOPC', 'ASPPC', 'ALEX FERT', 'ASORC', 'CORC',
   'ELAB', 'SADAT BERTH', 'ENPPI', 'ETHYDCO', 'FLEET ENERGY', 'GASCO', 'KHALDA',
   'MIDOR', 'MIDTAP', 'NPC', 'OSOCO', 'PETROBEL', 'PETROGAS', 'PETRONEFERTITI',
-  'RED SEA', 'PPC', 'SOPC', 'WEPCO', 'SUCO'
+  'RED SEA', 'PPC', 'SOPC', 'WEPCO', 'SUCO',
+  'Other...'
 ];
 
 export const MILESTONE_STATUS_OPTIONS: MilestoneStatus[] = ['Planned', 'In Progress', 'Done', 'Blocked'];
 
-export const CATEGORY_OPTIONS: CorrespondingCategory[] = ['Project', 'Internal', 'External'];
+export const CATEGORY_OPTIONS: CorrespondingCategory[] = ['Project', 'Internal', 'External', 'Other...'];
 
 // ─── Legacy compat ─────────────────────────────────────────────────────────────
 

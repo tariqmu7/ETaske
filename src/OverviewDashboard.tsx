@@ -139,6 +139,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [dateFilter, setDateFilter] = useState('');
+  const [viewTab, setViewTab] = useState<'Correspondences' | 'Tasks'>('Correspondences');
 
   // Load data
   useEffect(() => {
@@ -382,38 +383,69 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <ArrowRight className="w-4 h-4" style={{ transform: 'rotate(180deg)' }} /> Back to Categories
               </button>
               
-              <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 400 }}>
+              <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
                 <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#94a3b8' }} />
                 <input
                   className="input"
                   style={{ paddingLeft: 36, fontSize: 13 }}
-                  placeholder="Search tasks or correspondences…"
+                  placeholder="Search…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
+              </div>
+
+              <div style={{ display: 'flex', background: '#f1f5f9', padding: 4, borderRadius: 8 }}>
+                <button 
+                  onClick={() => setViewTab('Correspondences')}
+                  style={{ 
+                    padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: viewTab === 'Correspondences' ? '#fff' : 'transparent',
+                    color: viewTab === 'Correspondences' ? '#0f172a' : '#64748b',
+                    boxShadow: viewTab === 'Correspondences' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Correspondences ({Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.corrs.length, 0)})
+                </button>
+                <button 
+                  onClick={() => setViewTab('Tasks')}
+                  style={{ 
+                    padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    background: viewTab === 'Tasks' ? '#fff' : 'transparent',
+                    color: viewTab === 'Tasks' ? '#0f172a' : '#64748b',
+                    boxShadow: viewTab === 'Tasks' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                    transition: 'all 0.2s',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  Tasks ({Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.tasks.length, 0)})
+                </button>
               </div>
             </div>
 
             {/* Sub-categories */}
             {Array.from(subCategoryGroups.entries()).sort().map(([subCat, data]) => {
-              if (data.corrs.length === 0 && data.tasks.length === 0) return null;
+              const hasContent = viewTab === 'Correspondences' ? data.corrs.length > 0 : data.tasks.length > 0;
+              if (!hasContent) return null;
+              
               return (
-                <div key={subCat} style={{ marginBottom: 40 }}>
-                  <h3 style={{ fontSize: 18, fontWeight: 800, color: '#0f172a', marginBottom: 16, paddingBottom: 8, borderBottom: '2px solid #e2e8f0', display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <FolderOpen className="w-5 h-5 text-primary" />
+                <div key={subCat} style={{ marginBottom: 32 }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: '#475569', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                    <FolderOpen className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
                     {subCat}
                   </h3>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
-                    {/* Correspondences Column / Items */}
-                    {data.corrs.map(item => (
-                      <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} />
-                    ))}
-                    
-                    {/* Tasks Items */}
-                    {data.tasks.map(task => (
-                      <TaskCard key={`task-${task.id}`} task={task} />
-                    ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+                    {viewTab === 'Correspondences' ? (
+                      data.corrs.map(item => (
+                        <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} />
+                      ))
+                    ) : (
+                      data.tasks.map(task => (
+                        <TaskCard key={`task-${task.id}`} task={task} />
+                      ))
+                    )}
                   </div>
                 </div>
               );

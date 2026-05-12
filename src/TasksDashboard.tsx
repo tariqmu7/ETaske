@@ -65,9 +65,28 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     priority: 'Medium',
     dueDate: '',
     category: 'Project' as CorrespondingCategory,
-    subCategory: '',
-    department: DEPARTMENT_OPTIONS[0],
+    subCategory: 'None',
+    department: 'None',
   });
+
+  const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
+    if (value === 'Other...') {
+      const custom = prompt(`Enter custom value for ${field}:`);
+      if (custom) {
+        if (isEditingForm && editingTask) {
+          setEditingTask({ ...editingTask, [field]: custom });
+        } else {
+          setNewTask({ ...newTask, [field]: custom });
+        }
+      }
+    } else {
+      if (isEditingForm && editingTask) {
+        setEditingTask({ ...editingTask, [field]: value });
+      } else {
+        setNewTask({ ...newTask, [field]: value });
+      }
+    }
+  };
 
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
@@ -278,7 +297,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         updatedAt: serverTimestamp(),
       });
       setIsAddingTask(false);
-      setNewTask({ taskName: '', description: '', priority: 'Medium', dueDate: '', category: 'Project', subCategory: '', department: DEPARTMENT_OPTIONS[0] });
+      setNewTask({ taskName: '', description: '', priority: 'Medium', dueDate: '', category: 'Project', subCategory: 'None', department: 'None' });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
       setError('Failed to create task.');
@@ -421,24 +440,30 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div>
                   <label className="label">Category</label>
-                  <select className="input" value={newTask.category} onChange={e => setNewTask({ ...newTask, category: e.target.value as CorrespondingCategory })}>
+                  <select className="input" value={newTask.category} onChange={e => handleOtherSelection('category', e.target.value)}>
                     {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Department</label>
-                  <select className="input" value={newTask.department} onChange={e => setNewTask({ ...newTask, department: e.target.value })}>
+                  <select className="input" value={newTask.department} onChange={e => handleOtherSelection('department', e.target.value)}>
                     {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="label">Sub-Category / Project</label>
-                  <select className="input" value={newTask.subCategory} onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })}>
-                    <option value="">Select Option...</option>
+                  <input 
+                    className="input" 
+                    list="subCategoryList"
+                    placeholder="Search or type project..."
+                    value={newTask.subCategory} 
+                    onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })} 
+                  />
+                  <datalist id="subCategoryList">
                     {(newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                      <option key={s} value={s}>{s}</option>
+                      <option key={s} value={s} />
                     ))}
-                  </select>
+                  </datalist>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
@@ -477,7 +502,12 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                       className="card"
-                      style={{ overflow: 'hidden', borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${getUserColor(task.assignedToId || task.assignedTo || '')}` }}
+                      style={{ 
+                        overflow: 'hidden', 
+                        borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${getUserColor(task.assignedToId || task.assignedTo || '')}`,
+                        backgroundColor: task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)',
+                        transition: 'background-color 0.2s ease'
+                      }}
                     >
                       {isEditing ? (
                         <div style={{ padding: '24px' }}>
@@ -508,26 +538,34 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 <label className="label">Due Date</label>
                                 <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
                               </div>
-                              <div>
-                                <label className="label">Category</label>
-                                <select className="input" value={editingTask.category} onChange={e => setEditingTask({ ...editingTask, category: e.target.value as CorrespondingCategory })}>
-                                  {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="label">Department</label>
-                                <select className="input" value={editingTask.department} onChange={e => setEditingTask({ ...editingTask, department: e.target.value })}>
-                                  {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="label">Sub-Category / Project</label>
-                                <select className="input" value={editingTask.subCategory} onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })}>
-                                  <option value="">Select Option...</option>
-                                  {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                                    <option key={s} value={s}>{s}</option>
-                                  ))}
-                                </select>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, gridColumn: 'span 2' }}>
+                                <div>
+                                  <label className="label">Category</label>
+                                  <select className="input" value={editingTask.category} onChange={e => handleOtherSelection('category', e.target.value, true)}>
+                                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="label">Department</label>
+                                  <select className="input" value={editingTask.department} onChange={e => handleOtherSelection('department', e.target.value, true)}>
+                                    {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                                  </select>
+                                </div>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <label className="label">Sub-Category / Project</label>
+                                  <input 
+                                    className="input" 
+                                    list="editSubCategoryList"
+                                    placeholder="Search or type project..."
+                                    value={editingTask.subCategory} 
+                                    onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })} 
+                                  />
+                                  <datalist id="editSubCategoryList">
+                                    {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
+                                      <option key={s} value={s} />
+                                    ))}
+                                  </datalist>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -617,7 +655,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                   #{task.serialNumber}
                                 </div>
                               )}
-                              <h3 style={{ fontWeight: 700, fontSize: 15, color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4, textDecoration: task.status === 'Done' ? 'line-through' : 'none' }}>
+                              <h3 style={{ fontWeight: 700, fontSize: 15, color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4 }}>
                                 {task.taskName}
                               </h3>
                               <p style={{ color: 'var(--text-muted)', fontSize: 13, display: '-webkit-box', WebkitLineClamp: isExpanded ? 999 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
