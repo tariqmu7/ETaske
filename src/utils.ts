@@ -33,3 +33,13 @@ export const globalSearch = (item: any, searchStr: string): boolean => {
   
   return searchInObj(item);
 };
+export const getUserColor = (idOrName: string): string => {
+  if (!idOrName) return '#94a3b8';
+  let hash = 0;
+  for (let i = 0; i < idOrName.length; i++) {
+    hash = idOrName.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  const h = Math.abs(hash) % 360;
+  // Use professional, balanced saturation and lightness
+  return `hsl(${h}, 65%, 45%)`;
+};

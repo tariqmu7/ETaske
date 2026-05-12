@@ -7,7 +7,7 @@ import { db, auth } from './lib/firebase';
 import { User } from 'firebase/auth';
 import {
   AppUser, Corresponding, CorrespondingStatus,
-  DEPARTMENT_OPTIONS, SUBCATEGORY_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
+  DEPARTMENT_OPTIONS, PROJECT_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
@@ -16,7 +16,7 @@ import {
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor } from './utils';
 import { AppView } from './App';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
@@ -75,6 +75,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [deptFilter, setDeptFilter] = useState<string>('All');
+  const [dateFilter, setDateFilter] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Corresponding | null>(null);
@@ -100,6 +101,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       if (search && !globalSearch(i, search)) return false;
       if (statusFilter !== 'All' && i.status !== statusFilter) return false;
       if (deptFilter !== 'All' && i.department !== deptFilter) return false;
+      if (dateFilter && i.dateReceived !== dateFilter) return false;
       return true;
     });
   }, [items, search, statusFilter, deptFilter]);
@@ -112,12 +114,13 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   }), [items]);
 
   const dynamicDepartments = useMemo(() => {
-    return Array.from(new Set(items.map(i => i.department).filter(Boolean))).sort();
-  }, [items]);
+    return DEPARTMENT_OPTIONS;
+  }, []);
 
   const dynamicSubCategories = useMemo(() => {
+    if (formData.category === 'Project') return PROJECT_OPTIONS;
     return Array.from(new Set(items.filter(i => i.department === formData.department).map(i => i.subCategory).filter(Boolean))).sort();
-  }, [items, formData.department]);
+  }, [items, formData.department, formData.category]);
 
   const openModal = (item?: Corresponding) => {
     if (item) {
@@ -250,14 +253,33 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-        <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="All">All Statuses</option>
-          {(['Unread','Reviewing','Assigned','Closed'] as CorrespondingStatus[]).map(s => <option key={s}>{s}</option>)}
-        </select>
-        <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-          <option value="All">All Departments</option>
-          {dynamicDepartments.map(d => <option key={d}>{d}</option>)}
-        </select>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input 
+            type="date" 
+            className="input" 
+            style={{ width: 'auto' }} 
+            value={dateFilter} 
+            onChange={e => setDateFilter(e.target.value)}
+            title="Filter by day"
+          />
+          {dateFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
+              Clear Date
+            </button>
+          )}
+
+          <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+            <option value="All">All Statuses</option>
+            {['Unread', 'Reviewing', 'Assigned', 'Closed'].map(s => <option key={s}>{s}</option>)}
+          </select>
+
+          <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+            <option value="All">All Departments</option>
+            {DEPARTMENT_OPTIONS.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
+
         <button className="btn btn-primary" onClick={() => openModal()}>
           <Plus className="w-4 h-4" /> New Corresponding
         </button>
@@ -282,7 +304,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="card card-interactive"
-              style={{ padding: 24 }}
+              style={{ padding: 24, borderLeft: `4px solid ${getUserColor(item.assignedToId || item.userId || '')}` }}
               onClick={() => openModal(item)}
             >
               {/* Top row */}
@@ -344,12 +366,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     Deadline: {item.deadline}
                   </div>
                 )}
-                {item.assignedTo && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--accent-light)' }}>
-                    <Tag className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                    Assigned to: {item.assignedTo}
-                  </div>
-                )}
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: getUserColor(item.userId), opacity: 0.6 }} />
+                    Logged by {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
+                  </span>
+                  {item.assignedTo && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(item.assignedToId || item.assignedTo) }} />
+                      Assigned to: {item.assignedTo}
+                    </span>
+                  )}
+                </div>
               </div>
             </motion.div>
           ))}
@@ -437,18 +465,17 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   {/* Department */}
                   <div>
                     <label className="input-label">Department</label>
-                    <input className="input" list="dept-options" value={formData.department} onChange={e => { set('department', e.target.value); set('subCategory', ''); }} placeholder="Type or select…" />
-                    <datalist id="dept-options">
-                      {dynamicDepartments.map(d => <option key={d} value={d} />)}
-                    </datalist>
+                    <select className="input" value={formData.department} onChange={e => { set('department', e.target.value); set('subCategory', ''); }}>
+                      {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                    </select>
                   </div>
                   {/* Sub-category */}
                   <div>
-                    <label className="input-label">Sub-Category</label>
-                    <input className="input" list="subcat-options" value={formData.subCategory} onChange={e => set('subCategory', e.target.value)} placeholder="Type or select…" disabled={!formData.department} />
-                    <datalist id="subcat-options">
-                      {dynamicSubCategories.map(s => <option key={s} value={s} />)}
-                    </datalist>
+                    <label className="input-label">Sub-Category / Project</label>
+                    <select className="input" value={formData.subCategory} onChange={e => set('subCategory', e.target.value)}>
+                      <option value="">Select Option...</option>
+                      {dynamicSubCategories.map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
                   </div>
                   {/* Date received */}
                   <div>

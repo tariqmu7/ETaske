@@ -8,7 +8,7 @@ import { User } from 'firebase/auth';
 import {
   AppUser, Task, TaskStatus, Milestone, MilestoneStatus,
   PRIORITY_OPTIONS, MILESTONE_STATUS_OPTIONS, OperationType,
-  CATEGORY_OPTIONS, CorrespondingCategory
+  CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
 import {
@@ -17,7 +17,7 @@ import {
   TrendingUp, ListTodo, Search, Filter, Layers, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -57,6 +57,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [employeeFilter, setEmployeeFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
+  const [deptFilter, setDeptFilter] = useState('All');
+  const [dateFilter, setDateFilter] = useState('');
   const [newTask, setNewTask] = useState({
     taskName: '',
     description: '',
@@ -64,12 +66,14 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     dueDate: '',
     category: 'Project' as CorrespondingCategory,
     subCategory: '',
+    department: DEPARTMENT_OPTIONS[0],
   });
 
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
   const dynamicSubCategories = useMemo(() => {
-    return Array.from(new Set(tasks.map(t => t.subCategory).filter(Boolean))).sort();
+    const fromTasks = Array.from(new Set(tasks.map(t => t.subCategory).filter(Boolean))).sort();
+    return Array.from(new Set([...PROJECT_OPTIONS, ...fromTasks])).sort();
   }, [tasks]);
 
   // Tasks listener
@@ -106,14 +110,19 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const filtered = useMemo(() => {
     return tasks.filter(t => {
       if (t.status === 'Archived') return false;
-      if (view === 'mine' && t.assignedTo !== appUser.displayName) return false;
+      if (view === 'mine' && t.assignedToId !== user.uid) return false;
       if (search && !globalSearch(t, search)) return false;
       if (statusFilter !== 'All' && t.status !== statusFilter) return false;
       if (isManagerOrAdmin && employeeFilter !== 'All' && t.assignedTo !== employeeFilter) return false;
       if (subCategoryFilter !== 'All' && t.subCategory !== subCategoryFilter) return false;
+      if (deptFilter !== 'All' && t.department !== deptFilter) return false;
+      if (dateFilter) {
+        const createdDate = t.createdAt?.toDate?.()?.toISOString()?.split('T')[0];
+        if (createdDate !== dateFilter) return false;
+      }
       return true;
     });
-  }, [tasks, view, search, statusFilter, employeeFilter, subCategoryFilter, appUser.displayName, isManagerOrAdmin]);
+  }, [tasks, view, search, statusFilter, employeeFilter, subCategoryFilter, deptFilter, appUser.displayName, isManagerOrAdmin, dateFilter, user.uid]);
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = {};
@@ -142,6 +151,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         priority: editingTask.priority,
         category: editingTask.category,
         subCategory: editingTask.subCategory,
+        department: editingTask.department || null,
         dueDate: editingTask.dueDate || null,
         updatedAt: serverTimestamp(),
       });
@@ -256,6 +266,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         priority: newTask.priority,
         category: newTask.category,
         subCategory: newTask.subCategory,
+        department: newTask.department,
         serialNumber: serial,
         assignedTo: appUser.displayName,
         assignedToId: user.uid,
@@ -267,7 +278,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         updatedAt: serverTimestamp(),
       });
       setIsAddingTask(false);
-      setNewTask({ taskName: '', description: '', priority: 'Medium', dueDate: '', category: 'Project', subCategory: '' });
+      setNewTask({ taskName: '', description: '', priority: 'Medium', dueDate: '', category: 'Project', subCategory: '', department: DEPARTMENT_OPTIONS[0] });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
       setError('Failed to create task.');
@@ -329,9 +340,28 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           <input className="input" style={{ paddingLeft: 36 }} placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
+        <input 
+          type="date" 
+          className="input" 
+          style={{ width: 'auto' }} 
+          value={dateFilter} 
+          onChange={e => setDateFilter(e.target.value)}
+          title="Filter by day"
+        />
+        {dateFilter && (
+          <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
+            Clear Date
+          </button>
+        )}
+
         <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="All">All Statuses</option>
           {['Pending', 'In Progress', 'Done'].map(s => <option key={s}>{s}</option>)}
+        </select>
+
+        <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+          <option value="All">All Departments</option>
+          {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         
         {isManagerOrAdmin && view === 'all' && (
@@ -396,11 +426,19 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                   </select>
                 </div>
                 <div>
-                  <label className="label">Sub-Category</label>
-                  <input className="input" list="task-subcat-options" value={newTask.subCategory} onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })} placeholder="Type or select..." />
-                  <datalist id="task-subcat-options">
-                    {dynamicSubCategories.map(s => <option key={s as string} value={s as string} />)}
-                  </datalist>
+                  <label className="label">Department</label>
+                  <select className="input" value={newTask.department} onChange={e => setNewTask({ ...newTask, department: e.target.value })}>
+                    {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="label">Sub-Category / Project</label>
+                  <select className="input" value={newTask.subCategory} onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })}>
+                    <option value="">Select Option...</option>
+                    {(newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
@@ -409,12 +447,6 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
               </div>
             </div>
           </motion.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {editingTask && (
-          <div style={{ display: 'none' }}>Inline Edit Mode Active</div>
         )}
       </AnimatePresence>
 
@@ -445,10 +477,9 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                       className="card"
-                      style={{ overflow: 'hidden', borderLeft: isEditing ? '4px solid var(--accent)' : undefined }}
+                      style={{ overflow: 'hidden', borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${getUserColor(task.assignedToId || task.assignedTo || '')}` }}
                     >
                       {isEditing ? (
-                        /* Inline Edit Mode */
                         <div style={{ padding: '24px' }}>
                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
                             <h3 style={{ fontWeight: 800, fontSize: 16, margin: 0 }}>Editing Task</h3>
@@ -484,17 +515,24 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 </select>
                               </div>
                               <div>
-                                <label className="label">Sub-Category</label>
-                                <input className="input" list="edit-subcat-options-inline" value={editingTask.subCategory} onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })} />
-                                <datalist id="edit-subcat-options-inline">
-                                  {dynamicSubCategories.map(s => <option key={s as string} value={s as string} />)}
-                                </datalist>
+                                <label className="label">Department</label>
+                                <select className="input" value={editingTask.department} onChange={e => setEditingTask({ ...editingTask, department: e.target.value })}>
+                                  {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                                </select>
+                              </div>
+                              <div>
+                                <label className="label">Sub-Category / Project</label>
+                                <select className="input" value={editingTask.subCategory} onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })}>
+                                  <option value="">Select Option...</option>
+                                  {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
+                                    <option key={s} value={s}>{s}</option>
+                                  ))}
+                                </select>
                               </div>
                             </div>
                           </div>
                         </div>
                       ) : (
-                        /* View Mode */
                         <>
                           <div
                             style={{ padding: '20px 24px', display: 'flex', gap: 16, cursor: 'pointer', alignItems: 'flex-start' }}
@@ -587,8 +625,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                               </p>
 
                               <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                                {task.assignedTo && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--accent-light)' }}><CheckSquare className="w-3 h-3" /> {task.assignedTo}</span>}
-                                {task.assignedBy && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Flag className="w-3 h-3" /> By {task.assignedBy}</span>}
+                                {task.assignedTo && (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
+                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(task.assignedToId || task.assignedTo) }} />
+                                    {task.assignedTo}
+                                  </span>
+                                )}
+                                {task.assignedBy && (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
+                                    By {task.assignedBy}
+                                  </span>
+                                )}
                                 {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
                                 {task.correspondingSubject && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Link2 className="w-3 h-3" /> {task.correspondingSubject}</span>}
                                 {task.subCategory && (

@@ -15,7 +15,7 @@ import {
   FolderOpen, Globe, Server, X, Flag, Target, Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Overview Firestore:', { e, op, path });
@@ -70,7 +70,7 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
   const overdue = isOverdue(item.deadline);
 
   return (
-    <div className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative' }}>
+    <div className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', borderLeft: `4px solid ${getUserColor(item.assignedToId || item.userId || '')}` }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {item.serialNumber && (
@@ -99,6 +99,13 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
           </span>
         )}
       </div>
+
+      {item.assignedTo && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 12 }}>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(item.assignedToId || item.assignedTo) }} />
+          Assigned: {item.assignedTo}
+        </div>
+      )}
 
       <div style={{ fontSize: 11, color: overdue ? '#dc2626' : 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <span>{item.deadline ? `Due ${item.deadline}` : 'No deadline'}</span>
@@ -131,6 +138,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
   
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [dateFilter, setDateFilter] = useState('');
 
   // Load data
   useEffect(() => {
@@ -165,6 +173,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       External: { total: 0, tasks: 0, overdue: 0 }
     };
     correspondences.forEach(c => {
+      const createdDate = c.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || c.dateReceived;
+      if (dateFilter && createdDate !== dateFilter) return;
       const cat = c.category || 'Internal';
       if (stats[cat]) {
         stats[cat].total++;
@@ -172,6 +182,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       }
     });
     tasks.forEach(t => {
+      const createdDate = t.createdAt?.toDate?.()?.toISOString()?.split('T')[0];
+      if (dateFilter && createdDate !== dateFilter) return;
       if (t.correspondingId) {
         const c = correspondences.find(corr => corr.id === t.correspondingId);
         if (c && stats[c.category]) stats[c.category].tasks++;
@@ -193,6 +205,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
     
     catCorrs.forEach(c => {
       if (search && !globalSearch(c, search)) return;
+      const createdDate = c.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || c.dateReceived;
+      if (dateFilter && createdDate !== dateFilter) return;
       const sub = c.subCategory || 'General';
       if (!map.has(sub)) map.set(sub, { corrs: [], tasks: [] });
       map.get(sub)!.corrs.push(c);
@@ -283,17 +297,28 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
   return (
     <div style={{ padding: '4px 0', minHeight: '60vh', position: 'relative' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 3 }}>
-          Overview Dashboard
-        </h1>
-        <p style={{ color: '#64748b', fontSize: 13 }}>
-          {selectedCategory 
-            ? `Viewing details for ${selectedCategory} category.`
-            : `Full visibility across all correspondences, tasks and milestones — grouped for quick follow-up.`
-          }
-        </p>
+      {/* Stats Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
+          <p style={{ color: '#64748b', fontSize: 14 }}>Real-time stats and task monitoring.</p>
+        </div>
+        
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <input 
+            type="date" 
+            className="input" 
+            style={{ width: 'auto' }} 
+            value={dateFilter} 
+            onChange={e => setDateFilter(e.target.value)}
+            title="Filter by day"
+          />
+          {dateFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
+              Clear Date
+            </button>
+          )}
+        </div>
       </div>
 
       {selectedCategory === null ? (
@@ -456,7 +481,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: '#f8fafc', borderRadius: 12, border: '1px solid var(--border)' }}>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}><CheckSquare className="w-4 h-4 text-primary" /> {selectedTask.assignedTo || 'Unassigned'}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedTask.assignedTo || 'Unassigned'}</span>
+                    </div>
                   </div>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned By</span>

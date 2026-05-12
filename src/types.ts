@@ -15,6 +15,7 @@ export interface AppUser {
   teamId?: string;
   department?: string;
   phoneNumber?: string;
+  userColor?: string;
   lastSeen?: Timestamp;
 }
 
@@ -96,6 +97,7 @@ export interface Task {
   status: TaskStatus;
   category?: CorrespondingCategory;
   subCategory?: string;
+  department?: string;
   // Assignments
   assignedTo?: string;        // employee displayName
   assignedToId?: string;      // employee uid
@@ -172,30 +174,22 @@ export const STATUS_UPDATE_OPTIONS = [
 ];
 
 export const DEPARTMENT_OPTIONS = [
-  'Operations',
-  'Engineering',
-  'Finance',
-  'Human Resources',
-  'Legal & Compliance',
-  'Information Technology',
-  'Procurement',
-  'Projects',
-  'Safety, Health & Environment',
-  'Administration',
+  'Legal Department',
+  'Finance Department',
+  'PR',
+  'IT',
+  'Technical Office',
+  'Technical Support',
+  'CEO Office',
+  'Medical Department',
 ];
 
-export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
-  Operations: ['Production', 'Maintenance', 'Inspection', 'Quality Control'],
-  Engineering: ['Civil', 'Mechanical', 'Electrical', 'Instrumentation'],
-  Finance: ['Budgeting', 'Accounts', 'Auditing', 'Treasury'],
-  'Human Resources': ['Recruitment', 'Training', 'Payroll', 'Performance'],
-  'Legal & Compliance': ['Contracts', 'Regulatory', 'Risk', 'Ethics'],
-  'Information Technology': ['Infrastructure', 'Software', 'Security', 'Support'],
-  Procurement: ['Purchasing', 'Logistics', 'Vendor Management', 'Inventory'],
-  Projects: ['Planning', 'Execution', 'Monitoring', 'Closure'],
-  'Safety, Health & Environment': ['HSE Audit', 'Incident Management', 'Training', 'Environmental'],
-  Administration: ['Facilities', 'Documentation', 'Travel', 'Office Management'],
-};
+export const PROJECT_OPTIONS = [
+  'AMOC', 'APC', 'APRC', 'AGIBA', 'ANOPC', 'ASPPC', 'ALEX FERT', 'ASORC', 'CORC',
+  'ELAB', 'SADAT BERTH', 'ENPPI', 'ETHYDCO', 'FLEET ENERGY', 'GASCO', 'KHALDA',
+  'MIDOR', 'MIDTAP', 'NPC', 'OSOCO', 'PETROBEL', 'PETROGAS', 'PETRONEFERTITI',
+  'RED SEA', 'PPC', 'SOPC', 'WEPCO', 'SUCO'
+];
 
 export const MILESTONE_STATUS_OPTIONS: MilestoneStatus[] = ['Planned', 'In Progress', 'Done', 'Blocked'];
 
