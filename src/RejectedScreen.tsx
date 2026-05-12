@@ -1,26 +1,25 @@
 import React from 'react';
+import { XCircle } from 'lucide-react';
 import { signOut } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { XCircle, LogOut } from 'lucide-react';
 
 export default function RejectedScreen() {
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-neutral-100 overflow-hidden p-8 text-center">
-        <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
-          <XCircle className="w-8 h-8 text-red-500" />
+    <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #eff6ff, #fff1f2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+      <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 24, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.08)' }}>
+        <div style={{ width: 72, height: 72, background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+          <XCircle style={{ width: 32, height: 32, color: '#dc2626' }} />
         </div>
-        <h2 className="text-2xl font-bold text-neutral-900 mb-2">Access Denied</h2>
-        <p className="text-neutral-500 mb-8">
-          Your account request has been rejected by the administrator. Please contact IT support if you believe this is an error.
+        <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginBottom: 12 }}>Access Denied</h1>
+        <p style={{ color: '#64748b', fontSize: 14, lineHeight: 1.6 }}>
+          Your account access request has been rejected. Please contact your administrator for assistance.
         </p>
-        
         <button
           onClick={() => signOut(auth)}
-          className="flex items-center justify-center gap-2 w-full py-3 bg-neutral-100 hover:bg-neutral-200 text-neutral-700 rounded-xl font-medium transition-colors"
+          className="btn btn-ghost"
+          style={{ marginTop: 24 }}
         >
-          <LogOut className="w-4 h-4" />
-          Sign Out
+          Sign out & try another account
         </button>
       </div>
     </div>

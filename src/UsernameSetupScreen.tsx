@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { User, Phone } from 'lucide-react';
 
 export default function UsernameSetupScreen({ onSave }: { onSave: (name: string, phoneNumber: string) => Promise<void> }) {
   const [name, setName] = useState('');
@@ -9,7 +10,6 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    
     setSubmitting(true);
     try {
       await onSave(trimmed, phoneNumber.trim());
@@ -20,47 +20,84 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
-      <div className="w-full max-w-md bg-white p-8 rounded-2xl shadow-sm border border-neutral-200">
-        <h2 className="text-2xl font-bold mb-2">Welcome!</h2>
-        <p className="text-neutral-500 text-sm mb-6">Please enter your details to continue to the application.</p>
-        
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              Display Name
-            </label>
-            <input 
-              type="text" 
-              className="w-full px-4 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-neutral-900" 
-              value={name} 
-              onChange={e => setName(e.target.value)}
-              placeholder="e.g. Jane Doe"
-              disabled={submitting}
-              autoFocus
-              required
-            />
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #2563eb 0%, #14b8a6 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 24,
+        padding: '40px 36px',
+        width: '100%',
+        maxWidth: 420,
+        boxShadow: '0 25px 60px rgba(0,0,0,0.18)',
+      }}>
+        <div style={{
+          width: 52, height: 52,
+          background: 'linear-gradient(135deg, #2563eb, #14b8a6)',
+          borderRadius: 14,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 20px',
+        }}>
+          <User style={{ width: 22, height: 22, color: '#fff' }} />
+        </div>
+
+        <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', textAlign: 'center', marginBottom: 6 }}>
+          Welcome!
+        </h2>
+        <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', marginBottom: 28 }}>
+          Please enter your details to continue.
+        </p>
+
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div>
+            <label className="input-label">Display Name</label>
+            <div style={{ position: 'relative' }}>
+              <User style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+              <input
+                type="text"
+                className="input"
+                style={{ paddingLeft: 40 }}
+                value={name}
+                onChange={e => setName(e.target.value)}
+                placeholder="e.g. Jane Doe"
+                disabled={submitting}
+                autoFocus
+                required
+              />
+            </div>
           </div>
-          <div className="mb-6">
-            <label className="block text-sm font-medium text-neutral-700 mb-2">
-              WhatsApp Phone Number
-            </label>
-            <input 
-              type="tel" 
-              className="w-full px-4 py-2 border border-neutral-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-neutral-900 focus:border-neutral-900" 
-              value={phoneNumber} 
-              onChange={e => setPhoneNumber(e.target.value)}
-              placeholder="e.g. +201000000000"
-              disabled={submitting}
-              required
-            />
+
+          <div>
+            <label className="input-label">WhatsApp Phone Number</label>
+            <div style={{ position: 'relative' }}>
+              <Phone style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+              <input
+                type="tel"
+                className="input"
+                style={{ paddingLeft: 40 }}
+                value={phoneNumber}
+                onChange={e => setPhoneNumber(e.target.value)}
+                placeholder="e.g. +201000000000"
+                disabled={submitting}
+                required
+              />
+            </div>
           </div>
-          <button 
+
+          <button
             type="submit"
             disabled={submitting}
-            className="w-full py-2.5 bg-neutral-900 text-white rounded-xl font-medium hover:bg-neutral-800 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-neutral-900 disabled:opacity-50"
+            className="btn btn-primary"
+            style={{ width: '100%', padding: '12px', marginTop: 4 }}
           >
-            {submitting ? 'Saving...' : 'Continue'}
+            {submitting
+              ? <span className="spinner" style={{ width: 18, height: 18 }} />
+              : 'Continue →'}
           </button>
         </form>
       </div>

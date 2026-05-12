@@ -1,71 +1,154 @@
 import { Timestamp } from 'firebase/firestore';
 
+// ─── Users ───────────────────────────────────────────────────────────────────
+
+export type UserRole = 'Admin' | 'Manager' | 'Employee';
+export type UserStatus = 'Pending' | 'Approved' | 'Rejected';
+
 export interface AppUser {
   id: string;
   displayName: string;
   email: string;
   photoURL: string;
-  status: 'Pending' | 'Approved' | 'Rejected';
-  role: 'Admin' | 'Member' | 'Manager';
+  status: UserStatus;
+  role: UserRole;
   teamId?: string;
+  department?: string;
   phoneNumber?: string;
+  lastSeen?: Timestamp;
 }
+
+// ─── Correspondences (incoming) ───────────────────────────────────────────────
+
+export type CorrespondingStatus = 'Unread' | 'Reviewing' | 'Assigned' | 'Closed';
+
+export type CorrespondingCategory = 'Project' | 'Internal' | 'External';
+
+export interface Corresponding {
+  id: string;
+  // Core fields
+  subject: string;
+  body: string;
+  sentFrom: string;
+  department: string;
+  subCategory?: string;
+  category: CorrespondingCategory;
+  priority: TaskPriority;
+  dateReceived: string;
+  deadline?: string;
+  // Attachments
+  attachedFile?: string;
+  attachedFileName?: string;
+  serialNumber?: string;
+  // Workflow
+  status: CorrespondingStatus;
+  assignedTo?: string;          // employee displayName
+  assignedToId?: string;        // employee uid
+  assignedAt?: Timestamp;
+  convertedToTaskId?: string;   // ref to resulting task
+  // Meta
+  notes?: string;               // manager notes on review
+  userId: string;               // who entered this corresponding
+  teamId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ─── Milestones ───────────────────────────────────────────────────────────────
+
+export type MilestoneStatus = 'Planned' | 'In Progress' | 'Done' | 'Blocked';
+
+export interface Milestone {
+  id: string;
+  taskId: string;
+  title: string;
+  description?: string;
+  status: MilestoneStatus;
+  targetDate?: string;
+  completedAt?: Timestamp;
+  addedBy: string;              // displayName
+  addedById: string;            // uid
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// ─── Tasks ────────────────────────────────────────────────────────────────────
+
+export type TaskStatus = 'Pending' | 'In Progress' | 'Done' | 'Archived';
+export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
+
+export const PRIORITY_OPTIONS: TaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 export interface TaskNote {
   id: string;
   text: string;
   isCompleted: boolean;
+  addedBy?: string;
+  addedAt?: string;
 }
-
-export type TaskPriority = 'Low' | 'Medium' | 'High' | 'Urgent';
-
-export const PRIORITY_OPTIONS: TaskPriority[] = ['Low', 'Medium', 'High', 'Urgent'];
 
 export interface Task {
   id: string;
+  // Core
   taskName: string;
-  status: 'In Progress' | 'Done' | 'Pending';
   description: string;
-  statusUpdate: string;
-  assignedTo?: string;
-  waitingOn?: string;
-  requiredAction?: string;
-  notes?: TaskNote[];
-  dueDate?: string;
-  priority?: 'Low' | 'Medium' | 'High' | 'Urgent';
-  attachedFile?: string;
-  attachedFileName?: string;
-  serialNumber?: string;
-  userId: string;
-  teamId: string;
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
-}
-
-export interface FollowUp {
-  id: string;
-  dateIssued: string;
-  subject: string;
-  description?: string; // Kept as optional for backward compatibility
-  sentFrom?: string;
-  department?: string;
+  priority: TaskPriority;
+  status: TaskStatus;
+  category?: CorrespondingCategory;
   subCategory?: string;
-  epromProjectName?: string; // Kept for backward compatibility
-  assignedPersonnel: string;
-  endDate: string;
-  actionRequired: string;
-  actionTakenSoFar: string;
-  status: 'Pending' | 'Approved' | 'Returned' | 'Closed';
+  // Assignments
+  assignedTo?: string;        // employee displayName
+  assignedToId?: string;      // employee uid
+  assignedBy?: string;        // manager displayName
+  assignedById?: string;      // manager uid
+  // Dates
+  dueDate?: string;
+  archivedAt?: Timestamp;
+  // Progress
+  statusUpdate?: string;
+  notes?: TaskNote[];
+  milestoneCount?: number;    // denormalized count
+  completedMilestones?: number;
+  // Traceability (link back to original corresponding)
+  correspondingId?: string;
+  correspondingSubject?: string;
+  // Attachments
   attachedFile?: string;
   attachedFileName?: string;
   serialNumber?: string;
+  // Meta
   userId: string;
   teamId: string;
   createdAt: Timestamp;
   updatedAt: Timestamp;
 }
 
-export const FOLLOWUP_STATUS_OPTIONS = ['Pending', 'Approved', 'Returned', 'Closed'] as const;
+// ─── Notifications (in-app) ───────────────────────────────────────────────────
+
+export type NotificationType =
+  | 'new_corresponding'
+  | 'corresponding_assigned'
+  | 'task_assigned'
+  | 'milestone_added'
+  | 'task_done'
+  | 'task_overdue';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  title: string;
+  message: string;
+  forUserId: string;
+  forRole?: UserRole;
+  read: boolean;
+  link?: string;              // e.g. '#tasks'
+  relatedId?: string;         // correspondingId or taskId
+  createdAt: Timestamp;
+}
+
+// ─── Select Options ───────────────────────────────────────────────────────────
+
+export const STATUS_OPTIONS: TaskStatus[] = ['Pending', 'In Progress', 'Done', 'Archived'];
 
 export const ACTION_OPTIONS = [
   'None',
@@ -75,7 +158,7 @@ export const ACTION_OPTIONS = [
   'Action Required',
   'Development',
   'Testing',
-  'Deployment'
+  'Deployment',
 ];
 
 export const STATUS_UPDATE_OPTIONS = [
@@ -85,8 +168,40 @@ export const STATUS_UPDATE_OPTIONS = [
   'Blocked',
   'Waiting on Third Party',
   'Completed',
-  'Will Update Next Week'
+  'Will Update Next Week',
 ];
+
+export const DEPARTMENT_OPTIONS = [
+  'Operations',
+  'Engineering',
+  'Finance',
+  'Human Resources',
+  'Legal & Compliance',
+  'Information Technology',
+  'Procurement',
+  'Projects',
+  'Safety, Health & Environment',
+  'Administration',
+];
+
+export const SUBCATEGORY_OPTIONS: Record<string, string[]> = {
+  Operations: ['Production', 'Maintenance', 'Inspection', 'Quality Control'],
+  Engineering: ['Civil', 'Mechanical', 'Electrical', 'Instrumentation'],
+  Finance: ['Budgeting', 'Accounts', 'Auditing', 'Treasury'],
+  'Human Resources': ['Recruitment', 'Training', 'Payroll', 'Performance'],
+  'Legal & Compliance': ['Contracts', 'Regulatory', 'Risk', 'Ethics'],
+  'Information Technology': ['Infrastructure', 'Software', 'Security', 'Support'],
+  Procurement: ['Purchasing', 'Logistics', 'Vendor Management', 'Inventory'],
+  Projects: ['Planning', 'Execution', 'Monitoring', 'Closure'],
+  'Safety, Health & Environment': ['HSE Audit', 'Incident Management', 'Training', 'Environmental'],
+  Administration: ['Facilities', 'Documentation', 'Travel', 'Office Management'],
+};
+
+export const MILESTONE_STATUS_OPTIONS: MilestoneStatus[] = ['Planned', 'In Progress', 'Done', 'Blocked'];
+
+export const CATEGORY_OPTIONS: CorrespondingCategory[] = ['Project', 'Internal', 'External'];
+
+// ─── Legacy compat ─────────────────────────────────────────────────────────────
 
 export enum OperationType {
   CREATE = 'create',
@@ -113,6 +228,5 @@ export interface FirestoreErrorInfo {
       email: string | null;
       photoUrl: string | null;
     }[];
-  }
+  };
 }
-

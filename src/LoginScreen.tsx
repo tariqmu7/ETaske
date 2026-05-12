@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from './lib/firebase';
-import { CheckCircle2, Lock, Mail, AlertCircle, EyeOff, Eye } from 'lucide-react';
+import { Briefcase, Lock, Mail, AlertCircle, EyeOff, Eye } from 'lucide-react';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -13,10 +13,8 @@ export default function LoginScreen() {
 
   const handleGoogleLogin = async () => {
     try {
-      setLoading(true);
-      setError(null);
-      const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      setLoading(true); setError(null);
+      await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (err: any) {
       setError(err.message || 'Google login failed');
       setLoading(false);
@@ -25,54 +23,86 @@ export default function LoginScreen() {
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) {
-      setError("Email and password are required.");
-      return;
-    }
+    if (!email || !password) { setError('Email and password are required.'); return; }
     try {
-      setLoading(true);
-      setError(null);
+      setLoading(true); setError(null);
       if (isLogin) {
         await signInWithEmailAndPassword(auth, email, password);
       } else {
         await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch (err: any) {
-      // Very common error is auth/operation-not-allowed if email/pass is not turned on
-      if (err.code === 'auth/operation-not-allowed') {
-        setError('Email/Password login is not enabled. Please enable it in the Firebase Console under Authentication -> Sign-in methods.');
-      } else {
-        setError(err.message || 'Authentication failed');
-      }
+      setError(err.code === 'auth/operation-not-allowed'
+        ? 'Email/Password login is not enabled in Firebase Console.'
+        : err.message || 'Authentication failed');
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-xl border border-neutral-100 overflow-hidden">
-        <div className="p-8 pb-6 bg-neutral-900 text-center">
-          <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
-            <CheckCircle2 className="w-6 h-6 text-white" />
+    <div style={{
+      minHeight: '100vh',
+      background: 'linear-gradient(135deg, #2563eb 0%, #14b8a6 100%)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+    }}>
+      <div style={{
+        background: '#fff',
+        borderRadius: 24,
+        width: '100%',
+        maxWidth: 420,
+        overflow: 'hidden',
+        boxShadow: '0 25px 60px rgba(0,0,0,0.2)',
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: '36px 36px 28px',
+          background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)',
+          borderBottom: '1px solid var(--border)',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: 56, height: 56,
+            background: 'linear-gradient(135deg, #2563eb, #14b8a6)',
+            borderRadius: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            margin: '0 auto 16px',
+          }}>
+            <Briefcase style={{ width: 24, height: 24, color: '#fff' }} />
           </div>
-          <h1 className="text-2xl font-bold text-white mb-2">Welcome Back</h1>
-          <p className="text-neutral-400 text-sm">Sign in to access your task dashboard</p>
+          <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>
+            Welcome to ETaske
+          </h1>
+          <p style={{ color: '#64748b', fontSize: 14 }}>Sign in to access your workflow dashboard</p>
         </div>
 
-        <div className="p-8">
+        <div style={{ padding: '28px 36px 36px' }}>
           {error && (
-            <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 text-red-600 text-sm">
-              <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">{error}</div>
+            <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px', marginBottom: 20, display: 'flex', gap: 10, fontSize: 13, color: '#dc2626' }}>
+              <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
+              {error}
             </div>
           )}
 
+          {/* Google */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-neutral-200 rounded-xl text-sm font-semibold text-neutral-700 hover:bg-neutral-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed mb-6 shadow-sm"
+            style={{
+              width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              gap: 12, padding: '12px 16px',
+              background: '#fff',
+              border: '1.5px solid #e2e8f0',
+              borderRadius: 12, color: '#0f172a', fontSize: 14, fontWeight: 600,
+              cursor: 'pointer', marginBottom: 20, fontFamily: 'inherit', transition: 'all 0.15s',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+            }}
+            onMouseOver={e => (e.currentTarget.style.borderColor = '#2563eb')}
+            onMouseOut={e => (e.currentTarget.style.borderColor = '#e2e8f0')}
           >
-            <svg viewBox="0 0 24 24" className="w-5 h-5" xmlns="http://www.w3.org/2000/svg">
+            <svg viewBox="0 0 24 24" style={{ width: 20, height: 20 }} xmlns="http://www.w3.org/2000/svg">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -81,70 +111,38 @@ export default function LoginScreen() {
             Continue with Google
           </button>
 
-          <div className="flex items-center gap-4 mb-6">
-            <div className="flex-1 h-px bg-neutral-200"></div>
-            <span className="text-xs font-medium text-neutral-400 uppercase">Or continue with</span>
-            <div className="flex-1 h-px bg-neutral-200"></div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Or</span>
+            <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
           </div>
 
-          <form onSubmit={handleEmailAuth} className="space-y-4">
+          <form onSubmit={handleEmailAuth} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Email Address</label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/5 transition-all"
-                  placeholder="you@company.com"
-                  required
-                />
+              <label className="input-label">Email Address</label>
+              <div style={{ position: 'relative' }}>
+                <Mail style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+                <input type="email" className="input" style={{ paddingLeft: 40 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
               </div>
             </div>
-
             <div>
-              <label className="block text-xs font-bold text-neutral-500 uppercase mb-2">Password</label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-10 pr-10 py-2.5 bg-neutral-50 border border-neutral-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-neutral-900/5 transition-all"
-                  placeholder="••••••••"
-                  required
-                  minLength={6}
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              <label className="input-label">Password</label>
+              <div style={{ position: 'relative' }}>
+                <Lock style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+                <input type={showPassword ? 'text' : 'password'} className="input" style={{ paddingLeft: 40, paddingRight: 40 }} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+                <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                  {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
                 </button>
               </div>
             </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3 bg-neutral-900 text-white rounded-xl text-sm font-semibold hover:bg-neutral-800 transition-all shadow-sm flex items-center justify-center gap-2 group disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-            >
-              {loading ? (
-                <span className="w-5 h-5 border-2 border-white/20 border-t-white rounded-full animate-spin"></span>
-              ) : (
-                isLogin ? 'Sign In' : 'Create Account'
-              )}
+            <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '12px', marginTop: 4 }}>
+              {loading ? <span className="spinner" style={{ width: 18, height: 18 }} /> : isLogin ? 'Sign In' : 'Create Account'}
             </button>
           </form>
 
-          <div className="mt-8 text-center">
-            <button 
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-neutral-500 hover:text-neutral-900 font-medium transition-colors"
-            >
-              {isLogin ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+          <div style={{ marginTop: 20, textAlign: 'center' }}>
+            <button onClick={() => setIsLogin(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2563eb', fontWeight: 600, fontFamily: 'inherit' }}>
+              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
             </button>
           </div>
         </div>

@@ -2,160 +2,180 @@ import React, { useState } from 'react';
 import { AppUser } from './types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
-import { Check, X, Shield, Users, Building, ShieldAlert } from 'lucide-react';
+import { Check, X, Shield, Users, Building, ShieldCheck, UserCog } from 'lucide-react';
 
-interface Props {
-  users: AppUser[];
-}
+interface Props { users: AppUser[]; }
 
 export default function AdminDashboard({ users }: Props) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [editTeamId, setEditTeamId] = useState('');
-  const [editRole, setEditRole] = useState<'Admin' | 'Member' | 'Manager'>('Member');
+  const [editRole, setEditRole] = useState<'Admin' | 'Manager' | 'Employee'>('Employee');
+  const [editDepartment, setEditDepartment] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
 
-  const updateUserStatus = async (userId: string, status: 'Approved' | 'Rejected') => {
-    try {
-      await updateDoc(doc(db, 'users', userId), { status });
-    } catch (e) {
-      console.error(e);
-      alert("Failed to update status.");
-    }
+  const updateStatus = async (userId: string, status: 'Approved' | 'Rejected') => {
+    try { await updateDoc(doc(db, 'users', userId), { status }); }
+    catch (e) { console.error(e); alert('Failed.'); }
   };
 
-  const saveUserDetails = async (userId: string) => {
+  const saveUser = async (userId: string) => {
     try {
-      await updateDoc(doc(db, 'users', userId), { 
-        teamId: editTeamId,
-        role: editRole,
-        phoneNumber: editPhoneNumber
+      await updateDoc(doc(db, 'users', userId), {
+        teamId: editTeamId, role: editRole,
+        department: editDepartment, phoneNumber: editPhoneNumber
       });
       setEditingUserId(null);
-    } catch (e) {
-      console.error(e);
-      alert("Failed to update user.");
-    }
+    } catch (e) { console.error(e); alert('Failed.'); }
   };
 
-  const startEdit = (user: AppUser) => {
-    setEditingUserId(user.id);
-    setEditTeamId(user.teamId || '');
-    setEditRole(user.role || 'Member');
-    setEditPhoneNumber(user.phoneNumber || '');
+  const startEdit = (u: AppUser) => {
+    setEditingUserId(u.id);
+    setEditTeamId(u.teamId || '');
+    setEditRole(u.role === 'Admin' ? 'Admin' : u.role === 'Manager' ? 'Manager' : 'Employee');
+    setEditDepartment(u.department || '');
+    setEditPhoneNumber(u.phoneNumber || '');
   };
+
+  const pending = users.filter(u => u.status === 'Pending');
+  const approved = users.filter(u => u.status === 'Approved');
+  const rejected = users.filter(u => u.status === 'Rejected');
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-8">
-      <div className="flex items-center gap-3 mb-8">
-        <ShieldAlert className="w-8 h-8 text-neutral-900" />
-        <h2 className="text-2xl font-bold">Admin specific tasks and approval</h2>
+    <div style={{ padding: '4px 0', minHeight: '60vh' }}>
+      <div style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>User Management</h1>
+        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Approve users, assign roles and departments.</p>
       </div>
 
-      <div className="bg-white border text-sm text-neutral-900 border-neutral-200 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead className="bg-neutral-50 text-xs font-semibold text-neutral-500 uppercase tracking-wider">
-              <tr>
-                <th className="px-6 py-4">User</th>
-                <th className="px-6 py-4">Status</th>
-                <th className="px-6 py-4">Role / Team</th>
-                <th className="px-6 py-4 text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-neutral-100">
-              {users.map(u => (
-                <tr key={u.id} className="hover:bg-neutral-50/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      {u.photoURL ? (
-                        <img src={u.photoURL} className="w-8 h-8 rounded-full" alt="avatar" />
-                      ) : (
-                        <div className="w-8 h-8 bg-neutral-200 rounded-full flex items-center justify-center">
-                          <Users className="w-4 h-4 text-neutral-500" />
-                        </div>
-                      )}
-                      <div>
-                        <div className="font-semibold text-neutral-900">{u.displayName || 'No Name'}</div>
-                        <div className="text-xs text-neutral-500">{u.email}</div>
-                        {u.phoneNumber && <div className="text-xs text-neutral-400 mt-0.5">{u.phoneNumber}</div>}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4">
-                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
-                      u.status === 'Approved' ? 'bg-green-50 text-green-700' :
-                      u.status === 'Rejected' ? 'bg-red-50 text-red-700' :
-                      'bg-amber-50 text-amber-700'
-                    }`}>
-                      {u.status}
-                    </span>
-                    {u.status === 'Pending' && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <button onClick={() => updateUserStatus(u.id, 'Approved')} className="p-1 hover:bg-green-100 text-green-600 rounded">
-                          <Check className="w-4 h-4" />
-                        </button>
-                        <button onClick={() => updateUserStatus(u.id, 'Rejected')} className="p-1 hover:bg-red-100 text-red-600 rounded">
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4">
-                    {editingUserId === u.id ? (
-                      <div className="space-y-2">
-                        <select 
-                          value={editRole} 
-                          onChange={e => setEditRole(e.target.value as 'Admin'|'Member'|'Manager')}
-                          className="w-full px-2 py-1 border rounded text-xs"
-                        >
-                          <option value="Member">Member</option>
-                          <option value="Manager">Manager</option>
-                          <option value="Admin">Admin</option>
-                        </select>
-                        <input 
-                          type="text" 
-                          placeholder="Team / Dept" 
-                          value={editTeamId} 
-                          onChange={e => setEditTeamId(e.target.value)}
-                          className="w-full px-2 py-1 border rounded text-xs"
-                        />
-                        <input 
-                          type="text" 
-                          placeholder="Phone Number (e.g. +2010...)" 
-                          value={editPhoneNumber} 
-                          onChange={e => setEditPhoneNumber(e.target.value)}
-                          className="w-full px-2 py-1 border rounded text-xs"
-                        />
-                      </div>
-                    ) : (
-                      <div>
-                        <div className="flex items-center gap-1.5 text-xs font-medium mb-1">
-                          <Shield className="w-3.5 h-3.5 text-neutral-400" />
-                          {u.role}
-                        </div>
-                        <div className="flex items-center gap-1.5 text-xs text-neutral-500">
-                          <Building className="w-3.5 h-3.5" />
-                          {u.teamId || <span className="italic text-neutral-400">Unassigned</span>}
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {editingUserId === u.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => saveUserDetails(u.id)} className="text-xs bg-neutral-900 border text-white font-medium px-3 py-1.5 rounded-lg hover:bg-neutral-800 transition-colors">Save</button>
-                        <button onClick={() => setEditingUserId(null)} className="text-xs bg-white border text-neutral-700 font-medium px-3 py-1.5 rounded-lg hover:bg-neutral-50 transition-colors">Cancel</button>
-                      </div>
-                    ) : (
-                      <button onClick={() => startEdit(u)} className="text-xs bg-white border font-medium px-3 py-1.5 rounded-lg hover:bg-neutral-50 transition-colors">Edit</button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* Stats */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 28 }}>
+        {[
+          { label: 'Pending', value: pending.length, cls: 'stat-amber' },
+          { label: 'Approved', value: approved.length, cls: 'stat-green' },
+          { label: 'Rejected', value: rejected.length, cls: 'stat-red' },
+        ].map(s => (
+          <div key={s.label} className={`card ${s.cls}`} style={{ padding: '20px 24px' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Pending requests first */}
+      {pending.length > 0 && (
+        <div style={{ marginBottom: 28 }}>
+          <h2 style={{ fontSize: 14, fontWeight: 700, color: '#fbbf24', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>⚠ Pending Approval</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {pending.map(u => (
+              <div key={u.id} className="card" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', gap: 16, borderColor: 'rgba(245,158,11,0.3)' }}>
+                <UserAvatar user={u} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{u.displayName}</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.email}</div>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="btn btn-success btn-sm" onClick={() => updateStatus(u.id, 'Approved')}>
+                    <Check className="w-3.5 h-3.5" /> Approve
+                  </button>
+                  <button className="btn btn-danger btn-sm" onClick={() => updateStatus(u.id, 'Rejected')}>
+                    <X className="w-3.5 h-3.5" /> Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
+      )}
+
+      {/* All users table */}
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>All Users</h2>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid var(--border)' }}>
+              {['User', 'Status', 'Role', 'Team/Dept', 'Actions'].map(h => (
+                <th key={h} style={{ padding: '14px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {users.map(u => (
+              <tr key={u.id} style={{ borderBottom: '1px solid var(--border)' }}>
+                <td style={{ padding: '14px 20px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <UserAvatar user={u} />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text-primary)' }}>{u.displayName || 'No Name'}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{u.email}</div>
+                    </div>
+                  </div>
+                </td>
+                <td style={{ padding: '14px 20px' }}>
+                  <span className={`badge ${u.status === 'Approved' ? 'badge-done' : u.status === 'Rejected' ? 'badge-urgent' : 'badge-pending'}`}>
+                    {u.status}
+                  </span>
+                  {u.status === 'Pending' && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+                      <button className="btn btn-success btn-sm btn-icon" onClick={() => updateStatus(u.id, 'Approved')} title="Approve"><Check className="w-3 h-3" /></button>
+                      <button className="btn btn-danger btn-sm btn-icon" onClick={() => updateStatus(u.id, 'Rejected')} title="Reject"><X className="w-3 h-3" /></button>
+                    </div>
+                  )}
+                </td>
+                <td style={{ padding: '14px 20px' }}>
+                  {editingUserId === u.id ? (
+                    <select
+                      value={editRole}
+                      onChange={e => setEditRole(e.target.value as any)}
+                      className="input"
+                      style={{ padding: '6px 10px', fontSize: 12 }}
+                    >
+                      <option value="Employee">Employee</option>
+                      <option value="Manager">Manager</option>
+                      <option value="Admin">Admin</option>
+                    </select>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <Shield className="w-3 h-3" /> {u.role}
+                    </span>
+                  )}
+                </td>
+                <td style={{ padding: '14px 20px' }}>
+                  {editingUserId === u.id ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <input className="input" style={{ padding: '6px 10px', fontSize: 12 }} placeholder="Team ID" value={editTeamId} onChange={e => setEditTeamId(e.target.value)} />
+                      <input className="input" style={{ padding: '6px 10px', fontSize: 12 }} placeholder="Department" value={editDepartment} onChange={e => setEditDepartment(e.target.value)} />
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
+                      {u.teamId || u.department || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>Unassigned</span>}
+                    </span>
+                  )}
+                </td>
+                <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                  {editingUserId === u.id ? (
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button className="btn btn-primary btn-sm" onClick={() => saveUser(u.id)}>Save</button>
+                      <button className="btn btn-ghost btn-sm" onClick={() => setEditingUserId(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <button className="btn btn-ghost btn-sm" onClick={() => startEdit(u)}>
+                      <UserCog className="w-3.5 h-3.5" /> Edit
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );
+}
+
+function UserAvatar({ user }: { user: AppUser }) {
+  return user.photoURL
+    ? <img src={user.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 32, height: 32 }} alt="" />
+    : <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+        {user.displayName?.[0]?.toUpperCase() || '?'}
+      </div>;
 }
