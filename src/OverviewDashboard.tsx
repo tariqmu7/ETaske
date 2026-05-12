@@ -298,7 +298,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
       {selectedCategory === null ? (
         /* ── Category Grid View ── */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, marginTop: 30 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
           {['Project', 'Internal', 'External'].map(cat => {
             const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Internal;
             const s = categoryStats[cat];
@@ -379,7 +379,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     {subCat}
                   </h3>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20 }}>
                     {/* Correspondences Column / Items */}
                     {data.corrs.map(item => (
                       <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} />

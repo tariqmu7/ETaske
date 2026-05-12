@@ -305,7 +305,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, display: 'flex', gap: 4 }}>
           {(['mine', 'all'] as const).map(v => (
             <button
@@ -458,7 +458,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                             </div>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                               <div style={{ gridColumn: 'span 2' }}>
                                 <label className="label">Task Name</label>
                                 <input className="input" value={editingTask.taskName} onChange={e => setEditingTask({ ...editingTask, taskName: e.target.value })} />

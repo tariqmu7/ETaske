@@ -224,7 +224,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       </div>
 
       {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 28 }}>
         {[
           { label: 'Total', value: stats.total, cls: 'stat-indigo' },
           { label: 'Unread', value: stats.unread, cls: 'stat-amber' },
@@ -378,7 +378,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               </div>
 
               <form onSubmit={handleSubmit} style={{ padding: '20px 28px 28px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
                   {/* Subject */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Subject *</label>

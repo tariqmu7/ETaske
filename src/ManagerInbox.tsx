@@ -165,7 +165,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16, marginBottom: 32 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 32 }}>
         {[
           { label: 'Unread', value: stats.pending, cls: 'stat-amber' },
           { label: 'Reviewing', value: stats.reviewing, cls: 'stat-sky' },
@@ -191,7 +191,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 360px', gap: 24, alignItems: 'start' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 24, alignItems: 'start' }}>
         {/* Left: Correspondence list */}
         <div>
           {/* Toolbar */}

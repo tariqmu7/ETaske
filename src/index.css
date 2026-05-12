@@ -44,6 +44,7 @@
 
   --topnav-h: 60px;
   --bottomnav-h: 64px;
+  --safe-area-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -112,6 +113,10 @@ body {
   display: none;
 }
 
+@media (max-width: 768px) {
+  .topnav-tabs { display: none !important; }
+}
+
 @media (min-width: 480px) {
   .topnav-brand { display: block; }
 }
@@ -145,6 +150,8 @@ body {
   white-space: nowrap;
   flex-shrink: 0;
   position: relative;
+  min-height: 44px;
+  justify-content: center;
 }
 
 .nav-tab:hover {
@@ -225,6 +232,36 @@ body {
 }
 .logout-btn:hover { background: rgba(239,68,68,0.12); }
 
+.logout-label { display: none; }
+@media (min-width: 1024px) {
+  .logout-label { display: inline; }
+}
+
+/* ─── Notifications Dropdown ─────────────────────── */
+.notif-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: -40px;
+  width: 320px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  border: 1px solid var(--border);
+  z-index: 1000;
+  overflow: hidden;
+}
+
+@media (max-width: 480px) {
+  .notif-dropdown {
+    position: fixed;
+    top: var(--topnav-h);
+    left: 12px;
+    right: 12px;
+    width: auto;
+    max-height: 80vh;
+  }
+}
+
 /* ─── Main Content ──────────────────────────────── */
 .main-content {
   flex: 1;
@@ -235,10 +272,65 @@ body {
   margin: 0 auto;
 }
 
+@media (max-width: 768px) {
+  .main-content {
+    padding: 16px 12px 100px;
+  }
+}
+
 @media (min-width: 768px) {
   .main-content {
     padding: 28px 28px 40px;
   }
+}
+
+/* ─── Bottom Navigation (Mobile Only) ────────────── */
+.bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--bottomnav-h) + var(--safe-area-bottom));
+  background: #ffffff;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  padding-bottom: var(--safe-area-bottom);
+  z-index: 100;
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+}
+
+@media (min-width: 769px) {
+  .bottom-nav { display: none; }
+}
+
+.bottom-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+  background: none;
+  border: none;
+  flex: 1;
+  height: 100%;
+  cursor: pointer;
+  transition: all 0.2s;
+  padding: 8px 0;
+}
+
+.bottom-tab.active {
+  color: var(--blue-600);
+}
+
+.bottom-tab svg {
+  width: 20px;
+  height: 20px;
 }
 
 /* ─── Card ──────────────────────────────────────── */
@@ -325,7 +417,8 @@ body {
   justify-content: center;
   gap: 7px;
   padding: 9px 18px;
-  border-radius: 4px;
+  min-height: 44px;
+  border-radius: 6px;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
@@ -399,10 +492,10 @@ body {
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 6px 6px 0 0;
+  border-radius: 12px 12px 0 0;
   width: 100%;
   max-width: 660px;
-  max-height: 92vh;
+  max-height: 94vh;
   overflow-y: auto;
   box-shadow: 0 -8px 40px rgba(0,0,0,0.12);
 }

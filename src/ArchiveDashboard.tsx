@@ -78,7 +78,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       </div>
 
       {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 16, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 28 }}>
         {[
           { label: 'Completed Tasks', value: tasks.length, cls: 'stat-green' },
           { label: 'Total Milestones', value: milestones.filter(m => tasks.some(t => t.id === m.taskId)).length, cls: 'stat-indigo' },
@@ -201,7 +201,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                   </div>
                 )}
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
                   {[
                     { label: 'Assigned To', value: viewingTask.assignedTo },
                     { label: 'Assigned By', value: viewingTask.assignedBy },

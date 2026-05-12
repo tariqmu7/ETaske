@@ -14,6 +14,9 @@ import TasksDashboard from './TasksDashboard';
 import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
+import { 
+  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users 
+} from 'lucide-react';
 
 export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview';
 
@@ -203,6 +206,36 @@ export default function App() {
           <AdminDashboard users={projectUsers} />
         )}
       </main>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="bottom-nav">
+        {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
+          <button className={`bottom-tab${activeView === 'overview' ? ' active' : ''}`} onClick={() => setActiveView('overview')}>
+            <BarChart3 />
+            <span>Overview</span>
+          </button>
+        )}
+        <button className={`bottom-tab${activeView === 'correspondences' ? ' active' : ''}`} onClick={() => setActiveView('correspondences')}>
+          <MailOpen />
+          <span>Inbox</span>
+        </button>
+        {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
+          <button className={`bottom-tab${activeView === 'manager-inbox' ? ' active' : ''}`} onClick={() => setActiveView('manager-inbox')}>
+            <Inbox />
+            <span>Review</span>
+          </button>
+        )}
+        <button className={`bottom-tab${activeView === 'tasks' ? ' active' : ''}`} onClick={() => setActiveView('tasks')}>
+          <CheckSquare />
+          <span>Tasks</span>
+        </button>
+        {appUser.role === 'Admin' && (
+          <button className={`bottom-tab${activeView === 'admin' ? ' active' : ''}`} onClick={() => setActiveView('admin')}>
+            <Users />
+            <span>Users</span>
+          </button>
+        )}
+      </nav>
     </div>
   );
 }

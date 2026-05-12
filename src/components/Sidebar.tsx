@@ -119,11 +119,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           </button>
 
           {showNotifications && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 8px)', right: -40, width: 320,
-              background: '#fff', borderRadius: 12, boxShadow: '0 10px 25px rgba(0,0,0,0.1)',
-              border: '1px solid var(--border)', zIndex: 100, overflow: 'hidden'
-            }}>
+            <div className="notif-dropdown">
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Notifications</h3>
                 {unreadCount > 0 && (
@@ -182,7 +178,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
         <button onClick={onLogout} className="logout-btn" title="Sign Out">
           <LogOut className="w-3.5 h-3.5" />
-          <span style={{ display: 'none' }} id="logout-text">Sign Out</span>
+          <span className="logout-label">Sign Out</span>
         </button>
       </div>
 
