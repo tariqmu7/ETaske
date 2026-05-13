@@ -61,7 +61,7 @@ body {
 /* ─── Scrollbar ─────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 0; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(0,0,0,0.25); }
 
 /* ─── App Shell ─────────────────────────────────── */
@@ -98,7 +98,7 @@ body {
   width: 34px;
   height: 34px;
   background: linear-gradient(135deg, var(--blue-600), var(--teal-500));
-  border-radius: 4px;
+  border-radius: 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -138,7 +138,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
@@ -169,7 +169,7 @@ body {
   color: #fff;
   font-size: 10px;
   font-weight: 800;
-  border-radius: 4px;
+  border-radius: 0;
   padding: 1px 6px;
   min-width: 18px;
   text-align: center;
@@ -192,7 +192,7 @@ body {
 .topnav-avatar {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 0;
   object-fit: cover;
   border: 2px solid var(--blue-200);
   flex-shrink: 0;
@@ -202,7 +202,7 @@ body {
 .topnav-avatar-placeholder {
   width: 34px;
   height: 34px;
-  border-radius: 50%;
+  border-radius: 0;
   background: linear-gradient(135deg, var(--blue-600), var(--teal-500));
   display: flex;
   align-items: center;
@@ -220,7 +220,7 @@ body {
   align-items: center;
   gap: 6px;
   padding: 7px 12px;
-  border-radius: 8px;
+  border-radius: 0;
   font-size: 13px;
   font-weight: 600;
   color: #ef4444;
@@ -240,15 +240,20 @@ body {
 /* ─── Notifications Dropdown ─────────────────────── */
 .notif-dropdown {
   position: absolute;
-  top: calc(100% + 8px);
-  right: -40px;
+  top: calc(100% + 12px);
+  right: 0;
   width: 320px;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  max-width: calc(100vw - 40px);
+  background: #ffffff;
+  border-radius: 0;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.15);
   border: 1px solid var(--border);
   z-index: 1000;
   overflow: hidden;
+}
+
+.notif-item:hover {
+  background: var(--surface-2) !important;
 }
 
 @media (max-width: 480px) {
@@ -338,7 +343,7 @@ body {
 .card {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 0;
   transition: border-color 0.2s, box-shadow 0.2s;
 }
 
@@ -361,7 +366,7 @@ body {
   align-items: center;
   gap: 4px;
   padding: 3px 10px;
-  border-radius: 4px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -386,7 +391,7 @@ body {
   padding: 10px 14px;
   background: #fff;
   border: 1.5px solid var(--border-md);
-  border-radius: 4px;
+  border-radius: 0;
   color: var(--text-primary);
   font-size: 14px;
   outline: none;
@@ -419,7 +424,7 @@ body {
   gap: 7px;
   padding: 9px 18px;
   min-height: 44px;
-  border-radius: 6px;
+  border-radius: 0;
   font-size: 14px;
   font-weight: 600;
   font-family: inherit;
@@ -468,8 +473,8 @@ body {
 }
 .btn-danger:hover:not(:disabled) { background: #fecaca; }
 
-.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 4px; }
-.btn-icon { padding: 8px; border-radius: 4px; }
+.btn-sm { padding: 6px 12px; font-size: 12px; border-radius: 0; }
+.btn-icon { padding: 8px; border-radius: 0; }
 
 /* ─── Modal ─────────────────────────────────────── */
 .modal-overlay {
@@ -493,7 +498,7 @@ body {
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px 12px 0 0;
+  border-radius: 0;
   width: 100%;
   max-width: 660px;
   max-height: 94vh;
@@ -503,7 +508,7 @@ body {
 
 @media (min-width: 640px) {
   .modal {
-    border-radius: 6px;
+    border-radius: 0;
     box-shadow: 0 25px 60px rgba(0,0,0,0.18);
     margin-bottom: 20px;
   }
@@ -529,13 +534,13 @@ h1, h2, h3, h4, p, span, div {
 .progress-bar {
   height: 7px;
   background: var(--surface-3);
-  border-radius: 999px;
+  border-radius: 0;
   overflow: hidden;
 }
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--blue-500), var(--teal-500));
-  border-radius: 999px;
+  border-radius: 0;
   transition: width 0.4s ease;
 }
 
@@ -543,7 +548,7 @@ h1, h2, h3, h4, p, span, div {
 .notif-dot {
   width: 8px; height: 8px;
   background: var(--danger);
-  border-radius: 2px;
+  border-radius: 0;
   border: 2px solid #fff;
   position: absolute;
   top: 4px; right: 4px;
@@ -551,7 +556,7 @@ h1, h2, h3, h4, p, span, div {
 
 /* ─── Avatar ─────────────────────────────────────── */
 .avatar {
-  border-radius: 50%;
+  border-radius: 0;
   object-fit: cover;
   flex-shrink: 0;
 }
@@ -571,7 +576,7 @@ h1, h2, h3, h4, p, span, div {
   width: 22px; height: 22px;
   border: 2.5px solid var(--blue-100);
   border-top-color: var(--blue-500);
-  border-radius: 50%;
+  border-radius: 0;
   animation: spin 0.7s linear infinite;
 }
 
@@ -584,7 +589,7 @@ h1, h2, h3, h4, p, span, div {
   background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 50%, #f1f5f9 75%);
   background-size: 200% 100%;
   animation: shimmer 1.5s infinite;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ─── Milestone timeline ─────────────────────────── */
@@ -647,7 +652,7 @@ h1, h2, h3, h4, p, span, div {
   align-items: center;
   gap: 4px;
   padding: 2px 9px;
-  border-radius: 2px;
+  border-radius: 0;
   font-size: 11px;
   font-weight: 600;
   background: var(--blue-50);

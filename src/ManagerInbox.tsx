@@ -198,7 +198,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       </div>
 
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
@@ -329,7 +329,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 <h3 style={{ fontWeight: 800, fontSize: 16, color: 'var(--text-primary)', marginBottom: 4 }}>Assign to Employee</h3>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20 }}>Assigning will create a task linked to this correspondence.</p>
 
-                <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '14px 16px', marginBottom: 20, border: '1px solid var(--border)' }}>
+                <div style={{ background: 'var(--surface-2)', borderRadius: 0, padding: '14px 16px', marginBottom: 20, border: '1px solid var(--border)' }}>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>Corresponding</div>
                   <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', marginBottom: 4 }}>{selectedCorr.subject}</div>
                   <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{selectedCorr.department} › {selectedCorr.sentFrom}</div>
@@ -365,7 +365,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 </button>
 
                 {selectedCorr.status === 'Assigned' && (
-                  <div style={{ marginTop: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 10, padding: '10px 14px', fontSize: 12, color: '#4ade80', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ marginTop: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 0, padding: '10px 14px', fontSize: 12, color: '#4ade80', display: 'flex', gap: 8, alignItems: 'center' }}>
                     <CheckCircle2 className="w-4 h-4" />
                     Already assigned to {selectedCorr.assignedTo}
                   </div>
@@ -392,12 +392,12 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {emp.photoURL
                           ? <img src={emp.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 28, height: 28 }} alt="" />
-                          : <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{emp.displayName?.[0]}</div>
+                          : <div style={{ width: 28, height: 28, borderRadius: 0, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{emp.displayName?.[0]}</div>
                         }
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{emp.displayName}</span>
                       </div>
                       <span style={{
-                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 999,
+                        fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 0,
                         background: activeTasks >= 5 ? 'rgba(239,68,68,0.15)' : activeTasks >= 3 ? 'rgba(245,158,11,0.15)' : 'rgba(34,197,94,0.15)',
                         color: activeTasks >= 5 ? '#f87171' : activeTasks >= 3 ? '#fbbf24' : '#4ade80',
                       }}>

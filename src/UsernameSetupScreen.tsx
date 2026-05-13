@@ -30,7 +30,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
     }}>
       <div style={{
         background: '#fff',
-        borderRadius: 24,
+        borderRadius: 0,
         padding: '40px 36px',
         width: '100%',
         maxWidth: 420,
@@ -39,7 +39,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
         <div style={{
           width: 52, height: 52,
           background: 'linear-gradient(135deg, #2563eb, #14b8a6)',
-          borderRadius: 14,
+          borderRadius: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           margin: '0 auto 20px',
         }}>

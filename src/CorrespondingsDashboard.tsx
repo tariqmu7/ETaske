@@ -340,7 +340,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       </div>
 
       {error && (
-        <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#dc2626', fontSize: 14 }}>
+        <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#dc2626', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" />
           {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
@@ -369,7 +369,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   {item.category && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase',
                       background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
                       color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
@@ -378,7 +378,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   {item.actions && item.actions !== 'None' && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 999, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
                       border: '1px solid #fecaca'
                     }}>{item.actions}</span>
@@ -430,12 +430,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 )}
                 <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: getUserColor(item.userId), opacity: 0.6 }} />
+                    <span style={{ width: 6, height: 6, borderRadius: 0, background: getUserColor(item.userId), opacity: 0.6 }} />
                     Logged by {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
                   </span>
                   {item.assignedTo && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(item.assignedToId || item.assignedTo) }} />
+                      <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(item.assignedToId || item.assignedTo) }} />
                       Assigned to: {item.assignedTo}
                     </span>
                   )}
@@ -502,18 +502,19 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', padding: '4px 12px',
-                        borderRadius: 999, fontSize: 12, fontWeight: 700,
+                        borderRadius: 0, fontSize: 12, fontWeight: 700,
                         background: formData.category === 'Project' ? '#dbeafe' : formData.category === 'External' ? '#dcfce7' : '#f3e8ff',
                         color: formData.category === 'Project' ? '#1d4ed8' : formData.category === 'External' ? '#15803d' : '#6d28d9',
                       }}>{formData.category}</span>
                     ) : (
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content' }}>
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content' }}>
                         {CATEGORY_OPTIONS.map(c => (
                           <button
                             key={c} type="button"
                             onClick={() => handleOtherSelection('category', c)}
                             style={{
-                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                              whiteSpace: 'nowrap',
                               background: formData.category === c ? 'var(--accent)' : 'transparent',
                               color: formData.category === c ? '#fff' : 'var(--text-muted)',
                               transition: 'all 0.15s'
@@ -531,13 +532,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <span className={priorityBadgeClass(formData.priority)}>{formData.priority}</span>
                     ) : (
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
                         {PRIORITY_OPTIONS.map(p => (
                           <button
                             key={p} type="button"
                             onClick={() => set('priority', p)}
                             style={{
-                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                              whiteSpace: 'nowrap',
                               background: formData.priority === p ? (p === 'Urgent' ? '#ef4444' : p === 'High' ? '#f97316' : p === 'Medium' ? '#3b82f6' : '#64748b') : 'transparent',
                               color: formData.priority === p ? '#fff' : 'var(--text-muted)',
                               transition: 'all 0.15s'
@@ -586,7 +588,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <span style={{
                         display: 'inline-flex', alignItems: 'center', padding: '4px 12px',
-                        borderRadius: 999, fontSize: 12, fontWeight: 700,
+                        borderRadius: 0, fontSize: 12, fontWeight: 700,
                         background: '#fee2e2', color: '#dc2626',
                         border: '1px solid #fecaca'
                       }}>{formData.actions}</span>
@@ -621,13 +623,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
                     ) : (
                       (appUser.role === 'Admin' || appUser.role === 'Manager') ? (
-                        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
                           {(['Unread','Reviewing','Assigned','Closed'] as CorrespondingStatus[]).map(s => (
                             <button
                               key={s} type="button"
                               onClick={() => set('status', s)}
                               style={{
-                                padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                                padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                                whiteSpace: 'nowrap',
                                 background: formData.status === s ? 'var(--accent)' : 'transparent',
                                 color: formData.status === s ? '#fff' : 'var(--text-muted)',
                                 transition: 'all 0.15s'
@@ -649,7 +652,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       formData.attachedFile ? (
                         <div style={{ 
                           marginTop: 12, 
-                          borderRadius: 16, 
+                          borderRadius: 0, 
                           overflow: 'hidden', 
                           border: '1px solid var(--border)',
                           background: 'var(--surface-2)',
@@ -692,7 +695,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             </div>
                           ) : (
                             <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                                 <Paperclip className="w-5 h-5" />
                               </div>
                               <div style={{ flex: 1 }}>
@@ -724,8 +727,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               <button type="button" onClick={() => setFormData(p => ({ ...p, attachedFile: '', attachedFileName: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-3 h-3" /></button>
                             </div>
                             {formData.attachedFile && (formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) && (
-                              <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
-                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+                              <div style={{ borderRadius: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
+                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 0, display: 'block' }} />
                               </div>
                             )}
                           </div>
@@ -737,7 +740,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Manager Notes / Internal Comments</label>
                     {isViewing ? (
-                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border)', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 0, border: '1px solid var(--border)', fontStyle: 'italic' }}>
                         {formData.notes || 'No notes available.'}
                       </div>
                     ) : (

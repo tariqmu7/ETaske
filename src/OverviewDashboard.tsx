@@ -80,7 +80,7 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
           )}
           <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.subject}</div>
         </div>
-        <span style={{ padding: '3px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-secondary)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-secondary)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
           {item.status}
         </span>
       </div>
@@ -90,11 +90,11 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
       </div>
       
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
           {item.priority} Priority
         </span>
         {overdue && (
-          <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}>
+          <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}>
             Overdue
           </span>
         )}
@@ -102,7 +102,7 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
 
       {item.assignedTo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(item.assignedToId || item.assignedTo) }} />
+          <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(item.assignedToId || item.assignedTo) }} />
           Assigned: {item.assignedTo}
         </div>
       )}
@@ -113,8 +113,7 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
           <button 
             onClick={() => onTaskClick(linkedTask)}
             style={{ 
-              background: 'none', border: 'none', padding: '2px 6px', borderRadius: 4, 
-              color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
+              background: 'none', border: 'none', padding: '2px 6px', borderRadius: 0,               color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
               fontSize: 11, transition: 'all 0.2s'
             }}
             onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
@@ -272,7 +271,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             )}
             <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', lineHeight: 1.4 }}>{task.taskName}</div>
           </div>
-          <span style={{ padding: '3px 9px', borderRadius: 999, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+          <span style={{ padding: '3px 9px', borderRadius: 0, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
             background: task.status === 'Done' ? '#dcfce7' : task.status === 'In Progress' ? '#dbeafe' : '#f1f5f9',
             color: task.status === 'Done' ? '#15803d' : task.status === 'In Progress' ? '#1d4ed8' : '#475569',
           }}>{task.status}</span>
@@ -287,8 +286,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               <span>Milestones: {done}/{taskMilestones.length}</span>
               <span>{progress}%</span>
             </div>
-            <div style={{ height: 5, background: '#f1f5f9', borderRadius: 999, overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${progress}%`, background: '#3b82f6', borderRadius: 999, transition: 'width 0.4s' }} />
+            <div style={{ height: 5, background: '#f1f5f9', borderRadius: 0, overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${progress}%`, background: '#3b82f6', borderRadius: 0, transition: 'width 0.4s' }} />
             </div>
           </>
         )}
@@ -338,7 +337,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
                 <div style={{ padding: '24px', background: catStyle.bg, borderBottom: `1px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ color: catStyle.text, padding: 12, background: 'rgba(255,255,255,0.5)', borderRadius: 12 }}>
+                  <div style={{ color: catStyle.text, padding: 12, background: 'rgba(255,255,255,0.5)', borderRadius: 0 }}>
                     {catStyle.icon}
                   </div>
                   <div>
@@ -356,7 +355,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>{s.tasks}</span>
                   </div>
                   {s.overdue > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#fee2e2', borderRadius: 8 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#fee2e2', borderRadius: 0 }}>
                       <span style={{ color: '#dc2626', fontSize: 14, fontWeight: 700 }}>Overdue Correspondences</span>
                       <span style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>{s.overdue}</span>
                     </div>
@@ -394,11 +393,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 />
               </div>
 
-              <div style={{ display: 'flex', background: '#f1f5f9', padding: 4, borderRadius: 8 }}>
+              <div style={{ display: 'flex', background: '#f1f5f9', padding: 4, borderRadius: 0 }}>
                 <button 
                   onClick={() => setViewTab('Correspondences')}
                   style={{ 
-                    padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                     background: viewTab === 'Correspondences' ? '#fff' : 'transparent',
                     color: viewTab === 'Correspondences' ? '#0f172a' : '#64748b',
                     boxShadow: viewTab === 'Correspondences' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -411,7 +410,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <button 
                   onClick={() => setViewTab('Tasks')}
                   style={{ 
-                    padding: '6px 16px', borderRadius: 6, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                    padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
                     background: viewTab === 'Tasks' ? '#fff' : 'transparent',
                     color: viewTab === 'Tasks' ? '#0f172a' : '#64748b',
                     boxShadow: viewTab === 'Tasks' ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
@@ -483,20 +482,20 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
                 <div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-                    <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: selectedTask.status === 'Done' ? '#dcfce7' : selectedTask.status === 'In Progress' ? '#dbeafe' : '#f1f5f9',
                       color: selectedTask.status === 'Done' ? '#15803d' : selectedTask.status === 'In Progress' ? '#1d4ed8' : '#475569',
                     }}>{selectedTask.status}</span>
-                    <span style={{ padding: '3px 10px', borderRadius: 999, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                    <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: priorityColor[selectedTask.priority] ? `${priorityColor[selectedTask.priority]}20` : '#f1f5f9',
                       color: priorityColor[selectedTask.priority] || '#475569'
                     }}>{selectedTask.priority} Priority</span>
                   </div>
                   <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>{selectedTask.taskName}</h2>
                 </div>
-                <button 
-                  onClick={() => setSelectedTask(null)} 
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                  <button 
+                   onClick={() => setSelectedTask(null)} 
+                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
@@ -510,11 +509,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   {selectedTask.description || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No description provided.</span>}
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: '#f8fafc', borderRadius: 12, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: '#f8fafc', borderRadius: 0, border: '1px solid var(--border)' }}>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
+                      <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
                       <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedTask.assignedTo || 'Unassigned'}</span>
                     </div>
                   </div>
@@ -541,22 +540,22 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </h4>
                   
                   {milestones.filter(m => m.taskId === selectedTask.id).length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: 12, border: '1px dashed var(--border)', color: '#94a3b8', fontSize: 13 }}>
+                    <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: 0, border: '1px dashed var(--border)', color: '#94a3b8', fontSize: 13 }}>
                       No milestones for this task.
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {milestones.filter(m => m.taskId === selectedTask.id).map(ms => (
                         <div key={ms.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                          <div style={{ width: 24, height: 24, borderRadius: '50%', background: ms.status === 'Done' ? '#dcfce7' : ms.status === 'In Progress' ? '#dbeafe' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 0, background: ms.status === 'Done' ? '#dcfce7' : ms.status === 'In Progress' ? '#dbeafe' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
                             {ms.status === 'Done' && <CheckSquare className="w-3.5 h-3.5 text-success" style={{ color: '#15803d' }} />}
                             {ms.status === 'In Progress' && <Clock className="w-3.5 h-3.5 text-primary" style={{ color: '#1d4ed8' }} />}
-                            {ms.status !== 'Done' && ms.status !== 'In Progress' && <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#94a3b8' }} />}
+                            {ms.status !== 'Done' && ms.status !== 'In Progress' && <div style={{ width: 6, height: 6, borderRadius: 0, background: '#94a3b8' }} />}
                           </div>
-                          <div style={{ flex: 1, padding: '12px 16px', background: '#f8fafc', borderRadius: 10, border: '1px solid var(--border)' }}>
+                          <div style={{ flex: 1, padding: '12px 16px', background: '#f8fafc', borderRadius: 0, border: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
                               <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? '#94a3b8' : '#0f172a', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 12, background: 'var(--surface)', color: 'var(--text-muted)' }}>{ms.status}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: 'var(--surface)', color: 'var(--text-muted)' }}>{ms.status}</span>
                             </div>
                             <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12 }}>
                               <span>Added by {ms.addedBy}</span>

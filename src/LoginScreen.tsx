@@ -50,7 +50,7 @@ export default function LoginScreen() {
     }}>
       <div style={{
         background: '#fff',
-        borderRadius: 24,
+        borderRadius: 0,
         width: '100%',
         maxWidth: 420,
         overflow: 'hidden',
@@ -66,7 +66,7 @@ export default function LoginScreen() {
           <div style={{
             width: 56, height: 56,
             background: 'linear-gradient(135deg, #2563eb, #14b8a6)',
-            borderRadius: 16,
+            borderRadius: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 16px',
           }}>
@@ -80,7 +80,7 @@ export default function LoginScreen() {
 
         <div style={{ padding: '28px 36px 36px' }}>
           {error && (
-            <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 14px', marginBottom: 20, display: 'flex', gap: 10, fontSize: 13, color: '#dc2626' }}>
+            <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 0, padding: '12px 14px', marginBottom: 20, display: 'flex', gap: 10, fontSize: 13, color: '#dc2626' }}>
               <AlertCircle style={{ width: 16, height: 16, flexShrink: 0, marginTop: 1 }} />
               {error}
             </div>
@@ -95,7 +95,7 @@ export default function LoginScreen() {
               gap: 12, padding: '12px 16px',
               background: '#fff',
               border: '1.5px solid #e2e8f0',
-              borderRadius: 12, color: '#0f172a', fontSize: 14, fontWeight: 600,
+              borderRadius: 0, color: '#0f172a', fontSize: 14, fontWeight: 600,
               cursor: 'pointer', marginBottom: 20, fontFamily: 'inherit', transition: 'all 0.15s',
               boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
             }}

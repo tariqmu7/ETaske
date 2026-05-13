@@ -6,8 +6,8 @@ import { auth } from './lib/firebase';
 export default function RejectedScreen() {
   return (
     <div style={{ minHeight: '100vh', background: 'linear-gradient(135deg, #eff6ff, #fff1f2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-      <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 24, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.08)' }}>
-        <div style={{ width: 72, height: 72, background: '#fee2e2', border: '2px solid #fecaca', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+      <div style={{ background: '#fff', border: '1px solid #fecaca', borderRadius: 0, padding: '48px 40px', maxWidth: 420, width: '100%', textAlign: 'center', boxShadow: '0 10px 40px rgba(0,0,0,0.08)' }}>
+        <div style={{ width: 72, height: 72, background: '#fee2e2', border: '2px solid #fecaca', borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
           <XCircle style={{ width: 32, height: 32, color: '#dc2626' }} />
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', marginBottom: 12 }}>Access Denied</h1>

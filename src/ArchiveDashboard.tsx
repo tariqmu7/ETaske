@@ -98,7 +98,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       </div>
 
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
@@ -200,7 +200,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>{viewingTask.description}</p>
 
                 {viewingTask.correspondingSubject && (
-                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, marginBottom: 20 }}>
+                  <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 0, padding: 14, marginBottom: 20 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Source Corresponding</div>
                     <div style={{ fontSize: 14, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Link2 className="w-4 h-4" /> {viewingTask.correspondingSubject}
@@ -215,7 +215,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     { label: 'Priority', value: viewingTask.priority },
                     { label: 'Due Date', value: viewingTask.dueDate },
                   ].filter(i => i.value).map(i => (
-                    <div key={i.label} style={{ background: 'var(--surface-2)', borderRadius: 10, padding: '12px 14px', border: '1px solid var(--border)' }}>
+                    <div key={i.label} style={{ background: 'var(--surface-2)', borderRadius: 0, padding: '12px 14px', border: '1px solid var(--border)' }}>
                       <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{i.label}</div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{i.value}</div>
                     </div>
@@ -225,7 +225,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {viewingTask.attachedFile && (
                   <div style={{ 
                     marginBottom: 24, 
-                    borderRadius: 16, 
+                    borderRadius: 0, 
                     overflow: 'hidden', 
                     border: '1px solid var(--border)',
                     background: 'var(--surface-2)',
@@ -268,7 +268,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                       </div>
                     ) : (
                       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                           <Paperclip className="w-5 h-5" />
                         </div>
                         <div style={{ flex: 1 }}>
@@ -294,7 +294,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12 }}>Milestone History</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {getTaskMilestones(viewingTask.id).map(ms => (
-                        <div key={ms.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                        <div key={ms.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</div>
                             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>By {ms.addedBy}{ms.targetDate ? ` · ${ms.targetDate}` : ''}</div>

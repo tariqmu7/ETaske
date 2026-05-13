@@ -411,13 +411,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       </div>
 
       <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 4, display: 'flex', gap: 4 }}>
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
           {(['mine', 'all'] as const).map(v => (
             <button
               key={v}
               onClick={() => setView(v)}
               style={{
-                padding: '6px 16px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600,
                 border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                 background: view === v ? 'var(--accent)' : 'transparent',
                 color: view === v ? '#fff' : 'var(--text-secondary)',
@@ -466,7 +466,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         )}
 
         {subCategoryFilter !== 'All' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 20, fontSize: 12, fontWeight: 700 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 0, fontSize: 12, fontWeight: 700 }}>
             Tag: {subCategoryFilter}
             <button onClick={() => setSubCategoryFilter('All')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
               <X className="w-3.5 h-3.5" />
@@ -476,7 +476,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       </div>
 
       {error && (
-        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
+        <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
@@ -569,7 +569,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
               {cat} Tasks
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 12 }}>{catTasks.length}</span>
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
             </h2>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <AnimatePresence>
@@ -704,7 +704,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                                 {canEdit ? (
-                                  <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 2, borderRadius: 20, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                                  <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 2, borderRadius: 0, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
                                     {(['Pending', 'In Progress', 'Done'] as TaskStatus[]).map(s => (
                                       <button
                                         key={s}
@@ -716,7 +716,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           padding: '2px 10px',
                                           fontSize: 11,
                                           fontWeight: 700,
-                                          borderRadius: 16,
+                                          borderRadius: 0,
                                           border: 'none',
                                           cursor: 'pointer',
                                           background: task.status === s ? (s === 'Done' ? '#dcfce7' : s === 'In Progress' ? '#e0e7ff' : '#fef3c7') : 'transparent',
@@ -785,13 +785,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                               <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                                 {task.assignedTo && (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
-                                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: getUserColor(task.assignedToId || task.assignedTo) }} />
+                                    <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(task.assignedToId || task.assignedTo) }} />
                                     {task.assignedTo}
                                   </span>
                                 )}
                                 {task.assignedBy && (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                    <span style={{ width: 6, height: 6, borderRadius: '50%', background: getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
+                                    <span style={{ width: 6, height: 6, borderRadius: 0, background: getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
                                     By {task.assignedBy}
                                   </span>
                                 )}
@@ -815,8 +815,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 <div style={{ marginTop: 24 }}>
                                   <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>Attachment</div>
                                   <div style={{ 
-                                    borderRadius: 16, 
-                                    overflow: 'hidden', 
+                                    borderRadius: 0,                                     overflow: 'hidden', 
                                     border: '1px solid var(--border)',
                                     background: 'var(--surface-2)',
                                     boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
@@ -859,7 +858,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                       </div>
                                     ) : (
                                       <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 0, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
                                           <Paperclip className="w-5 h-5" />
                                         </div>
                                         <div style={{ flex: 1 }}>
@@ -921,7 +920,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                               </div>
 
                               {newMilestone?.taskId === task.id && (
-                                <div style={{ background: 'var(--surface-2)', borderRadius: 10, padding: 16, marginBottom: 14, border: '1px solid var(--border)' }}>
+                                <div style={{ background: 'var(--surface-2)', borderRadius: 0, padding: 16, marginBottom: 14, border: '1px solid var(--border)' }}>
                                   <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                                     <input
                                       className="input"
@@ -955,18 +954,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     <div key={ms.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', position: 'relative', paddingLeft: 28 }}>
                                       <div style={{
                                         position: 'absolute', left: 8, top: 6,
-                                        width: 10, height: 10, borderRadius: '50%',
+                                        width: 10, height: 10, borderRadius: 0,
                                         background: ms.status === 'Done' ? '#4ade80' : ms.status === 'In Progress' ? '#818cf8' : ms.status === 'Blocked' ? '#f87171' : 'var(--surface-3)',
                                         border: '2px solid var(--surface)',
                                         zIndex: 1,
                                       }} />
-                                      <div style={{ flex: 1, background: 'var(--surface-2)', borderRadius: 10, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                                      <div style={{ flex: 1, background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
                                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                           <span style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>
                                             {ms.title}
                                           </span>
                                           <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                                            <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
                                               {MILESTONE_STATUS_OPTIONS.map(s => (
                                                 <button
                                                   key={s}
@@ -978,7 +977,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                     padding: '2px 8px',
                                                     fontSize: 10,
                                                     fontWeight: 700,
-                                                    borderRadius: 16,
+                                                    borderRadius: 0,
                                                     border: 'none',
                                                     cursor: 'pointer',
                                                     background: ms.status === s ? (s === 'Done' ? '#dcfce7' : s === 'In Progress' ? '#e0e7ff' : s === 'Blocked' ? '#fee2e2' : '#f1f5f9') : 'transparent',

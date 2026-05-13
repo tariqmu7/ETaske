@@ -175,7 +175,7 @@ export default function AdminDashboard({ users }: Props) {
 function UserAvatar({ user }: { user: AppUser }) {
   return user.photoURL
     ? <img src={user.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 32, height: 32 }} alt="" />
-    : <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+    : <div style={{ width: 32, height: 32, borderRadius: 0, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
         {user.displayName?.[0]?.toUpperCase() || '?'}
       </div>;
 }

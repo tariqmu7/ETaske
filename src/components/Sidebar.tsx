@@ -26,6 +26,25 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(console.error);
     });
   };
+
+  const handleNotificationClick = (n: AppNotification) => {
+    if (!n.read) {
+      updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(console.error);
+    }
+    setShowNotifications(false);
+
+    if (n.link) {
+      if (n.link === '#tasks') onNavigate('tasks');
+      else if (n.link === '#correspondences') onNavigate('correspondences');
+      else if (n.link === '#manager-inbox') onNavigate('manager-inbox');
+      else if (n.link === '#archive') onNavigate('archive');
+      else if (n.link === '#overview') onNavigate('overview');
+    } else {
+      if (n.type.includes('task') || n.type.includes('milestone')) onNavigate('tasks');
+      else if (n.type.includes('corresponding')) onNavigate('correspondences');
+    }
+  };
+
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
   const navItems: { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean }[] = [
@@ -110,7 +129,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
             {unreadCount > 0 && (
               <span style={{
                 position: 'absolute', top: 0, right: 0, background: '#ef4444', color: 'white',
-                fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 999,
+                fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
                 transform: 'translate(25%, -25%)'
               }}>
                 {unreadCount > 9 ? '9+' : unreadCount}
@@ -135,13 +154,18 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   </div>
                 ) : (
                   notifications.slice(0, 20).map(n => (
-                    <div key={n.id} style={{ 
-                      padding: '12px 16px', borderBottom: '1px solid var(--border)', 
-                      background: n.read ? '#fff' : 'rgba(99,102,241,0.05)',
-                      display: 'flex', gap: 12, alignItems: 'flex-start'
-                    }}>
+                    <div key={n.id} 
+                      onClick={() => handleNotificationClick(n)}
+                      className="notif-item"
+                      style={{ 
+                        padding: '12px 16px', borderBottom: '1px solid var(--border)', 
+                        background: n.read ? '#fff' : 'rgba(99,102,241,0.05)',
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        cursor: 'pointer'
+                      }}
+                    >
                       <div style={{ marginTop: 2 }}>
-                        {n.read ? <CheckCircle2 className="w-4 h-4 text-success" /> : <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)', marginTop: 4 }} />}
+                        {n.read ? <CheckCircle2 className="w-4 h-4 text-success" /> : <div style={{ width: 8, height: 8, borderRadius: 0, background: 'var(--accent)', marginTop: 4 }} />}
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: n.read ? 600 : 800, color: 'var(--text-primary)', marginBottom: 2 }}>{n.title}</div>
