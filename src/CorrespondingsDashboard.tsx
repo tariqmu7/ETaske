@@ -84,6 +84,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [error, setError] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Corresponding | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
 
   // Firestore listener
   useEffect(() => {
@@ -109,7 +111,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       if (dateFilter && i.dateReceived !== dateFilter) return false;
       return true;
     });
-  }, [items, search, statusFilter, deptFilter]);
+  }, [items, search, statusFilter, deptFilter, dateFilter]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [search, statusFilter, deptFilter, dateFilter]);
+
+  const totalPages = Math.ceil(filtered.length / itemsPerPage);
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return filtered.slice(startIndex, startIndex + itemsPerPage);
+  }, [filtered, currentPage]);
 
   const stats = useMemo(() => ({
     total: items.length,
@@ -371,11 +384,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
         </div>
       )}
-
       {/* Items grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
         <AnimatePresence>
-          {filtered.map(item => (
+          {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(item => (
             <motion.div
               key={item.id}
               layout
@@ -470,6 +482,37 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           ))}
         </AnimatePresence>
       </div>
+
+      {/* Pagination Controls */}
+      {Math.ceil(filtered.length / 20) > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
+          <button 
+            className="btn btn-ghost btn-sm" 
+            disabled={currentPage === 1}
+            onClick={() => setCurrentPage(prev => prev - 1)}
+          >
+            Previous
+          </button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            {Array.from({ length: Math.ceil(filtered.length / 20) }, (_, i) => i + 1).map(p => (
+              <button
+                key={p}
+                className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-ghost'}`}
+                onClick={() => setCurrentPage(p)}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+          <button 
+            className="btn btn-ghost btn-sm" 
+            disabled={currentPage === Math.ceil(filtered.length / 20)}
+            onClick={() => setCurrentPage(prev => prev + 1)}
+          >
+            Next
+          </button>
+        </div>
+      )}
 
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
