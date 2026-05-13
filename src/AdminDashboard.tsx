@@ -12,6 +12,8 @@ export default function AdminDashboard({ users }: Props) {
   const [editRole, setEditRole] = useState<'Admin' | 'Manager' | 'Employee'>('Employee');
   const [editDepartment, setEditDepartment] = useState('');
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
+  const [editPhotoURL, setEditPhotoURL] = useState('');
+  const [editUserColor, setEditUserColor] = useState('');
 
   const updateStatus = async (userId: string, status: 'Approved' | 'Rejected') => {
     try { await updateDoc(doc(db, 'users', userId), { status }); }
@@ -22,7 +24,8 @@ export default function AdminDashboard({ users }: Props) {
     try {
       await updateDoc(doc(db, 'users', userId), {
         teamId: editTeamId, role: editRole,
-        department: editDepartment, phoneNumber: editPhoneNumber
+        department: editDepartment, phoneNumber: editPhoneNumber,
+        photoURL: editPhotoURL, userColor: editUserColor
       });
       setEditingUserId(null);
     } catch (e) { console.error(e); alert('Failed.'); }
@@ -34,6 +37,8 @@ export default function AdminDashboard({ users }: Props) {
     setEditRole(u.role === 'Admin' ? 'Admin' : u.role === 'Manager' ? 'Manager' : 'Employee');
     setEditDepartment(u.department || '');
     setEditPhoneNumber(u.phoneNumber || '');
+    setEditPhotoURL(u.photoURL || '');
+    setEditUserColor(u.userColor || '#6366f1');
   };
 
   const pending = users.filter(u => u.status === 'Pending');
@@ -144,6 +149,11 @@ export default function AdminDashboard({ users }: Props) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <input className="input" style={{ padding: '6px 10px', fontSize: 12 }} placeholder="Team ID" value={editTeamId} onChange={e => setEditTeamId(e.target.value)} />
                       <input className="input" style={{ padding: '6px 10px', fontSize: 12 }} placeholder="Department" value={editDepartment} onChange={e => setEditDepartment(e.target.value)} />
+                      <input className="input" style={{ padding: '6px 10px', fontSize: 12 }} placeholder="Photo URL" value={editPhotoURL} onChange={e => setEditPhotoURL(e.target.value)} />
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Color:</span>
+                        <input type="color" value={editUserColor} onChange={e => setEditUserColor(e.target.value)} style={{ width: 40, height: 24, padding: 0, border: 'none', background: 'none', cursor: 'pointer' }} />
+                      </div>
                     </div>
                   ) : (
                     <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
@@ -173,9 +183,10 @@ export default function AdminDashboard({ users }: Props) {
 }
 
 function UserAvatar({ user }: { user: AppUser }) {
+  const bgColor = user.userColor || 'linear-gradient(135deg,#6366f1,#818cf8)';
   return user.photoURL
-    ? <img src={user.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 32, height: 32 }} alt="" />
-    : <div style={{ width: 32, height: 32, borderRadius: 0, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+    ? <img src={user.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 32, height: 32, objectFit: 'cover' }} alt="" />
+    : <div style={{ width: 32, height: 32, borderRadius: 0, background: bgColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
         {user.displayName?.[0]?.toUpperCase() || '?'}
       </div>;
 }

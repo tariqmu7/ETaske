@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView } from './App';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor } from './utils';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -68,12 +68,13 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
   const targetUsers = useMemo(() => {
     return projectUsers.filter(u => 
       u.status === 'Approved' && 
-      (u.role === 'Employee' || u.role === 'Manager') &&
-      u.department === appUser.department &&
-      u.teamId === appUser.teamId &&
-      u.id !== user.uid
+      (
+        u.id === user.uid || 
+        appUser.role === 'Admin' || 
+        (u.department === appUser.department && u.teamId === appUser.teamId)
+      )
     );
-  }, [projectUsers, appUser.department, appUser.teamId]);
+  }, [projectUsers, appUser.department, appUser.teamId, appUser.role, user.uid]);
 
   const filtered = useMemo(() => {
     return correspondences.filter(c => {
@@ -253,7 +254,13 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0 }}
                     className="card"
-                    style={{ padding: '18px 20px' }}
+                    style={{ 
+                      padding: '18px 20px',
+                      borderLeft: `4px solid ${(() => {
+                        const u = projectUsers.find(pu => pu.id === task.assignedToId);
+                        return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
+                      })()}`
+                    }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                       <span className={`badge ${task.status === 'Done' ? 'badge-done' : task.status === 'In Progress' ? 'badge-inprogress' : 'badge-pending'}`}>
@@ -294,6 +301,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                         padding: '18px 20px',
                         borderColor: isSelected ? 'var(--accent)' : isNew ? 'rgba(245,158,11,0.3)' : undefined,
                         background: isSelected ? 'rgba(99,102,241,0.08)' : undefined,
+                        borderLeft: `4px solid ${(() => {
+                          const u = projectUsers.find(pu => pu.id === corr.assignedToId);
+                          return u?.userColor || getUserColor(corr.assignedToId || corr.userId || '');
+                        })()}`
                       }}
                       onClick={() => { setSelectedCorr(corr); setAssigneeId(corr.assignedToId || ''); setDueDate(corr.deadline || ''); setManagerNote(corr.notes || ''); }}
                     >
@@ -412,8 +423,21 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                         {emp.photoURL
-                          ? <img src={emp.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 28, height: 28 }} alt="" />
-                          : <div style={{ width: 28, height: 28, borderRadius: 0, background: 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff' }}>{emp.displayName?.[0]}</div>
+                          ? <img src={emp.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 28, height: 28, objectFit: 'cover' }} alt="" />
+                          : <div style={{ 
+                              width: 28, 
+                              height: 28, 
+                              borderRadius: 0, 
+                              background: emp.userColor || 'linear-gradient(135deg,#6366f1,#818cf8)', 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              justifyContent: 'center', 
+                              fontSize: 11, 
+                              fontWeight: 800, 
+                              color: '#fff' 
+                            }}>
+                              {emp.displayName?.[0]?.toUpperCase()}
+                            </div>
                         }
                         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{emp.displayName}</span>
                       </div>

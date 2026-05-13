@@ -64,13 +64,23 @@ function StatCard({ label, value, sub, color }: { label: string; value: number |
   );
 }
 
-const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Milestone[]; onTaskClick: (t: Task) => void }> = ({ item, tasks, milestones, onTaskClick }) => {
+const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Milestone[]; onTaskClick: (t: Task) => void; projectUsers: AppUser[] }> = ({ item, tasks, milestones, onTaskClick, projectUsers }) => {
   const linkedTask = tasks.find(t => t.correspondingId === item.id || t.id === item.convertedToTaskId);
   const taskMilestones = linkedTask ? milestones.filter(m => m.taskId === linkedTask.id) : [];
   const overdue = isOverdue(item.deadline);
 
   return (
-    <div className="card" style={{ padding: '16px', display: 'flex', flexDirection: 'column', height: '100%', position: 'relative', borderLeft: `4px solid ${getUserColor(item.assignedToId || item.userId || '')}` }}>
+    <div className="card" style={{ 
+      padding: '16px', 
+      display: 'flex', 
+      flexDirection: 'column', 
+      height: '100%', 
+      position: 'relative', 
+      borderLeft: `4px solid ${(() => {
+        const u = projectUsers.find(pu => pu.id === item.assignedToId);
+        return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
+      })()}` 
+    }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {item.serialNumber && (
@@ -102,7 +112,14 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
 
       {item.assignedTo && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 12 }}>
-          <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(item.assignedToId || item.assignedTo) }} />
+          {(() => {
+            const u = projectUsers.find(pu => pu.id === item.assignedToId);
+            return u?.photoURL ? (
+              <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover' }} alt="" />
+            ) : (
+              <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
+            );
+          })()}
           Assigned: {item.assignedTo}
         </div>
       )}
@@ -259,7 +276,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
     return (
       <div 
         className="card" 
-        style={{ padding: '16px 18px', cursor: 'pointer', transition: 'transform 0.2s', borderLeft: '4px solid #3b82f6' }}
+        style={{ 
+          padding: '16px 18px', 
+          cursor: 'pointer', 
+          transition: 'transform 0.2s', 
+          borderLeft: `4px solid ${(() => {
+            const u = projectUsers.find(pu => pu.id === task.assignedToId);
+            return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
+          })()}` 
+        }}
         onClick={() => setSelectedTask(task)}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
@@ -276,8 +301,24 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             color: task.status === 'Done' ? '#15803d' : task.status === 'In Progress' ? '#1d4ed8' : '#475569',
           }}>{task.status}</span>
         </div>
-        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
-          Assigned to: <span style={{fontWeight: 600, color: '#334155'}}>{task.assignedTo || '—'}</span> &nbsp;·&nbsp; Due: {task.dueDate || '—'}
+        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            Assigned to: 
+            {(() => {
+              const u = projectUsers.find(pu => pu.id === task.assignedToId);
+              return (
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600, color: '#334155' }}>
+                  {u?.photoURL ? (
+                    <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover' }} alt="" />
+                  ) : (
+                    <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(task.assignedToId || task.assignedTo) }} />
+                  )}
+                  {task.assignedTo || '—'}
+                </span>
+              );
+            })()}
+          </span>
+          &nbsp;·&nbsp; Due: {task.dueDate || '—'}
           {ov && <span style={{ color: '#dc2626', marginLeft: 6 }}>⚠ Overdue</span>}
         </div>
         {taskMilestones.length > 0 && (
@@ -438,7 +479,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                     {viewTab === 'Correspondences' ? (
                       data.corrs.map(item => (
-                        <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} />
+                        <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} projectUsers={projectUsers} />
                       ))
                     ) : (
                       data.tasks.map(task => (
@@ -513,13 +554,30 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === selectedTask.assignedToId);
+                        return u?.photoURL ? (
+                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
+                        ) : (
+                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
+                        );
+                      })()}
                       <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedTask.assignedTo || 'Unassigned'}</span>
                     </div>
                   </div>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned By</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}><Flag className="w-4 h-4 text-muted" /> {selectedTask.assignedBy || '—'}</span>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === selectedTask.assignedById);
+                        return u?.photoURL ? (
+                          <img src={u.photoURL} className="avatar" style={{ width: 16, height: 16, objectFit: 'cover', opacity: 0.8 }} alt="" />
+                        ) : (
+                          <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(selectedTask.assignedById || selectedTask.assignedBy), opacity: 0.6 }} />
+                        );
+                      })()}
+                      {selectedTask.assignedBy || '—'}
+                    </div>
                   </div>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>

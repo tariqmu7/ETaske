@@ -7,7 +7,7 @@ import {
 import { db, auth } from './lib/firebase';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Task, TaskStatus, Milestone, MilestoneStatus,
+  AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding,
   PRIORITY_OPTIONS, MILESTONE_STATUS_OPTIONS, OperationType,
   CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS
 } from './types';
@@ -49,6 +49,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [view, setView] = useState<'mine' | 'all'>('mine');
   const [newMilestone, setNewMilestone] = useState<{ taskId: string; title: string; targetDate: string } | null>(null);
   const [editingStatus, setEditingStatus] = useState<{ taskId: string; status: TaskStatus } | null>(null);
@@ -66,11 +67,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [newTask, setNewTask] = useState({
     taskName: '',
     description: '',
-    priority: 'Medium',
+    priority: 'Medium' as Corresponding['priority'],
     dueDate: '',
     category: 'Project' as CorrespondingCategory,
     subCategory: 'None',
     department: 'None',
+    assignedTo: appUser.displayName,
+    assignedToId: user.uid,
   });
 
   const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
@@ -136,6 +139,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       if (view === 'mine' && t.assignedToId !== user.uid) return false;
       if (search && !globalSearch(t, search)) return false;
       if (statusFilter !== 'All' && t.status !== statusFilter) return false;
+      if (categoryFilter !== 'All' && t.category !== categoryFilter) return false;
       if (isManagerOrAdmin && employeeFilter !== 'All' && t.assignedTo !== employeeFilter) return false;
       if (subCategoryFilter !== 'All' && t.subCategory !== subCategoryFilter) return false;
       if (deptFilter !== 'All' && t.department !== deptFilter) return false;
@@ -145,16 +149,17 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       }
       return true;
     });
-  }, [tasks, view, search, statusFilter, employeeFilter, subCategoryFilter, deptFilter, appUser.displayName, isManagerOrAdmin, dateFilter, user.uid]);
+  }, [tasks, view, search, statusFilter, categoryFilter, employeeFilter, subCategoryFilter, deptFilter, appUser.displayName, isManagerOrAdmin, dateFilter, user.uid]);
 
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, statusFilter, employeeFilter, subCategoryFilter, deptFilter, dateFilter, view]);
+  }, [search, statusFilter, categoryFilter, employeeFilter, subCategoryFilter, deptFilter, dateFilter, view]);
 
   const resetFilters = () => {
     setSearch('');
     setStatusFilter('All');
+    setCategoryFilter('All');
     setEmployeeFilter('All');
     setSubCategoryFilter('All');
     setDeptFilter('All');
@@ -411,8 +416,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         subCategory: newTask.subCategory,
         department: newTask.department,
         serialNumber: serial,
-        assignedTo: appUser.displayName,
-        assignedToId: user.uid,
+        assignedTo: newTask.assignedTo || appUser.displayName,
+        assignedToId: newTask.assignedToId || user.uid,
         assignedBy: appUser.displayName,
         assignedById: user.uid,
         teamId: appUser.teamId || 'NONE',
@@ -421,7 +426,17 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         updatedAt: serverTimestamp(),
       });
       setIsAddingTask(false);
-      setNewTask({ taskName: '', description: '', priority: 'Medium', dueDate: '', category: 'Project', subCategory: 'None', department: 'None' });
+      setNewTask({ 
+        taskName: '', 
+        description: '', 
+        priority: 'Medium', 
+        dueDate: '', 
+        category: 'Project', 
+        subCategory: 'None', 
+        department: 'None',
+        assignedTo: appUser.displayName,
+        assignedToId: user.uid,
+      });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
       setError('Failed to create task.');
@@ -474,6 +489,24 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
               }}
             >
               {v === 'mine' ? 'My Tasks' : 'All Tasks'}
+            </button>
+          ))}
+        </div>
+
+        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
+          {['All', 'Project', 'Internal', 'External'].map(cat => (
+            <button
+              key={cat}
+              onClick={() => setCategoryFilter(cat)}
+              style={{
+                padding: '6px 12px', borderRadius: 0, fontSize: 13, fontWeight: 600,
+                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                background: categoryFilter === cat ? 'var(--accent)' : 'transparent',
+                color: categoryFilter === cat ? '#fff' : 'var(--text-secondary)',
+                transition: 'all 0.15s',
+              }}
+            >
+              {cat}
             </button>
           ))}
         </div>
@@ -590,6 +623,28 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                   </datalist>
                 </div>
                 <div style={{ gridColumn: 'span 2' }}>
+                  <label className="label">Assignee</label>
+                  <select 
+                    className="input" 
+                    value={newTask.assignedToId} 
+                    onChange={e => {
+                      const u = projectUsers.find(u => u.id === e.target.value);
+                      if (u) setNewTask({ ...newTask, assignedToId: u.id, assignedTo: u.displayName });
+                    }}
+                  >
+                    {projectUsers
+                      .filter(u => 
+                        u.id === user.uid || 
+                        appUser.role === 'Admin' || 
+                        (u.department === appUser.department && u.teamId === appUser.teamId)
+                      )
+                      .map(u => (
+                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
                   <label className="label">Attachment</label>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <input type="file" onChange={handleNewFileUpload} style={{ fontSize: 12 }} />
@@ -641,7 +696,10 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                         className="card"
                         style={{ 
                           overflow: 'hidden', 
-                          borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${getUserColor(task.assignedToId || task.assignedTo || '')}`,
+                          borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${(() => {
+                            const u = projectUsers.find(pu => pu.id === task.assignedToId);
+                            return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
+                          })()}`,
                           backgroundColor: task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)',
                           transition: 'background-color 0.2s ease'
                         }}
@@ -675,30 +733,29 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                   <label className="label">Due Date</label>
                                   <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
                                 </div>
-                                {isManagerOrAdmin && (
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label className="label">Reassign To</label>
-                                    <select 
-                                      className="input" 
-                                      value={editingTask.assignedToId} 
-                                      onChange={e => {
-                                        const u = projectUsers.find(u => u.id === e.target.value);
-                                        if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
-                                      }}
-                                    >
-                                      <option value="">— Select Assignee —</option>
-                                      {projectUsers
-                                        .filter(u => 
-                                          u.role !== 'Admin' && 
-                                          (appUser.role === 'Admin' || (u.department === appUser.department && u.teamId === appUser.teamId))
-                                        )
-                                        .map(u => (
-                                          <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
-                                        ))
-                                      }
-                                    </select>
-                                  </div>
-                                )}
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <label className="label">Assignee</label>
+                                  <select 
+                                    className="input" 
+                                    value={editingTask.assignedToId} 
+                                    onChange={e => {
+                                      const u = projectUsers.find(u => u.id === e.target.value);
+                                      if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
+                                    }}
+                                  >
+                                    <option value="">— Select Assignee —</option>
+                                    {projectUsers
+                                      .filter(u => 
+                                        u.id === user.uid || 
+                                        appUser.role === 'Admin' || 
+                                        (u.department === appUser.department && u.teamId === appUser.teamId)
+                                      )
+                                      .map(u => (
+                                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                                      ))
+                                    }
+                                  </select>
+                                </div>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, gridColumn: 'span 2' }}>
                                   <div>
                                     <label className="label">Category</label>
@@ -857,14 +914,28 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
                                 <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                                   {task.assignedTo && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
-                                      <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(task.assignedToId || task.assignedTo) }} />
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
+                                      {(() => {
+                                        const u = projectUsers.find(pu => pu.id === task.assignedToId);
+                                        return u?.photoURL ? (
+                                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
+                                        ) : (
+                                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(task.assignedToId || task.assignedTo) }} />
+                                        );
+                                      })()}
                                       {task.assignedTo}
                                     </span>
                                   )}
                                   {task.assignedBy && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                      <span style={{ width: 6, height: 6, borderRadius: 0, background: getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {(() => {
+                                        const u = projectUsers.find(pu => pu.id === task.assignedById);
+                                        return u?.photoURL ? (
+                                          <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover', opacity: 0.7 }} alt="" />
+                                        ) : (
+                                          <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
+                                        );
+                                      })()}
                                       By {task.assignedBy}
                                     </span>
                                   )}

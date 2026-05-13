@@ -389,13 +389,20 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         <AnimatePresence>
           {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(item => (
             <motion.div
-              key={item.id}
               layout
-              initial={{ opacity: 0, y: 12 }}
+              key={item.id}
+              initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
               className="card card-interactive"
-              style={{ padding: 24, borderLeft: `4px solid ${getUserColor(item.assignedToId || item.userId || '')}` }}
+              style={{ 
+                padding: '24px', 
+                cursor: 'pointer',
+                borderLeft: `4px solid ${(() => {
+                  const u = projectUsers.find(pu => pu.id === item.assignedToId);
+                  return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
+                })()}`
+              }}
               onClick={() => openModal(item, true)}
             >
               {/* Top row */}
@@ -466,13 +473,27 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   </div>
                 )}
                 <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12 }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    <span style={{ width: 6, height: 6, borderRadius: 0, background: getUserColor(item.userId), opacity: 0.6 }} />
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    {(() => {
+                      const u = projectUsers.find(pu => pu.id === item.userId);
+                      return u?.photoURL ? (
+                        <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover', opacity: 0.8 }} alt="" />
+                      ) : (
+                        <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
+                      );
+                    })()}
                     Logged by {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
                   </span>
                   {item.assignedTo && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 0, background: getUserColor(item.assignedToId || item.assignedTo) }} />
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === item.assignedToId);
+                        return u?.photoURL ? (
+                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
+                        ) : (
+                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
+                        );
+                      })()}
                       Assigned to: {item.assignedTo}
                     </span>
                   )}
@@ -713,35 +734,39 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       )
                     )}
                   </div>
-                  {/* Assignee (Manager Only) */}
-                  {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
-                    <div>
-                      <label className="input-label">Assignee</label>
-                      {isViewing ? (
-                        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                          {formData.assignedTo || 'Unassigned'}
-                        </div>
-                      ) : (
-                        <select 
-                          className="input" 
-                          value={formData.assignedToId} 
-                          onChange={e => {
-                            const u = projectUsers.find(u => u.id === e.target.value);
-                            set('assignedToId', e.target.value);
-                            set('assignedTo', u?.displayName || '');
-                            if (e.target.value && formData.status === 'Unread') {
-                              set('status', 'Assigned');
-                            }
-                          }}
-                        >
-                          <option value="">— Unassigned —</option>
-                          {projectUsers.filter(u => u.role !== 'Admin').map(u => (
+                  <div>
+                    <label className="input-label">Assignee</label>
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                        {formData.assignedTo || 'Unassigned'}
+                      </div>
+                    ) : (
+                      <select 
+                        className="input" 
+                        value={formData.assignedToId} 
+                        onChange={e => {
+                          const u = projectUsers.find(u => u.id === e.target.value);
+                          set('assignedToId', e.target.value);
+                          set('assignedTo', u?.displayName || '');
+                          if (e.target.value && formData.status === 'Unread') {
+                            set('status', 'Assigned');
+                          }
+                        }}
+                      >
+                        <option value="">— Unassigned —</option>
+                        {projectUsers
+                          .filter(u => 
+                            u.id === user.uid || 
+                            appUser.role === 'Admin' || 
+                            (u.department === appUser.department && u.teamId === appUser.teamId)
+                          )
+                          .map(u => (
                             <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
-                          ))}
-                        </select>
-                      )}
-                    </div>
-                  )}
+                          ))
+                        }
+                      </select>
+                    )}
+                  </div>
                   {/* File */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Attachment</label>

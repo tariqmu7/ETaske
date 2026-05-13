@@ -195,6 +195,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <div
             className="topnav-avatar-placeholder"
             title={`${appUser.displayName} · ${appUser.role}`}
+            style={{ background: appUser.userColor || undefined }}
           >
             {appUser.displayName?.[0]?.toUpperCase() || 'U'}
           </div>
