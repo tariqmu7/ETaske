@@ -11,7 +11,7 @@ import {
   Link2, Target, X, AlertCircle, Eye, TrendingUp, Paperclip, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch } from './utils';
+import { globalSearch, getGoogleDrivePreviewUrl } from './utils';
 
 interface Props {
   user: User;
@@ -232,12 +232,15 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                   }}>
                     {(viewingTask.attachedFile.includes('image') || viewingTask.attachedFile.includes('google.com')) ? (
-                      <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+                      <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                         <img 
-                          src={viewingTask.attachedFile} 
+                          src={getGoogleDrivePreviewUrl(viewingTask.attachedFile)} 
                           alt="Attachment" 
                           style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
-                          onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).parentElement!.style.height = '120px';
+                          }}
                         />
                         <div style={{ 
                           position: 'absolute', 

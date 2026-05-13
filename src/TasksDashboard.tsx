@@ -18,7 +18,7 @@ import {
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -563,7 +563,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       </AnimatePresence>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {(Object.entries(groupedTasks) as [string, Task[]][]).map(([cat, catTasks]) => (
+        {(Object.entries(groupedTasks) as [string, Task[]][]).map(([cat, catTasks]) => {
+          return (
           <div key={cat}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
@@ -811,80 +812,86 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                               </div>
 
                               {isExpanded && task.attachedFile && (
-                                <div style={{ 
-                                  marginTop: 20, 
-                                  borderRadius: 16, 
-                                  overflow: 'hidden', 
-                                  border: '1px solid var(--border)',
-                                  background: 'var(--surface-2)',
-                                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
-                                }}>
-                                  {(task.attachedFile.includes('image') || task.attachedFile.includes('google.com')) ? (
-                                    <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
-                                      <img 
-                                        src={task.attachedFile} 
-                                        alt="Attachment" 
-                                        style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
-                                        onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
-                                      />
-                                      <div style={{ 
-                                        position: 'absolute', 
-                                        bottom: 0, 
-                                        left: 0, 
-                                        right: 0, 
-                                        padding: '16px 20px', 
-                                        background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
-                                        display: 'flex', 
-                                        justifyContent: 'space-between', 
-                                        alignItems: 'center',
-                                        backdropFilter: 'blur(4px)'
-                                      }}>
-                                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
+                                <div style={{ marginTop: 24 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>Attachment</div>
+                                  <div style={{ 
+                                    borderRadius: 16, 
+                                    overflow: 'hidden', 
+                                    border: '1px solid var(--border)',
+                                    background: 'var(--surface-2)',
+                                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                                  }}>
+                                    {(task.attachedFile.includes('image') || task.attachedFile.includes('google.com')) ? (
+                                      <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                                        <img 
+                                          src={getGoogleDrivePreviewUrl(task.attachedFile)} 
+                                          alt="Attachment" 
+                                          style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+                                          onLoad={(e) => (e.target as HTMLImageElement).style.opacity = '1'}
+                                          onError={(e) => {
+                                            (e.target as HTMLImageElement).style.display = 'none';
+                                            (e.target as HTMLImageElement).parentElement!.style.height = '120px';
+                                          }}
+                                        />
+                                        <div style={{ 
+                                          position: 'absolute', 
+                                          bottom: 0, 
+                                          left: 0, 
+                                          right: 0, 
+                                          padding: '16px 20px', 
+                                          background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
+                                          display: 'flex', 
+                                          justifyContent: 'space-between', 
+                                          alignItems: 'center',
+                                          backdropFilter: 'blur(4px)'
+                                        }}>
+                                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
+                                          <a 
+                                            href={task.attachedFile} 
+                                            target="_blank" 
+                                            rel="noopener noreferrer" 
+                                            className="btn btn-sm"
+                                            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                                          >
+                                            <ExternalLink className="w-3.5 h-3.5" /> Full View
+                                          </a>
+                                        </div>
+                                      </div>
+                                    ) : (
+                                      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                                          <Paperclip className="w-5 h-5" />
+                                        </div>
+                                        <div style={{ flex: 1 }}>
+                                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || 'Attachment'}</div>
+                                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                                        </div>
                                         <a 
                                           href={task.attachedFile} 
                                           target="_blank" 
                                           rel="noopener noreferrer" 
-                                          className="btn btn-sm"
-                                          style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                                          className="btn btn-ghost btn-sm"
                                         >
-                                          <ExternalLink className="w-3.5 h-3.5" /> Full View
+                                          <Download className="w-4 h-4" />
                                         </a>
                                       </div>
-                                    </div>
-                                  ) : (
-                                    <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-                                        <Paperclip className="w-5 h-5" />
-                                      </div>
-                                      <div style={{ flex: 1 }}>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || 'Attachment'}</div>
-                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
-                                      </div>
-                                      <a 
-                                        href={task.attachedFile} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="btn btn-ghost btn-sm"
-                                      >
-                                        <Download className="w-4 h-4" />
-                                      </a>
-                                    </div>
-                                  )}
+                                    )}
+                                  </div>
                                 </div>
                               )}
 
-                          {taskMilestones.length > 0 && (
-                            <div style={{ marginTop: 12 }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Target className="w-3 h-3" /> {doneMilestones}/{taskMilestones.length} milestones</span>
-                                <span>{progress}%</span>
-                              </div>
-                              <div className="progress-bar">
-                                <div className="progress-fill" style={{ width: `${progress}%` }} />
-                              </div>
+                              {taskMilestones.length > 0 && (
+                                <div style={{ marginTop: 12 }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Target className="w-3 h-3" /> {doneMilestones}/{taskMilestones.length} milestones</span>
+                                    <span>{progress}%</span>
+                                  </div>
+                                  <div className="progress-bar">
+                                    <div className="progress-fill" style={{ width: `${progress}%` }} />
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          )}
-                        </div>
 
                         <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0, marginTop: 4 }} />
                       </div>
@@ -1025,8 +1032,10 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
             </AnimatePresence>
           </div>
         </div>
-      ))}
+      );
+    })}
     </div>
+
 
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>

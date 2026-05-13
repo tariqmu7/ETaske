@@ -43,3 +43,20 @@ export const getUserColor = (idOrName: string): string => {
   // Use professional, balanced saturation and lightness
   return `hsl(${h}, 65%, 45%)`;
 };
+
+export const getGoogleDrivePreviewUrl = (url: string): string => {
+  if (!url || !url.includes('drive.google.com')) return url;
+  
+  // Try to extract file ID from common Google Drive URL patterns
+  const fileDMatch = url.match(/\/file\/d\/([^/?#]+)/);
+  const idParamMatch = url.match(/[?&]id=([^&#]+)/);
+  
+  const fileId = fileDMatch ? fileDMatch[1] : (idParamMatch ? idParamMatch[1] : null);
+  
+  if (fileId) {
+    // This format allows direct image embedding for public/shared files
+    return `https://drive.google.com/uc?export=view&id=${fileId}`;
+  }
+  
+  return url;
+};

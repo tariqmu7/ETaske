@@ -17,7 +17,7 @@ import {
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl } from './utils';
 import { AppView } from './App';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
@@ -656,12 +656,15 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
                         }}>
                           {(formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) ? (
-                            <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+                            <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                               <img 
-                                src={formData.attachedFile} 
+                                src={getGoogleDrivePreviewUrl(formData.attachedFile)} 
                                 alt="Attachment" 
                                 style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
-                                onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                                onError={(e) => {
+                                  (e.target as HTMLImageElement).style.display = 'none';
+                                  (e.target as HTMLImageElement).parentElement!.style.height = '120px';
+                                }}
                               />
                               <div style={{ 
                                 position: 'absolute', 
@@ -722,7 +725,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             </div>
                             {formData.attachedFile && (formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) && (
                               <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
-                                <img src={formData.attachedFile} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 8, display: 'block' }} />
                               </div>
                             )}
                           </div>
