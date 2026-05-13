@@ -72,6 +72,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [items, setItems] = useState<Corresponding[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<Corresponding | null>(null);
+  const [isViewing, setIsViewing] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
@@ -123,7 +124,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     return Array.from(new Set(items.filter(i => i.department === formData.department).map(i => i.subCategory).filter(Boolean))).sort();
   }, [items, formData.department, formData.category]);
 
-  const openModal = (item?: Corresponding) => {
+  const openModal = (item?: Corresponding, viewing = false) => {
+    setIsViewing(viewing);
     if (item) {
       setEditing(item);
       setFormData({
@@ -317,7 +319,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               exit={{ opacity: 0, scale: 0.95 }}
               className="card card-interactive"
               style={{ padding: 24, borderLeft: `4px solid ${getUserColor(item.assignedToId || item.userId || '')}` }}
-              onClick={() => openModal(item)}
+              onClick={() => openModal(item, true)}
             >
               {/* Top row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -345,7 +347,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <div style={{ display: 'flex', gap: 4 }}>
                   <button
                     className="btn btn-ghost btn-icon btn-sm"
-                    onClick={e => { e.stopPropagation(); openModal(item); }}
+                    onClick={e => { e.stopPropagation(); openModal(item, false); }}
                     title="Edit"
                   >
                     <Edit2 className="w-3.5 h-3.5" />
@@ -420,147 +422,272 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               {/* Modal header */}
               <div style={{ padding: '24px 28px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <h2 style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)' }}>
-                  {editing ? 'Edit Corresponding' : 'New Corresponding'}
+                  {isViewing ? 'Correspondence Details' : (editing ? 'Edit Corresponding' : 'New Corresponding')}
                 </h2>
                 <button className="btn btn-ghost btn-icon" onClick={closeModal}><X className="w-4 h-4" /></button>
               </div>
 
               <form onSubmit={handleSubmit} style={{ padding: '20px 28px 28px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
                   {/* Subject */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Subject</label>
-                    <input className="input" value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
+                    {isViewing ? (
+                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{formData.subject}</div>
+                    ) : (
+                      <input className="input" value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
+                    )}
                   </div>
                   {/* Body */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Body / Description</label>
-                    <textarea className="input" rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder="Describe the content of the correspondence…" />
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{formData.body}</div>
+                    ) : (
+                      <textarea className="input" rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder="Describe the content of the correspondence…" />
+                    )}
                   </div>
                   {/* Sent From */}
                   <div>
                     <label className="input-label">Sent From</label>
-                    <input className="input" value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder="Organization or person…" />
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>{formData.sentFrom}</div>
+                    ) : (
+                      <input className="input" value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder="Organization or person…" />
+                    )}
                   </div>
                   {/* Category */}
                   <div>
                     <label className="input-label">Category</label>
-                    <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content' }}>
-                      {CATEGORY_OPTIONS.map(c => (
-                        <button
-                          key={c} type="button"
-                          onClick={() => handleOtherSelection('category', c)}
-                          style={{
-                            padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
-                            background: formData.category === c ? 'var(--accent)' : 'transparent',
-                            color: formData.category === c ? '#fff' : 'var(--text-muted)',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          {c}
-                        </button>
-                      ))}
-                    </div>
+                    {isViewing ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '4px 12px',
+                        borderRadius: 999, fontSize: 12, fontWeight: 700,
+                        background: formData.category === 'Project' ? '#dbeafe' : formData.category === 'External' ? '#dcfce7' : '#f3e8ff',
+                        color: formData.category === 'Project' ? '#1d4ed8' : formData.category === 'External' ? '#15803d' : '#6d28d9',
+                      }}>{formData.category}</span>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content' }}>
+                        {CATEGORY_OPTIONS.map(c => (
+                          <button
+                            key={c} type="button"
+                            onClick={() => handleOtherSelection('category', c)}
+                            style={{
+                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                              background: formData.category === c ? 'var(--accent)' : 'transparent',
+                              color: formData.category === c ? '#fff' : 'var(--text-muted)',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            {c}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {/* Priority */}
                   <div>
                     <label className="input-label">Priority</label>
-                    <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
-                      {PRIORITY_OPTIONS.map(p => (
-                        <button
-                          key={p} type="button"
-                          onClick={() => set('priority', p)}
-                          style={{
-                            padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
-                            background: formData.priority === p ? (p === 'Urgent' ? '#ef4444' : p === 'High' ? '#f97316' : p === 'Medium' ? '#3b82f6' : '#64748b') : 'transparent',
-                            color: formData.priority === p ? '#fff' : 'var(--text-muted)',
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          {p}
-                        </button>
-                      ))}
-                    </div>
+                    {isViewing ? (
+                      <span className={priorityBadgeClass(formData.priority)}>{formData.priority}</span>
+                    ) : (
+                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                        {PRIORITY_OPTIONS.map(p => (
+                          <button
+                            key={p} type="button"
+                            onClick={() => set('priority', p)}
+                            style={{
+                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                              background: formData.priority === p ? (p === 'Urgent' ? '#ef4444' : p === 'High' ? '#f97316' : p === 'Medium' ? '#3b82f6' : '#64748b') : 'transparent',
+                              color: formData.priority === p ? '#fff' : 'var(--text-muted)',
+                              transition: 'all 0.15s'
+                            }}
+                          >
+                            {p}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   {/* Department */}
                   <div>
                     <label className="input-label">Department</label>
-                    <select className="input" value={formData.department} onChange={e => { handleOtherSelection('department', e.target.value); set('subCategory', 'None'); }}>
-                      {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                    </select>
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.department}</div>
+                    ) : (
+                      <select className="input" value={formData.department} onChange={e => { handleOtherSelection('department', e.target.value); set('subCategory', 'None'); }}>
+                        {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    )}
                   </div>
                   {/* Sub-category */}
                   <div>
                     <label className="input-label">Sub-Category / Project</label>
-                    <input 
-                      className="input" 
-                      list="corrSubCategoryList"
-                      placeholder="Search or type project..."
-                      value={formData.subCategory} 
-                      onChange={e => set('subCategory', e.target.value)} 
-                    />
-                    <datalist id="corrSubCategoryList">
-                      {dynamicSubCategories.map(s => <option key={s} value={s} />)}
-                    </datalist>
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.subCategory || 'None'}</div>
+                    ) : (
+                      <>
+                        <input 
+                          className="input" 
+                          list="corrSubCategoryList"
+                          placeholder="Search or type project..."
+                          value={formData.subCategory} 
+                          onChange={e => set('subCategory', e.target.value)} 
+                        />
+                        <datalist id="corrSubCategoryList">
+                          {dynamicSubCategories.map(s => <option key={s} value={s} />)}
+                        </datalist>
+                      </>
+                    )}
                   </div>
                   {/* Actions */}
                   <div>
                     <label className="input-label">Actions</label>
-                    <select className="input" value={formData.actions} onChange={e => set('actions', e.target.value)}>
-                      {['None', 'For info', 'SR for approval', 'Action needed'].map(a => <option key={a} value={a}>{a}</option>)}
-                    </select>
+                    {isViewing ? (
+                      <span style={{
+                        display: 'inline-flex', alignItems: 'center', padding: '4px 12px',
+                        borderRadius: 999, fontSize: 12, fontWeight: 700,
+                        background: '#fee2e2', color: '#dc2626',
+                        border: '1px solid #fecaca'
+                      }}>{formData.actions}</span>
+                    ) : (
+                      <select className="input" value={formData.actions} onChange={e => set('actions', e.target.value)}>
+                        {['None', 'For info', 'SR for approval', 'Action needed'].map(a => <option key={a} value={a}>{a}</option>)}
+                      </select>
+                    )}
                   </div>
                   {/* Date received */}
                   <div>
                     <label className="input-label">Date Received</label>
-                    <input className="input" type="date" value={formData.dateReceived} onChange={e => set('dateReceived', e.target.value)} />
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.dateReceived}</div>
+                    ) : (
+                      <input className="input" type="date" value={formData.dateReceived} onChange={e => set('dateReceived', e.target.value)} />
+                    )}
                   </div>
                   {/* Deadline */}
                   <div>
                     <label className="input-label">Deadline</label>
-                    <input className="input" type="date" value={formData.deadline} onChange={e => set('deadline', e.target.value)} />
-                  </div>
-                  {/* Status (editable only by manager/admin) */}
-                  {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
-                    <div>
-                      <label className="input-label">Status</label>
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
-                        {(['Unread','Reviewing','Assigned','Closed'] as CorrespondingStatus[]).map(s => (
-                          <button
-                            key={s} type="button"
-                            onClick={() => set('status', s)}
-                            style={{
-                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
-                              background: formData.status === s ? 'var(--accent)' : 'transparent',
-                              color: formData.status === s ? '#fff' : 'var(--text-muted)',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            {s}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* File */}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">Attachment (max 700 KB)</label>
-                    <input type="file" onChange={handleFileUpload} style={{ color: 'var(--text-secondary)', fontSize: 13 }} />
-                    {isUploading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>Uploading…</div>}
-                    {formData.attachedFileName && (
-                      <div style={{ marginTop: 6, fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Paperclip className="w-3 h-3" /> {formData.attachedFileName}
-                        <button type="button" onClick={() => setFormData(p => ({ ...p, attachedFile: '', attachedFileName: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-3 h-3" /></button>
-                      </div>
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: formData.deadline ? '#fbbf24' : 'var(--text-muted)' }}>{formData.deadline || 'No deadline'}</div>
+                    ) : (
+                      <input className="input" type="date" value={formData.deadline} onChange={e => set('deadline', e.target.value)} />
                     )}
                   </div>
+                  {/* Status */}
+                  <div>
+                    <label className="input-label">Status</label>
+                    {isViewing ? (
+                      <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
+                    ) : (
+                      (appUser.role === 'Admin' || appUser.role === 'Manager') ? (
+                        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 20, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                          {(['Unread','Reviewing','Assigned','Closed'] as CorrespondingStatus[]).map(s => (
+                            <button
+                              key={s} type="button"
+                              onClick={() => set('status', s)}
+                              style={{
+                                padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 16, border: 'none', cursor: 'pointer',
+                                background: formData.status === s ? 'var(--accent)' : 'transparent',
+                                color: formData.status === s ? '#fff' : 'var(--text-muted)',
+                                transition: 'all 0.15s'
+                              }}
+                            >
+                              {s}
+                            </button>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
+                      )
+                    )}
+                  </div>
+                  {/* File */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="input-label">Attachment</label>
+                    {isViewing ? (
+                      formData.attachedFile ? (
+                        <a 
+                          href={formData.attachedFile} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="btn btn-ghost"
+                          style={{ width: 'fit-content', gap: 8 }}
+                        >
+                          <Paperclip className="w-4 h-4" />
+                          View Attachment: {formData.attachedFileName}
+                          <Download className="w-4 h-4" />
+                        </a>
+                      ) : (
+                        <div style={{ fontSize: 14, color: 'var(--text-muted)', fontStyle: 'italic' }}>No attachment</div>
+                      )
+                    ) : (
+                      <>
+                        <input type="file" onChange={handleFileUpload} style={{ color: 'var(--text-secondary)', fontSize: 13 }} />
+                        {isUploading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>Uploading…</div>}
+                        {formData.attachedFileName && (
+                          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <Paperclip className="w-3 h-3" /> {formData.attachedFileName}
+                            <button type="button" onClick={() => setFormData(p => ({ ...p, attachedFile: '', attachedFileName: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-3 h-3" /></button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                  {/* Notes */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="input-label">Manager Notes / Internal Comments</label>
+                    {isViewing ? (
+                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 8, border: '1px solid var(--border)', fontStyle: 'italic' }}>
+                        {formData.notes || 'No notes available.'}
+                      </div>
+                    ) : (
+                      <textarea className="input" rows={2} value={formData.notes} onChange={e => set('notes', e.target.value)} placeholder="Add internal notes or instructions…" />
+                    )}
+                  </div>
+                  {/* Serial Number */}
+                  {isViewing && formData.serialNumber && (
+                    <div>
+                      <label className="input-label">Serial Number</label>
+                      <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 800 }}>#{formData.serialNumber}</div>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ display: 'flex', gap: 10, marginTop: 24, justifyContent: 'flex-end' }}>
-                  <button type="button" className="btn btn-ghost" onClick={closeModal}>Cancel</button>
-                  <button type="submit" className="btn btn-primary" disabled={isUploading}>
-                    {editing ? 'Save Changes' : 'Create Corresponding'}
-                  </button>
+                <div style={{ 
+                  display: 'flex', 
+                  gap: 10, 
+                  marginTop: 32, 
+                  justifyContent: 'flex-end', 
+                  borderTop: '1px solid var(--border)', 
+                  padding: '20px 28px',
+                  background: 'var(--surface)',
+                  position: 'sticky',
+                  bottom: 0,
+                  margin: '0 -28px -28px',
+                  paddingBottom: 'calc(20px + var(--safe-area-bottom))',
+                  zIndex: 10
+                }}>
+                  {isViewing ? (
+                    <>
+                      <button type="button" className="btn btn-ghost" onClick={closeModal}>Close</button>
+                      <button 
+                        type="button" 
+                        className="btn btn-primary" 
+                        onClick={() => setIsViewing(false)}
+                        style={{ gap: 8 }}
+                      >
+                        <Edit2 className="w-4 h-4" /> Edit Details
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="btn btn-ghost" onClick={closeModal}>Cancel</button>
+                      <button type="submit" className="btn btn-primary" disabled={isUploading}>
+                        {editing ? 'Save Changes' : 'Create Corresponding'}
+                      </button>
+                    </>
+                  )}
                 </div>
               </form>
             </motion.div>

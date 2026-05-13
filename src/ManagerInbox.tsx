@@ -65,7 +65,15 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     return () => unsub();
   }, [appUser.status]);
 
-  const employees = projectUsers.filter(u => u.role === 'Employee' && u.status === 'Approved');
+  const targetUsers = useMemo(() => {
+    return projectUsers.filter(u => 
+      u.status === 'Approved' && 
+      (u.role === 'Employee' || u.role === 'Manager') &&
+      u.department === appUser.department &&
+      u.teamId === appUser.teamId &&
+      u.id !== user.uid
+    );
+  }, [projectUsers, appUser.department, appUser.teamId]);
 
   const filtered = useMemo(() => {
     return correspondences.filter(c => {
@@ -328,9 +336,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 <div style={{ marginBottom: 14 }}>
                   <label className="input-label">Assign to Employee *</label>
                   <select className="input" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} required>
-                    <option value="">— Select Employee —</option>
-                    {employees.map(e => (
-                      <option key={e.id} value={e.id}>{e.displayName} ({e.department || 'No dept'})</option>
+                    <option value="">— Select Recipient —</option>
+                    {targetUsers.map(e => (
+                      <option key={e.id} value={e.id}>{e.displayName} ({e.role})</option>
                     ))}
                   </select>
                 </div>
@@ -371,11 +379,11 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           </div>
 
           {/* Employee workload */}
-          {employees.length > 0 && (
+          {targetUsers.length > 0 && (
             <div className="card" style={{ padding: 20, marginTop: 16 }}>
-              <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Employee Workload</h4>
+              <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>Department Workload</h4>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {employees.slice(0, 6).map(emp => {
+                {targetUsers.slice(0, 10).map(emp => {
                   const activeTasks = tasks.filter(t => t.assignedToId === emp.id && t.status !== 'Done' && t.status !== 'Archived').length;
                   return (
                     <div key={emp.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

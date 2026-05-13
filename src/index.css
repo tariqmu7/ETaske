@@ -274,7 +274,7 @@ body {
 
 @media (max-width: 768px) {
   .main-content {
-    padding: 16px 12px 100px;
+    padding: 16px 12px calc(var(--bottomnav-h) + var(--safe-area-bottom) + 24px);
   }
 }
 
@@ -299,6 +299,7 @@ body {
   padding-bottom: var(--safe-area-bottom);
   z-index: 100;
   box-shadow: 0 -2px 12px rgba(0,0,0,0.06);
+  pointer-events: auto;
 }
 
 @media (min-width: 769px) {
@@ -475,7 +476,7 @@ body {
   position: fixed; inset: 0;
   background: rgba(15,23,42,0.45);
   backdrop-filter: blur(4px);
-  z-index: 100;
+  z-index: 2000;
   display: flex;
   align-items: flex-end;
   justify-content: center;
@@ -504,7 +505,24 @@ body {
   .modal {
     border-radius: 6px;
     box-shadow: 0 25px 60px rgba(0,0,0,0.18);
+    margin-bottom: 20px;
   }
+}
+
+/* ─── Text Handling ────────────────────────────── */
+.card, .modal, .main-content {
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+h1, h2, h3, h4, p, span, div {
+  max-width: 100%;
+}
+
+.text-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ─── Progress bar ──────────────────────────────── */
