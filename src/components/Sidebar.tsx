@@ -45,7 +45,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       id: 'manager-inbox',
       label: 'Inbox',
       icon: <Inbox className="w-4 h-4" />,
-      show: isManagerOrAdmin,
+      show: true,
     },
     {
       id: 'tasks',

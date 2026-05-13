@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
@@ -158,18 +159,57 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     }
   };
 
+  const uploadToGoogleDrive = async (file: File): Promise<string> => {
+    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+    if (!scriptUrl) {
+      throw new Error('Google Script URL (VITE_GOOGLE_SCRIPT_URL) is not configured in environment variables.');
+    }
+
+    // Read file as base64
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        filename: file.name,
+        mimeType: file.type,
+        base64: base64
+      })
+    });
+
+    if (!response.ok) throw new Error('Network response was not ok');
+    const result = await response.json();
+    if (result.status === 'success') return result.url;
+    throw new Error(result.message || 'Upload failed');
+  };
+
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 700 * 1024) { alert('Max file size is 700KB.'); return; }
+    
+    // Google Drive can handle larger files, but let's keep a reasonable limit
+    if (file.size > 10 * 1024 * 1024) { 
+      alert('Max file size is 10MB.'); 
+      return; 
+    }
+
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const url = ev.target?.result as string;
-      setFormData(p => ({ ...p, attachedFile: url, attachedFileName: file.name }));
+    try {
+      const driveUrl = await uploadToGoogleDrive(file);
+      setFormData(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
+    } catch (err: any) {
+      console.error('Upload error:', err);
+      alert('Failed to upload to Google Drive: ' + err.message);
+    } finally {
       setIsUploading(false);
-    };
-    reader.readAsDataURL(file);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -607,28 +647,84 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <label className="input-label">Attachment</label>
                     {isViewing ? (
                       formData.attachedFile ? (
-                        <a 
-                          href={formData.attachedFile} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="btn btn-ghost"
-                          style={{ width: 'fit-content', gap: 8 }}
-                        >
-                          <Paperclip className="w-4 h-4" />
-                          View Attachment: {formData.attachedFileName}
-                          <Download className="w-4 h-4" />
-                        </a>
+                        <div style={{ 
+                          marginTop: 12, 
+                          borderRadius: 16, 
+                          overflow: 'hidden', 
+                          border: '1px solid var(--border)',
+                          background: 'var(--surface-2)',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                        }}>
+                          {(formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) ? (
+                            <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+                              <img 
+                                src={formData.attachedFile} 
+                                alt="Attachment" 
+                                style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+                                onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                              />
+                              <div style={{ 
+                                position: 'absolute', 
+                                bottom: 0, 
+                                left: 0, 
+                                right: 0, 
+                                padding: '16px 20px', 
+                                background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center',
+                                backdropFilter: 'blur(4px)'
+                              }}>
+                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{formData.attachedFileName || 'Attached Image'}</span>
+                                <a 
+                                  href={formData.attachedFile} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="btn btn-sm"
+                                  style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                                >
+                                  <Download className="w-3.5 h-3.5" /> Download
+                                </a>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                              <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                                <Paperclip className="w-5 h-5" />
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{formData.attachedFileName || 'Attachment'}</div>
+                                <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                              </div>
+                              <a 
+                                href={formData.attachedFile} 
+                                target="_blank" 
+                                rel="noopener noreferrer" 
+                                className="btn btn-ghost btn-sm"
+                              >
+                                <Download className="w-4 h-4" />
+                              </a>
+                            </div>
+                          )}
+                        </div>
                       ) : (
                         <div style={{ fontSize: 14, color: 'var(--text-muted)', fontStyle: 'italic' }}>No attachment</div>
                       )
                     ) : (
                       <>
                         <input type="file" onChange={handleFileUpload} style={{ color: 'var(--text-secondary)', fontSize: 13 }} />
-                        {isUploading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>Uploading…</div>}
+                        {isUploading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
                         {formData.attachedFileName && (
-                          <div style={{ marginTop: 6, fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <Paperclip className="w-3 h-3" /> {formData.attachedFileName}
-                            <button type="button" onClick={() => setFormData(p => ({ ...p, attachedFile: '', attachedFileName: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-3 h-3" /></button>
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                              <Paperclip className="w-3 h-3" /> {formData.attachedFileName}
+                              <button type="button" onClick={() => setFormData(p => ({ ...p, attachedFile: '', attachedFileName: '' }))} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-3 h-3" /></button>
+                            </div>
+                            {formData.attachedFile && (formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) && (
+                              <div style={{ borderRadius: 12, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
+                                <img src={formData.attachedFile} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 8, display: 'block' }} />
+                              </div>
+                            )}
                           </div>
                         )}
                       </>

@@ -217,14 +217,12 @@ export default function App() {
         )}
         <button className={`bottom-tab${activeView === 'correspondences' ? ' active' : ''}`} onClick={() => setActiveView('correspondences')}>
           <MailOpen />
+          <span>Correspondences</span>
+        </button>
+        <button className={`bottom-tab${activeView === 'manager-inbox' ? ' active' : ''}`} onClick={() => setActiveView('manager-inbox')}>
+          <Inbox />
           <span>Inbox</span>
         </button>
-        {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
-          <button className={`bottom-tab${activeView === 'manager-inbox' ? ' active' : ''}`} onClick={() => setActiveView('manager-inbox')}>
-            <Inbox />
-            <span>Review</span>
-          </button>
-        )}
         <button className={`bottom-tab${activeView === 'tasks' ? ' active' : ''}`} onClick={() => setActiveView('tasks')}>
           <CheckSquare />
           <span>Tasks</span>

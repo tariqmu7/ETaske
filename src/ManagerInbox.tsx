@@ -127,6 +127,8 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         dueDate: dueDate || selectedCorr.deadline || null,
         correspondingId: selectedCorr.id,
         correspondingSubject: selectedCorr.subject,
+        attachedFile: selectedCorr.attachedFile || null,
+        attachedFileName: selectedCorr.attachedFileName || null,
         statusUpdate: 'Not Started',
         notes: [],
         userId: user.uid,
@@ -168,7 +170,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          Manager Inbox
+          Inbox
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
           Review incoming correspondences and assign them to employees as tasks.

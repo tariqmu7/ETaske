@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
@@ -14,7 +15,7 @@ import { getNextSerialNumber } from './lib/counters';
 import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
-  TrendingUp, ListTodo, Search, Filter, Layers, Tag
+  TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor } from './utils';
@@ -59,6 +60,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const [deptFilter, setDeptFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
   const [newTask, setNewTask] = useState({
     taskName: '',
     description: '',
@@ -234,6 +236,79 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `tasks/${taskId}`);
       setError('Failed to delete task.');
+    }
+  };
+
+  const handleArchiveTask = async (taskId: string) => {
+    try {
+      await updateDoc(doc(db, 'tasks', taskId), {
+        status: 'Archived' as TaskStatus,
+        archivedAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
+      setError('Failed to archive task.');
+    }
+  };
+
+  const uploadToGoogleDrive = async (file: File): Promise<string> => {
+    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
+    if (!scriptUrl) {
+      throw new Error('Google Script URL not configured.');
+    }
+
+    const base64 = await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        filename: file.name,
+        mimeType: file.type,
+        base64: base64
+      })
+    });
+
+    if (!response.ok) throw new Error('Network response was not ok');
+    const result = await response.json();
+    if (result.status === 'success') return result.url;
+    throw new Error(result.message || 'Upload failed');
+  };
+
+  const handleEditFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !editingTask) return;
+    
+    setIsUploading(true);
+    try {
+      const driveUrl = await uploadToGoogleDrive(file);
+      setEditingTask({ ...editingTask, attachedFile: driveUrl, attachedFileName: file.name });
+    } catch (err: any) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleNewFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    
+    setIsUploading(true);
+    try {
+      const driveUrl = await uploadToGoogleDrive(file);
+      setNewTask(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
+    } catch (err: any) {
+      alert('Upload failed: ' + err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -465,6 +540,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     ))}
                   </datalist>
                 </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="label">Attachment</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <input type="file" onChange={handleNewFileUpload} style={{ fontSize: 12 }} />
+                    {isUploading && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
+                    {(newTask as any).attachedFileName && (
+                      <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Paperclip className="w-3 h-3" /> {(newTask as any).attachedFileName}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                 <button className="btn btn-ghost" onClick={() => setIsAddingTask(false)}>Cancel</button>
@@ -566,6 +653,25 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     ))}
                                   </datalist>
                                 </div>
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <label className="label">Attachment</label>
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    <input type="file" onChange={handleEditFileUpload} style={{ fontSize: 12 }} />
+                                    {isUploading && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
+                                    {editingTask.attachedFileName && (
+                                      <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                        <Paperclip className="w-3 h-3" /> {editingTask.attachedFileName}
+                                        <button 
+                                          type="button" 
+                                          onClick={() => setEditingTask({ ...editingTask, attachedFile: '', attachedFileName: '' })} 
+                                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           </div>
@@ -628,6 +734,19 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 {isOverdue && <span className="badge badge-urgent">Overdue</span>}
                                 
                                 <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
+                                  {task.status === 'Done' && (
+                                    <button 
+                                      className="btn btn-ghost" 
+                                      style={{ padding: '2px 8px', height: 'auto', fontSize: 11, color: 'var(--text-muted)' }}
+                                      onClick={e => {
+                                        e.stopPropagation();
+                                        handleArchiveTask(task.id);
+                                      }}
+                                      title="Archive Task"
+                                    >
+                                      <Archive className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
                                   <button 
                                     className="btn btn-ghost" 
                                     style={{ padding: '2px 8px', height: 'auto', fontSize: 11 }}
@@ -690,6 +809,69 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                   </span>
                                 )}
                               </div>
+
+                              {isExpanded && task.attachedFile && (
+                                <div style={{ 
+                                  marginTop: 20, 
+                                  borderRadius: 16, 
+                                  overflow: 'hidden', 
+                                  border: '1px solid var(--border)',
+                                  background: 'var(--surface-2)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                                }}>
+                                  {(task.attachedFile.includes('image') || task.attachedFile.includes('google.com')) ? (
+                                    <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+                                      <img 
+                                        src={task.attachedFile} 
+                                        alt="Attachment" 
+                                        style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+                                        onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                                      />
+                                      <div style={{ 
+                                        position: 'absolute', 
+                                        bottom: 0, 
+                                        left: 0, 
+                                        right: 0, 
+                                        padding: '16px 20px', 
+                                        background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
+                                        display: 'flex', 
+                                        justifyContent: 'space-between', 
+                                        alignItems: 'center',
+                                        backdropFilter: 'blur(4px)'
+                                      }}>
+                                        <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
+                                        <a 
+                                          href={task.attachedFile} 
+                                          target="_blank" 
+                                          rel="noopener noreferrer" 
+                                          className="btn btn-sm"
+                                          style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                                        >
+                                          <ExternalLink className="w-3.5 h-3.5" /> Full View
+                                        </a>
+                                      </div>
+                                    </div>
+                                  ) : (
+                                    <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                                      <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                                        <Paperclip className="w-5 h-5" />
+                                      </div>
+                                      <div style={{ flex: 1 }}>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || 'Attachment'}</div>
+                                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                                      </div>
+                                      <a 
+                                        href={task.attachedFile} 
+                                        target="_blank" 
+                                        rel="noopener noreferrer" 
+                                        className="btn btn-ghost btn-sm"
+                                      >
+                                        <Download className="w-4 h-4" />
+                                      </a>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
 
                           {taskMilestones.length > 0 && (
                             <div style={{ marginTop: 12 }}>
@@ -835,16 +1017,16 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                           </motion.div>
                         )}
                       </AnimatePresence>
-                      </>
-                      )}
-                    </motion.div>
-                  );
-                })}
-              </AnimatePresence>
-            </div>
+                    </>
+                  )}
+                </motion.div>
+              );
+            })}
+            </AnimatePresence>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
+    </div>
 
       {filtered.length === 0 && (
         <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>

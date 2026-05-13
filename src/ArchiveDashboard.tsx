@@ -8,7 +8,7 @@ import { User } from 'firebase/auth';
 import { AppUser, Task, Milestone, OperationType } from './types';
 import {
   Archive, Search, Filter, ChevronDown, CheckCircle2, Calendar,
-  Link2, Target, X, AlertCircle, Eye, TrendingUp
+  Link2, Target, X, AlertCircle, Eye, TrendingUp, Paperclip, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch } from './utils';
@@ -131,7 +131,6 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>{task.taskName}</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 14, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{task.description}</p>
 
-                {/* Meta */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
                   {task.assignedTo && <span>👤 {task.assignedTo}</span>}
                   {task.assignedBy && <span>📋 Assigned by {task.assignedBy}</span>}
@@ -139,6 +138,14 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Link2 className="w-3 h-3" /> {task.correspondingSubject}
                     </span>
+                  )}
+                  {task.attachedFile && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
+                      <Paperclip className="w-3 h-3" />
+                      <a href={task.attachedFile} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600 }}>
+                        {task.attachedFileName || 'Attachment'}
+                      </a>
+                    </div>
                   )}
                 </div>
 
@@ -159,8 +166,8 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setViewingTask(task)}>
                     <Eye className="w-3.5 h-3.5" /> View Details
                   </button>
-                  {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
-                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)}>
+                  {task.status === 'Done' && (
+                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)} title="Archive Task">
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -214,6 +221,69 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     </div>
                   ))}
                 </div>
+
+                {viewingTask.attachedFile && (
+                  <div style={{ 
+                    marginBottom: 24, 
+                    borderRadius: 16, 
+                    overflow: 'hidden', 
+                    border: '1px solid var(--border)',
+                    background: 'var(--surface-2)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                  }}>
+                    {(viewingTask.attachedFile.includes('image') || viewingTask.attachedFile.includes('google.com')) ? (
+                      <div style={{ position: 'relative', background: '#f8fafc', overflow: 'hidden' }}>
+                        <img 
+                          src={viewingTask.attachedFile} 
+                          alt="Attachment" 
+                          style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+                          onError={(e) => (e.target as HTMLImageElement).style.display = 'none'}
+                        />
+                        <div style={{ 
+                          position: 'absolute', 
+                          bottom: 0, 
+                          left: 0, 
+                          right: 0, 
+                          padding: '16px 20px', 
+                          background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
+                          display: 'flex', 
+                          justifyContent: 'space-between', 
+                          alignItems: 'center',
+                          backdropFilter: 'blur(4px)'
+                        }}>
+                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{viewingTask.attachedFileName || 'Attached Image'}</span>
+                          <a 
+                            href={viewingTask.attachedFile} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="btn btn-sm"
+                            style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                          >
+                            <Download className="w-3.5 h-3.5" /> Download
+                          </a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 10, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
+                          <Paperclip className="w-5 h-5" />
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{viewingTask.attachedFileName || 'Attachment'}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                        </div>
+                        <a 
+                          href={viewingTask.attachedFile} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="btn btn-ghost btn-sm"
+                        >
+                          <Download className="w-4 h-4" />
+                        </a>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Milestone history */}
                 {getTaskMilestones(viewingTask.id).length > 0 && (
