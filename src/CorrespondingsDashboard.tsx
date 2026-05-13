@@ -60,6 +60,8 @@ const emptyForm = () => ({
   serialNumber: '',
   notes: '',
   status: 'Unread' as CorrespondingStatus,
+  assignedTo: '',
+  assignedToId: '',
 });
 
 interface Props {
@@ -136,6 +138,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         priority: item.priority, dateReceived: item.dateReceived, deadline: item.deadline || '',
         attachedFile: item.attachedFile || '', attachedFileName: item.attachedFileName || '',
         serialNumber: item.serialNumber || '', notes: item.notes || '', status: item.status,
+        assignedTo: item.assignedTo || '', assignedToId: item.assignedToId || '',
       });
     } else {
       setEditing(null);
@@ -245,6 +248,28 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             forUserId: manager.id,
             read: false,
             relatedId: docId,
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+
+      // Reassignment logic: update linked task if exists
+      if (editing && editing.convertedToTaskId && editing.assignedToId !== formData.assignedToId) {
+        await updateDoc(doc(db, 'tasks', editing.convertedToTaskId), {
+          assignedTo: formData.assignedTo,
+          assignedToId: formData.assignedToId,
+          updatedAt: serverTimestamp(),
+        });
+
+        // Notify new assignee
+        if (formData.assignedToId) {
+          await addDoc(collection(db, 'notifications'), {
+            type: 'task_assigned',
+            title: 'Task Reassigned',
+            message: `The task for "${formData.subject}" has been reassigned to you by ${appUser.displayName}`,
+            forUserId: formData.assignedToId,
+            read: false,
+            relatedId: editing.convertedToTaskId,
             createdAt: serverTimestamp(),
           });
         }
@@ -645,6 +670,35 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       )
                     )}
                   </div>
+                  {/* Assignee (Manager Only) */}
+                  {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
+                    <div>
+                      <label className="input-label">Assignee</label>
+                      {isViewing ? (
+                        <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
+                          {formData.assignedTo || 'Unassigned'}
+                        </div>
+                      ) : (
+                        <select 
+                          className="input" 
+                          value={formData.assignedToId} 
+                          onChange={e => {
+                            const u = projectUsers.find(u => u.id === e.target.value);
+                            set('assignedToId', e.target.value);
+                            set('assignedTo', u?.displayName || '');
+                            if (e.target.value && formData.status === 'Unread') {
+                              set('status', 'Assigned');
+                            }
+                          }}
+                        >
+                          <option value="">— Unassigned —</option>
+                          {projectUsers.filter(u => u.role !== 'Admin').map(u => (
+                            <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  )}
                   {/* File */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Attachment</label>

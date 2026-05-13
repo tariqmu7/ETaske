@@ -174,16 +174,41 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         subCategory: editingTask.subCategory,
         department: editingTask.department || null,
         dueDate: editingTask.dueDate || null,
+        assignedTo: editingTask.assignedTo,
+        assignedToId: editingTask.assignedToId,
         updatedAt: serverTimestamp(),
       });
 
       const originalTask = tasks.find(t => t.id === editingTask.id);
+      
+      // Update linked correspondence if exists
+      if (originalTask?.correspondingId) {
+        await updateDoc(doc(db, 'correspondences', originalTask.correspondingId), {
+          assignedTo: editingTask.assignedTo,
+          assignedToId: editingTask.assignedToId,
+          updatedAt: serverTimestamp(),
+        });
+      }
+
       if (originalTask && originalTask.assignedById && originalTask.assignedById !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
           type: 'task_updated',
           title: 'Task Updated',
           message: `${appUser.displayName} updated the details of "${editingTask.taskName}".`,
           forUserId: originalTask.assignedById,
+          read: false,
+          relatedId: editingTask.id,
+          createdAt: serverTimestamp(),
+        });
+      }
+
+      // Notify new assignee if changed
+      if (originalTask && originalTask.assignedToId !== editingTask.assignedToId) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'task_assigned',
+          title: 'Task Reassigned',
+          message: `Task "${editingTask.taskName}" has been reassigned to you by ${appUser.displayName}`,
+          forUserId: editingTask.assignedToId,
           read: false,
           relatedId: editingTask.id,
           createdAt: serverTimestamp(),
@@ -626,6 +651,30 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 <label className="label">Due Date</label>
                                 <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
                               </div>
+                              {isManagerOrAdmin && (
+                                <div style={{ gridColumn: 'span 2' }}>
+                                  <label className="label">Reassign To</label>
+                                  <select 
+                                    className="input" 
+                                    value={editingTask.assignedToId} 
+                                    onChange={e => {
+                                      const u = projectUsers.find(u => u.id === e.target.value);
+                                      if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
+                                    }}
+                                  >
+                                    <option value="">— Select Assignee —</option>
+                                    {projectUsers
+                                      .filter(u => 
+                                        u.role !== 'Admin' && 
+                                        (appUser.role === 'Admin' || (u.department === appUser.department && u.teamId === appUser.teamId))
+                                      )
+                                      .map(u => (
+                                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                                      ))
+                                    }
+                                  </select>
+                                </div>
+                              )}
                               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, gridColumn: 'span 2' }}>
                                 <div>
                                   <label className="label">Category</label>

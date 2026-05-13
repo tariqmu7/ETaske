@@ -99,7 +99,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     if (!employee) { setIsAssigning(false); return; }
 
     try {
-      // 1. Mark corresponding as assigned
+      const isReassignment = selectedCorr.status === 'Assigned';
+
+      // 1. Update corresponding
       await updateDoc(doc(db, 'correspondences', selectedCorr.id), {
         status: 'Assigned',
         assignedTo: employee.displayName,
@@ -109,47 +111,59 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         updatedAt: serverTimestamp(),
       });
 
-      // 2. Create a task from this corresponding
-      const serial = await getNextSerialNumber('tasks');
-      const taskRef = await addDoc(collection(db, 'tasks'), {
-        taskName: selectedCorr.subject,
-        description: selectedCorr.body,
-        priority: selectedCorr.priority,
-        status: 'Pending',
-        category: selectedCorr.category,
-        subCategory: selectedCorr.subCategory || 'None',
-        department: selectedCorr.department || 'None',
-        serialNumber: serial,
-        assignedTo: employee.displayName,
-        assignedToId: assigneeId,
-        assignedBy: appUser.displayName,
-        assignedById: user.uid,
-        dueDate: dueDate || selectedCorr.deadline || null,
-        correspondingId: selectedCorr.id,
-        correspondingSubject: selectedCorr.subject,
-        attachedFile: selectedCorr.attachedFile || null,
-        attachedFileName: selectedCorr.attachedFileName || null,
-        statusUpdate: 'Not Started',
-        notes: [],
-        userId: user.uid,
-        teamId: appUser.teamId || employee.teamId || 'NONE',
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      let taskId = selectedCorr.convertedToTaskId;
 
-      // 3. Update corresponding with taskId
-      await updateDoc(doc(db, 'correspondences', selectedCorr.id), {
-        convertedToTaskId: taskRef.id,
-      });
+      if (isReassignment && taskId) {
+        // 2. Update existing task
+        await updateDoc(doc(db, 'tasks', taskId), {
+          assignedTo: employee.displayName,
+          assignedToId: assigneeId,
+          dueDate: dueDate || null,
+          updatedAt: serverTimestamp(),
+        });
+      } else if (!isReassignment) {
+        // 2. Create new task
+        const serial = await getNextSerialNumber('tasks');
+        const taskRef = await addDoc(collection(db, 'tasks'), {
+          taskName: selectedCorr.subject,
+          description: selectedCorr.body,
+          priority: selectedCorr.priority,
+          status: 'Pending',
+          category: selectedCorr.category,
+          subCategory: selectedCorr.subCategory || 'None',
+          department: selectedCorr.department || 'None',
+          serialNumber: serial,
+          assignedTo: employee.displayName,
+          assignedToId: assigneeId,
+          assignedBy: appUser.displayName,
+          assignedById: user.uid,
+          dueDate: dueDate || selectedCorr.deadline || null,
+          correspondingId: selectedCorr.id,
+          correspondingSubject: selectedCorr.subject,
+          attachedFile: selectedCorr.attachedFile || null,
+          attachedFileName: selectedCorr.attachedFileName || null,
+          statusUpdate: 'Not Started',
+          notes: [],
+          userId: user.uid,
+          teamId: appUser.teamId || employee.teamId || 'NONE',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        taskId = taskRef.id;
+        
+        await updateDoc(doc(db, 'correspondences', selectedCorr.id), {
+          convertedToTaskId: taskId,
+        });
+      }
 
-      // 4. Create notification for employee
+      // 3. Create notification for employee
       await addDoc(collection(db, 'notifications'), {
         type: 'task_assigned',
-        title: 'New Task Assigned',
-        message: `"${selectedCorr.subject}" has been assigned to you by ${appUser.displayName}`,
+        title: isReassignment ? 'Task Reassigned' : 'New Task Assigned',
+        message: `"${selectedCorr.subject}" has been ${isReassignment ? 'reassigned' : 'assigned'} to you by ${appUser.displayName}`,
         forUserId: assigneeId,
         read: false,
-        relatedId: taskRef.id,
+        relatedId: taskId,
         createdAt: serverTimestamp(),
       });
 
@@ -159,9 +173,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       setManagerNote('');
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
-      setError('Failed to assign task. Check permissions.');
+      setError('Failed to update assignment. Check permissions.');
     } finally {
-      setIsAssigning(false);
+      setIsAssigning(true); // Wait for snapshot before clearing
+      setTimeout(() => setIsAssigning(false), 800);
     }
   };
 
@@ -357,17 +372,23 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
                 <button
                   className="btn btn-primary"
-                  style={{ width: '100%' }}
+                  style={{ width: '100%', background: selectedCorr.status === 'Assigned' ? 'var(--accent-light)' : undefined }}
                   onClick={handleAssign}
                   disabled={!assigneeId || isAssigning}
                 >
-                  {isAssigning ? <><span className="spinner" style={{ width: 16, height: 16 }} /> Assigning…</> : <><UserCheck className="w-4 h-4" /> Assign as Task</>}
+                  {isAssigning ? (
+                    <><span className="spinner" style={{ width: 16, height: 16 }} /> Processing…</>
+                  ) : selectedCorr.status === 'Assigned' ? (
+                    <><UserCheck className="w-4 h-4" /> Reassign Task</>
+                  ) : (
+                    <><UserCheck className="w-4 h-4" /> Assign as Task</>
+                  )}
                 </button>
 
                 {selectedCorr.status === 'Assigned' && (
-                  <div style={{ marginTop: 12, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', borderRadius: 0, padding: '10px 14px', fontSize: 12, color: '#4ade80', display: 'flex', gap: 8, alignItems: 'center' }}>
-                    <CheckCircle2 className="w-4 h-4" />
-                    Already assigned to {selectedCorr.assignedTo}
+                  <div style={{ marginTop: 12, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', borderRadius: 0, padding: '10px 14px', fontSize: 12, color: 'var(--accent)', display: 'flex', gap: 8, alignItems: 'center' }}>
+                    <Users className="w-4 h-4" />
+                    Currently assigned to {selectedCorr.assignedTo}. Changing this will update the linked task.
                   </div>
                 )}
               </>
