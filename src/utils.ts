@@ -60,3 +60,19 @@ export const getGoogleDrivePreviewUrl = (url: string): string => {
   
   return url;
 };
+
+export const isOverdue = (deadlineStr?: string): boolean => {
+  if (!deadlineStr) return false;
+  const d = new Date(deadlineStr);
+  // Set to end of day for overdue check if only date is provided
+  if (deadlineStr.length <= 10) d.setHours(23, 59, 59);
+  return d < new Date();
+};
+
+export const isDueSoon = (deadlineStr?: string, hours: number = 48): boolean => {
+  if (!deadlineStr) return false;
+  const deadline = new Date(deadlineStr);
+  const now = new Date();
+  const diff = deadline.getTime() - now.getTime();
+  return diff > 0 && diff <= hours * 60 * 60 * 1000;
+};

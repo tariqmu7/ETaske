@@ -27,6 +27,7 @@ export default function App() {
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<AppView>('tasks');
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
+  const [dueSoonCount, setDueSoonCount] = useState(0);
 
   // Auth setup
   useEffect(() => {
@@ -130,6 +131,39 @@ export default function App() {
     return () => unsub();
   }, [user, appUser]);
 
+  // Alerting system: items due within 48h
+  useEffect(() => {
+    if (!user || !appUser || appUser.status !== 'Approved') return;
+    
+    let taskCount = 0;
+    let corrCount = 0;
+
+    const checkDueSoon = (items: any[], dateField: string) => {
+      const now = new Date();
+      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
+      return items.filter(item => {
+        if (!item[dateField]) return false;
+        const d = new Date(item[dateField]);
+        return d > now && d <= fortyEightHoursLater && item.status !== 'Done' && item.status !== 'Closed' && item.status !== 'Archived';
+      }).length;
+    };
+
+    const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
+      taskCount = checkDueSoon(snap.docs.map(d => d.data()), 'dueDate');
+      setDueSoonCount(taskCount + corrCount);
+    });
+
+    const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
+      corrCount = checkDueSoon(snap.docs.map(d => d.data()), 'deadline');
+      setDueSoonCount(taskCount + corrCount);
+    });
+
+    return () => {
+      unsubT();
+      unsubC();
+    };
+  }, [user, appUser]);
+
   // Default view by role
   useEffect(() => {
     if (!appUser) return;
@@ -184,6 +218,7 @@ export default function App() {
         activeView={activeView}
         onNavigate={setActiveView}
         notifications={notifications}
+        dueSoonCount={dueSoonCount}
         onLogout={handleLogout}
       />
       <main className="main-content">

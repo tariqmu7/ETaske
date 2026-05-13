@@ -15,7 +15,7 @@ import {
   FolderOpen, Globe, Server, X, Flag, Target, Link2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor } from './utils';
+import { globalSearch, getUserColor, isOverdue, isDueSoon } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Overview Firestore:', { e, op, path });
@@ -44,10 +44,6 @@ function formatDate(d: Timestamp | string | undefined): string {
   return d.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-function isOverdue(deadline?: string): boolean {
-  if (!deadline) return false;
-  return new Date(deadline) < new Date();
-}
 
 const priorityColor: Record<string, string> = {
   Urgent: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#16a34a'
@@ -209,6 +205,23 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
     return stats;
   }, [correspondences, tasks]);
 
+  // ─── Due Soon Alerts ───────────────────────────────────────────────────
+  const dueSoonItems = useMemo(() => {
+    const corrs = correspondences
+      .filter(c => c.status !== 'Closed' && isDueSoon(c.deadline))
+      .map(c => ({ ...c, type: 'Correspondence' as const }));
+    
+    const tks = tasks
+      .filter(t => t.status !== 'Done' && t.status !== 'Archived' && isDueSoon(t.dueDate))
+      .map(t => ({ ...t, type: 'Task' as const }));
+
+    return [...corrs, ...tks].sort((a, b) => {
+      const dateA = new Date((a as any).deadline || (a as any).dueDate || 0);
+      const dateB = new Date((b as any).deadline || (b as any).dueDate || 0);
+      return dateA.getTime() - dateB.getTime();
+    });
+  }, [correspondences, tasks]);
+
   // ─── Sub-Category Grouping for Selected Category ───────────────────────
   const subCategoryGroups = useMemo(() => {
     if (!selectedCategory) return new Map();
@@ -361,6 +374,63 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
           )}
         </div>
       </div>
+
+      {/* ── Due Soon Alerts Section ── */}
+      {dueSoonItems.length > 0 && selectedCategory === null && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }} 
+          animate={{ opacity: 1, y: 0 }}
+          style={{ marginBottom: 32, background: '#fff7ed', border: '1px solid #ffedd5', padding: '20px', borderRadius: 0 }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+            <div style={{ background: '#f97316', padding: 6, borderRadius: 0 }}>
+              <AlertCircle className="w-4 h-4" style={{ color: '#fff' }} />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: '#9a3412', margin: 0 }}>Due Soon (Within 48h)</h2>
+              <p style={{ fontSize: 12, color: '#c2410c', margin: 0 }}>Items that require immediate attention.</p>
+            </div>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
+            {dueSoonItems.slice(0, 4).map((item: any) => (
+              <div 
+                key={`${item.type}-${item.id}`} 
+                className="card"
+                style={{ 
+                  padding: '12px 16px', 
+                  background: '#fff', 
+                  borderLeft: `4px solid #f97316`,
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer'
+                }}
+                onClick={() => {
+                  if (item.type === 'Task') {
+                    setSelectedTask(item);
+                  } else {
+                    setSelectedCategory(item.category);
+                    setViewTab('Correspondences');
+                  }
+                }}
+              >
+                <div style={{ flex: 1, marginRight: 12 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
+                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Due: {item.deadline || item.dueDate}</div>
+                </div>
+                <ArrowRight className="w-4 h-4" style={{ color: '#94a3b8' }} />
+              </div>
+            ))}
+            {dueSoonItems.length > 4 && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#9a3412', background: 'rgba(249, 115, 22, 0.05)', padding: 12 }}>
+                + {dueSoonItems.length - 4} more items due soon
+              </div>
+            )}
+          </div>
+        </motion.div>
+      )}
 
       {selectedCategory === null ? (
         /* ── Category Grid View ── */

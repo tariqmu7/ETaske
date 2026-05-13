@@ -17,7 +17,7 @@ import {
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
 import { AppView } from './App';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
@@ -394,15 +394,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95 }}
-              className="card card-interactive"
-              style={{ 
-                padding: '24px', 
-                cursor: 'pointer',
-                borderLeft: `4px solid ${(() => {
-                  const u = projectUsers.find(pu => pu.id === item.assignedToId);
-                  return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
-                })()}`
-              }}
+               className="card card-interactive"
+               style={{ 
+                 padding: '24px', 
+                 cursor: 'pointer',
+                 borderLeft: isDueSoon(item.deadline) && item.status !== 'Closed' 
+                   ? '4px solid #f97316' 
+                   : `4px solid ${(() => {
+                     const u = projectUsers.find(pu => pu.id === item.assignedToId);
+                     return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
+                   })()}`,
+                 backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? '#fffcf9' : 'var(--surface)'
+               }}
               onClick={() => openModal(item, true)}
             >
               {/* Top row */}
@@ -419,13 +422,19 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
                     }}>{item.category}</span>
                   )}
-                  {item.actions && item.actions !== 'None' && (
+                   {item.actions && item.actions !== 'None' && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
                       borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
                       border: '1px solid #fecaca'
                     }}>{item.actions}</span>
+                  )}
+                  {isOverdue(item.deadline) && item.status !== 'Closed' && (
+                    <span className="badge badge-urgent">OVERDUE</span>
+                  )}
+                  {isDueSoon(item.deadline) && item.status !== 'Closed' && (
+                    <span className="badge" style={{ background: '#f97316', color: '#fff' }}>DUE SOON</span>
                   )}
                 </div>
                 <div style={{ display: 'flex', gap: 4 }}>

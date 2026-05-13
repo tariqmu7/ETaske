@@ -18,7 +18,7 @@ import {
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -682,7 +682,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     const doneMilestones = taskMilestones.filter(m => m.status === 'Done').length;
                     const progress = taskMilestones.length > 0 ? Math.round((doneMilestones / taskMilestones.length) * 100) : 0;
                     const isExpanded = expandedTask === task.id;
-                    const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && task.status !== 'Done';
+                    const isTaskOverdue = isOverdue(task.dueDate) && task.status !== 'Done';
+                    const isTaskDueSoon = isDueSoon(task.dueDate) && task.status !== 'Done';
                     const canEdit = true;
                     const isEditing = editingTask?.id === task.id;
 
@@ -696,11 +697,11 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                         className="card"
                         style={{ 
                           overflow: 'hidden', 
-                          borderLeft: isEditing ? '4px solid var(--accent)' : `4px solid ${(() => {
+                          borderLeft: isEditing ? '4px solid var(--accent)' : (isTaskDueSoon ? '4px solid #f97316' : `4px solid ${(() => {
                             const u = projectUsers.find(pu => pu.id === task.assignedToId);
                             return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
-                          })()}`,
-                          backgroundColor: task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)',
+                          })()}`),
+                          backgroundColor: isTaskDueSoon ? '#fffcf9' : (task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)'),
                           transition: 'background-color 0.2s ease'
                         }}
                       >
@@ -862,7 +863,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     <span className={statusBadge(task.status)}>{task.status}</span>
                                   )}
                                   <span className={priorityBadge(task.priority)}>{task.priority}</span>
-                                  {isOverdue && <span className="badge badge-urgent">Overdue</span>}
+                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>OVERDUE</span>}
+                                  {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>DUE SOON</span>}
                                   
                                   <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
                                     {task.status === 'Done' && (

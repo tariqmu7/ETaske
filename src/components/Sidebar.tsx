@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Inbox, CheckSquare, Archive,
-  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2
+  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
@@ -12,11 +12,12 @@ interface Props {
   appUser: AppUser;
   activeView: AppView;
   onNavigate: (v: AppView) => void;
-  notifications: AppNotification[];
-  onLogout: () => void;
-}
+   notifications: AppNotification[];
+   dueSoonCount: number;
+   onLogout: () => void;
+ }
 
-export default function TopNav({ appUser, activeView, onNavigate, notifications, onLogout }: Props) {
+export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, onLogout }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -117,6 +118,25 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Due Soon Alert */}
+        {dueSoonCount > 0 && (
+          <button 
+            className="btn btn-ghost btn-icon" 
+            onClick={() => onNavigate('overview')}
+            title={`${dueSoonCount} items due soon`}
+            style={{ position: 'relative' }}
+          >
+            <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
+            <span style={{
+              position: 'absolute', top: 0, right: 0, background: '#f97316', color: 'white',
+              fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
+              transform: 'translate(25%, -25%)'
+            }}>
+              {dueSoonCount}
+            </span>
+          </button>
+        )}
+
         {/* Notifications Bell */}
         <div style={{ position: 'relative' }}>
           <button 
