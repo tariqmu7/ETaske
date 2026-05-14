@@ -159,6 +159,7 @@ export interface ChatMessage {
   text: string;
   createdAt: Timestamp;
   participants: string[]; // [uid1, uid2] sorted
+  read: boolean;
 }
 
 // ─── Select Options ───────────────────────────────────────────────────────────
