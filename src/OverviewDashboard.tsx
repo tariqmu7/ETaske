@@ -12,7 +12,8 @@ import {
   BarChart3, MailOpen, CheckSquare, Clock, AlertCircle,
   ChevronDown, ChevronRight, Building2, Tag, Calendar,
   TrendingUp, Users, Layers, Search, Filter, ArrowRight,
-  FolderOpen, Globe, Server, X, Flag, Target, Link2
+  FolderOpen, Globe, Server, X, Flag, Target, Link2,
+  Paperclip, ExternalLink, FileText, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, isOverdue, isDueSoon } from './utils';
@@ -60,46 +61,66 @@ function StatCard({ label, value, sub, color }: { label: string; value: number |
   );
 }
 
-const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Milestone[]; onTaskClick: (t: Task) => void; projectUsers: AppUser[] }> = ({ item, tasks, milestones, onTaskClick, projectUsers }) => {
+const CorrCard: React.FC<{ 
+  item: Corresponding; 
+  tasks: Task[]; 
+  milestones: Milestone[]; 
+  onTaskClick: (t: Task) => void; 
+  onCorrClick: (c: Corresponding) => void;
+  projectUsers: AppUser[] 
+}> = ({ item, tasks, milestones, onTaskClick, onCorrClick, projectUsers }) => {
   const linkedTask = tasks.find(t => t.correspondingId === item.id || t.id === item.convertedToTaskId);
-  const taskMilestones = linkedTask ? milestones.filter(m => m.taskId === linkedTask.id) : [];
   const overdue = isOverdue(item.deadline);
 
   return (
-    <div className="card" style={{ 
-      padding: '16px', 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100%', 
-      position: 'relative', 
-      borderLeft: `4px solid ${(() => {
-        const u = projectUsers.find(pu => pu.id === item.assignedToId);
-        return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
-      })()}` 
-    }}>
+    <div 
+      className="card" 
+      onClick={() => onCorrClick(item)}
+      style={{ 
+        padding: '16px', 
+        display: 'flex', 
+        flexDirection: 'column', 
+        height: '100%', 
+        position: 'relative', 
+        cursor: 'pointer',
+        transition: 'transform 0.2s, box-shadow 0.2s',
+        borderLeft: `4px solid ${(() => {
+          const u = projectUsers.find(pu => pu.id === item.assignedToId);
+          return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
+        })()}` 
+      }}
+      onMouseEnter={e => {
+        e.currentTarget.style.transform = 'translateY(-2px)';
+        e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+      }}
+      onMouseLeave={e => {
+        e.currentTarget.style.transform = 'translateY(0)';
+        e.currentTarget.style.boxShadow = 'none';
+      }}
+    >
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {item.serialNumber && (
-            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: '#64748b', letterSpacing: '0.04em' }}>
               #{item.serialNumber}
             </span>
           )}
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.subject}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', lineHeight: 1.4 }}>{item.subject}</div>
         </div>
-        <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-secondary)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: '#f1f5f9', color: '#475569', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
           {item.status}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flex: 1 }}>
+      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, flex: 1 }}>
         <p style={{ marginBottom: 4 }}><strong>From:</strong> {item.sentFrom}</p>
         <p style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
       </div>
       
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || 'var(--text-muted)', background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
           {item.priority} Priority
         </span>
-        {overdue && (
+        {overdue && item.status !== 'Closed' && (
           <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}>
             Overdue
           </span>
@@ -107,7 +128,7 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
       </div>
 
       {item.assignedTo && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 12 }}>
           {(() => {
             const u = projectUsers.find(pu => pu.id === item.assignedToId);
             return u?.photoURL ? (
@@ -120,21 +141,31 @@ const CorrCard: React.FC<{ item: Corresponding; tasks: Task[]; milestones: Miles
         </div>
       )}
 
-      <div style={{ fontSize: 11, color: overdue ? '#dc2626' : 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>{item.deadline ? `Due ${item.deadline}` : 'No deadline'}</span>
-        {linkedTask && (
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ fontSize: 10, fontWeight: 600, color: overdue ? '#dc2626' : '#94a3b8' }}>
+          {item.deadline ? `Due ${item.deadline}` : 'No deadline'}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {linkedTask && (
+            <button 
+              onClick={(e) => {
+                e.stopPropagation();
+                onTaskClick(linkedTask);
+              }}
+              className="btn btn-ghost btn-sm"
+              style={{ padding: '2px 6px', height: 'auto', fontSize: 9, fontWeight: 800, color: '#16a34a' }}
+            >
+              LINKED TASK
+            </button>
+          )}
           <button 
-            onClick={() => onTaskClick(linkedTask)}
-            style={{ 
-              background: 'none', border: 'none', padding: '2px 6px', borderRadius: 0,               color: '#16a34a', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-              fontSize: 11, transition: 'all 0.2s'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#dcfce7'}
-            onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+            className="btn btn-ghost btn-sm" 
+            style={{ padding: '2px 8px', height: 'auto', fontSize: 10, fontWeight: 800 }}
+            onClick={(e) => { e.stopPropagation(); onCorrClick(item); }}
           >
-            ↳ Linked Task
+            FULL DETAILS
           </button>
-        )}
+        </div>
       </div>
     </div>
   );
@@ -150,6 +181,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
   
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [selectedCorr, setSelectedCorr] = useState<Corresponding | null>(null);
   const [dateFilter, setDateFilter] = useState('');
   const [viewTab, setViewTab] = useState<'Correspondences' | 'Tasks'>('Correspondences');
 
@@ -292,11 +324,19 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         style={{ 
           padding: '16px 18px', 
           cursor: 'pointer', 
-          transition: 'transform 0.2s', 
+          transition: 'transform 0.2s, box-shadow 0.2s', 
           borderLeft: `4px solid ${(() => {
             const u = projectUsers.find(pu => pu.id === task.assignedToId);
             return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
           })()}` 
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.transform = 'translateY(-2px)';
+          e.currentTarget.style.boxShadow = '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)';
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.transform = 'translateY(0)';
+          e.currentTarget.style.boxShadow = 'none';
         }}
         onClick={() => setSelectedTask(task)}
       >
@@ -335,7 +375,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
           {ov && <span style={{ color: '#dc2626', marginLeft: 6 }}>⚠ Overdue</span>}
         </div>
         {taskMilestones.length > 0 && (
-          <>
+          <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
               <span>Milestones: {done}/{taskMilestones.length}</span>
               <span>{progress}%</span>
@@ -343,8 +383,18 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             <div style={{ height: 5, background: '#f1f5f9', borderRadius: 0, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${progress}%`, background: '#3b82f6', borderRadius: 0, transition: 'width 0.4s' }} />
             </div>
-          </>
+          </div>
         )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+          <button 
+            className="btn btn-ghost btn-sm" 
+            style={{ padding: '2px 8px', height: 'auto', fontSize: 10, fontWeight: 800 }}
+            onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+          >
+            FULL DETAILS
+          </button>
+        </div>
       </div>
     );
   };
@@ -410,8 +460,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   if (item.type === 'Task') {
                     setSelectedTask(item);
                   } else {
-                    setSelectedCategory(item.category);
-                    setViewTab('Correspondences');
+                    setSelectedCorr(item);
                   }
                 }}
               >
@@ -457,22 +506,51 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
                 </div>
                 <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600 }}>Correspondences</span>
+                  <div 
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', margin: '-8px', borderRadius: 0, transition: 'background 0.2s' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCategory(cat);
+                      setViewTab('Correspondences');
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <MailOpen className="w-4 h-4" /> Correspondences
+                    </span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>{s.total}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600 }}>Related Tasks</span>
+                  <div 
+                    style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', margin: '-8px', borderRadius: 0, transition: 'background 0.2s' }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCategory(cat);
+                      setViewTab('Tasks');
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
+                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <CheckSquare className="w-4 h-4" /> Related Tasks
+                    </span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>{s.tasks}</span>
                   </div>
                   {s.overdue > 0 && (
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#fee2e2', borderRadius: 0 }}>
+                    <div 
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px', background: '#fee2e2', borderRadius: 0, cursor: 'pointer' }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedCategory(cat);
+                        setViewTab('Correspondences');
+                      }}
+                    >
                       <span style={{ color: '#dc2626', fontSize: 14, fontWeight: 700 }}>Overdue Correspondences</span>
                       <span style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>{s.overdue}</span>
                     </div>
                   )}
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', color: catStyle.text, fontSize: 14, fontWeight: 700, gap: 4 }}>
-                    View Details <ArrowRight className="w-4 h-4" />
+                    View Full Details <ArrowRight className="w-4 h-4" />
                   </div>
                 </div>
               </div>
@@ -549,7 +627,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                     {viewTab === 'Correspondences' ? (
                       data.corrs.map(item => (
-                        <CorrCard key={`corr-${item.id}`} item={item} tasks={tasks} milestones={milestones} onTaskClick={setSelectedTask} projectUsers={projectUsers} />
+                        <CorrCard 
+                          key={`corr-${item.id}`} 
+                          item={item} 
+                          tasks={tasks} 
+                          milestones={milestones} 
+                          onTaskClick={setSelectedTask} 
+                          onCorrClick={setSelectedCorr}
+                          projectUsers={projectUsers} 
+                        />
                       ))
                     ) : (
                       data.tasks.map(task => (
@@ -653,10 +739,17 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
                   </div>
-                  {selectedTask.correspondingSubject && (
+                  {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div>
                       <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Linked Corresponding</span>
-                      <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}><Link2 className="w-4 h-4 flex-shrink-0" /> {selectedTask.correspondingSubject}</span>
+                      <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}>
+                        <Link2 className="w-4 h-4 flex-shrink-0" /> 
+                        {(() => {
+                          const linkedCorr = correspondences.find(c => c.id === selectedTask.correspondingId);
+                          return selectedTask.correspondingSerialNumber 
+                            || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : selectedTask.correspondingSubject);
+                        })()}
+                      </span>
                     </div>
                   )}
                 </div>
@@ -695,6 +788,212 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                   )}
                 </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      
+      {/* ── Correspondence Details Modal ── */}
+      <AnimatePresence>
+        {selectedCorr && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}
+            onClick={() => setSelectedCorr(null)}
+          >
+            <motion.div
+              initial={{ y: 20, scale: 0.95 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 20, scale: 0.95 }}
+              className="card"
+              style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto', padding: 0, display: 'flex', flexDirection: 'column' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                      background: 'var(--surface-3)',
+                      color: 'var(--text-secondary)',
+                    }}>{selectedCorr.status}</span>
+                    <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                      background: priorityColor[selectedCorr.priority] ? `${priorityColor[selectedCorr.priority]}20` : '#f1f5f9',
+                      color: priorityColor[selectedCorr.priority] || '#475569'
+                    }}>{selectedCorr.priority} Priority</span>
+                    <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                      background: CATEGORY_COLORS[selectedCorr.category]?.bg || '#f1f5f9',
+                      color: CATEGORY_COLORS[selectedCorr.category]?.text || '#475569',
+                      display: 'flex', alignItems: 'center', gap: 4
+                    }}>
+                      {CATEGORY_COLORS[selectedCorr.category]?.icon} {selectedCorr.category}
+                    </span>
+                  </div>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
+                  {selectedCorr.serialNumber && (
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginTop: 4, letterSpacing: '0.02em' }}>
+                      REF: {selectedCorr.serialNumber}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setSelectedCorr(null)} 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <X className="w-6 h-6 text-muted" />
+                </button>
+              </div>
+              
+              {/* Modal Body */}
+              <div style={{ padding: '32px', flex: 1 }}>
+                <div style={{ marginBottom: 32 }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                     <FileText className="w-4 h-4 text-primary" />
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
+                   </div>
+                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: '#334155', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {selectedCorr.body || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No content provided.</span>}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                      <Building2 className="w-4 h-4 text-muted" />
+                      {selectedCorr.sentFrom}
+                    </div>
+                    {selectedCorr.department && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginLeft: 24 }}>{selectedCorr.department}</div>
+                    )}
+                  </div>
+
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Calendar className="w-4 h-4 text-muted" />
+                        Received: {selectedCorr.dateReceived}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorr.deadline) && selectedCorr.status !== 'Closed' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Flag className="w-4 h-4 text-muted" />
+                        Deadline: {selectedCorr.deadline || 'None'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === selectedCorr.assignedToId);
+                        return (
+                          <>
+                            {u?.photoURL ? (
+                              <img src={u.photoURL} className="avatar" style={{ width: 24, height: 24, objectFit: 'cover' }} alt="" />
+                            ) : (
+                              <div style={{ width: 24, height: 24, borderRadius: 0, background: u?.userColor || getUserColor(selectedCorr.assignedToId || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
+                                {selectedCorr.assignedTo?.[0] || '?'}
+                              </div>
+                            )}
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedCorr.assignedTo || 'Unassigned'}</div>
+                              {selectedCorr.assignedAt && (
+                                <div style={{ fontSize: 11, color: '#64748b' }}>Assigned {formatDate(selectedCorr.assignedAt)}</div>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {(selectedCorr.filePaths && selectedCorr.filePaths.length > 0) && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Link2 className="w-4 h-4 text-primary" />
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {selectedCorr.filePaths.map((path, idx) => (
+                        <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{path}</span>
+                          <button 
+                            onClick={() => window.open(path.startsWith('http') ? path : `file:///${path}`, '_blank')}
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '4px 8px', height: 'auto' }}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedCorr.attachedFile && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Paperclip className="w-4 h-4 text-primary" />
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
+                    </div>
+                    <a 
+                      href={selectedCorr.attachedFile} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ 
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: '#eff6ff', 
+                        border: '1px solid #bfdbfe', borderRadius: 0, color: '#1e40af', textDecoration: 'none',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                    >
+                      <div style={{ background: '#fff', padding: 8, borderRadius: 0 }}>
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorr.attachedFileName || 'View Attachment'}</div>
+                        <div style={{ fontSize: 11, opacity: 0.8 }}>Click to open in new tab</div>
+                      </div>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                )}
+
+                {selectedCorr.notes && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Briefcase className="w-4 h-4 text-primary" />
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Internal Notes</h3>
+                    </div>
+                    <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 0, color: '#92400e', fontSize: 14, fontStyle: 'italic' }}>
+                      "{selectedCorr.notes}"
+                    </div>
+                  </div>
+                )}
+                
+                {tasks.find(t => t.correspondingId === selectedCorr.id || t.id === selectedCorr.convertedToTaskId) && (
+                   <button 
+                    className="btn btn-primary w-full" 
+                    style={{ marginTop: 8, gap: 10, height: 48 }}
+                    onClick={() => {
+                      const t = tasks.find(t => t.correspondingId === selectedCorr.id || t.id === selectedCorr.convertedToTaskId);
+                      if (t) {
+                        setSelectedCorr(null);
+                        setSelectedTask(t);
+                      }
+                    }}
+                   >
+                     <Target className="w-4 h-4" /> View Linked Task
+                   </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

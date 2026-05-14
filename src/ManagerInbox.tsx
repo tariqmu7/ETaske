@@ -141,6 +141,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           dueDate: dueDate || selectedCorr.deadline || null,
           correspondingId: selectedCorr.id,
           correspondingSubject: selectedCorr.subject,
+          correspondingSerialNumber: selectedCorr.serialNumber,
           attachedFile: selectedCorr.attachedFile || null,
           attachedFileName: selectedCorr.attachedFileName || null,
           statusUpdate: 'Not Started',

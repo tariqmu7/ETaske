@@ -14,6 +14,7 @@ import TasksDashboard from './TasksDashboard';
 import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
+import ChatBox from './components/ChatBox';
 import { 
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users 
 } from 'lucide-react';
@@ -269,6 +270,9 @@ export default function App() {
           </button>
         )}
       </nav>
+
+      {/* Real-time Chat */}
+      <ChatBox currentUser={appUser} allUsers={projectUsers} />
     </div>
   );
 }

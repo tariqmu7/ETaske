@@ -46,6 +46,7 @@ interface Props {
 
 export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -131,6 +132,15 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       setMilestones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Milestone)));
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'milestones');
+    });
+    return () => unsub();
+  }, [appUser.status]);
+  
+  // Correspondences listener for fallback serial numbers
+  useEffect(() => {
+    if (!appUser || appUser.status !== 'Approved') return;
+    const unsub = onSnapshot(collection(db, 'correspondences'), snap => {
+      setCorrespondences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     });
     return () => unsub();
   }, [appUser.status]);
@@ -1023,7 +1033,16 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     </span>
                                   )}
                                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
-                                  {task.correspondingSubject && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Link2 className="w-3 h-3" /> {task.correspondingSubject}</span>}
+                                  {(task.correspondingSerialNumber || task.correspondingSubject) && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                      <Link2 className="w-3 h-3" /> 
+                                      {(() => {
+                                        const linkedCorr = correspondences.find(c => c.id === task.correspondingId);
+                                        return task.correspondingSerialNumber 
+                                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : task.correspondingSubject);
+                                      })()}
+                                    </span>
+                                  )}
                                   {task.subCategory && (
                                     <span 
                                       onClick={(e) => {

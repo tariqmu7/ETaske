@@ -7,13 +7,13 @@ import {
 import { db, auth } from './lib/firebase';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Corresponding, CorrespondingStatus,
+  AppUser, Corresponding, CorrespondingStatus, Task,
   DEPARTMENT_OPTIONS, PROJECT_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
 import {
-  Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown,
+  Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -89,6 +89,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
+  const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
+  const [tasks, setTasks] = useState<Task[]>([]);
 
   const copyToClipboard = (path: string) => {
     navigator.clipboard.writeText(path);
@@ -111,6 +113,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     });
     return () => unsub();
   }, [appUser]);
+
+  // Load tasks for linking
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'tasks'), snap => {
+      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+    });
+    return () => unsub();
+  }, []);
 
   const filtered = useMemo(() => {
     return items.filter(i => {
@@ -416,7 +426,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                    })()}`,
                  backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? '#fffcf9' : 'var(--surface)'
                }}
-              onClick={() => openModal(item, true)}
+              onClick={() => setSelectedCorrForDetails(item)}
             >
               {/* Top row */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
@@ -491,7 +501,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     Deadline: {item.deadline}
                   </div>
                 )}
-                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12 }}>
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {(() => {
                       const u = projectUsers.find(pu => pu.id === item.userId);
@@ -516,6 +526,16 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       Assigned to: {item.assignedTo}
                     </span>
                   )}
+                  <button 
+                    className="btn btn-ghost btn-sm" 
+                    style={{ marginLeft: 'auto', padding: '2px 8px', height: 'auto', minHeight: 'auto', fontSize: 10, fontWeight: 700 }}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedCorrForDetails(item);
+                    }}
+                  >
+                    FULL DETAILS
+                  </button>
                 </div>
               </div>
             </motion.div>
@@ -1098,6 +1118,207 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                   <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
                   <button className="btn btn-danger" onClick={confirmDelete}>Delete</button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Correspondence Details Modal (Premium) ── */}
+      <AnimatePresence>
+        {selectedCorrForDetails && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}
+            onClick={() => setSelectedCorrForDetails(null)}
+          >
+            <motion.div
+              initial={{ y: 20, scale: 0.95 }}
+              animate={{ y: 0, scale: 1 }}
+              exit={{ y: 20, scale: 0.95 }}
+              className="card"
+              style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto', padding: 0, display: 'flex', flexDirection: 'column' }}
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal Header */}
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+                    <span className={statusBadgeClass(selectedCorrForDetails.status)}>{selectedCorrForDetails.status}</span>
+                    <span className={priorityBadgeClass(selectedCorrForDetails.priority)}>{selectedCorrForDetails.priority} Priority</span>
+                    <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                      background: selectedCorrForDetails.category === 'Project' ? '#dbeafe' : selectedCorrForDetails.category === 'External' ? '#dcfce7' : '#f3e8ff',
+                      color: selectedCorrForDetails.category === 'Project' ? '#1d4ed8' : selectedCorrForDetails.category === 'External' ? '#15803d' : '#6d28d9',
+                      display: 'flex', alignItems: 'center', gap: 4
+                    }}>
+                       {selectedCorrForDetails.category}
+                    </span>
+                  </div>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
+                  {selectedCorrForDetails.serialNumber && (
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginTop: 4, letterSpacing: '0.02em' }}>
+                      REF: {selectedCorrForDetails.serialNumber}
+                    </div>
+                  )}
+                </div>
+                <button 
+                  onClick={() => setSelectedCorrForDetails(null)} 
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16 }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                >
+                  <X className="w-6 h-6 text-muted" />
+                </button>
+              </div>
+              
+              {/* Modal Body */}
+              <div style={{ padding: '32px', flex: 1 }}>
+                <div style={{ marginBottom: 32 }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                     <FileText className="w-4 h-4 text-primary" />
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
+                   </div>
+                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: '#334155', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {selectedCorrForDetails.body || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No content provided.</span>}
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                      <Building2 className="w-4 h-4 text-muted" />
+                      {selectedCorrForDetails.sentFrom}
+                    </div>
+                    {selectedCorrForDetails.department && (
+                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
+                    )}
+                  </div>
+
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Calendar className="w-4 h-4 text-muted" />
+                        Received: {selectedCorrForDetails.dateReceived}
+                      </div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Clock className="w-4 h-4 text-muted" />
+                        Deadline: {selectedCorrForDetails.deadline || 'None'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === selectedCorrForDetails.assignedToId);
+                        return (
+                          <>
+                            {u?.photoURL ? (
+                              <img src={u.photoURL} className="avatar" style={{ width: 24, height: 24, objectFit: 'cover' }} alt="" />
+                            ) : (
+                              <div style={{ width: 24, height: 24, borderRadius: 0, background: u?.userColor || getUserColor(selectedCorrForDetails.assignedToId || ''), display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>
+                                {selectedCorrForDetails.assignedTo?.[0] || '?'}
+                              </div>
+                            )}
+                            <div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedCorrForDetails.assignedTo || 'Unassigned'}</div>
+                              {selectedCorrForDetails.assignedAt && (
+                                <div style={{ fontSize: 11, color: '#64748b' }}>Assigned Recently</div>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                </div>
+
+                {(selectedCorrForDetails.filePaths && selectedCorrForDetails.filePaths.length > 0) && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <ExternalLink className="w-4 h-4 text-primary" />
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {selectedCorrForDetails.filePaths.map((path, idx) => (
+                        <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{path}</span>
+                          <button 
+                            onClick={() => window.open(path.startsWith('http') ? path : `file:///${path}`, '_blank')}
+                            className="btn btn-ghost btn-sm"
+                            style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto' }}
+                          >
+                            <ExternalLink className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedCorrForDetails.attachedFile && (
+                  <div style={{ marginBottom: 32 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                      <Paperclip className="w-4 h-4 text-primary" />
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
+                    </div>
+                    <a 
+                      href={selectedCorrForDetails.attachedFile} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ 
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: '#eff6ff', 
+                        border: '1px solid #bfdbfe', borderRadius: 0, color: '#1e40af', textDecoration: 'none',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
+                      onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                    >
+                      <div style={{ background: '#fff', padding: 8, borderRadius: 0 }}>
+                        <FileText className="w-5 h-5" />
+                      </div>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorrForDetails.attachedFileName || 'View Attachment'}</div>
+                        <div style={{ fontSize: 11, opacity: 0.8 }}>Click to open in new tab</div>
+                      </div>
+                      <ExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                )}
+
+                {tasks.find(t => t.correspondingId === selectedCorrForDetails.id || t.id === selectedCorrForDetails.convertedToTaskId) && (
+                   <button 
+                    className="btn btn-primary w-full" 
+                    style={{ marginTop: 8, gap: 10, height: 48 }}
+                    onClick={() => {
+                      const t = tasks.find(t => t.correspondingId === selectedCorrForDetails.id || t.id === selectedCorrForDetails.convertedToTaskId);
+                      if (t) {
+                        setSelectedCorrForDetails(null);
+                        onNavigate('tasks'); // Corrected from 'Tasks' to match AppView type
+                      }
+                    }}
+                   >
+                     <Edit2 className="w-4 h-4" /> View Linked Task
+                   </button>
+                )}
+                
+                <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
+                  <button 
+                    className="btn btn-ghost w-full" 
+                    onClick={() => {
+                      setSelectedCorrForDetails(null);
+                      openModal(selectedCorrForDetails, false);
+                    }}
+                  >
+                    Edit Correspondence
+                  </button>
+                  <button className="btn btn-ghost w-full" onClick={() => setSelectedCorrForDetails(null)}>Close</button>
                 </div>
               </div>
             </motion.div>

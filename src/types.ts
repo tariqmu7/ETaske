@@ -116,6 +116,7 @@ export interface Task {
   // Traceability (link back to original corresponding)
   correspondingId?: string;
   correspondingSubject?: string;
+  correspondingSerialNumber?: string;
   // Attachments
   attachedFile?: string;
   attachedFileName?: string;
@@ -149,6 +150,15 @@ export interface AppNotification {
   link?: string;              // e.g. '#tasks'
   relatedId?: string;         // correspondingId or taskId
   createdAt: Timestamp;
+}
+
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  receiverId: string;
+  text: string;
+  createdAt: Timestamp;
+  participants: string[]; // [uid1, uid2] sorted
 }
 
 // ─── Select Options ───────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ interface Props {
 
 export default function ArchiveDashboard({ user, appUser, projectUsers }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [search, setSearch] = useState('');
   const [viewingTask, setViewingTask] = useState<Task | null>(null);
@@ -42,6 +43,13 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
     const q = query(collection(db, 'milestones'), orderBy('createdAt', 'asc'));
     const unsub = onSnapshot(q, snap => {
       setMilestones(snap.docs.map(d => ({ id: d.id, ...d.data() } as Milestone)));
+    });
+    return () => unsub();
+  }, []);
+
+  useEffect(() => {
+    const unsub = onSnapshot(collection(db, 'correspondences'), snap => {
+      setCorrespondences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     });
     return () => unsub();
   }, []);
@@ -134,9 +142,14 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
                   {task.assignedTo && <span>👤 {task.assignedTo}</span>}
                   {task.assignedBy && <span>📋 Assigned by {task.assignedBy}</span>}
-                  {task.correspondingSubject && (
+                  {(task.correspondingSerialNumber || task.correspondingSubject) && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <Link2 className="w-3 h-3" /> {task.correspondingSubject}
+                      <Link2 className="w-3 h-3" /> 
+                      {(() => {
+                        const linkedCorr = correspondences.find(c => c.id === task.correspondingId);
+                        return task.correspondingSerialNumber 
+                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : task.correspondingSubject);
+                      })()}
                     </span>
                   )}
                   {task.attachedFile && (
@@ -199,11 +212,16 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 <h3 style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)', marginBottom: 12 }}>{viewingTask.taskName}</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20, lineHeight: 1.6 }}>{viewingTask.description}</p>
 
-                {viewingTask.correspondingSubject && (
+                {(viewingTask.correspondingSerialNumber || viewingTask.correspondingSubject) && (
                   <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 0, padding: 14, marginBottom: 20 }}>
                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Source Corresponding</div>
                     <div style={{ fontSize: 14, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Link2 className="w-4 h-4" /> {viewingTask.correspondingSubject}
+                      <Link2 className="w-4 h-4" /> 
+                      {(() => {
+                        const linkedCorr = correspondences.find(c => c.id === viewingTask.correspondingId);
+                        return viewingTask.correspondingSerialNumber 
+                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : viewingTask.correspondingSubject);
+                      })()}
                     </div>
                   </div>
                 )}
