@@ -14,10 +14,11 @@ import {
 import { getNextSerialNumber } from './lib/counters';
 import {
   Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown,
-  Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag
+  Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
+import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
@@ -62,6 +63,7 @@ const emptyForm = () => ({
   status: 'Unread' as CorrespondingStatus,
   assignedTo: '',
   assignedToId: '',
+  filePaths: [] as string[],
 });
 
 interface Props {
@@ -86,6 +88,13 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [deleteTarget, setDeleteTarget] = useState<Corresponding | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
+  const [copiedPath, setCopiedPath] = useState<string | null>(null);
+
+  const copyToClipboard = (path: string) => {
+    navigator.clipboard.writeText(path);
+    setCopiedPath(path);
+    setTimeout(() => setCopiedPath(null), 2000);
+  };
 
   // Firestore listener
   useEffect(() => {
@@ -152,6 +161,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         attachedFile: item.attachedFile || '', attachedFileName: item.attachedFileName || '',
         serialNumber: item.serialNumber || '', notes: item.notes || '', status: item.status,
         assignedTo: item.assignedTo || '', assignedToId: item.assignedToId || '',
+        filePaths: item.filePaths || [],
       });
     } else {
       setEditing(null);
@@ -776,6 +786,82 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       </select>
                     )}
                   </div>
+
+                  {/* Shared Folder Paths */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <label className="input-label" style={{ marginBottom: 0 }}>Shared Folder Paths (Computer/Local)</label>
+                      {!isViewing && (
+                        <button 
+                          type="button" 
+                          className="btn btn-ghost btn-sm" 
+                          onClick={() => set('filePaths', [...(formData.filePaths || []), ''])}
+                          style={{ fontSize: 11 }}
+                        >
+                          <Plus className="w-3.5 h-3.5" /> Add Path
+                        </button>
+                      )}
+                    </div>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                      {(formData.filePaths || []).map((path, idx) => (
+                        <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                          {isViewing ? (
+                            <div style={{ 
+                              flex: 1, 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: 10, 
+                              padding: '8px 12px', 
+                              background: 'var(--surface-3)', 
+                              border: '1px solid var(--border)',
+                              borderRadius: 0,
+                              fontSize: 13
+                            }}>
+                              <Clock className="w-3.5 h-3.5 text-muted" />
+                              <code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{path || 'Empty path'}</code>
+                              <button 
+                                type="button"
+                                className="btn btn-ghost btn-icon btn-sm"
+                                onClick={() => copyToClipboard(path)}
+                                title="Copy Path"
+                              >
+                                {copiedPath === path ? <Check className="w-3.5 h-3.5 text-green" /> : <Copy className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          ) : (
+                            <>
+                              <input 
+                                className="input" 
+                                style={{ flex: 1, fontSize: 13, fontFamily: 'monospace' }} 
+                                value={path} 
+                                onChange={e => {
+                                  const newPaths = [...formData.filePaths];
+                                  newPaths[idx] = e.target.value;
+                                  set('filePaths', newPaths);
+                                }} 
+                                placeholder="e.g. \\SERVER\Documents\ProjectA" 
+                              />
+                              <button 
+                                type="button" 
+                                className="btn btn-ghost btn-icon" 
+                                onClick={() => {
+                                  const newPaths = formData.filePaths.filter((_, i) => i !== idx);
+                                  set('filePaths', newPaths);
+                                }}
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                      {(formData.filePaths || []).length === 0 && (
+                        <p style={{ fontSize: 12, color: 'var(--text-muted)', fontStyle: 'italic' }}>No folder paths added.</p>
+                      )}
+                    </div>
+                  </div>
+
                   {/* File */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Attachment</label>
@@ -865,6 +951,77 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           </div>
                         )}
                       </>
+                    )}
+                  </div>
+                  {/* Shared Folder Paths */}
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="input-label">Shared Folder Paths (Computer Paths)</label>
+                    {isViewing ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        {formData.filePaths && formData.filePaths.length > 0 ? (
+                          formData.filePaths.map((path, idx) => (
+                            <div key={idx} style={{ 
+                              display: 'flex', 
+                              alignItems: 'center', 
+                              gap: 12, 
+                              padding: '8px 12px', 
+                              background: 'var(--surface-2)', 
+                              border: '1px solid var(--border)',
+                              borderRadius: 0
+                            }}>
+                              <ExternalLink className="w-4 h-4 text-muted" />
+                              <code style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{path}</code>
+                              <button 
+                                type="button" 
+                                className="btn btn-ghost btn-sm" 
+                                onClick={() => {
+                                  navigator.clipboard.writeText(path);
+                                  alert('Path copied to clipboard!');
+                                }}
+                              >
+                                Copy
+                              </button>
+                            </div>
+                          ))
+                        ) : (
+                          <div style={{ fontSize: 14, color: 'var(--text-muted)', fontStyle: 'italic' }}>No folder paths added</div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                        {formData.filePaths.map((path, idx) => (
+                          <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                            <input 
+                              className="input" 
+                              placeholder="e.g. \\server\share\folder or C:\Documents\..." 
+                              value={path}
+                              onChange={e => {
+                                const newPaths = [...formData.filePaths];
+                                newPaths[idx] = e.target.value;
+                                set('filePaths', newPaths);
+                              }}
+                            />
+                            <button 
+                              type="button" 
+                              className="btn btn-danger btn-icon" 
+                              onClick={() => {
+                                const newPaths = formData.filePaths.filter((_, i) => i !== idx);
+                                set('filePaths', newPaths);
+                              }}
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ))}
+                        <button 
+                          type="button" 
+                          className="btn btn-ghost btn-sm" 
+                          style={{ width: 'fit-content', gap: 6 }}
+                          onClick={() => set('filePaths', [...formData.filePaths, ''])}
+                        >
+                          <Plus className="w-4 h-4" /> Add Path
+                        </button>
+                      </div>
                     )}
                   </div>
                   {/* Notes */}

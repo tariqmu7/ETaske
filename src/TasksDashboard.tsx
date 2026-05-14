@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
+import { Copy, Check } from 'lucide-react';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -74,6 +75,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     department: 'None',
     assignedTo: appUser.displayName,
     assignedToId: user.uid,
+    filePaths: [] as string[],
   });
 
   const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
@@ -205,6 +207,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         dueDate: editingTask.dueDate || null,
         assignedTo: editingTask.assignedTo,
         assignedToId: editingTask.assignedToId,
+        filePaths: editingTask.filePaths || [],
         updatedAt: serverTimestamp(),
       });
 
@@ -422,6 +425,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         assignedById: user.uid,
         teamId: appUser.teamId || 'NONE',
         dueDate: newTask.dueDate || null,
+        filePaths: newTask.filePaths || [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -436,6 +440,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         department: 'None',
         assignedTo: appUser.displayName,
         assignedToId: user.uid,
+        filePaths: [],
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
@@ -656,6 +661,44 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     )}
                   </div>
                 </div>
+                {/* Shared Folder Paths */}
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label className="label">Shared Folder Paths (Computer Paths)</label>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {newTask.filePaths.map((path, idx) => (
+                      <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                        <input 
+                          className="input" 
+                          placeholder="e.g. \\server\share\folder or C:\Documents\..." 
+                          value={path}
+                          onChange={e => {
+                            const newPaths = [...newTask.filePaths];
+                            newPaths[idx] = e.target.value;
+                            setNewTask({ ...newTask, filePaths: newPaths });
+                          }}
+                        />
+                        <button 
+                          type="button" 
+                          className="btn btn-danger btn-icon" 
+                          onClick={() => {
+                            const newPaths = newTask.filePaths.filter((_, i) => i !== idx);
+                            setNewTask({ ...newTask, filePaths: newPaths });
+                          }}
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                    <button 
+                      type="button" 
+                      className="btn btn-ghost btn-sm" 
+                      style={{ width: 'fit-content', gap: 6 }}
+                      onClick={() => setNewTask({ ...newTask, filePaths: [...newTask.filePaths, ''] })}
+                    >
+                      <Plus className="w-4 h-4" /> Add Path
+                    </button>
+                  </div>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
                 <button className="btn btn-ghost" onClick={() => setIsAddingTask(false)}>Cancel</button>
@@ -802,6 +845,44 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           </button>
                                         </div>
                                       )}
+                                    </div>
+                                </div>
+                                {/* Shared Folder Paths */}
+                                <div style={{ gridColumn: 'span 2' }}>
+                                    <label className="label">Shared Folder Paths (Computer Paths)</label>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                                      {(editingTask.filePaths || []).map((path, idx) => (
+                                        <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                                          <input 
+                                            className="input" 
+                                            placeholder="e.g. \\server\share\folder or C:\Documents\..." 
+                                            value={path}
+                                            onChange={e => {
+                                              const newPaths = [...(editingTask.filePaths || [])];
+                                              newPaths[idx] = e.target.value;
+                                              setEditingTask({ ...editingTask, filePaths: newPaths });
+                                            }}
+                                          />
+                                          <button 
+                                            type="button" 
+                                            className="btn btn-danger btn-icon" 
+                                            onClick={() => {
+                                              const newPaths = (editingTask.filePaths || []).filter((_, i) => i !== idx);
+                                              setEditingTask({ ...editingTask, filePaths: newPaths });
+                                            }}
+                                          >
+                                            <X className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      ))}
+                                      <button 
+                                        type="button" 
+                                        className="btn btn-ghost btn-sm" 
+                                        style={{ width: 'fit-content', gap: 6 }}
+                                        onClick={() => setEditingTask({ ...editingTask, filePaths: [...(editingTask.filePaths || []), ''] })}
+                                      >
+                                        <Plus className="w-4 h-4" /> Add Path
+                                      </button>
                                     </div>
                                   </div>
                                 </div>
@@ -968,39 +1049,39 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     }}>
                                       {(task.attachedFile.includes('image') || task.attachedFile.includes('google.com')) ? (
                                         <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                          <img 
-                                            src={getGoogleDrivePreviewUrl(task.attachedFile)} 
-                                            alt="Attachment" 
-                                            style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
-                                            onLoad={(e) => (e.target as HTMLImageElement).style.opacity = '1'}
-                                            onError={(e) => {
-                                              (e.target as HTMLImageElement).style.display = 'none';
-                                              (e.target as HTMLImageElement).parentElement!.style.height = '120px';
-                                            }}
-                                          />
-                                          <div style={{ 
-                                            position: 'absolute', 
-                                            bottom: 0, 
-                                            left: 0, 
-                                            right: 0, 
-                                            padding: '16px 20px', 
-                                            background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
-                                            display: 'flex', 
-                                            justifyContent: 'space-between', 
-                                            alignItems: 'center',
-                                            backdropFilter: 'blur(4px)'
-                                          }}>
-                                            <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
-                                            <a 
-                                              href={task.attachedFile} 
-                                              target="_blank" 
-                                              rel="noopener noreferrer" 
-                                              className="btn btn-sm"
-                                              style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
-                                            >
-                                              <ExternalLink className="w-3.5 h-3.5" /> Full View
-                                            </a>
-                                          </div>
+                                              <img 
+                                                src={getGoogleDrivePreviewUrl(task.attachedFile)} 
+                                                alt="Attachment" 
+                                                style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
+                                                onLoad={(e) => (e.target as HTMLImageElement).style.opacity = '1'}
+                                                onError={(e) => {
+                                                  (e.target as HTMLImageElement).style.display = 'none';
+                                                  (e.target as HTMLImageElement).parentElement!.style.height = '120px';
+                                                }}
+                                              />
+                                              <div style={{ 
+                                                position: 'absolute', 
+                                                bottom: 0, 
+                                                left: 0, 
+                                                right: 0, 
+                                                padding: '16px 20px', 
+                                                background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)', 
+                                                display: 'flex', 
+                                                justifyContent: 'space-between', 
+                                                alignItems: 'center',
+                                                backdropFilter: 'blur(4px)'
+                                              }}>
+                                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
+                                                <a 
+                                                  href={task.attachedFile} 
+                                                  target="_blank" 
+                                                  rel="noopener noreferrer" 
+                                                  className="btn btn-sm"
+                                                  style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
+                                                >
+                                                  <ExternalLink className="w-3.5 h-3.5" /> Full View
+                                                </a>
+                                              </div>
                                         </div>
                                       ) : (
                                         <div style={{ padding: '16px 20px', display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -1021,6 +1102,40 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           </a>
                                         </div>
                                       )}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Shared Folder Paths Display */}
+                                {isExpanded && task.filePaths && task.filePaths.length > 0 && (
+                                  <div style={{ marginTop: 24 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>Shared Folder Paths</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                      {task.filePaths.map((path, idx) => (
+                                        <div key={idx} style={{ 
+                                          display: 'flex', 
+                                          alignItems: 'center', 
+                                          gap: 12, 
+                                          padding: '8px 12px', 
+                                          background: 'var(--surface-2)', 
+                                          border: '1px solid var(--border)',
+                                          borderRadius: 0
+                                        }}>
+                                          <ExternalLink className="w-4 h-4 text-muted" />
+                                          <code style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{path}</code>
+                                          <button 
+                                            type="button" 
+                                            className="btn btn-ghost btn-sm" 
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              navigator.clipboard.writeText(path);
+                                              alert('Path copied to clipboard!');
+                                            }}
+                                          >
+                                            Copy
+                                          </button>
+                                        </div>
+                                      ))}
                                     </div>
                                   </div>
                                 )}
@@ -1175,11 +1290,11 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     );
                   })}
                 </AnimatePresence>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+               </div>
+             </div>
+           );
+         })}
+       </div>
 
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24, padding: '12px 0', borderTop: '1px solid var(--border)' }}>

@@ -42,6 +42,7 @@ export interface Corresponding {
   attachedFile?: string;
   attachedFileName?: string;
   serialNumber?: string;
+  filePaths?: string[];         // New: list of local/share folder paths
   // Workflow
   status: CorrespondingStatus;
   assignedTo?: string;          // employee displayName
@@ -119,6 +120,7 @@ export interface Task {
   attachedFile?: string;
   attachedFileName?: string;
   serialNumber?: string;
+  filePaths?: string[];         // New: list of local/share folder paths
   // Meta
   userId: string;
   teamId: string;
