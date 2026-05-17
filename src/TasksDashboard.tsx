@@ -1184,7 +1184,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                   exit={{ height: 0, opacity: 0 }}
                                   style={{ overflow: 'hidden' }}
                                 >
-                                  <div style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingLeft: 62 }}>
+                                  <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingLeft: 62 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                       <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                                         <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 6 }} />
@@ -1201,8 +1201,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     </div>
 
                                     {newMilestone?.taskId === task.id && (
-                                      <div style={{ background: 'var(--surface-2)', borderRadius: 0, padding: 16, marginBottom: 14, border: '1px solid var(--border)' }}>
-                                        <div style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
+                                      <div className="ms-addform" style={{ background: 'var(--surface-2)', borderRadius: 0, padding: 16, marginBottom: 14, border: '1px solid var(--border)' }}>
+                                        <div className="ms-addform-row" style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                                           <input
                                             className="input"
                                             placeholder="Milestone title…"
@@ -1232,7 +1232,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }} className="milestone-line">
                                         {taskMilestones.map((ms, i) => (
-                                          <div key={ms.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start', position: 'relative', paddingLeft: 28 }}>
+                                          <div key={ms.id} className="ms-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', position: 'relative', paddingLeft: 28 }}>
                                             <div style={{
                                               position: 'absolute', left: 8, top: 6,
                                               width: 10, height: 10, borderRadius: 0,
@@ -1241,15 +1241,16 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                               zIndex: 1,
                                             }} />
                                             <div style={{ flex: 1, background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
-                                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                <span style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>
+                                              <div className="ms-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                                                <span className="ms-title" style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>
                                                   {ms.title}
                                                 </span>
-                                                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                                                  <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
+                                                <div className="ms-card-ctrls" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                                                  <div className="ms-status-seg" style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
                                                     {MILESTONE_STATUS_OPTIONS.map(s => (
                                                       <button
                                                         key={s}
+                                                        className="ms-status-btn"
                                                         onClick={(e) => {
                                                           e.stopPropagation();
                                                           if (ms.status !== s) handleUpdateMilestoneStatus(ms.id, s as MilestoneStatus);
@@ -1271,7 +1272,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                     ))}
                                                   </div>
                                                   {canEdit && (
-                                                    <button onClick={() => handleDeleteMilestone(ms.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
+                                                    <button className="ms-del-btn" onClick={() => handleDeleteMilestone(ms.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
                                                       <Trash2 className="w-3.5 h-3.5" />
                                                     </button>
                                                   )}
@@ -1288,7 +1289,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     )}
 
                                     {canEdit && task.status !== 'Done' && (
-                                      <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                                      <div className="ms-task-actions" style={{ marginTop: 16, display: 'flex', gap: 8 }}>
                                         {(['In Progress', 'Done'] as TaskStatus[]).map(s => (
                                           <button
                                             key={s}

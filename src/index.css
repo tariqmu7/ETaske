@@ -256,13 +256,14 @@ body {
   background: var(--surface-2) !important;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 768px) {
   .notif-dropdown {
     position: fixed;
     top: var(--topnav-h);
     left: 12px;
     right: 12px;
     width: auto;
+    max-width: none;
     max-height: 80vh;
   }
 }
@@ -657,4 +658,175 @@ h1, h2, h3, h4, p, span, div {
   font-weight: 600;
   background: var(--blue-50);
   color: var(--blue-700);
+}
+
+/* ─── Floating chat launcher ─────────────────────── */
+/* Position lives here (not inline) so the mobile media
+   query below can lift it clear of the bottom nav. */
+.chat-fab-wrap {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+}
+
+/* ════════════════════════════════════════════════════
+   Mobile UX enhancements (phone view, ≤768px)
+   Overrides use !important only where they must beat
+   component inline styles; desktop is left untouched.
+   ════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* ── Top bar: tighter, flat icon actions ── */
+  .topnav { padding: 0 10px; gap: 4px; }
+
+  .topnav-user {
+    gap: 2px !important;
+    margin-left: 0;
+  }
+
+  .topnav-user .btn-icon {
+    border-color: transparent !important;
+    background: transparent;
+    width: 42px;
+    height: 42px;
+    min-height: 42px;
+    padding: 0;
+  }
+  .topnav-user .btn-icon:active { background: var(--surface-3); }
+
+  .logout-btn {
+    border-color: transparent;
+    background: transparent;
+    padding: 9px;
+    min-height: 42px;
+  }
+  .logout-btn:active { background: rgba(239,68,68,0.12); }
+
+  .topnav-avatar,
+  .topnav-avatar-placeholder { width: 32px; height: 32px; }
+
+  /* ── Bottom nav: scrollable, clear active state ── */
+  /* flex:1 lets tabs fill the bar when they fit; the
+     min-width + no-shrink makes the bar scroll instead
+     of squashing labels once Archive/Users are added. */
+  .bottom-nav {
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    scrollbar-width: none;
+  }
+  .bottom-nav::-webkit-scrollbar { display: none; }
+
+  .bottom-tab {
+    flex: 1 0 auto;
+    min-width: 78px;
+    gap: 3px;
+    padding: 8px 4px;
+    position: relative;
+  }
+  .bottom-tab svg { width: 22px; height: 22px; }
+  .bottom-tab span {
+    white-space: nowrap;
+    font-size: 10px;
+    line-height: 1.1;
+  }
+  .bottom-tab.active {
+    background: linear-gradient(to bottom, rgba(37,99,235,0.07), transparent);
+  }
+  .bottom-tab.active::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 22%;
+    right: 22%;
+    height: 3px;
+    background: var(--blue-600);
+  }
+
+  /* ── Chat: lift clear of the bottom nav, fit screen ── */
+  .chat-fab-wrap {
+    bottom: calc(var(--bottomnav-h) + var(--safe-area-bottom) + 16px);
+    right: 16px;
+  }
+  .chat-panel {
+    width: min(360px, calc(100vw - 24px)) !important;
+    /* Clears the FAB + bottom nav below and the sticky top bar above. */
+    height: min(500px, calc(100vh - var(--topnav-h) - var(--bottomnav-h) - var(--safe-area-bottom) - 110px)) !important;
+  }
+
+  /* ── Overview dashboard: reclaim vertical space ── */
+  .ov-header { margin-bottom: 14px !important; gap: 10px !important; }
+  .ov-title { font-size: 22px !important; }
+  .ov-subtitle { font-size: 13px !important; }
+  .ov-datefilter { width: 100%; }
+  .ov-datefilter .input {
+    flex: 1;
+    width: 100% !important;
+  }
+  .ov-duesoon {
+    padding: 14px !important;
+    margin-bottom: 18px !important;
+  }
+  .ov-cat-grid {
+    gap: 12px !important;
+    margin-top: 16px !important;
+  }
+  .cat-card-head { padding: 16px !important; }
+  .cat-card-body {
+    padding: 16px !important;
+    gap: 12px !important;
+  }
+
+  /* ── Expanded task body: reclaim the wasted left gutter ──
+     Desktop indents milestones under the task header with a
+     62px left pad; on a phone that gutter is most of the row,
+     which is what crushes the status selector. The timeline
+     line/markers are positioned within .milestone-line, so
+     shrinking the outer pad keeps them aligned. */
+  .task-expand {
+    padding: 14px 14px 16px 16px !important;
+  }
+
+  /* Add-milestone form: stack title over the date picker
+     instead of fighting for a 160px column on a phone. */
+  .ms-addform-row { flex-direction: column; }
+  .ms-addform-row .input[type="date"] {
+    width: 100% !important;
+  }
+
+  /* ── Milestone card: title on its own line, the segmented
+     status control gets a full-width row of its own so the
+     labels stop wrapping a letter at a time. ── */
+  .ms-card-head {
+    flex-direction: column;
+    align-items: stretch !important;
+    gap: 8px;
+  }
+  .ms-card-ctrls {
+    justify-content: space-between;
+    gap: 8px !important;
+  }
+  .ms-status-seg {
+    flex: 1;
+    min-width: 0;
+  }
+  .ms-status-btn {
+    flex: 1 1 0;
+    min-width: 0;
+    white-space: nowrap;
+    padding: 7px 4px !important;
+    font-size: 11px !important;
+    line-height: 1.1;
+  }
+
+  /* Bigger, finger-sized delete + task-action targets. */
+  .ms-del-btn {
+    padding: 8px !important;
+    flex-shrink: 0;
+  }
+  .ms-task-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
 }

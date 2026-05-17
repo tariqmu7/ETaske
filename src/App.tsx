@@ -245,32 +245,28 @@ export default function App() {
         )}
       </main>
 
-      {/* Mobile Bottom Navigation */}
+      {/* Mobile Bottom Navigation — mirrors the desktop top nav
+          (Archive included; the bar scrolls when it overflows). */}
       <nav className="bottom-nav">
-        {(appUser.role === 'Admin' || appUser.role === 'Manager') && (
-          <button className={`bottom-tab${activeView === 'overview' ? ' active' : ''}`} onClick={() => setActiveView('overview')}>
-            <BarChart3 />
-            <span>Overview</span>
-          </button>
-        )}
-        <button className={`bottom-tab${activeView === 'correspondences' ? ' active' : ''}`} onClick={() => setActiveView('correspondences')}>
-          <MailOpen />
-          <span>Correspondences</span>
-        </button>
-        <button className={`bottom-tab${activeView === 'manager-inbox' ? ' active' : ''}`} onClick={() => setActiveView('manager-inbox')}>
-          <Inbox />
-          <span>Inbox</span>
-        </button>
-        <button className={`bottom-tab${activeView === 'tasks' ? ' active' : ''}`} onClick={() => setActiveView('tasks')}>
-          <CheckSquare />
-          <span>Tasks</span>
-        </button>
-        {appUser.role === 'Admin' && (
-          <button className={`bottom-tab${activeView === 'admin' ? ' active' : ''}`} onClick={() => setActiveView('admin')}>
-            <Users />
-            <span>Users</span>
-          </button>
-        )}
+        {([
+          { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
+          { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
+          { id: 'manager-inbox',   label: 'Inbox',           icon: <Inbox />,       show: true },
+          { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
+          { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
+          { id: 'admin',           label: 'Users',           icon: <Users />,       show: appUser.role === 'Admin' },
+        ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
+          .filter(item => item.show)
+          .map(item => (
+            <button
+              key={item.id}
+              className={`bottom-tab${activeView === item.id ? ' active' : ''}`}
+              onClick={() => setActiveView(item.id)}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
       </nav>
 
       {/* Real-time Chat */}

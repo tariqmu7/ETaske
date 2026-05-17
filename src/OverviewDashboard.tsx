@@ -402,13 +402,13 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
   return (
     <div style={{ padding: '4px 0', minHeight: '60vh', position: 'relative' }}>
       {/* Stats Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
+      <div className="ov-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
-          <p style={{ color: '#64748b', fontSize: 14 }}>Real-time stats and task monitoring.</p>
+          <h1 className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
+          <p className="ov-subtitle" style={{ color: '#64748b', fontSize: 14 }}>Real-time stats and task monitoring.</p>
         </div>
-        
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+
+        <div className="ov-datefilter" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
           <input 
             type="date" 
             className="input" 
@@ -427,8 +427,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
       {/* ── Due Soon Alerts Section ── */}
       {dueSoonItems.length > 0 && selectedCategory === null && (
-        <motion.div 
-          initial={{ opacity: 0, y: -10 }} 
+        <motion.div
+          className="ov-duesoon"
+          initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           style={{ marginBottom: 32, background: '#fff7ed', border: '1px solid #ffedd5', padding: '20px', borderRadius: 0 }}
         >
@@ -483,7 +484,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
       {selectedCategory === null ? (
         /* ── Category Grid View ── */
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
+        <div className="ov-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
           {['Project', 'Internal', 'External'].map(cat => {
             const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Internal;
             const s = categoryStats[cat];
@@ -496,7 +497,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div style={{ padding: '24px', background: catStyle.bg, borderBottom: `1px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="cat-card-head" style={{ padding: '24px', background: catStyle.bg, borderBottom: `1px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ color: catStyle.text, padding: 12, background: 'rgba(255,255,255,0.5)', borderRadius: 0 }}>
                     {catStyle.icon}
                   </div>
@@ -505,7 +506,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>Category</span>
                   </div>
                 </div>
-                <div style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="cat-card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div 
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', margin: '-8px', borderRadius: 0, transition: 'background 0.2s' }}
                     onClick={(e) => {

@@ -144,10 +144,11 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
   };
 
   return (
-    <div style={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+    <div className="chat-fab-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            className="chat-panel"
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.95 }}
