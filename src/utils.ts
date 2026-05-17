@@ -61,18 +61,28 @@ export const getGoogleDrivePreviewUrl = (url: string): string => {
   return url;
 };
 
+// Parse a deadline string into a Date.
+// A date-only string ("YYYY-MM-DD") is interpreted as the END of that
+// calendar day in the user's LOCAL timezone. `new Date('YYYY-MM-DD')` would
+// parse as UTC midnight, which then shifts to the previous day for users
+// behind UTC (off-by-one overdue/due-soon). Strings carrying a time
+// component fall through to the native parser, which handles ISO correctly.
+const parseDeadline = (deadlineStr: string): Date => {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(deadlineStr);
+  if (dateOnly) {
+    const [, y, m, d] = dateOnly;
+    return new Date(Number(y), Number(m) - 1, Number(d), 23, 59, 59, 999);
+  }
+  return new Date(deadlineStr);
+};
+
 export const isOverdue = (deadlineStr?: string): boolean => {
   if (!deadlineStr) return false;
-  const d = new Date(deadlineStr);
-  // Set to end of day for overdue check if only date is provided
-  if (deadlineStr.length <= 10) d.setHours(23, 59, 59);
-  return d < new Date();
+  return parseDeadline(deadlineStr) < new Date();
 };
 
 export const isDueSoon = (deadlineStr?: string, hours: number = 48): boolean => {
   if (!deadlineStr) return false;
-  const deadline = new Date(deadlineStr);
-  const now = new Date();
-  const diff = deadline.getTime() - now.getTime();
+  const diff = parseDeadline(deadlineStr).getTime() - Date.now();
   return diff > 0 && diff <= hours * 60 * 60 * 1000;
 };
