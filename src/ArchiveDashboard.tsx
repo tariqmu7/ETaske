@@ -5,7 +5,7 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { User } from 'firebase/auth';
-import { AppUser, Task, Milestone, OperationType } from './types';
+import { AppUser, Task, Corresponding, Milestone, OperationType } from './types';
 import {
   Archive, Search, Filter, ChevronDown, CheckCircle2, Calendar,
   Link2, Target, X, AlertCircle, Eye, TrendingUp, Paperclip, Download
@@ -49,7 +49,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'correspondences'), snap => {
-      setCorrespondences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
+      setCorrespondences(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     });
     return () => unsub();
   }, []);

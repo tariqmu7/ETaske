@@ -117,7 +117,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   // Load tasks for linking
   useEffect(() => {
     const unsub = onSnapshot(collection(db, 'tasks'), snap => {
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+      setTasks(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Task)));
     });
     return () => unsub();
   }, []);

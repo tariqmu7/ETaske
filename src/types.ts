@@ -134,7 +134,11 @@ export interface Task {
 export type NotificationType =
   | 'new_corresponding'
   | 'corresponding_assigned'
+  | 'correspondence_added'
+  | 'correspondence_updated'
   | 'task_assigned'
+  | 'task_updated'
+  | 'task_status_updated'
   | 'milestone_added'
   | 'task_done'
   | 'task_overdue';

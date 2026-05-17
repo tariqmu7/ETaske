@@ -26,7 +26,9 @@ export async function getNextSerialNumber(type: 'tasks' | 'correspondences'): Pr
     return `${prefix}${nextVal.toString().padStart(6, '0')}`;
   } catch (error) {
     console.error('Error generating serial number:', error);
-    // Fallback if transaction fails
-    return `${prefix}${Math.floor(Math.random() * 1000000).toString().padStart(6, '0')}`;
+    // Do NOT fall back to a random number: it silently breaks serial
+    // uniqueness and the sequence. Propagate so the caller aborts the
+    // create and surfaces a save error to the user instead.
+    throw error;
   }
 }

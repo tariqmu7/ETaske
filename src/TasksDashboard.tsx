@@ -140,7 +140,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   useEffect(() => {
     if (!appUser || appUser.status !== 'Approved') return;
     const unsub = onSnapshot(collection(db, 'correspondences'), snap => {
-      setCorrespondences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
+      setCorrespondences(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     });
     return () => unsub();
   }, [appUser.status]);
@@ -268,7 +268,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     try {
       const update: any = { status, updatedAt: serverTimestamp() };
       const task = tasks.find(t => t.id === taskId);
-      
+
+      // Perform the announced write first so a failed update never
+      // produces a false "status updated" notification.
+      await updateDoc(doc(db, 'tasks', taskId), update);
+
+      if (status === 'Done' && task?.correspondingId) {
+        await updateDoc(doc(db, 'correspondences', task.correspondingId), {
+          status: 'Closed',
+          updatedAt: serverTimestamp()
+        });
+      }
+
       if (task && task.assignedById && task.assignedById !== user.uid) {
         await addDoc(collection(db, 'notifications'), {
           type: 'task_status_updated',
@@ -280,16 +291,6 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           createdAt: serverTimestamp(),
         });
       }
-
-      if (status === 'Done') {
-        if (task?.correspondingId) {
-          await updateDoc(doc(db, 'correspondences', task.correspondingId), {
-            status: 'Closed',
-            updatedAt: serverTimestamp()
-          });
-        }
-      }
-      await updateDoc(doc(db, 'tasks', taskId), update);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
       setError('Failed to update status.');

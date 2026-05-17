@@ -176,10 +176,12 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
       setError('Failed to update assignment. Check permissions.');
-    } finally {
-      setIsAssigning(true); // Wait for snapshot before clearing
-      setTimeout(() => setIsAssigning(false), 800);
+      setIsAssigning(false); // re-enable so the manager can retry
+      return;
     }
+    // Success: keep the button briefly disabled so the live snapshot
+    // refreshes the inbox before it becomes interactive again.
+    setTimeout(() => setIsAssigning(false), 800);
   };
 
   return (

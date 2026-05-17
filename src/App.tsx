@@ -50,7 +50,9 @@ export default function App() {
             });
           } else {
             await updateDoc(userRef, {
-              displayName: currentUser.displayName || snap.data().displayName || 'Unknown User',
+              // Stored name wins: a user's custom name (set in UsernameSetupScreen)
+              // must not be reverted to their auth-provider name on every login.
+              displayName: snap.data().displayName || currentUser.displayName || 'Unknown User',
               photoURL: currentUser.photoURL || snap.data().photoURL || '',
               ...(isAdmin && snap.data().role !== 'Admin' ? { role: 'Admin', status: 'Approved' } : {}),
               lastSeen: serverTimestamp(),
@@ -150,12 +152,12 @@ export default function App() {
     };
 
     const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
-      taskCount = checkDueSoon(snap.docs.map(d => d.data()), 'dueDate');
+      taskCount = checkDueSoon(snap.docs.filter(d => d.id !== '--stats--').map(d => d.data()), 'dueDate');
       setDueSoonCount(taskCount + corrCount);
     });
 
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
-      corrCount = checkDueSoon(snap.docs.map(d => d.data()), 'deadline');
+      corrCount = checkDueSoon(snap.docs.filter(d => d.id !== '--stats--').map(d => d.data()), 'deadline');
       setDueSoonCount(taskCount + corrCount);
     });
 
