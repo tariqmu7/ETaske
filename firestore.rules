@@ -2,56 +2,150 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // ─── Helpers ──────────────────────────────────────────────────────────────
+    // status/role live in the users doc (no backend = no custom claims), so role
+    // gating costs one cached get() of the caller's own user doc per request.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdminEmail() {
+      // Matches the hardcoded admin in src/App.tsx — keep both in sync.
+      return isSignedIn() && request.auth.token.email == 'tarekmoh123@gmail.com';
+    }
+    function userData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isApproved() {
+      // Missing user doc -> userData() errors -> denies (intended: not approved).
+      return isAdminEmail() || (isSignedIn() && userData().status == 'Approved');
+    }
+    function isManagerOrAdmin() {
+      return isAdminEmail() ||
+        (isSignedIn() && userData().status == 'Approved' &&
+         userData().role in ['Manager', 'Admin']);
+    }
+
     // Default: deny everything
     match /{document=**} {
       allow read, write: if false;
     }
 
     // ─── Users ────────────────────────────────────────────────────────────────
-    // Any logged-in user can read user profiles (needed for assignment lists)
+    // Any signed-in user can read profiles (assignment lists; own pending status
+    // before approval). Reading is intentionally broad — see RULES-NOTES.md.
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null && request.auth.uid == userId;
-      allow update: if request.auth != null && (
-        request.auth.uid == userId ||
-        request.auth.token.email == 'tarekmoh123@gmail.com'
+      allow read: if isSignedIn();
+
+      // Self-signup is only allowed as a Pending Employee. The hardcoded admin
+      // may bootstrap its own Admin/Approved doc. This blocks an attacker from
+      // self-granting Admin/Approved at create time.
+      allow create: if isSignedIn() && request.auth.uid == userId && (
+        isAdminEmail() ||
+        (request.resource.data.status == 'Pending' &&
+         request.resource.data.role == 'Employee')
       );
-      allow delete: if request.auth.token.email == 'tarekmoh123@gmail.com';
+
+      // Admin may change anything (approve/reject/promote). A user may edit their
+      // own profile but may NOT change their own role or status — closes the
+      // self-escalation hole (a Pending user promoting itself to Admin/Approved).
+      allow update: if isSignedIn() && (
+        isAdminEmail() ||
+        (request.auth.uid == userId &&
+         request.resource.data.role == resource.data.role &&
+         request.resource.data.status == resource.data.status)
+      );
+
+      allow delete: if isAdminEmail();
+    }
+
+    // ─── Serial-number counters ───────────────────────────────────────────────
+    // tasks/--stats-- and correspondences/--stats-- (src/lib/counters.ts).
+    // Increment-only: cannot be reset, decremented, skewed, or deleted.
+    match /tasks/--stats-- {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+        request.resource.data.keys().hasOnly(['value']) &&
+        request.resource.data.value == 1;
+      allow update: if isApproved() &&
+        request.resource.data.keys().hasOnly(['value']) &&
+        request.resource.data.value == resource.data.value + 1;
+      allow delete: if false;
+    }
+    match /correspondences/--stats-- {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+        request.resource.data.keys().hasOnly(['value']) &&
+        request.resource.data.value == 1;
+      allow update: if isApproved() &&
+        request.resource.data.keys().hasOnly(['value']) &&
+        request.resource.data.value == resource.data.value + 1;
+      allow delete: if false;
     }
 
     // ─── Correspondences ──────────────────────────────────────────────────────
     match /correspondences/{id} {
-      allow read, write: if request.auth != null;
+      allow read: if isApproved();
+      allow create: if isApproved() && id != '--stats--' &&
+        request.resource.data.userId == request.auth.uid;
+      allow update: if isApproved() && id != '--stats--' && (
+        isManagerOrAdmin() || resource.data.userId == request.auth.uid
+      );
+      allow delete: if isManagerOrAdmin() && id != '--stats--';
     }
 
     // ─── Tasks ────────────────────────────────────────────────────────────────
     match /tasks/{taskId} {
-      allow read, write: if request.auth != null;
+      allow read: if isApproved();
+      allow create: if isApproved() && taskId != '--stats--' &&
+        request.resource.data.assignedById == request.auth.uid;
+      allow update: if isApproved() && taskId != '--stats--' && (
+        isManagerOrAdmin() ||
+        resource.data.assignedToId == request.auth.uid ||
+        resource.data.assignedById == request.auth.uid
+      );
+      allow delete: if isManagerOrAdmin() && taskId != '--stats--';
     }
 
     // ─── Milestones ───────────────────────────────────────────────────────────
+    // No teamId on milestones; scope by author or the parent task's assignee.
     match /milestones/{id} {
-      allow read, write: if request.auth != null;
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+        request.resource.data.addedById == request.auth.uid;
+      allow update, delete: if isApproved() && (
+        isManagerOrAdmin() ||
+        resource.data.addedById == request.auth.uid ||
+        get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assignedToId == request.auth.uid
+      );
     }
 
     // ─── Notifications ────────────────────────────────────────────────────────
+    // Readable only by the recipient (or admin). Any approved user may create a
+    // notification addressed to another user. The recipient may only flip `read`.
     match /notifications/{id} {
-      allow read, write: if request.auth != null;
+      allow read: if isApproved() && (
+        isAdminEmail() || resource.data.forUserId == request.auth.uid
+      );
+      allow create: if isApproved();
+      allow update: if isApproved() &&
+        resource.data.forUserId == request.auth.uid &&
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow delete: if isAdminEmail();
     }
 
     // ─── Chat Messages ────────────────────────────────────────────────────────
     match /messages/{id} {
-      allow read: if request.auth != null && (
+      allow read: if isSignedIn() && (
         request.auth.uid in resource.data.participants ||
         request.auth.uid == resource.data.receiverId ||
         request.auth.uid == resource.data.senderId
       );
-      allow create: if request.auth != null && request.auth.uid in request.resource.data.participants;
+      allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
       // Allow receiver to mark as read
-      allow update: if request.auth != null && request.auth.uid == resource.data.receiverId
+      allow update: if isSignedIn() && request.auth.uid == resource.data.receiverId
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
       allow delete: if false;
     }
   }
 }
-// Force upload by changing hash 1
+// Force upload by changing hash 2
