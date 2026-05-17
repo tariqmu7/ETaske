@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Local Firestore data dumps — real production data (PII). Never commit.
+backups/
