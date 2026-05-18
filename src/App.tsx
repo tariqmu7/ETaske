@@ -15,6 +15,7 @@ import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
 import ChatBox from './components/ChatBox';
+import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone
@@ -327,7 +328,10 @@ export default function App() {
       </nav>
 
       {/* Real-time Chat */}
-      <ChatBox currentUser={appUser} allUsers={projectUsers} />
+      <ChatBox currentUser={appUser} allUsers={projectUsers} onNavigate={setActiveView} />
+
+      {/* Soft re-sync after a long idle gap (no hard reload) */}
+      <IdleResyncBanner />
     </div>
   );
 }

@@ -12,6 +12,7 @@ import {
   CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
+import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
@@ -50,6 +51,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [pendingOpenTaskId, setPendingOpenTaskId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -246,6 +248,24 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       }, 120);
     });
   };
+
+  // Deep-link: a task shared in chat (src/lib/deepLink.ts). The request may
+  // arrive before this view is mounted or before `tasks` has loaded, so we
+  // stash the id and act on it once the matching task is in the list.
+  useEffect(() => {
+    const initial = consumePending('task');
+    if (initial) setPendingOpenTaskId(initial);
+    return subscribeOpen(ref => {
+      if (ref.type === 'task') setPendingOpenTaskId(ref.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpenTaskId) return;
+    if (!tasks.some(t => t.id === pendingOpenTaskId)) return; // wait for data
+    handleOpenTask(pendingOpenTaskId);
+    setPendingOpenTaskId(null);
+  }, [pendingOpenTaskId, tasks]);
 
   const handleUpdateTask = async () => {
     if (!editingTask || !editingTask.taskName.trim()) return;

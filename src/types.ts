@@ -165,6 +165,12 @@ export interface ChatMessage {
   participants: string[]; // [uid1, uid2] sorted
   read: boolean;
   readAt?: Timestamp;     // when the receiver opened/saw it
+  // Optional reference to a Task / Correspondence shared in the chat so the
+  // recipient can jump straight to it (see src/lib/deepLink.ts).
+  refType?: 'task' | 'corresponding';
+  refId?: string;
+  refLabel?: string;      // taskName / subject snapshot for display
+  refSerial?: string;     // serial number snapshot (e.g. TK000001 / CR000001)
 }
 
 // ─── Announcements (department broadcast) ─────────────────────────────────────

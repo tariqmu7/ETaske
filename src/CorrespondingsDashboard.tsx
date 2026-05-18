@@ -12,6 +12,7 @@ import {
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
+import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
@@ -91,6 +92,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const itemsPerPage = 20;
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
+  const [pendingOpenCorrId, setPendingOpenCorrId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const copyToClipboard = (path: string) => {
@@ -114,6 +116,24 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     });
     return () => unsub();
   }, [appUser]);
+
+  // Deep-link: a correspondence shared in chat (src/lib/deepLink.ts). Stash the
+  // id until it has loaded, then open its detail modal.
+  useEffect(() => {
+    const initial = consumePending('corresponding');
+    if (initial) setPendingOpenCorrId(initial);
+    return subscribeOpen(ref => {
+      if (ref.type === 'corresponding') setPendingOpenCorrId(ref.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpenCorrId) return;
+    const found = items.find(i => i.id === pendingOpenCorrId);
+    if (!found) return; // wait for data
+    setSelectedCorrForDetails(found);
+    setPendingOpenCorrId(null);
+  }, [pendingOpenCorrId, items]);
 
   // Department scoping: an Admin sees every correspondence. A Manager or
   // Employee only sees correspondences whose *creator* is in the same
