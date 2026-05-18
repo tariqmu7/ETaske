@@ -649,7 +649,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div>
                   <label className="label">Priority</label>
-                  <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value })}>
+                  <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Corresponding['priority'] })}>
                     {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
                   </select>
                 </div>

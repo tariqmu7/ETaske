@@ -2,9 +2,93 @@ import React, { useState } from 'react';
 import { AppUser } from './types';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
-import { Check, X, Shield, Users, Building, ShieldCheck, UserCog } from 'lucide-react';
+import { Check, X, Shield, Users, Building, ShieldCheck, UserCog, Download, FileSpreadsheet, Database, Loader2 } from 'lucide-react';
+import { exportToExcel, downloadFullBackup } from './lib/exportData';
 
 interface Props { users: AppUser[]; }
+
+const codeStyle: React.CSSProperties = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+  fontSize: 12,
+  background: 'var(--surface-2)',
+  padding: '1px 6px',
+  borderRadius: 4,
+};
+
+function ExportBackupCard() {
+  const [busy, setBusy] = useState<null | 'excel' | 'backup'>(null);
+  const [result, setResult] = useState<React.ReactNode>(null);
+
+  const runExcel = async () => {
+    setBusy('excel'); setResult(null);
+    try {
+      const r = await exportToExcel();
+      setResult(
+        <span style={{ color: 'var(--text-secondary)' }}>
+          ✓ Exported <strong>{r.correspondences}</strong> correspondences and{' '}
+          <strong>{r.tasks}</strong> tasks → <strong>{r.fileName}</strong>
+        </span>
+      );
+    } catch (e: any) {
+      setResult(<span style={{ color: '#f87171' }}>Export failed: {e?.message || 'Unknown error'}</span>);
+    } finally { setBusy(null); }
+  };
+
+  const runBackup = async () => {
+    setBusy('backup'); setResult(null);
+    try {
+      const r = await downloadFullBackup();
+      const ok = Object.entries(r.collections).map(([k, v]) => `${k} (${v})`).join(', ');
+      setResult(
+        <div style={{ color: 'var(--text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <span>✓ Saved <strong>{r.fileName}</strong> — {ok || 'no documents'}.</span>
+          {r.skipped.length > 0 && (
+            <span style={{ color: '#fbbf24', fontSize: 12 }}>
+              Not included from the browser: {r.skipped.map(s => s.collection).join(', ')}. Run{' '}
+              <code style={codeStyle}>npm run firestore:backup</code> for a complete server-side
+              backup (includes chat).
+            </span>
+          )}
+          <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Restore with <code style={codeStyle}>npm run firestore:restore backups/{r.fileName}</code>
+          </span>
+        </div>
+      );
+    } catch (e: any) {
+      setResult(<span style={{ color: '#f87171' }}>Backup failed: {e?.message || 'Unknown error'}</span>);
+    } finally { setBusy(null); }
+  };
+
+  return (
+    <div className="card" style={{ padding: '20px 24px', marginBottom: 28 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        <Download className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Export &amp; Backup
+        </h2>
+      </div>
+      <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
+        Download all correspondences and tasks as an Excel workbook, or take a full JSON
+        backup of the database for safekeeping.
+      </p>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button className="btn btn-primary btn-sm" disabled={busy !== null} onClick={runExcel}>
+          {busy === 'excel'
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <FileSpreadsheet className="w-3.5 h-3.5" />}
+          {busy === 'excel' ? 'Exporting…' : 'Export to Excel'}
+        </button>
+        <button className="btn btn-ghost btn-sm" disabled={busy !== null} onClick={runBackup}>
+          {busy === 'backup'
+            ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            : <Database className="w-3.5 h-3.5" />}
+          {busy === 'backup' ? 'Backing up…' : 'Download Full Backup (JSON)'}
+        </button>
+      </div>
+      {result && <div style={{ marginTop: 14, fontSize: 13, lineHeight: 1.5 }}>{result}</div>}
+    </div>
+  );
+}
 
 export default function AdminDashboard({ users }: Props) {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
@@ -65,6 +149,8 @@ export default function AdminDashboard({ users }: Props) {
           </div>
         ))}
       </div>
+
+      <ExportBackupCard />
 
       {/* Pending requests first */}
       {pending.length > 0 && (

@@ -194,6 +194,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         department: item.department, subCategory: item.subCategory || '',
         category: item.category || 'Internal',
         priority: item.priority, dateReceived: item.dateReceived, deadline: item.deadline || '',
+        actions: item.actions || 'None',
         attachedFile: item.attachedFile || '', attachedFileName: item.attachedFileName || '',
         serialNumber: item.serialNumber || '', notes: item.notes || '', status: item.status,
         assignedTo: item.assignedTo || '', assignedToId: item.assignedToId || '',
