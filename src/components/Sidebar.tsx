@@ -7,6 +7,7 @@ import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
+import { requestOpen } from '../lib/deepLink';
 
 interface Props {
   appUser: AppUser;
@@ -35,6 +36,19 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     }
     setShowNotifications(false);
 
+    // A task/milestone notification points at a task doc; any "correspond*"
+    // notification points at a correspondence doc. relatedId is that doc id.
+    const isTask = n.type.includes('task') || n.type.includes('milestone');
+    const isCorr = n.type.includes('correspond');
+
+    // Ask the target dashboard to open the specific record (deep-link bus,
+    // src/lib/deepLink.ts). The dashboard picks this up when it mounts or, if
+    // already mounted, reacts live.
+    if (n.relatedId) {
+      if (isTask) requestOpen({ type: 'task', id: n.relatedId });
+      else if (isCorr) requestOpen({ type: 'corresponding', id: n.relatedId });
+    }
+
     if (n.link) {
       if (n.link === '#tasks') onNavigate('tasks');
       else if (n.link === '#correspondences') onNavigate('correspondences');
@@ -42,8 +56,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       else if (n.link === '#archive') onNavigate('archive');
       else if (n.link === '#overview') onNavigate('overview');
     } else {
-      if (n.type.includes('task') || n.type.includes('milestone')) onNavigate('tasks');
-      else if (n.type.includes('corresponding')) onNavigate('correspondences');
+      if (isTask) onNavigate('tasks');
+      else if (isCorr) onNavigate('correspondences');
     }
   };
 
