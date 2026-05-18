@@ -179,6 +179,7 @@ export interface Announcement {
   id: string;
   text: string;
   department: string;        // scope: every Approved user with this department
+  recipientIds?: string[];   // if set & non-empty: only these uids (+author) see it; else dept-wide
   authorId: string;
   authorName: string;
   authorPhotoURL?: string;

@@ -19,6 +19,8 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
+  // Selected recipient uids. Empty => broadcast to the whole department.
+  const [recipientIds, setRecipientIds] = useState<string[]>([]);
 
   const department = (appUser.department || '').trim();
   const hasDept = !!department && department !== 'None';
@@ -30,10 +32,41 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
     [projectUsers, department]
   );
 
+  // Teammates I can target (everyone in the dept except me).
+  const selectable = useMemo(
+    () => teammates.filter(u => u.id !== appUser.id),
+    [teammates, appUser.id]
+  );
+
+  const userById = useMemo(() => {
+    const m = new Map<string, AppUser>();
+    projectUsers.forEach(u => m.set(u.id, u));
+    return m;
+  }, [projectUsers]);
+
+  const toggleRecipient = (id: string) =>
+    setRecipientIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+
+  const targeted = recipientIds.length > 0;
+
+  // Only show targeted announcements to the author or a listed recipient.
+  // (A manager/admin still sees ones they authored; per-record reach is
+  // intentionally client-side, consistent with department scoping.)
+  const visible = useMemo(
+    () => announcements.filter(a => {
+      const rids = a.recipientIds || [];
+      if (rids.length === 0) return true;                 // dept-wide
+      return a.authorId === appUser.id || rids.includes(appUser.id);
+    }),
+    [announcements, appUser.id]
+  );
+
   // Mark every announcement I haven't seen (and didn't write) as read.
   const markedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    announcements.forEach(a => {
+    visible.forEach(a => {
       if (
         a.authorId !== appUser.id &&
         !(a.readBy || []).includes(appUser.id) &&
@@ -48,7 +81,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
         });
       }
     });
-  }, [announcements, appUser.id]);
+  }, [visible, appUser.id]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,9 +90,14 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
     setSending(true);
     setError('');
     try {
+      // Only send valid, still-in-department recipient uids.
+      const validRecipients = recipientIds.filter(id =>
+        selectable.some(u => u.id === id)
+      );
       await addDoc(collection(db, 'announcements'), {
         text: body,
         department,
+        recipientIds: validRecipients,
         authorId: appUser.id,
         authorName: appUser.displayName,
         authorPhotoURL: appUser.photoURL || '',
@@ -68,6 +106,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
         createdAt: serverTimestamp(),
       });
       setText('');
+      setRecipientIds([]);
     } catch (err: any) {
       console.error('Send announcement failed:', err);
       setError('Could not send. Check your connection and permissions.');
@@ -130,11 +169,71 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
               if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) handleSend(e as any);
             }}
           />
+          {/* Recipient picker — none selected = whole department */}
+          {selectable.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
+                letterSpacing: '0.04em', color: 'var(--text-muted)', marginBottom: 8,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                <Users className="w-3.5 h-3.5" />
+                {targeted
+                  ? `Sending to ${recipientIds.length} selected`
+                  : `Everyone in ${department}`}
+                {targeted && (
+                  <button
+                    type="button"
+                    onClick={() => setRecipientIds([])}
+                    style={{
+                      marginLeft: 4, fontSize: 11, fontWeight: 600, padding: 0,
+                      background: 'none', border: 'none', cursor: 'pointer',
+                      color: 'var(--accent)', textTransform: 'none', letterSpacing: 0,
+                    }}
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {selectable.map(u => {
+                  const on = recipientIds.includes(u.id);
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => toggleRecipient(u.id)}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '5px 10px', fontSize: 12, fontWeight: 600,
+                        cursor: 'pointer',
+                        border: `1px solid ${on ? 'var(--accent)' : 'var(--border)'}`,
+                        background: on ? 'var(--accent)' : 'var(--surface-2)',
+                        color: on ? '#fff' : 'var(--text-secondary)',
+                      }}
+                    >
+                      <span style={{
+                        width: 18, height: 18, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        background: on ? 'rgba(255,255,255,0.25)' : (u.userColor || 'var(--accent)'),
+                        color: '#fff', fontSize: 10, fontWeight: 800,
+                      }}>
+                        {u.displayName?.[0]?.toUpperCase() || '?'}
+                      </span>
+                      {u.displayName}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
             <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
               {error
                 ? <span style={{ color: '#dc2626', fontWeight: 600 }}>{error}</span>
-                : 'Ctrl/⌘ + Enter to send · everyone in your department is notified'}
+                : targeted
+                  ? 'Ctrl/⌘ + Enter to send · only selected members are notified'
+                  : 'Ctrl/⌘ + Enter to send · everyone in your department is notified'}
             </span>
             <button
               type="submit"
@@ -153,16 +252,22 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
 
       {/* Feed */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {announcements.length === 0 ? (
+        {visible.length === 0 ? (
           <div className="card" style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Megaphone className="w-8 h-8" style={{ margin: '0 auto 12px', opacity: 0.4 }} />
             <p style={{ fontSize: 14 }}>No announcements yet.</p>
             {hasDept && <p style={{ fontSize: 12, marginTop: 4 }}>Be the first to post to {department}.</p>}
           </div>
         ) : (
-          announcements.map(a => {
+          visible.map(a => {
+            const rids = a.recipientIds || [];
+            const isTargeted = rids.length > 0;
             const seenCount = (a.readBy || []).length;
+            const reach = isTargeted ? rids.length + 1 : (teammates.length || seenCount);
             const mine = a.authorId === appUser.id;
+            const recipientUsers = rids
+              .map(id => userById.get(id))
+              .filter(Boolean) as AppUser[];
             return (
               <div key={a.id} className="card" style={{ padding: 16 }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
@@ -201,7 +306,57 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                     {mine && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
                         <Users className="w-3 h-3" />
-                        Seen by {seenCount} of {teammates.length || seenCount}
+                        Seen by {seenCount} of {reach}
+                      </div>
+                    )}
+                    {isTargeted && (
+                      <div style={{
+                        marginTop: 14, paddingTop: 14,
+                        borderTop: '1px solid var(--border)',
+                      }}>
+                        <div style={{
+                          fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                          letterSpacing: '0.04em', color: 'var(--text-muted)',
+                          marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
+                        }}>
+                          <Users className="w-3 h-3" />
+                          {mine ? 'Sent to' : 'Sent to you'}
+                        </div>
+                        {recipientUsers.length > 0 && (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                            {recipientUsers.map(u => (
+                              <span
+                                key={u.id}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 8,
+                                  padding: '5px 12px 5px 5px', fontSize: 12, fontWeight: 600,
+                                  background: 'var(--surface-2)',
+                                  color: 'var(--text-secondary)',
+                                  border: '1px solid var(--border)',
+                                }}
+                              >
+                                {u.photoURL ? (
+                                  <img
+                                    src={u.photoURL}
+                                    referrerPolicy="no-referrer"
+                                    alt=""
+                                    style={{ width: 22, height: 22, objectFit: 'cover', flexShrink: 0 }}
+                                  />
+                                ) : (
+                                  <span style={{
+                                    width: 22, height: 22, flexShrink: 0,
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    background: u.userColor || 'var(--accent)',
+                                    color: '#fff', fontSize: 10, fontWeight: 800,
+                                  }}>
+                                    {u.displayName?.[0]?.toUpperCase() || '?'}
+                                  </span>
+                                )}
+                                {u.displayName}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>

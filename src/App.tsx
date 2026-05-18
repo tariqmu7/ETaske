@@ -257,9 +257,11 @@ export default function App() {
   if (appUser.status === 'Pending') return <PendingScreen />;
   if (appUser.status === 'Rejected') return <RejectedScreen />;
 
-  const unreadAnnouncements = announcements.filter(
-    a => a.authorId !== appUser.id && !(a.readBy || []).includes(appUser.id)
-  ).length;
+  const unreadAnnouncements = announcements.filter(a => {
+    if (a.authorId === appUser.id || (a.readBy || []).includes(appUser.id)) return false;
+    const rids = a.recipientIds || [];
+    return rids.length === 0 || rids.includes(appUser.id); // targeted -> only recipients
+  }).length;
 
   const sharedProps = { user, appUser, projectUsers };
 
