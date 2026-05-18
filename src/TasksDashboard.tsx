@@ -55,11 +55,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [view, setView] = useState<'mine' | 'all'>('mine');
   const [newMilestone, setNewMilestone] = useState<{ taskId: string; title: string; targetDate: string } | null>(null);
+  const [editingMilestone, setEditingMilestone] = useState<{ id: string; taskId: string; title: string; targetDate: string } | null>(null);
+  const [isSavingMilestone, setIsSavingMilestone] = useState(false);
   const [editingStatus, setEditingStatus] = useState<{ taskId: string; status: TaskStatus } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // When a milestone is updated on a task whose due date is already
+  // alerting (overdue / due soon), prompt the user to keep, extend, or
+  // pick a new due date.
+  const [dueDatePrompt, setDueDatePrompt] = useState<{ task: Task; milestoneTitle: string } | null>(null);
+  const [promptDueDate, setPromptDueDate] = useState('');
   const [employeeFilter, setEmployeeFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const [deptFilter, setDeptFilter] = useState('All');
@@ -416,9 +423,25 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     }
   };
 
+  // Shared by add / edit / status-change: if the milestone's parent
+  // task is still open and its due date is already alerting (overdue or
+  // due soon), open the keep/extend/reset prompt.
+  const maybePromptDueDate = (task: Task | undefined, milestoneTitle: string) => {
+    if (
+      task &&
+      task.status !== 'Done' &&
+      task.status !== 'Archived' &&
+      (isOverdue(task.dueDate) || isDueSoon(task.dueDate))
+    ) {
+      setPromptDueDate(task.dueDate || '');
+      setDueDatePrompt({ task, milestoneTitle });
+    }
+  };
+
   const handleAddMilestone = async () => {
     if (!newMilestone || !newMilestone.title.trim()) return;
     setIsAddingMilestone(true);
+    const title = newMilestone.title.trim();
     try {
       const task = tasks.find(t => t.id === newMilestone.taskId);
       await addDoc(collection(db, 'milestones'), {
@@ -445,6 +468,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       }
 
       setNewMilestone(null);
+      maybePromptDueDate(task, title);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'milestones');
       setError('Failed to add milestone.');
@@ -500,8 +524,75 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       const update: any = { status, updatedAt: serverTimestamp() };
       if (status === 'Done') update.completedAt = serverTimestamp();
       await updateDoc(doc(db, 'milestones', milestoneId), update);
+
+      const ms = milestones.find(m => m.id === milestoneId);
+      const task = ms ? tasks.find(t => t.id === ms.taskId) : undefined;
+      maybePromptDueDate(task, ms?.title || '');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `milestones/${milestoneId}`);
+    }
+  };
+
+  const handleUpdateMilestone = async () => {
+    if (!editingMilestone || !editingMilestone.title.trim()) return;
+    setIsSavingMilestone(true);
+    const title = editingMilestone.title.trim();
+    try {
+      await updateDoc(doc(db, 'milestones', editingMilestone.id), {
+        title,
+        targetDate: editingMilestone.targetDate || null,
+        updatedAt: serverTimestamp(),
+      });
+      const task = tasks.find(t => t.id === editingMilestone.taskId);
+      setEditingMilestone(null);
+      maybePromptDueDate(task, title);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `milestones/${editingMilestone.id}`);
+      setError('Failed to update milestone.');
+    } finally {
+      setIsSavingMilestone(false);
+    }
+  };
+
+  // Local-time YYYY-MM-DD `days` from today. Built by hand (not
+  // toISOString) so it doesn't shift a day for users behind UTC — same
+  // reasoning as parseDeadline in utils.ts.
+  const plusDaysISO = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const resolveDueDatePrompt = async (choice: 'keep' | 'extend' | 'custom') => {
+    if (!dueDatePrompt) return;
+    if (choice === 'keep') { setDueDatePrompt(null); return; }
+
+    const newDue = choice === 'extend' ? plusDaysISO(3) : promptDueDate;
+    if (!newDue) return;
+
+    const { task } = dueDatePrompt;
+    try {
+      await updateDoc(doc(db, 'tasks', task.id), {
+        dueDate: newDue,
+        updatedAt: serverTimestamp(),
+      });
+
+      if (task.assignedById && task.assignedById !== user.uid) {
+        await addDoc(collection(db, 'notifications'), {
+          type: 'task_updated',
+          title: 'Due Date Changed',
+          message: `${appUser.displayName} moved the due date of "${task.taskName}" to ${newDue}.`,
+          forUserId: task.assignedById,
+          read: false,
+          relatedId: task.id,
+          createdAt: serverTimestamp(),
+        });
+      }
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `tasks/${task.id}`);
+      setError('Failed to update due date.');
+    } finally {
+      setDueDatePrompt(null);
     }
   };
 
@@ -1288,6 +1379,30 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                               zIndex: 1,
                                             }} />
                                             <div style={{ flex: 1, background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
+                                              {editingMilestone?.id === ms.id ? (
+                                                <div className="ms-addform-row" style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }} onClick={e => e.stopPropagation()}>
+                                                  <input
+                                                    className="input"
+                                                    style={{ flex: 1, minWidth: 160 }}
+                                                    value={editingMilestone.title}
+                                                    onChange={e => setEditingMilestone(p => p ? { ...p, title: e.target.value } : p)}
+                                                    placeholder="Milestone title…"
+                                                    autoFocus
+                                                  />
+                                                  <input
+                                                    className="input"
+                                                    type="date"
+                                                    style={{ width: 160, flexShrink: 0 }}
+                                                    value={editingMilestone.targetDate}
+                                                    onChange={e => setEditingMilestone(p => p ? { ...p, targetDate: e.target.value } : p)}
+                                                  />
+                                                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingMilestone(null)}>Cancel</button>
+                                                  <button className="btn btn-primary btn-sm" onClick={handleUpdateMilestone} disabled={isSavingMilestone || !editingMilestone.title.trim()}>
+                                                    {isSavingMilestone ? 'Saving…' : 'Save'}
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                              <>
                                               <div className="ms-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                 <span className="ms-title" style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>
                                                   {ms.title}
@@ -1319,9 +1434,14 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                     ))}
                                                   </div>
                                                   {canEdit && (
-                                                    <button className="ms-del-btn" onClick={() => handleDeleteMilestone(ms.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
-                                                      <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
+                                                    <>
+                                                      <button className="ms-del-btn" onClick={() => setEditingMilestone({ id: ms.id, taskId: ms.taskId, title: ms.title, targetDate: ms.targetDate || '' })} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
+                                                        <Edit2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                      <button className="ms-del-btn" onClick={() => handleDeleteMilestone(ms.id)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}>
+                                                        <Trash2 className="w-3.5 h-3.5" />
+                                                      </button>
+                                                    </>
                                                   )}
                                                 </div>
                                               </div>
@@ -1329,6 +1449,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                 <span>By {ms.addedBy}</span>
                                                 {ms.targetDate && <span><Calendar className="w-3 h-3" style={{ display: 'inline', marginRight: 3 }} />{ms.targetDate}</span>}
                                               </div>
+                                              </>
+                                              )}
                                             </div>
                                           </div>
                                         ))}
@@ -1406,6 +1528,67 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={resetFilters}>Clear All Filters</button>
         </div>
       )}
+
+      {/* ── Due-date prompt after a milestone update on an alerting task ── */}
+      <AnimatePresence>
+        {dueDatePrompt && (
+          <motion.div
+            className="modal-overlay"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setDueDatePrompt(null)}
+          >
+            <motion.div
+              className="modal"
+              style={{ maxWidth: 460 }}
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              onClick={e => e.stopPropagation()}
+            >
+              <div style={{ padding: 28 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
+                  <h3 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', margin: 0 }}>Update the due date?</h3>
+                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
+                  "<strong style={{ color: 'var(--text-secondary)' }}>{dueDatePrompt.task.taskName}</strong>" is{' '}
+                  {isOverdue(dueDatePrompt.task.dueDate) ? 'overdue' : 'due soon'} (currently{' '}
+                  <strong style={{ color: 'var(--text-secondary)' }}>{dueDatePrompt.task.dueDate || '—'}</strong>).
+                  You just updated the milestone "{dueDatePrompt.milestoneTitle}". Choose how to handle the due date:
+                </p>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label className="label">New due date</label>
+                  <input
+                    type="date"
+                    className="input"
+                    value={promptDueDate}
+                    onChange={e => setPromptDueDate(e.target.value)}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => resolveDueDatePrompt('custom')}
+                    disabled={!promptDueDate || promptDueDate === dueDatePrompt.task.dueDate}
+                  >
+                    <Calendar className="w-4 h-4" /> Change to selected date
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => resolveDueDatePrompt('extend')}>
+                    <Clock className="w-4 h-4" /> Extend automatically — 3 days from today ({plusDaysISO(3)})
+                  </button>
+                  <button className="btn btn-ghost" onClick={() => resolveDueDatePrompt('keep')}>
+                    Keep current due date
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
