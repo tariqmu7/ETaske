@@ -16,7 +16,7 @@ import {
   Paperclip, ExternalLink, FileText, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, isOverdue, isDueSoon } from './utils';
+import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Overview Firestore:', { e, op, path });
@@ -924,9 +924,14 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorr.filePaths.map((path, idx) => (
                         <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{path}</span>
-                          <button 
-                            onClick={() => window.open(path.startsWith('http') ? path : `file:///${path}`, '_blank')}
+                          <span
+                            onClick={() => openOrCopyPath(path)}
+                            title="Click to open (web link) or copy this path"
+                            style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                          >{path}</span>
+                          <button
+                            onClick={() => openOrCopyPath(path)}
+                            title="Open (web link) or copy this path"
                             className="btn btn-ghost btn-sm"
                             style={{ padding: '4px 8px', height: 'auto' }}
                           >

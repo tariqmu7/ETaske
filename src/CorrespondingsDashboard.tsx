@@ -17,7 +17,7 @@ import {
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
@@ -876,7 +876,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               fontSize: 13
                             }}>
                               <Clock className="w-3.5 h-3.5 text-muted" />
-                              <code style={{ flex: 1, wordBreak: 'break-all', fontSize: 12 }}>{path || 'Empty path'}</code>
+                              <code
+                                onClick={() => path && openOrCopyPath(path)}
+                                title={path ? 'Click to open (web link) or copy this path' : undefined}
+                                style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, cursor: path ? 'pointer' : 'default', textDecoration: path ? 'underline' : 'none', textDecorationStyle: 'dotted' }}
+                              >{path || 'Empty path'}</code>
                               <button 
                                 type="button"
                                 className="btn btn-ghost btn-icon btn-sm"
@@ -1027,16 +1031,17 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               borderRadius: 0
                             }}>
                               <ExternalLink className="w-4 h-4 text-muted" />
-                              <code style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{path}</code>
-                              <button 
-                                type="button" 
-                                className="btn btn-ghost btn-sm" 
-                                onClick={() => {
-                                  navigator.clipboard.writeText(path);
-                                  alert('Path copied to clipboard!');
-                                }}
+                              <code
+                                onClick={() => openOrCopyPath(path)}
+                                title="Click to open (web link) or copy this path"
+                                style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                              >{path}</code>
+                              <button
+                                type="button"
+                                className="btn btn-ghost btn-sm"
+                                onClick={() => openOrCopyPath(path)}
                               >
-                                Copy
+                                Open / Copy
                               </button>
                             </div>
                           ))
@@ -1285,9 +1290,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorrForDetails.filePaths.map((path, idx) => (
                         <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis' }}>{path}</span>
-                          <button 
-                            onClick={() => window.open(path.startsWith('http') ? path : `file:///${path}`, '_blank')}
+                          <span
+                            onClick={() => openOrCopyPath(path)}
+                            title="Click to open (web link) or copy this path"
+                            style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                          >{path}</span>
+                          <button
+                            onClick={() => openOrCopyPath(path)}
+                            title="Open (web link) or copy this path"
                             className="btn btn-ghost btn-sm"
                             style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto' }}
                           >

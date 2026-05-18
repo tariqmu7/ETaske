@@ -18,7 +18,7 @@ import {
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 import { Copy, Check } from 'lucide-react';
 import DueSoonBanner from './components/DueSoonBanner';
 
@@ -1189,17 +1189,17 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           borderRadius: 0
                                         }}>
                                           <ExternalLink className="w-4 h-4 text-muted" />
-                                          <code style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)' }}>{path}</code>
-                                          <button 
-                                            type="button" 
-                                            className="btn btn-ghost btn-sm" 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              navigator.clipboard.writeText(path);
-                                              alert('Path copied to clipboard!');
-                                            }}
+                                          <code
+                                            onClick={(e) => { e.stopPropagation(); openOrCopyPath(path); }}
+                                            title="Click to open (web link) or copy this path"
+                                            style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                                          >{path}</code>
+                                          <button
+                                            type="button"
+                                            className="btn btn-ghost btn-sm"
+                                            onClick={(e) => { e.stopPropagation(); openOrCopyPath(path); }}
                                           >
-                                            Copy
+                                            Open / Copy
                                           </button>
                                         </div>
                                       ))}

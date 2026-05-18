@@ -86,3 +86,62 @@ export const isDueSoon = (deadlineStr?: string, hours: number = 48): boolean => 
   const diff = parseDeadline(deadlineStr).getTime() - Date.now();
   return diff > 0 && diff <= hours * 60 * 60 * 1000;
 };
+
+// True for http(s) links (openable in a browser tab) vs. a local/UNC
+// computer path, which a web page is not allowed to navigate to.
+export const isWebUrl = (path?: string): boolean =>
+  /^https?:\/\//i.test((path || '').trim());
+
+// Copy text to the clipboard, with a fallback for non-secure contexts
+// and older browsers. Resolves to whether the copy succeeded.
+export const copyToClipboard = async (text: string): Promise<boolean> => {
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to the legacy path below */
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+};
+
+// Click action for a shared folder path. A web link opens in a new tab.
+// A computer/UNC path can't be opened from a web page (browsers block
+// file:// navigation from an https origin for security), so the path is
+// copied to the clipboard and the user is told to paste it into File
+// Explorer. Returns 'opened' | 'copied' | 'prompted' | 'noop'.
+export const openOrCopyPath = async (
+  path?: string
+): Promise<'opened' | 'copied' | 'prompted' | 'noop'> => {
+  const value = (path || '').trim();
+  if (!value) return 'noop';
+  if (isWebUrl(value)) {
+    window.open(value, '_blank', 'noopener,noreferrer');
+    return 'opened';
+  }
+  const copied = await copyToClipboard(value);
+  if (copied) {
+    alert(
+      "Browsers can't open a folder on your computer directly.\n\n" +
+        'The path has been copied — open File Explorer (Win + E), click ' +
+        'the address bar, paste (Ctrl + V) and press Enter.'
+    );
+    return 'copied';
+  }
+  window.prompt('Copy this folder path, then paste it into File Explorer:', value);
+  return 'prompted';
+};
