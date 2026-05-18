@@ -120,9 +120,9 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
         {/* Due Soon Alert */}
         {dueSoonCount > 0 && (
-          <button 
-            className="btn btn-ghost btn-icon" 
-            onClick={() => onNavigate('overview')}
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={() => onNavigate(isManagerOrAdmin ? 'overview' : 'tasks')}
             title={`${dueSoonCount} items due soon`}
             style={{ position: 'relative' }}
           >

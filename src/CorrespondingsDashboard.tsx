@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
-  doc, serverTimestamp, orderBy, where, deleteField
+  doc, serverTimestamp, orderBy, deleteField
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { User } from 'firebase/auth';
@@ -20,6 +20,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
+import DueSoonBanner from './components/DueSoonBanner';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -98,21 +99,46 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     setTimeout(() => setCopiedPath(null), 2000);
   };
 
-  // Firestore listener
+  // Firestore listener. Every approved user may read the whole collection
+  // (firestore.rules: `allow read: if isApproved()`); department visibility is
+  // applied client-side in `visibleItems` since the creator's department lives
+  // on their user profile, not on the correspondence doc.
   useEffect(() => {
-    const isManager = appUser.role === 'Admin' || appUser.role === 'Manager';
-    const q = isManager
-      ? query(collection(db, 'correspondences'), orderBy('createdAt', 'desc'))
-      : query(collection(db, 'correspondences'), where('teamId', '==', appUser.teamId || 'NONE'), orderBy('createdAt', 'desc'));
+    const q = query(collection(db, 'correspondences'), orderBy('createdAt', 'desc'));
 
     const unsub = onSnapshot(q, (snap) => {
-      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
+      setItems(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'correspondences');
       setError('Failed to load correspondences.');
     });
     return () => unsub();
   }, [appUser]);
+
+  // Department scoping: an Admin sees every correspondence. A Manager or
+  // Employee only sees correspondences whose *creator* is in the same
+  // department as them (plus anything they logged themselves, so a user never
+  // loses sight of their own entries even if their department is unset).
+  const isAdmin = appUser.role === 'Admin';
+
+  const departmentByUserId = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    projectUsers.forEach(u => { map[u.id] = u.department; });
+    return map;
+  }, [projectUsers]);
+
+  const visibleItems = useMemo(() => {
+    if (isAdmin) return items;
+    return items.filter(i =>
+      i.userId === user.uid ||
+      (!!appUser.department && departmentByUserId[i.userId] === appUser.department)
+    );
+  }, [items, isAdmin, departmentByUserId, appUser.department, user.uid]);
+
+  const dueSoonItems = useMemo(
+    () => visibleItems.filter(i => i.status !== 'Closed' && isDueSoon(i.deadline)),
+    [visibleItems]
+  );
 
   // Load tasks for linking
   useEffect(() => {
@@ -123,14 +149,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   }, []);
 
   const filtered = useMemo(() => {
-    return items.filter(i => {
+    return visibleItems.filter(i => {
       if (search && !globalSearch(i, search)) return false;
       if (statusFilter !== 'All' && i.status !== statusFilter) return false;
       if (deptFilter !== 'All' && i.department !== deptFilter) return false;
       if (dateFilter && i.dateReceived !== dateFilter) return false;
       return true;
     });
-  }, [items, search, statusFilter, deptFilter, dateFilter]);
+  }, [visibleItems, search, statusFilter, deptFilter, dateFilter]);
 
   // Reset page when filters change
   useEffect(() => {
@@ -144,11 +170,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   }, [filtered, currentPage]);
 
   const stats = useMemo(() => ({
-    total: items.length,
-    unread: items.filter(i => i.status === 'Unread').length,
-    assigned: items.filter(i => i.status === 'Assigned').length,
-    closed: items.filter(i => i.status === 'Closed').length,
-  }), [items]);
+    total: visibleItems.length,
+    unread: visibleItems.filter(i => i.status === 'Unread').length,
+    assigned: visibleItems.filter(i => i.status === 'Assigned').length,
+    closed: visibleItems.filter(i => i.status === 'Closed').length,
+  }), [visibleItems]);
 
   const dynamicDepartments = useMemo(() => {
     return DEPARTMENT_OPTIONS;
@@ -156,8 +182,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
   const dynamicSubCategories = useMemo(() => {
     if (formData.category === 'Project') return PROJECT_OPTIONS;
-    return Array.from(new Set(items.filter(i => i.department === formData.department).map(i => i.subCategory).filter(Boolean))).sort();
-  }, [items, formData.department, formData.category]);
+    return Array.from(new Set(visibleItems.filter(i => i.department === formData.department).map(i => i.subCategory).filter(Boolean))).sort();
+  }, [visibleItems, formData.department, formData.category]);
 
   const openModal = (item?: Corresponding, viewing = false) => {
     setIsViewing(viewing);
@@ -404,6 +430,17 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
         </div>
       )}
+
+      <DueSoonBanner
+        items={dueSoonItems.map(i => ({
+          id: i.id,
+          type: 'Correspondence' as const,
+          title: i.subject,
+          due: i.deadline,
+          onClick: () => setSelectedCorrForDetails(i),
+        }))}
+      />
+
       {/* Items grid */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
         <AnimatePresence>

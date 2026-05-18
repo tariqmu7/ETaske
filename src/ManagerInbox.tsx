@@ -65,6 +65,25 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     return () => unsub();
   }, [appUser.status]);
 
+  // Department scoping (mirrors CorrespondingsDashboard): an Admin reviews
+  // every correspondence; a Manager only reviews ones whose creator is in
+  // their department (plus anything they logged themselves).
+  const isAdmin = appUser.role === 'Admin';
+
+  const departmentByUserId = useMemo(() => {
+    const map: Record<string, string | undefined> = {};
+    projectUsers.forEach(u => { map[u.id] = u.department; });
+    return map;
+  }, [projectUsers]);
+
+  const visibleCorrespondences = useMemo(() => {
+    if (isAdmin) return correspondences;
+    return correspondences.filter(c =>
+      c.userId === user.uid ||
+      (!!appUser.department && departmentByUserId[c.userId] === appUser.department)
+    );
+  }, [correspondences, isAdmin, departmentByUserId, appUser.department, user.uid]);
+
   const targetUsers = useMemo(() => {
     return projectUsers.filter(u => 
       u.status === 'Approved' && 
@@ -77,21 +96,21 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
   }, [projectUsers, appUser.department, appUser.teamId, appUser.role, user.uid]);
 
   const filtered = useMemo(() => {
-    return correspondences.filter(c => {
+    return visibleCorrespondences.filter(c => {
       if (search && !globalSearch(c, search)) return false;
       if (filter !== 'All' && c.status !== filter) return false;
       return true;
     });
-  }, [correspondences, search, filter]);
+  }, [visibleCorrespondences, search, filter]);
 
-  const pendingCount = correspondences.filter(c => c.status === 'Unread' || c.status === 'Reviewing').length;
+  const pendingCount = visibleCorrespondences.filter(c => c.status === 'Unread' || c.status === 'Reviewing').length;
 
   const stats = useMemo(() => ({
-    pending: correspondences.filter(c => c.status === 'Unread').length,
-    reviewing: correspondences.filter(c => c.status === 'Reviewing').length,
+    pending: visibleCorrespondences.filter(c => c.status === 'Unread').length,
+    reviewing: visibleCorrespondences.filter(c => c.status === 'Reviewing').length,
     tasksActive: tasks.filter(t => t.status === 'In Progress' || t.status === 'Pending').length,
     tasksDone: tasks.filter(t => t.status === 'Done').length,
-  }), [correspondences, tasks]);
+  }), [visibleCorrespondences, tasks]);
 
   const handleAssign = async () => {
     if (!selectedCorr || !assigneeId) return;

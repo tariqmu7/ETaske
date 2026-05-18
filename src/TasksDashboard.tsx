@@ -20,6 +20,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon } from './utils';
 import { Copy, Check } from 'lucide-react';
+import DueSoonBanner from './components/DueSoonBanner';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -202,7 +203,42 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     done: tasks.filter(t => t.status === 'Done' && (view === 'all' || t.assignedTo === appUser.displayName)).length,
   }), [tasks, view, appUser.displayName]);
 
+  const dueSoonTasks = useMemo(
+    () => tasks.filter(t => t.status !== 'Done' && t.status !== 'Archived' && isDueSoon(t.dueDate)),
+    [tasks]
+  );
+
   const getMilestonesForTask = (taskId: string) => milestones.filter(m => m.taskId === taskId);
+
+  // Open a specific task from anywhere (e.g. the Due Soon banner). The task may
+  // be hidden behind the "My Tasks" view, an active filter, or another page, so
+  // clear everything that could hide it, jump to its page, expand it, and
+  // scroll it into view once rendered.
+  const handleOpenTask = (taskId: string) => {
+    setSearch('');
+    setStatusFilter('All');
+    setCategoryFilter('All');
+    setEmployeeFilter('All');
+    setSubCategoryFilter('All');
+    setDeptFilter('All');
+    setDateFilter('');
+    setView('all');
+
+    // With all filters cleared + "All Tasks", `filtered` is just the
+    // non-archived tasks in listener order, so its page math is reproducible.
+    const defaultFiltered = tasks.filter(t => t.status !== 'Archived');
+    const idx = defaultFiltered.findIndex(t => t.id === taskId);
+    setCurrentPage(idx >= 0 ? Math.floor(idx / itemsPerPage) + 1 : 1);
+
+    setExpandedTask(taskId);
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        document.getElementById(`task-${taskId}`)
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 120);
+    });
+  };
 
   const handleUpdateTask = async () => {
     if (!editingTask || !editingTask.taskName.trim()) return;
@@ -580,6 +616,16 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         </div>
       )}
 
+      <DueSoonBanner
+        items={dueSoonTasks.map(t => ({
+          id: t.id,
+          type: 'Task' as const,
+          title: t.taskName,
+          due: t.dueDate,
+          onClick: () => handleOpenTask(t.id),
+        }))}
+      />
+
       <AnimatePresence>
         {isAddingTask && (
           <motion.div
@@ -744,6 +790,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     return (
                       <motion.div
                         key={task.id}
+                        id={`task-${task.id}`}
                         layout
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
