@@ -87,6 +87,27 @@ export const isDueSoon = (deadlineStr?: string, hours: number = 48): boolean => 
   return diff > 0 && diff <= hours * 60 * 60 * 1000;
 };
 
+// Short relative time, e.g. "just now", "5m ago", "3h ago", "2d ago".
+// Accepts a Firestore Timestamp, a Date, or a millis number.
+export const timeAgo = (when?: { toDate?: () => Date } | Date | number | null): string => {
+  if (!when) return '';
+  let d: Date;
+  if (typeof when === 'number') d = new Date(when);
+  else if (when instanceof Date) d = when;
+  else if (typeof (when as any).toDate === 'function') d = (when as any).toDate();
+  else return '';
+  const diff = Date.now() - d.getTime();
+  if (diff < 0) return 'just now';
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+};
+
 // True for http(s) links (openable in a browser tab) vs. a local/UNC
 // computer path, which a web page is not allowed to navigate to.
 export const isWebUrl = (path?: string): boolean =>

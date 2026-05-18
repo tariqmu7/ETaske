@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Inbox, CheckSquare, Archive,
-  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle
+  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
@@ -14,10 +14,11 @@ interface Props {
   onNavigate: (v: AppView) => void;
    notifications: AppNotification[];
    dueSoonCount: number;
+   announcementCount: number;
    onLogout: () => void;
  }
 
-export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, onLogout }: Props) {
+export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -118,6 +119,25 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Announcements */}
+        <button
+          className="btn btn-ghost btn-icon"
+          onClick={() => onNavigate('announcements')}
+          title="Announcements"
+          style={{ position: 'relative', color: activeView === 'announcements' ? 'var(--accent)' : undefined }}
+        >
+          <Megaphone className="w-5 h-5" style={{ color: activeView === 'announcements' ? 'var(--accent)' : 'var(--text-secondary)' }} />
+          {announcementCount > 0 && (
+            <span style={{
+              position: 'absolute', top: 0, right: 0, background: 'var(--accent)', color: 'white',
+              fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
+              transform: 'translate(25%, -25%)'
+            }}>
+              {announcementCount > 9 ? '9+' : announcementCount}
+            </span>
+          )}
+        </button>
+
         {/* Due Soon Alert */}
         {dueSoonCount > 0 && (
           <button

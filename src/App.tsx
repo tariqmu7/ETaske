@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, serverTimestamp, updateDoc, query, where, orderBy } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
-import { AppUser, AppNotification } from './types';
+import { AppUser, AppNotification, Announcement } from './types';
 import LoginScreen from './LoginScreen';
 import PendingScreen from './PendingScreen';
 import RejectedScreen from './RejectedScreen';
@@ -15,11 +15,12 @@ import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
 import ChatBox from './components/ChatBox';
-import { 
-  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users 
+import Announcements from './components/Announcements';
+import {
+  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone
 } from 'lucide-react';
 
-export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview';
+export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -29,6 +30,7 @@ export default function App() {
   const [activeView, setActiveView] = useState<AppView>('tasks');
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   // Auth setup
   useEffect(() => {
@@ -167,6 +169,50 @@ export default function App() {
     };
   }, [user, appUser]);
 
+  // Presence heartbeat: keep our own lastSeen fresh while the tab is open so
+  // other users get an accurate "last seen" in chat. Rules allow a self-update
+  // that doesn't touch role/status, so this needs no rule change.
+  useEffect(() => {
+    if (!user || !appUser || appUser.status !== 'Approved') return;
+    const ref = doc(db, 'users', user.uid);
+    const beat = () => {
+      if (document.visibilityState === 'visible') {
+        updateDoc(ref, { lastSeen: serverTimestamp() }).catch(() => {});
+      }
+    };
+    beat();
+    const interval = setInterval(beat, 60_000);
+    document.addEventListener('visibilitychange', beat);
+    window.addEventListener('focus', beat);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', beat);
+      window.removeEventListener('focus', beat);
+    };
+  }, [user, appUser?.status]);
+
+  // Department announcements (single equality filter -> no composite index;
+  // sorted client-side). Empty/None department -> no feed.
+  useEffect(() => {
+    if (!user || !appUser || appUser.status !== 'Approved') return;
+    const dept = (appUser.department || '').trim();
+    if (!dept || dept === 'None') {
+      setAnnouncements([]);
+      return;
+    }
+    const q = query(collection(db, 'announcements'), where('department', '==', dept));
+    const unsub = onSnapshot(
+      q,
+      (snap) => {
+        const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as Announcement));
+        rows.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+        setAnnouncements(rows);
+      },
+      (err) => console.warn('Announcements listener error:', err.code)
+    );
+    return () => unsub();
+  }, [user, appUser?.status, appUser?.department]);
+
   // Default view by role
   useEffect(() => {
     if (!appUser) return;
@@ -210,7 +256,9 @@ export default function App() {
   if (appUser.status === 'Pending') return <PendingScreen />;
   if (appUser.status === 'Rejected') return <RejectedScreen />;
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadAnnouncements = announcements.filter(
+    a => a.authorId !== appUser.id && !(a.readBy || []).includes(appUser.id)
+  ).length;
 
   const sharedProps = { user, appUser, projectUsers };
 
@@ -222,6 +270,7 @@ export default function App() {
         onNavigate={setActiveView}
         notifications={notifications}
         dueSoonCount={dueSoonCount}
+        announcementCount={unreadAnnouncements}
         onLogout={handleLogout}
       />
       <main className="main-content">
@@ -240,6 +289,13 @@ export default function App() {
         {activeView === 'archive' && (
           <ArchiveDashboard {...sharedProps} />
         )}
+        {activeView === 'announcements' && (
+          <Announcements
+            appUser={appUser}
+            announcements={announcements}
+            projectUsers={projectUsers}
+          />
+        )}
         {activeView === 'admin' && (appUser.role === 'Admin') && (
           <AdminDashboard users={projectUsers} />
         )}
@@ -253,6 +309,7 @@ export default function App() {
           { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
           { id: 'manager-inbox',   label: 'Inbox',           icon: <Inbox />,       show: true },
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
+          { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
           { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
           { id: 'admin',           label: 'Users',           icon: <Users />,       show: appUser.role === 'Admin' },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])

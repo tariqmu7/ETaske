@@ -43,6 +43,9 @@ required, and no data migration:
 - Sidebar notification "mark read" writes only `{read: true}` — matches the
   `hasOnly(['read'])` update rule.
 
+> Superseded for chat by the announcements/presence change — see the section
+> at the bottom of this file.
+
 Pending/Rejected accounts now get `permission-denied` on dashboard listeners.
 That is the intended effect; those users are already UI-gated to the
 Pending/Rejected screens, and existing `onSnapshot` error handlers swallow it.
@@ -84,3 +87,29 @@ the Pending user is denied.
 
 `git checkout HEAD -- firestore.rules` then re-run the deploy command to restore
 the previous open ruleset.
+
+## Update — announcements + chat presence
+
+Added with the department-announcements and chat-receipt features. **Requires a
+fresh `firebase deploy --only firestore:rules` to the named DB** — until then
+the live rules reject announcement writes and the chat seen-receipt write.
+
+- **New `announcements` collection.** Read = any Approved member (no per-record
+  isolation — same shared-org trust boundary as tasks/correspondences above;
+  department scoping is applied client-side, not in rules, by design). Create =
+  Approved and `authorId == uid`. Update = manager/admin, the author, **or** a
+  non-author whose diff touches only `readBy` (the mark-as-seen
+  `arrayUnion(uid)` path — same shape as the notifications `read` rule). Delete
+  = manager/admin or the author. Same residual openness as the rest of the
+  board: every Approved user can read every department's announcements; the
+  feed is filtered client-side.
+- **Messages update rule widened** from `hasOnly(['read'])` to
+  `hasOnly(['read', 'readAt'])` so the receiver can stamp a seen-time for the
+  "Seen HH:MM" receipt. Still receiver-only, still no other field writable, no
+  deletes. This supersedes the "mark read writes only `{read:true}`" note in
+  *Client impact* above — the receiver write is now `{read:true, readAt:ts}`.
+- **Presence:** the heartbeat is a self-update of `users/{me}.lastSeen` only;
+  it already satisfies the existing `users` update rule (role/status unchanged),
+  so no rule change was needed for it. Cost: one `users` write per active tab
+  per minute, fanned out to every open client via the existing users listener —
+  acceptable for a small org, standard presence trade-off.

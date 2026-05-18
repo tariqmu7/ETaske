@@ -133,6 +133,27 @@ service cloud.firestore {
       allow delete: if isAdminEmail();
     }
 
+    // ─── Announcements ────────────────────────────────────────────────────────
+    // Department broadcast. Readable by any Approved member (no per-record
+    // isolation — consistent with the shared-org trust boundary in
+    // RULES-NOTES.md; department scoping is applied client-side). Any Approved
+    // user may post one authored by themselves. A non-author may only append
+    // themselves to `readBy` (mark-as-seen); the author or a manager/admin may
+    // edit or delete it.
+    match /announcements/{id} {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+        request.resource.data.authorId == request.auth.uid;
+      allow update: if isApproved() && (
+        isManagerOrAdmin() ||
+        resource.data.authorId == request.auth.uid ||
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy'])
+      );
+      allow delete: if isApproved() && (
+        isManagerOrAdmin() || resource.data.authorId == request.auth.uid
+      );
+    }
+
     // ─── Chat Messages ────────────────────────────────────────────────────────
     match /messages/{id} {
       allow read: if isSignedIn() && (
@@ -141,9 +162,9 @@ service cloud.firestore {
         request.auth.uid == resource.data.senderId
       );
       allow create: if isSignedIn() && request.auth.uid in request.resource.data.participants;
-      // Allow receiver to mark as read
+      // Allow receiver to mark as read (and stamp readAt for the seen receipt)
       allow update: if isSignedIn() && request.auth.uid == resource.data.receiverId
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read', 'readAt']);
       allow delete: if false;
     }
   }

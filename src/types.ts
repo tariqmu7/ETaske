@@ -164,6 +164,21 @@ export interface ChatMessage {
   createdAt: Timestamp;
   participants: string[]; // [uid1, uid2] sorted
   read: boolean;
+  readAt?: Timestamp;     // when the receiver opened/saw it
+}
+
+// ─── Announcements (department broadcast) ─────────────────────────────────────
+
+export interface Announcement {
+  id: string;
+  text: string;
+  department: string;        // scope: every Approved user with this department
+  authorId: string;
+  authorName: string;
+  authorPhotoURL?: string;
+  authorColor?: string;
+  readBy: string[];          // uids that have seen it (small dept teams)
+  createdAt: Timestamp;
 }
 
 // ─── Select Options ───────────────────────────────────────────────────────────

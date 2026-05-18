@@ -6,10 +6,20 @@ import {
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { AppUser, ChatMessage } from '../types';
-import { 
-  MessageSquare, Send, X, Search, User as UserIcon, 
-  ChevronLeft, Minus, Maximize2 
+import { timeAgo } from '../utils';
+import {
+  MessageSquare, Send, X, Search, User as UserIcon,
+  ChevronLeft, Minus, Check, CheckCheck
 } from 'lucide-react';
+
+// Online if the user's lastSeen heartbeat is within the last 2 minutes.
+const ONLINE_WINDOW_MS = 2 * 60 * 1000;
+const presenceOf = (u?: AppUser | null) => {
+  const ms = u?.lastSeen?.toDate?.()?.getTime?.();
+  if (!ms) return { online: false, label: 'Offline' };
+  if (Date.now() - ms < ONLINE_WINDOW_MS) return { online: true, label: 'Active now' };
+  return { online: false, label: `Last seen ${timeAgo(ms)}` };
+};
 import { motion, AnimatePresence } from 'motion/react';
 
 interface ChatBoxProps {
@@ -27,7 +37,26 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
   const [showNotification, setShowNotification] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  // Re-render every 30s so "Active now" decays to "Last seen …" even when no
+  // new snapshot arrives (the other user simply stopped heart-beating).
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    if (!isOpen) return;
+    const t = setInterval(() => setNowTick(n => n + 1), 30_000);
+    return () => clearInterval(t);
+  }, [isOpen]);
+
   const otherUsers = allUsers.filter(u => u.id !== currentUser.id && u.status === 'Approved');
+  // Always read presence from the live users list, not the stale click-time copy.
+  const liveSelectedUser = selectedUser
+    ? allUsers.find(u => u.id === selectedUser.id) || selectedUser
+    : null;
+  const presence = presenceOf(liveSelectedUser);
+  // Index of my most recent message — only it carries the seen/sent receipt.
+  let lastMineIdx = -1;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].senderId === currentUser.id) { lastMineIdx = i; break; }
+  }
   const filteredUsers = otherUsers.filter(u => 
     u.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
     u.email.toLowerCase().includes(searchQuery.toLowerCase())
@@ -112,7 +141,7 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
       unreadFromThisUser.forEach(async (msg) => {
         markingRef.current.add(msg.id);
         try {
-          await updateDoc(doc(db, 'messages', msg.id), { read: true });
+          await updateDoc(doc(db, 'messages', msg.id), { read: true, readAt: serverTimestamp() });
         } catch (err) {
           console.warn("Error marking as read:", err);
           markingRef.current.delete(msg.id);
@@ -193,7 +222,14 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
                       )}
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{selectedUser.displayName}</div>
-                        <div style={{ fontSize: 10, opacity: 0.8 }}>Active Now</div>
+                        <div style={{ fontSize: 10, opacity: 0.85, display: 'flex', alignItems: 'center', gap: 5 }}>
+                          <span style={{
+                            width: 7, height: 7, borderRadius: '50%',
+                            background: presence.online ? '#22c55e' : 'rgba(255,255,255,0.5)',
+                            display: 'inline-block', flexShrink: 0,
+                          }} />
+                          {presence.label}
+                        </div>
                       </div>
                     </div>
                   </>
@@ -281,6 +317,18 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
                                   border: '2px solid #ffffff'
                                 }} />
                               )}
+                              {presenceOf(u).online && (
+                                <div style={{
+                                  position: 'absolute',
+                                  bottom: 0,
+                                  right: 0,
+                                  width: 11,
+                                  height: 11,
+                                  background: '#22c55e',
+                                  borderRadius: '50%',
+                                  border: '2px solid #ffffff'
+                                }} />
+                              )}
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -298,7 +346,9 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: 12, color: '#64748b' }}>{u.role}</div>
+                              <div style={{ fontSize: 12, color: '#64748b' }}>
+                                {u.role} · {presenceOf(u).label}
+                              </div>
                             </div>
                           </button>
                         );
@@ -347,8 +397,21 @@ export default function ChatBox({ currentUser, allUsers }: ChatBoxProps) {
                             }}>
                               {msg.text}
                             </div>
-                            <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
+                            <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                               {msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              {isMine && idx === lastMineIdx && (
+                                msg.read ? (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 2, color: 'var(--blue-600)', fontWeight: 600 }}>
+                                    <CheckCheck size={13} />
+                                    Seen{msg.readAt ? ` ${msg.readAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                  </span>
+                                ) : (
+                                  <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                    <Check size={13} />
+                                    Sent
+                                  </span>
+                                )
+                              )}
                             </span>
                           </div>
                         );
