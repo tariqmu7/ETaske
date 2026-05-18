@@ -14,6 +14,7 @@ import TasksDashboard from './TasksDashboard';
 import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
+import DueSoonDashboard from './DueSoonDashboard';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
@@ -21,7 +22,7 @@ import {
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone
 } from 'lucide-react';
 
-export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements';
+export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -291,6 +292,9 @@ export default function App() {
         )}
         {activeView === 'archive' && (
           <ArchiveDashboard {...sharedProps} />
+        )}
+        {activeView === 'due-soon' && (
+          <DueSoonDashboard {...sharedProps} onNavigate={setActiveView} />
         )}
         {activeView === 'announcements' && (
           <Announcements

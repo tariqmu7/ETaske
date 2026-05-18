@@ -156,8 +156,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         {dueSoonCount > 0 && (
           <button
             className="btn btn-ghost btn-icon"
-            onClick={() => onNavigate(isManagerOrAdmin ? 'overview' : 'tasks')}
-            title={`${dueSoonCount} items due soon`}
+            onClick={() => onNavigate('due-soon')}
+            title={`${dueSoonCount} items due soon — view list`}
             style={{ position: 'relative' }}
           >
             <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
