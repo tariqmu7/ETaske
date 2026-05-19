@@ -256,7 +256,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
+      <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
       {/* Left: toolbar + card list */}
       <div>
       {/* Toolbar */}
@@ -379,7 +379,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       </div>{/* end left column */}
 
       {/* Right: team workload panel */}
-      <div style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
             Team Workload

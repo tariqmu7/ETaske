@@ -375,6 +375,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
+  white-space: nowrap;
 }
 .badge::before {
   content: '';
@@ -889,5 +890,13 @@ h1, h2, h3, h4, p, span, div {
   .ms-task-actions .btn {
     flex: 1;
     justify-content: center;
+  }
+
+  /* ── Manager Inbox: stack workload panel below the list ── */
+  .inbox-grid {
+    grid-template-columns: 1fr !important;
+  }
+  .inbox-workload {
+    position: static !important;
   }
 }
