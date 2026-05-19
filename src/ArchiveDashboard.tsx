@@ -192,10 +192,12 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       </div>
 
       {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
-          <Archive style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }} />
-          <p style={{ fontSize: 15, fontWeight: 600 }}>Archive is empty</p>
-          <p style={{ fontSize: 13, marginTop: 6 }}>Completed tasks will appear here.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <Archive style={{ width: 28, height: 28 }} />
+          </div>
+          <p className="empty-state-title">Archive is empty</p>
+          <p className="empty-state-sub">Completed and archived tasks will appear here.<br />Mark a task as Done to archive it.</p>
         </div>
       )}
 

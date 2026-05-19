@@ -633,10 +633,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       )}
 
       {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
-          <MailOpen style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.3 }} />
-          <p style={{ fontSize: 15, fontWeight: 600 }}>No correspondences found</p>
-          <p style={{ fontSize: 13, marginTop: 6 }}>Log a new incoming document to get started.</p>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <MailOpen style={{ width: 28, height: 28 }} />
+          </div>
+          <p className="empty-state-title">No correspondences found</p>
+          <p className="empty-state-sub">No items match your filters, or nothing has been logged yet.<br />Use the button above to add a new correspondence.</p>
         </div>
       )}
 

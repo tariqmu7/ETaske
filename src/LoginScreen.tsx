@@ -42,35 +42,43 @@ export default function LoginScreen() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'linear-gradient(135deg, #2563eb 0%, #14b8a6 100%)',
+      background: 'linear-gradient(150deg, #1d4ed8 0%, #2563eb 40%, #14b8a6 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       padding: 20,
     }}>
+      {/* Decorative blobs */}
+      <div style={{ position: 'fixed', inset: 0, overflow: 'hidden', pointerEvents: 'none', zIndex: 0 }}>
+        <div style={{ position: 'absolute', width: 400, height: 400, background: 'rgba(255,255,255,0.04)', top: -100, right: -80, transform: 'rotate(20deg)' }} />
+        <div style={{ position: 'absolute', width: 300, height: 300, background: 'rgba(255,255,255,0.04)', bottom: -60, left: -60, transform: 'rotate(-15deg)' }} />
+      </div>
+
       <div style={{
         background: '#fff',
         borderRadius: 0,
         width: '100%',
         maxWidth: 420,
         overflow: 'hidden',
-        boxShadow: '0 25px 60px rgba(0,0,0,0.2)',
+        boxShadow: '0 32px 80px rgba(0,0,0,0.3), 0 4px 16px rgba(37,99,235,0.2)',
+        position: 'relative', zIndex: 1,
       }}>
         {/* Header */}
         <div style={{
           padding: '36px 36px 28px',
-          background: 'linear-gradient(135deg, #eff6ff, #f0fdf4)',
-          borderBottom: '1px solid var(--border)',
+          background: 'linear-gradient(135deg, #dbeafe 0%, #dcfce7 100%)',
+          borderBottom: '2px solid var(--blue-200)',
           textAlign: 'center',
         }}>
           <div style={{
-            width: 56, height: 56,
+            width: 60, height: 60,
             background: 'linear-gradient(135deg, #2563eb, #14b8a6)',
             borderRadius: 0,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             margin: '0 auto 16px',
+            boxShadow: '0 8px 20px rgba(37,99,235,0.3)',
           }}>
-            <Briefcase style={{ width: 24, height: 24, color: '#fff' }} />
+            <Briefcase style={{ width: 26, height: 26, color: '#fff' }} />
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>
             Welcome to ETaske
