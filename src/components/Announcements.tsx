@@ -15,6 +15,77 @@ interface Props {
   projectUsers: AppUser[];
 }
 
+function SeenByBadge({ seenCount, reach, readByIds, userById }: {
+  seenCount: number;
+  reach: number;
+  readByIds: string[];
+  userById: Map<string, AppUser>;
+}) {
+  const [show, setShow] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const seenUsers = readByIds.map(id => userById.get(id)).filter(Boolean) as AppUser[];
+
+  return (
+    <div
+      ref={ref}
+      style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 4, cursor: 'default' }}
+      onMouseEnter={() => setShow(true)}
+      onMouseLeave={() => setShow(false)}
+    >
+      <Users className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
+      <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+        Seen by {seenCount} of {reach}
+      </span>
+      {show && seenUsers.length > 0 && (
+        <div style={{
+          position: 'absolute',
+          bottom: 'calc(100% + 6px)',
+          left: 0,
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 4,
+          padding: '8px 10px',
+          minWidth: 180,
+          width: 'max-content',
+          boxShadow: '0 4px 16px rgba(0,0,0,0.18)',
+          pointerEvents: 'none',
+          zIndex: 9999,
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
+            Seen by
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            {seenUsers.map(u => (
+              <div key={u.id} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                {u.photoURL ? (
+                  <img
+                    src={u.photoURL}
+                    referrerPolicy="no-referrer"
+                    alt=""
+                    style={{ width: 18, height: 18, borderRadius: 0, objectFit: 'cover', flexShrink: 0 }}
+                  />
+                ) : (
+                  <div style={{
+                    width: 18, height: 18, flexShrink: 0,
+                    background: u.userColor || 'var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    color: '#fff', fontWeight: 800, fontSize: 10,
+                  }}>
+                    {u.displayName?.[0]?.toUpperCase() || '?'}
+                  </div>
+                )}
+                <span style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                  {u.displayName || u.email}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Announcements({ appUser, announcements, projectUsers }: Props) {
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -269,7 +340,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
               .map(id => userById.get(id))
               .filter(Boolean) as AppUser[];
             return (
-              <div key={a.id} className="card" style={{ padding: 16 }}>
+              <div key={a.id} className="card" style={{ padding: 16, overflow: 'visible' }}>
                 <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
                   {a.authorPhotoURL ? (
                     <img
@@ -304,9 +375,13 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                       {a.text}
                     </p>
                     {mine && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <Users className="w-3 h-3" />
-                        Seen by {seenCount} of {reach}
+                      <div style={{ marginTop: 8 }}>
+                        <SeenByBadge
+                          seenCount={seenCount}
+                          reach={reach}
+                          readByIds={a.readBy || []}
+                          userById={userById}
+                        />
                       </div>
                     )}
                     {isTargeted && (
