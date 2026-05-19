@@ -1,7 +1,9 @@
 {
   "permissions": {
-    "allow": [
-      "Bypass permissions"
-    ]
+    "defaultMode": "bypassPermissions"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "sh ~/.claude/statusline-command.sh"
   }
 }

@@ -1,25 +1,28 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
   Inbox, CheckSquare, Archive,
-  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone
+  LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
+  Download, BellOff, BellRing
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
+import { usePWA } from '../hooks/usePWA';
 
 interface Props {
   appUser: AppUser;
   activeView: AppView;
   onNavigate: (v: AppView) => void;
-   notifications: AppNotification[];
-   dueSoonCount: number;
-   announcementCount: number;
-   onLogout: () => void;
- }
+  notifications: AppNotification[];
+  dueSoonCount: number;
+  announcementCount: number;
+  onLogout: () => void;
+  pwa: ReturnType<typeof usePWA>;
+}
 
-export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout }: Props) {
+export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout, pwa }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -146,6 +149,33 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Install PWA */}
+        {pwa.canInstall && (
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={pwa.promptInstall}
+            title="Add to Home Screen"
+          >
+            <Download className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+          </button>
+        )}
+
+        {/* Enable / notifications granted indicator */}
+        {pwa.notificationPermission !== 'granted' && !pwa.canInstall && (
+          <button
+            className="btn btn-ghost btn-icon"
+            onClick={pwa.enableNotifications}
+            title={pwa.isIOS && !pwa.isInstalled ? 'Install app first to enable notifications' : 'Enable push notifications'}
+          >
+            <BellOff className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+          </button>
+        )}
+        {pwa.notificationPermission === 'granted' && (
+          <span title="Push notifications enabled">
+            <BellRing className="w-5 h-5" style={{ color: '#22c55e' }} />
+          </span>
+        )}
+
         {/* Announcements */}
         <button
           className="btn btn-ghost btn-icon"

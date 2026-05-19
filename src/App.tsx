@@ -21,6 +21,8 @@ import Announcements from './components/Announcements';
 import {
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone
 } from 'lucide-react';
+import { usePWA } from './hooks/usePWA';
+import { onForegroundMessage } from './lib/fcm';
 
 export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon';
 
@@ -33,6 +35,20 @@ export default function App() {
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+
+  const pwa = usePWA(user?.uid ?? null);
+
+  // Register SW + listen for foreground FCM messages once user is approved
+  useEffect(() => {
+    if (!appUser || appUser.status !== 'Approved') return;
+    return onForegroundMessage((payload: any) => {
+      const title = payload?.notification?.title ?? 'ETaske';
+      const body = payload?.notification?.body ?? '';
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, { body, icon: '/favicon.png' });
+      }
+    });
+  }, [appUser]);
 
   // Auth setup
   useEffect(() => {
@@ -103,10 +119,6 @@ export default function App() {
   // Notifications for current user
   useEffect(() => {
     if (!user || !appUser || appUser.status !== 'Approved') return;
-
-    if ("Notification" in window && Notification.permission !== "denied" && Notification.permission !== "granted") {
-      Notification.requestPermission();
-    }
 
     const q = query(
       collection(db, 'notifications'),
@@ -276,6 +288,7 @@ export default function App() {
         dueSoonCount={dueSoonCount}
         announcementCount={unreadAnnouncements}
         onLogout={handleLogout}
+        pwa={pwa}
       />
       <main className="main-content">
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
