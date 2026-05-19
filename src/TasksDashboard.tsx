@@ -1189,6 +1189,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     </span>
                                   )}
                                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
+                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title="Creation date"><Clock className="w-3 h-3" /> {task.createdAt.toDate().toLocaleDateString('en-GB')}</span>}
                                   {(task.correspondingSerialNumber || task.correspondingSubject) && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <Link2 className="w-3 h-3" /> 

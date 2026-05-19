@@ -133,7 +133,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                   <span className={`badge ${task.status === 'Archived' ? 'badge-archived' : 'badge-done'}`}>
                     {task.status === 'Archived' ? <Archive className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />} {task.status}
                   </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{task.updatedAt?.toDate?.()?.toLocaleDateString?.() || ''}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{task.updatedAt?.toDate?.()?.toLocaleDateString?.('en-GB') || ''}</span>
                 </div>
 
                 <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>{task.taskName}</h3>

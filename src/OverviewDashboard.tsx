@@ -42,7 +42,7 @@ const TASK_STATUS_ORDER: TaskStatus[] = ['Pending', 'In Progress', 'Done', 'Arch
 function formatDate(d: Timestamp | string | undefined): string {
   if (!d) return '—';
   if (typeof d === 'string') return d;
-  return d.toDate().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toDate().toLocaleDateString('en-GB');
 }
 
 

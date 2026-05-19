@@ -388,11 +388,24 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
             <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No team members</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {targetUsers.slice(0, 12).map(emp => {
-                const inProgress = tasks.filter(t => t.assignedToId === emp.id && (t.status === 'In Progress' || t.status === 'Pending')).length;
-                const done = tasks.filter(t => t.assignedToId === emp.id && t.status === 'Done').length;
+              {[...targetUsers].sort((a, b) => {
+                const aActive = tasks.filter(t => t.assignedToId === a.id && (t.status === 'In Progress' || t.status === 'Pending')).length;
+                const bActive = tasks.filter(t => t.assignedToId === b.id && (t.status === 'In Progress' || t.status === 'Pending')).length;
+                if (bActive !== aActive) return bActive - aActive;
+                const aDone = tasks.filter(t => t.assignedToId === a.id && (t.status === 'Done' || t.status === 'Archived')).length;
+                const bDone = tasks.filter(t => t.assignedToId === b.id && (t.status === 'Done' || t.status === 'Archived')).length;
+                return bDone - aDone;
+              }).slice(0, 12).map(emp => {
+                const activeTasks = tasks.filter(t => t.assignedToId === emp.id && (t.status === 'In Progress' || t.status === 'Pending'));
+                const inProgress = activeTasks.length;
+                const done = tasks.filter(t => t.assignedToId === emp.id && (t.status === 'Done' || t.status === 'Archived')).length;
                 const total = inProgress + done;
                 const donePercent = total > 0 ? Math.round((done / total) * 100) : 0;
+                const oldestActive = activeTasks.reduce<Date | null>((oldest, t) => {
+                  if (!t.createdAt) return oldest;
+                  const d = t.createdAt.toDate();
+                  return !oldest || d < oldest ? d : oldest;
+                }, null);
                 return (
                   <div key={emp.id}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
@@ -417,6 +430,12 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     {total > 0 && (
                       <div style={{ height: 4, background: 'var(--surface-2)', borderRadius: 2, overflow: 'hidden' }}>
                         <div style={{ height: '100%', width: `${donePercent}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                      </div>
+                    )}
+                    {oldestActive && (
+                      <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                        <span style={{ opacity: 0.6 }}>Since</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{oldestActive.toLocaleDateString('en-GB')}</span>
                       </div>
                     )}
                   </div>
