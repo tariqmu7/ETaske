@@ -902,9 +902,6 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                       <motion.div
                         key={task.id}
                         id={`task-${task.id}`}
-                        layout
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0 }}
                         className="card"
                         style={{ 
@@ -1423,8 +1420,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                 </div>
                                               ) : (
                                               <>
-                                              <div className="ms-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                <span className="ms-title" style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>
+                                              <div className="ms-card-head" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                                                <span className="ms-title" style={{ fontWeight: 600, fontSize: 13, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none', wordBreak: 'break-word', overflowWrap: 'break-word', minWidth: 0, flex: 1 }}>
                                                   {ms.title}
                                                 </span>
                                                 <div className="ms-card-ctrls" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -1438,12 +1435,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                           if (ms.status !== s) handleUpdateMilestoneStatus(ms.id, s as MilestoneStatus);
                                                         }}
                                                         style={{
-                                                          padding: '2px 8px',
+                                                          padding: '2px 6px',
                                                           fontSize: 10,
                                                           fontWeight: 700,
                                                           borderRadius: 0,
                                                           border: 'none',
                                                           cursor: 'pointer',
+                                                          whiteSpace: 'nowrap',
                                                           background: ms.status === s ? (s === 'Done' ? '#dcfce7' : s === 'In Progress' ? '#e0e7ff' : s === 'Blocked' ? '#fee2e2' : '#f1f5f9') : 'transparent',
                                                           color: ms.status === s ? (s === 'Done' ? '#166534' : s === 'In Progress' ? '#3730a3' : s === 'Blocked' ? '#991b1b' : 'var(--text-primary)') : 'var(--text-muted)',
                                                           transition: 'all 0.15s'
