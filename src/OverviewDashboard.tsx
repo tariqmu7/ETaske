@@ -237,6 +237,21 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
     return stats;
   }, [correspondences, tasks]);
 
+  // ─── Top-level summary stats ──────────────────────────────────────────
+  const summaryStats = useMemo(() => {
+    const totalCorrs = correspondences.filter(c => c.id !== '--stats--').length;
+    const openCorrs = correspondences.filter(c => c.status !== 'Closed' && c.id !== '--stats--').length;
+    const activeTasks = tasks.filter(t => t.status !== 'Archived' && t.status !== 'Done').length;
+    const doneTasks = tasks.filter(t => t.status === 'Done').length;
+    const totalTasks = tasks.filter(t => t.status !== 'Archived').length;
+    const overdue = [
+      ...correspondences.filter(c => c.status !== 'Closed' && isOverdue(c.deadline)),
+      ...tasks.filter(t => t.status !== 'Done' && t.status !== 'Archived' && isOverdue(t.dueDate)),
+    ].length;
+    const rate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+    return { totalCorrs, openCorrs, activeTasks, doneTasks, overdue, rate };
+  }, [correspondences, tasks]);
+
   // ─── Due Soon Alerts ───────────────────────────────────────────────────
   const dueSoonItems = useMemo(() => {
     const corrs = correspondences
@@ -425,6 +440,14 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         </div>
       </div>
 
+      {/* ── Summary Stat Cards ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 28 }}>
+        <StatCard label="Correspondences" value={summaryStats.totalCorrs} sub={`${summaryStats.openCorrs} open`} color="var(--blue-600)" />
+        <StatCard label="Active Tasks" value={summaryStats.activeTasks} sub={`${summaryStats.doneTasks} done`} color="var(--green-600)" />
+        <StatCard label="Overdue" value={summaryStats.overdue} sub="need attention" color="#ef4444" />
+        <StatCard label="Completion" value={`${summaryStats.rate}%`} sub="tasks done" color="var(--teal-500)" />
+      </div>
+
       {/* ── Due Soon Alerts Section ── */}
       {dueSoonItems.length > 0 && selectedCategory === null && (
         <motion.div
@@ -497,8 +520,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div className="cat-card-head" style={{ padding: '24px', background: catStyle.bg, borderBottom: `1px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ color: catStyle.text, padding: 12, background: 'rgba(255,255,255,0.5)', borderRadius: 0 }}>
+                <div className="cat-card-head" style={{ padding: '24px', background: `linear-gradient(135deg, ${catStyle.bg}, #fff)`, borderBottom: `2px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ color: '#fff', padding: 10, background: catStyle.text, borderRadius: 0, boxShadow: `0 4px 12px ${catStyle.border}` }}>
                     {catStyle.icon}
                   </div>
                   <div>

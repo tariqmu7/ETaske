@@ -1542,10 +1542,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       )}
 
       {filtered.length === 0 && (
-        <div style={{ textAlign: 'center', padding: '80px 20px', color: 'var(--text-muted)' }}>
-          <CheckCircle2 style={{ width: 48, height: 48, margin: '0 auto 16px', opacity: 0.2 }} />
-          <p style={{ fontSize: 16, fontWeight: 600 }}>No tasks found matching your filters.</p>
-          <button className="btn btn-ghost btn-sm" style={{ marginTop: 12 }} onClick={resetFilters}>Clear All Filters</button>
+        <div className="empty-state">
+          <div className="empty-state-icon">
+            <CheckCircle2 style={{ width: 28, height: 28 }} />
+          </div>
+          <p className="empty-state-title">No tasks found</p>
+          <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
+          <button className="btn btn-ghost btn-sm" onClick={resetFilters}>Clear All Filters</button>
         </div>
       )}
 

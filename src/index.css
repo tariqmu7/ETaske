@@ -77,9 +77,9 @@ body {
   top: 0;
   z-index: 50;
   height: var(--topnav-h);
-  background: #ffffff;
-  border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 8px rgba(37,99,235,0.06);
+  background: var(--blue-50);
+  border-bottom: 2px solid var(--blue-600);
+  box-shadow: 0 2px 12px rgba(37,99,235,0.10);
   display: flex;
   align-items: center;
   padding: 0 16px;
@@ -160,8 +160,10 @@ body {
 }
 
 .nav-tab.active {
-  background: var(--blue-600);
-  color: #fff;
+  background: #fff;
+  color: var(--blue-700);
+  font-weight: 700;
+  box-shadow: inset 0 -3px 0 var(--blue-600);
 }
 
 .nav-tab .tab-badge {
@@ -177,7 +179,8 @@ body {
 }
 
 .nav-tab.active .tab-badge {
-  background: rgba(255,255,255,0.3);
+  background: var(--blue-600);
+  color: #fff;
 }
 
 /* User area */
@@ -365,13 +368,22 @@ body {
 .badge {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: 5px;
   padding: 3px 10px;
   border-radius: 0;
   font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 600;
+  letter-spacing: 0.03em;
   text-transform: uppercase;
+}
+.badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+  opacity: 0.8;
 }
 
 .badge-pending    { background: #fef3c7; color: #92400e; }
@@ -538,11 +550,15 @@ h1, h2, h3, h4, p, span, div {
   border-radius: 0;
   overflow: hidden;
 }
+@keyframes progressFillLoad {
+  from { width: 0 !important; }
+}
 .progress-fill {
   height: 100%;
   background: linear-gradient(90deg, var(--blue-500), var(--teal-500));
   border-radius: 0;
   transition: width 0.4s ease;
+  animation: progressFillLoad 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 /* ─── Notification dot ──────────────────────────── */
@@ -603,11 +619,11 @@ h1, h2, h3, h4, p, span, div {
 }
 
 /* ─── Stat cards ─────────────────────────────────── */
-.stat-indigo { background: linear-gradient(135deg, var(--blue-50), #fff); border-color: var(--blue-200); }
-.stat-amber  { background: linear-gradient(135deg, #fffbeb, #fff); border-color: #fde68a; }
-.stat-green  { background: linear-gradient(135deg, var(--green-50), #fff); border-color: var(--green-100); }
-.stat-red    { background: linear-gradient(135deg, #fff1f2, #fff); border-color: #fecdd3; }
-.stat-sky    { background: linear-gradient(135deg, #f0f9ff, #fff); border-color: #bae6fd; }
+.stat-indigo { background: linear-gradient(135deg, var(--blue-100) 0%, #fff 65%); border-color: var(--blue-200); }
+.stat-amber  { background: linear-gradient(135deg, #fde68a 0%, #fff 65%); border-color: #fcd34d; }
+.stat-green  { background: linear-gradient(135deg, var(--green-100) 0%, #fff 65%); border-color: var(--green-400); }
+.stat-red    { background: linear-gradient(135deg, #fecdd3 0%, #fff 65%); border-color: #fca5a5; }
+.stat-sky    { background: linear-gradient(135deg, #bae6fd 0%, #fff 65%); border-color: #7dd3fc; }
 
 /* ─── Hero gradient (login / pending screens) ────── */
 .hero-bg {
@@ -658,6 +674,39 @@ h1, h2, h3, h4, p, span, div {
   font-weight: 600;
   background: var(--blue-50);
   color: var(--blue-700);
+}
+
+/* ─── Empty state ───────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 72px 20px;
+  text-align: center;
+  border: 1.5px dashed var(--border-md);
+  background: var(--surface);
+}
+.empty-state-icon {
+  width: 60px;
+  height: 60px;
+  margin: 0 auto 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--blue-50);
+  color: var(--blue-400);
+}
+.empty-state-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.empty-state-sub {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  line-height: 1.5;
 }
 
 /* ─── Floating chat launcher ─────────────────────── */
@@ -720,26 +769,38 @@ h1, h2, h3, h4, p, span, div {
 
   .bottom-tab {
     flex: 1 0 auto;
-    min-width: 78px;
-    gap: 3px;
+    min-width: 56px;
+    gap: 2px;
     padding: 8px 4px;
     position: relative;
   }
   .bottom-tab svg { width: 22px; height: 22px; }
   .bottom-tab span {
     white-space: nowrap;
-    font-size: 10px;
+    font-size: 9px;
     line-height: 1.1;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.2s, max-height 0.2s;
+  }
+  .bottom-tab.active span {
+    opacity: 1;
+    max-height: 14px;
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--blue-600);
   }
   .bottom-tab.active {
-    background: linear-gradient(to bottom, rgba(37,99,235,0.07), transparent);
+    background: linear-gradient(to bottom, rgba(37,99,235,0.08), transparent);
+    min-width: 78px;
   }
   .bottom-tab.active::before {
     content: '';
     position: absolute;
     top: 0;
-    left: 22%;
-    right: 22%;
+    left: 18%;
+    right: 18%;
     height: 3px;
     background: var(--blue-600);
   }

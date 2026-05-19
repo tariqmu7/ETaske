@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Inbox, CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone
@@ -21,7 +21,20 @@ interface Props {
 
 export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (userMenuRef.current && !userMenuRef.current.contains(e.target as Node)) {
+        setShowUserMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showUserMenu]);
 
   const handleClearAll = () => {
     const unread = notifications.filter(n => !n.read);
@@ -236,29 +249,55 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           )}
         </div>
 
-        {/* Avatar */}
-        {appUser.photoURL ? (
-          <img
-            src={appUser.photoURL}
-            alt={appUser.displayName}
-            className="topnav-avatar"
-            referrerPolicy="no-referrer"
-            title={`${appUser.displayName} · ${appUser.role}`}
-          />
-        ) : (
-          <div
-            className="topnav-avatar-placeholder"
-            title={`${appUser.displayName} · ${appUser.role}`}
-            style={{ background: appUser.userColor || undefined }}
-          >
-            {appUser.displayName?.[0]?.toUpperCase() || 'U'}
-          </div>
-        )}
+        {/* Avatar + user dropdown */}
+        <div ref={userMenuRef} style={{ position: 'relative' }}>
+          {appUser.photoURL ? (
+            <img
+              src={appUser.photoURL}
+              alt={appUser.displayName}
+              className="topnav-avatar"
+              referrerPolicy="no-referrer"
+              title={`${appUser.displayName} · ${appUser.role}`}
+              onClick={() => setShowUserMenu(v => !v)}
+            />
+          ) : (
+            <div
+              className="topnav-avatar-placeholder"
+              title={`${appUser.displayName} · ${appUser.role}`}
+              style={{ background: appUser.userColor || undefined }}
+              onClick={() => setShowUserMenu(v => !v)}
+            >
+              {appUser.displayName?.[0]?.toUpperCase() || 'U'}
+            </div>
+          )}
 
-        <button onClick={onLogout} className="logout-btn" title="Sign Out">
-          <LogOut className="w-3.5 h-3.5" />
-          <span className="logout-label">Sign Out</span>
-        </button>
+          {showUserMenu && (
+            <div style={{
+              position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+              background: '#fff', border: '1px solid var(--border)',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
+              minWidth: 220, zIndex: 2000,
+            }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', background: 'var(--blue-50)' }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{appUser.displayName}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{appUser.email}</div>
+                <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', padding: '2px 8px', background: 'var(--blue-600)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+                  {appUser.role}
+                </div>
+              </div>
+              <div style={{ padding: '6px 8px' }}>
+                <button
+                  onClick={() => { setShowUserMenu(false); onLogout(); }}
+                  style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                  onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                >
+                  <LogOut className="w-4 h-4" /> Sign Out
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
     </header>
