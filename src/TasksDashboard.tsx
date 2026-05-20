@@ -64,7 +64,12 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
+  const [showAdvancedCreate, setShowAdvancedCreate] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
+  const [isDragOverEdit, setIsDragOverEdit] = useState(false);
+  const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
   // When a milestone is updated on a task whose due date is already
   // alerting (overdue / due soon), prompt the user to keep, extend, or
   // pick a new due date.
@@ -740,76 +745,133 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
       <AnimatePresence>
         {isAddingTask && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            style={{ overflow: 'hidden', marginBottom: 24 }}
-          >
-            <div className="card" style={{ padding: 24, border: '2px dashed var(--border)' }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Plus className="w-5 h-5 text-primary" /> Create New Task
-              </h3>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="label">Task Name</label>
-                  <input className="input" value={newTask.taskName} onChange={e => setNewTask({ ...newTask, taskName: e.target.value })} placeholder="What needs to be done?" autoFocus />
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setIsAddingTask(false)}
+              style={{
+                position: 'fixed', inset: 0,
+                background: 'rgba(15,23,42,0.4)',
+                backdropFilter: 'blur(2px)',
+                zIndex: 1500,
+              }}
+            />
+            {/* Slide-over panel */}
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              style={{
+                position: 'fixed', top: 0, right: 0, bottom: 0,
+                width: '100%', maxWidth: 480,
+                background: 'var(--surface)',
+                borderLeft: '1px solid var(--border-md)',
+                boxShadow: '-8px 0 40px rgba(15,23,42,0.12)',
+                zIndex: 1501,
+                display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Panel header */}
+              <div style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 32, height: 32, background: 'var(--blue-600)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <Plus style={{ width: 16, height: 16, color: '#fff' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>New Task</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Fill in the details below</div>
+                  </div>
                 </div>
-                <div style={{ gridColumn: '1 / -1' }}>
-                  <label className="label">Description (Optional)</label>
-                  <textarea className="input" value={newTask.description} onChange={e => setNewTask({ ...newTask, description: e.target.value })} rows={2} placeholder="Add details..." />
-                </div>
-                <div>
-                  <label className="label">Priority</label>
-                  <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Corresponding['priority'] })}>
-                    {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Due Date (Optional)</label>
-                  <input type="date" className="input" value={newTask.dueDate} onChange={e => setNewTask({ ...newTask, dueDate: e.target.value })} />
-                </div>
-                <div>
-                  <label className="label">Category</label>
-                  <select className="input" value={newTask.category} onChange={e => handleOtherSelection('category', e.target.value)}>
-                    {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Department</label>
-                  <select className="input" value={newTask.department} onChange={e => handleOtherSelection('department', e.target.value)}>
-                    {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className="label">Sub-Category / Project</label>
-                  <input 
-                    className="input" 
-                    list="subCategoryList"
-                    placeholder="Search or type project..."
-                    value={newTask.subCategory} 
-                    onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })} 
+                <button className="btn btn-ghost btn-icon" onClick={() => setIsAddingTask(false)}>
+                  <X style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
+
+              {/* Scrollable body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+
+                {/* Hero: Task Name */}
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">
+                    Task Name <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <input
+                    className="input"
+                    required
+                    style={{ fontSize: 16, fontWeight: 500, padding: '12px 14px' }}
+                    value={newTask.taskName}
+                    onChange={e => setNewTask({ ...newTask, taskName: e.target.value })}
+                    placeholder="What needs to be done?"
+                    autoFocus
+                    onKeyDown={e => e.key === 'Enter' && newTask.taskName.trim() && handleCreateTask()}
                   />
-                  <datalist id="subCategoryList">
-                    {(newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                      <option key={s} value={s} />
-                    ))}
-                  </datalist>
                 </div>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Assignee</label>
-                  <select 
-                    className="input" 
-                    value={newTask.assignedToId} 
+
+                {/* Description */}
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <textarea
+                    className="input"
+                    value={newTask.description}
+                    onChange={e => setNewTask({ ...newTask, description: e.target.value })}
+                    rows={3}
+                    placeholder="Add context, links, or notes..."
+                    style={{ resize: 'vertical', minHeight: 72 }}
+                  />
+                </div>
+
+                {/* Divider: When & Urgency */}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>When &amp; Urgency</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label className="input-label">Priority</label>
+                    <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Corresponding['priority'] })}>
+                      {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Due Date <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                    <input type="date" className="input" value={newTask.dueDate} onChange={e => setNewTask({ ...newTask, dueDate: e.target.value })} />
+                  </div>
+                </div>
+
+                {/* Divider: Who */}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Who</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">Assignee</label>
+                  <select
+                    className="input"
+                    value={newTask.assignedToId}
                     onChange={e => {
                       const u = projectUsers.find(u => u.id === e.target.value);
                       if (u) setNewTask({ ...newTask, assignedToId: u.id, assignedTo: u.displayName });
                     }}
                   >
                     {projectUsers
-                      .filter(u => 
-                        u.id === user.uid || 
-                        appUser.role === 'Admin' || 
+                      .filter(u =>
+                        u.id === user.uid ||
+                        appUser.role === 'Admin' ||
                         (u.department === appUser.department && u.teamId === appUser.teamId)
                       )
                       .map(u => (
@@ -818,63 +880,176 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     }
                   </select>
                 </div>
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Attachment</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <input type="file" onChange={handleNewFileUpload} style={{ fontSize: 12 }} />
-                    {isUploading && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
-                    {(newTask as any).attachedFileName && (
-                      <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Paperclip className="w-3 h-3" /> {(newTask as any).attachedFileName}
+
+                {/* Divider: Classification */}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Classification</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label className="input-label">Category</label>
+                    <select className="input" value={newTask.category} onChange={e => handleOtherSelection('category', e.target.value)}>
+                      {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Department</label>
+                    <input
+                      className="input"
+                      list="taskDepartmentList"
+                      placeholder="Select or type department..."
+                      value={newTask.department === 'None' ? '' : newTask.department}
+                      onChange={e => setNewTask({ ...newTask, department: e.target.value || 'None' })}
+                    />
+                    <datalist id="taskDepartmentList">
+                      {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
+                    </datalist>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label className="input-label">Sub-Category / Project</label>
+                    <input
+                      className="input"
+                      list="subCategoryList"
+                      placeholder="Search or type project..."
+                      value={newTask.subCategory}
+                      onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })}
+                    />
+                    <datalist id="subCategoryList">
+                      {(newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                {/* Divider: Attachment */}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Attachment</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label
+                    style={{
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      gap: 8, padding: '20px 16px',
+                      border: `2px dashed ${isDragOver ? 'var(--blue-500)' : 'var(--border-md)'}`,
+                      background: isDragOver ? 'rgba(59,130,246,0.05)' : 'var(--surface-2)',
+                      cursor: 'pointer', transition: 'all 0.15s',
+                    }}
+                    onDragOver={e => { e.preventDefault(); setIsDragOver(true); }}
+                    onDragLeave={() => setIsDragOver(false)}
+                    onDrop={e => {
+                      e.preventDefault(); setIsDragOver(false);
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) handleNewFileUpload({ target: { files: e.dataTransfer.files } } as any);
+                    }}
+                  >
+                    <input type="file" onChange={handleNewFileUpload} style={{ display: 'none' }} />
+                    {isUploading ? (
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>
+                    ) : (newTask as any).attachedFileName ? (
+                      <div style={{ fontSize: 12, color: 'var(--blue-600)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+                        <Paperclip style={{ width: 14, height: 14 }} /> {(newTask as any).attachedFileName}
                       </div>
+                    ) : (
+                      <>
+                        <Paperclip style={{ width: 20, height: 20, color: 'var(--text-muted)' }} />
+                        <div style={{ textAlign: 'center' }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Drop file or click to upload</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Uploads to Google Drive</div>
+                        </div>
+                      </>
                     )}
-                  </div>
+                  </label>
                 </div>
-                {/* Shared Folder Paths */}
-                <div style={{ gridColumn: 'span 2' }}>
-                  <label className="label">Shared Folder Paths (Computer Paths)</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                    {newTask.filePaths.map((path, idx) => (
-                      <div key={idx} style={{ display: 'flex', gap: 8 }}>
-                        <input 
-                          className="input" 
-                          placeholder="e.g. \\server\share\folder or C:\Documents\..." 
-                          value={path}
-                          onChange={e => {
-                            const newPaths = [...newTask.filePaths];
-                            newPaths[idx] = e.target.value;
-                            setNewTask({ ...newTask, filePaths: newPaths });
-                          }}
-                        />
-                        <button 
-                          type="button" 
-                          className="btn btn-danger btn-icon" 
-                          onClick={() => {
-                            const newPaths = newTask.filePaths.filter((_, i) => i !== idx);
-                            setNewTask({ ...newTask, filePaths: newPaths });
-                          }}
-                        >
-                          <X className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))}
-                    <button 
-                      type="button" 
-                      className="btn btn-ghost btn-sm" 
-                      style={{ width: 'fit-content', gap: 6 }}
-                      onClick={() => setNewTask({ ...newTask, filePaths: [...newTask.filePaths, ''] })}
+
+                {/* Advanced: Shared Folder Paths */}
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedCreate(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12,
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedCreate ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  Advanced
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)', marginLeft: 4 }} />
+                </button>
+
+                <AnimatePresence>
+                  {showAdvancedCreate && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      style={{ overflow: 'hidden' }}
                     >
-                      <Plus className="w-4 h-4" /> Add Path
-                    </button>
-                  </div>
-                </div>
+                      <div style={{ marginBottom: 20 }}>
+                        <label className="input-label">Shared Folder Paths (Computer Paths)</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                          {newTask.filePaths.map((path, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                className="input"
+                                placeholder={`\\\\server\\share\\folder or C:\\Documents\\...`}
+                                value={path}
+                                onChange={e => {
+                                  const newPaths = [...newTask.filePaths];
+                                  newPaths[idx] = e.target.value;
+                                  setNewTask({ ...newTask, filePaths: newPaths });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-icon"
+                                onClick={() => {
+                                  const newPaths = newTask.filePaths.filter((_, i) => i !== idx);
+                                  setNewTask({ ...newTask, filePaths: newPaths });
+                                }}
+                              >
+                                <X style={{ width: 14, height: 14 }} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ width: 'fit-content', gap: 6 }}
+                            onClick={() => setNewTask({ ...newTask, filePaths: [...newTask.filePaths, ''] })}
+                          >
+                            <Plus style={{ width: 14, height: 14 }} /> Add Path
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
               </div>
-              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+
+              {/* Panel footer */}
+              <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex', gap: 12, justifyContent: 'flex-end',
+                flexShrink: 0, background: 'var(--surface)',
+              }}>
                 <button className="btn btn-ghost" onClick={() => setIsAddingTask(false)}>Cancel</button>
-                <button className="btn btn-primary" onClick={handleCreateTask} disabled={!newTask.taskName.trim()}>Create Task</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleCreateTask}
+                  disabled={!newTask.taskName.trim()}
+                  style={{ minWidth: 120 }}
+                >
+                  <Plus style={{ width: 16, height: 16 }} /> Create Task
+                </button>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          </>
         )}
       </AnimatePresence>
 
@@ -915,148 +1090,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                           transition: 'background-color 0.2s ease'
                         }}
                       >
-                        {isEditing ? (
-                          <div style={{ padding: '24px' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                              <h3 style={{ fontWeight: 800, fontSize: 16, margin: 0 }}>Editing Task</h3>
-                              <div style={{ display: 'flex', gap: 8 }}>
-                                <button className="btn btn-ghost btn-sm" onClick={() => setEditingTask(null)}>Cancel</button>
-                                <button className="btn btn-primary btn-sm" onClick={handleUpdateTask} disabled={!editingTask.taskName.trim()}>Save</button>
-                              </div>
-                            </div>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16 }}>
-                                <div style={{ gridColumn: 'span 2' }}>
-                                  <label className="label">Task Name</label>
-                                  <input className="input" value={editingTask.taskName} onChange={e => setEditingTask({ ...editingTask, taskName: e.target.value })} />
-                                </div>
-                                <div style={{ gridColumn: 'span 2' }}>
-                                  <label className="label">Description</label>
-                                  <textarea className="input" style={{ minHeight: 80 }} value={editingTask.description} onChange={e => setEditingTask({ ...editingTask, description: e.target.value })} />
-                                </div>
-                                <div>
-                                  <label className="label">Priority</label>
-                                  <select className="input" value={editingTask.priority} onChange={e => setEditingTask({ ...editingTask, priority: e.target.value as any })}>
-                                    {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
-                                  </select>
-                                </div>
-                                <div>
-                                  <label className="label">Due Date</label>
-                                  <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
-                                </div>
-                                <div style={{ gridColumn: 'span 2' }}>
-                                  <label className="label">Assignee</label>
-                                  <select 
-                                    className="input" 
-                                    value={editingTask.assignedToId} 
-                                    onChange={e => {
-                                      const u = projectUsers.find(u => u.id === e.target.value);
-                                      if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
-                                    }}
-                                  >
-                                    <option value="">— Select Assignee —</option>
-                                    {projectUsers
-                                      .filter(u => 
-                                        u.id === user.uid || 
-                                        appUser.role === 'Admin' || 
-                                        (u.department === appUser.department && u.teamId === appUser.teamId)
-                                      )
-                                      .map(u => (
-                                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
-                                      ))
-                                    }
-                                  </select>
-                                </div>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, gridColumn: 'span 2' }}>
-                                  <div>
-                                    <label className="label">Category</label>
-                                    <select className="input" value={editingTask.category} onChange={e => handleOtherSelection('category', e.target.value, true)}>
-                                      {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                                    </select>
-                                  </div>
-                                  <div>
-                                    <label className="label">Department</label>
-                                    <select className="input" value={editingTask.department} onChange={e => handleOtherSelection('department', e.target.value, true)}>
-                                      {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                                    </select>
-                                  </div>
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label className="label">Sub-Category / Project</label>
-                                    <input 
-                                      className="input" 
-                                      list="editSubCategoryList"
-                                      placeholder="Search or type project..."
-                                      value={editingTask.subCategory} 
-                                      onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })} 
-                                    />
-                                    <datalist id="editSubCategoryList">
-                                      {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                                        <option key={s} value={s} />
-                                      ))}
-                                    </datalist>
-                                  </div>
-                                  <div style={{ gridColumn: 'span 2' }}>
-                                    <label className="label">Attachment</label>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                      <input type="file" onChange={handleEditFileUpload} style={{ fontSize: 12 }} />
-                                      {isUploading && <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
-                                      {editingTask.attachedFileName && (
-                                        <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                                          <Paperclip className="w-3 h-3" /> {editingTask.attachedFileName}
-                                          <button 
-                                            type="button" 
-                                            onClick={() => setEditingTask({ ...editingTask, attachedFile: '', attachedFileName: '' })} 
-                                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}
-                                          >
-                                            <X className="w-3 h-3" />
-                                          </button>
-                                        </div>
-                                      )}
-                                    </div>
-                                </div>
-                                {/* Shared Folder Paths */}
-                                <div style={{ gridColumn: 'span 2' }}>
-                                    <label className="label">Shared Folder Paths (Computer Paths)</label>
-                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                                      {(editingTask.filePaths || []).map((path, idx) => (
-                                        <div key={idx} style={{ display: 'flex', gap: 8 }}>
-                                          <input 
-                                            className="input" 
-                                            placeholder="e.g. \\server\share\folder or C:\Documents\..." 
-                                            value={path}
-                                            onChange={e => {
-                                              const newPaths = [...(editingTask.filePaths || [])];
-                                              newPaths[idx] = e.target.value;
-                                              setEditingTask({ ...editingTask, filePaths: newPaths });
-                                            }}
-                                          />
-                                          <button 
-                                            type="button" 
-                                            className="btn btn-danger btn-icon" 
-                                            onClick={() => {
-                                              const newPaths = (editingTask.filePaths || []).filter((_, i) => i !== idx);
-                                              setEditingTask({ ...editingTask, filePaths: newPaths });
-                                            }}
-                                          >
-                                            <X className="w-4 h-4" />
-                                          </button>
-                                        </div>
-                                      ))}
-                                      <button 
-                                        type="button" 
-                                        className="btn btn-ghost btn-sm" 
-                                        style={{ width: 'fit-content', gap: 6 }}
-                                        onClick={() => setEditingTask({ ...editingTask, filePaths: [...(editingTask.filePaths || []), ''] })}
-                                      >
-                                        <Plus className="w-4 h-4" /> Add Path
-                                      </button>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        ) : (
+                        {(
                           <>
                             <div
                               style={{ padding: '20px 24px', display: 'flex', gap: 16, cursor: 'pointer', alignItems: 'flex-start' }}
@@ -1114,40 +1148,71 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                   {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>OVERDUE</span>}
                                   {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>DUE SOON</span>}
                                   
-                                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 6 }}>
-                                    {task.status === 'Done' && (
-                                      <button 
-                                        className="btn btn-ghost" 
-                                        style={{ padding: '2px 8px', height: 'auto', fontSize: 11, color: 'var(--text-muted)' }}
-                                        onClick={e => {
-                                          e.stopPropagation();
-                                          handleArchiveTask(task.id);
-                                        }}
-                                        title="Archive Task"
-                                      >
-                                        <Archive className="w-3.5 h-3.5" />
-                                      </button>
-                                    )}
-                                    <button 
-                                      className="btn btn-ghost" 
-                                      style={{ padding: '2px 8px', height: 'auto', fontSize: 11 }}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        setEditingTask(task);
-                                      }}
+                                  <div style={{ marginLeft: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                                    <button
+                                      className="btn btn-ghost btn-icon"
+                                      style={{ padding: '4px 8px', height: 'auto', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', lineHeight: 1 }}
+                                      onClick={e => { e.stopPropagation(); setOpenActionMenu(openActionMenu === task.id ? null : task.id); }}
+                                      title="Task actions"
                                     >
-                                      Edit
+                                      ···
                                     </button>
-                                    <button 
-                                      className="btn btn-ghost text-red" 
-                                      style={{ padding: '2px 8px', height: 'auto', fontSize: 11, color: '#ef4444' }}
-                                      onClick={e => {
-                                        e.stopPropagation();
-                                        handleDeleteTask(task.id);
-                                      }}
-                                    >
-                                      Delete
-                                    </button>
+                                    <AnimatePresence>
+                                      {openActionMenu === task.id && (
+                                        <>
+                                          <div
+                                            style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+                                            onClick={() => setOpenActionMenu(null)}
+                                          />
+                                          <motion.div
+                                            initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                                            animate={{ opacity: 1, y: 0, scale: 1 }}
+                                            exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                                            transition={{ duration: 0.12 }}
+                                            style={{
+                                              position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                                              background: 'var(--surface)',
+                                              border: '1px solid var(--border-md)',
+                                              boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                                              zIndex: 100,
+                                              minWidth: 148,
+                                              overflow: 'hidden',
+                                            }}
+                                          >
+                                            <button
+                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'left' }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                              onClick={() => { setOpenActionMenu(null); setShowAdvancedEdit(false); setEditingTask(task); }}
+                                            >
+                                              <Edit2 style={{ width: 14, height: 14, color: 'var(--text-muted)', flexShrink: 0 }} />
+                                              Edit Task
+                                            </button>
+                                            {task.status === 'Done' && (
+                                              <button
+                                                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'left' }}
+                                                onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                                                onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                                onClick={() => { setOpenActionMenu(null); handleArchiveTask(task.id); }}
+                                              >
+                                                <Archive style={{ width: 14, height: 14, color: 'var(--text-muted)', flexShrink: 0 }} />
+                                                Archive
+                                              </button>
+                                            )}
+                                            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
+                                            <button
+                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#dc2626', textAlign: 'left' }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                              onClick={() => { setOpenActionMenu(null); handleDeleteTask(task.id); }}
+                                            >
+                                              <Trash2 style={{ width: 14, height: 14, flexShrink: 0 }} />
+                                              Delete
+                                            </button>
+                                          </motion.div>
+                                        </>
+                                      )}
+                                    </AnimatePresence>
                                   </div>
                                 </div>
                                 {task.serialNumber && (
@@ -1551,6 +1616,319 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           <button className="btn btn-ghost btn-sm" onClick={resetFilters}>Clear All Filters</button>
         </div>
       )}
+
+      {/* ── Edit Task slide-over ── */}
+      <AnimatePresence>
+        {editingTask && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setEditingTask(null)}
+              style={{
+                position: 'fixed', inset: 0,
+                background: 'rgba(15,23,42,0.4)',
+                backdropFilter: 'blur(2px)',
+                zIndex: 1500,
+              }}
+            />
+            <motion.div
+              initial={{ x: '100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '100%' }}
+              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
+              style={{
+                position: 'fixed', top: 0, right: 0, bottom: 0,
+                width: '100%', maxWidth: 480,
+                background: 'var(--surface)',
+                borderLeft: '1px solid var(--border-md)',
+                boxShadow: '-8px 0 40px rgba(15,23,42,0.12)',
+                zIndex: 1501,
+                display: 'flex', flexDirection: 'column',
+                overflow: 'hidden',
+              }}
+            >
+              {/* Header */}
+              <div style={{
+                padding: '20px 24px',
+                borderBottom: '1px solid var(--border)',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                flexShrink: 0,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{
+                    width: 32, height: 32, background: 'var(--surface-3)',
+                    border: '1.5px solid var(--border-md)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0,
+                  }}>
+                    <Edit2 style={{ width: 14, height: 14, color: 'var(--text-secondary)' }} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Task</div>
+                    {editingTask.serialNumber && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>#{editingTask.serialNumber}</div>
+                    )}
+                  </div>
+                </div>
+                <button className="btn btn-ghost btn-icon" onClick={() => setEditingTask(null)}>
+                  <X style={{ width: 16, height: 16 }} />
+                </button>
+              </div>
+
+              {/* Body */}
+              <div style={{ flex: 1, overflowY: 'auto', padding: '24px' }}>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">
+                    Task Name <span style={{ color: '#dc2626' }}>*</span>
+                  </label>
+                  <input
+                    className="input"
+                    style={{ fontSize: 16, fontWeight: 500, padding: '12px 14px' }}
+                    value={editingTask.taskName}
+                    onChange={e => setEditingTask({ ...editingTask, taskName: e.target.value })}
+                    autoFocus
+                    onKeyDown={e => e.key === 'Enter' && editingTask.taskName.trim() && handleUpdateTask()}
+                  />
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <textarea
+                    className="input"
+                    value={editingTask.description}
+                    onChange={e => setEditingTask({ ...editingTask, description: e.target.value })}
+                    rows={3}
+                    style={{ resize: 'vertical', minHeight: 72 }}
+                  />
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>When &amp; Urgency</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label className="input-label">Priority</label>
+                    <select className="input" value={editingTask.priority} onChange={e => setEditingTask({ ...editingTask, priority: e.target.value as any })}>
+                      {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Due Date <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                    <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Who</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">Assignee</label>
+                  <select
+                    className="input"
+                    value={editingTask.assignedToId}
+                    onChange={e => {
+                      const u = projectUsers.find(u => u.id === e.target.value);
+                      if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
+                    }}
+                  >
+                    <option value="">— Select Assignee —</option>
+                    {projectUsers
+                      .filter(u =>
+                        u.id === user.uid ||
+                        appUser.role === 'Admin' ||
+                        (u.department === appUser.department && u.teamId === appUser.teamId)
+                      )
+                      .map(u => (
+                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                      ))
+                    }
+                  </select>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Classification</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
+                  <div>
+                    <label className="input-label">Category</label>
+                    <select className="input" value={editingTask.category} onChange={e => handleOtherSelection('category', e.target.value, true)}>
+                      {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="input-label">Department</label>
+                    <input
+                      className="input"
+                      list="editTaskDepartmentList"
+                      placeholder="Select or type department..."
+                      value={editingTask.department === 'None' ? '' : editingTask.department}
+                      onChange={e => setEditingTask({ ...editingTask, department: e.target.value || 'None' })}
+                    />
+                    <datalist id="editTaskDepartmentList">
+                      {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
+                    </datalist>
+                  </div>
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label className="input-label">Sub-Category / Project</label>
+                    <input
+                      className="input"
+                      list="editSubCategoryList"
+                      placeholder="Search or type project..."
+                      value={editingTask.subCategory}
+                      onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })}
+                    />
+                    <datalist id="editSubCategoryList">
+                      {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
+                        <option key={s} value={s} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Attachment</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  {editingTask.attachedFileName ? (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 14px', background: 'var(--surface-2)', border: '1px solid var(--border-md)' }}>
+                      <Paperclip style={{ width: 14, height: 14, color: 'var(--blue-600)', flexShrink: 0 }} />
+                      <span style={{ flex: 1, fontSize: 13, color: 'var(--blue-600)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{editingTask.attachedFileName}</span>
+                      <button
+                        type="button"
+                        onClick={() => setEditingTask({ ...editingTask, attachedFile: '', attachedFileName: '' })}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2, flexShrink: 0 }}
+                        title="Remove attachment"
+                      >
+                        <X style={{ width: 14, height: 14 }} />
+                      </button>
+                    </div>
+                  ) : (
+                    <label
+                      style={{
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 8, padding: '20px 16px',
+                        border: `2px dashed ${isDragOverEdit ? 'var(--blue-500)' : 'var(--border-md)'}`,
+                        background: isDragOverEdit ? 'rgba(59,130,246,0.05)' : 'var(--surface-2)',
+                        cursor: 'pointer', transition: 'all 0.15s',
+                      }}
+                      onDragOver={e => { e.preventDefault(); setIsDragOverEdit(true); }}
+                      onDragLeave={() => setIsDragOverEdit(false)}
+                      onDrop={e => {
+                        e.preventDefault(); setIsDragOverEdit(false);
+                        if (e.dataTransfer.files?.[0]) handleEditFileUpload({ target: { files: e.dataTransfer.files } } as any);
+                      }}
+                    >
+                      <input type="file" onChange={handleEditFileUpload} style={{ display: 'none' }} />
+                      {isUploading ? (
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>
+                      ) : (
+                        <>
+                          <Paperclip style={{ width: 20, height: 20, color: 'var(--text-muted)' }} />
+                          <div style={{ textAlign: 'center' }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Drop file or click to upload</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Uploads to Google Drive</div>
+                          </div>
+                        </>
+                      )}
+                    </label>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowAdvancedEdit(v => !v)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6, width: '100%',
+                    background: 'none', border: 'none', cursor: 'pointer', padding: '4px 0', marginBottom: 12,
+                    fontSize: 11, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase',
+                    color: 'var(--text-muted)',
+                  }}
+                >
+                  <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedEdit ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
+                  Advanced
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)', marginLeft: 4 }} />
+                </button>
+
+                <AnimatePresence>
+                  {showAdvancedEdit && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      style={{ overflow: 'hidden' }}
+                    >
+                      <div style={{ marginBottom: 20 }}>
+                        <label className="input-label">Shared Folder Paths (Computer Paths)</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                          {(editingTask.filePaths || []).map((path, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                className="input"
+                                placeholder={`\\\\server\\share\\folder or C:\\Documents\\...`}
+                                value={path}
+                                onChange={e => {
+                                  const newPaths = [...(editingTask.filePaths || [])];
+                                  newPaths[idx] = e.target.value;
+                                  setEditingTask({ ...editingTask, filePaths: newPaths });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-icon"
+                                onClick={() => {
+                                  const newPaths = (editingTask.filePaths || []).filter((_, i) => i !== idx);
+                                  setEditingTask({ ...editingTask, filePaths: newPaths });
+                                }}
+                              >
+                                <X style={{ width: 14, height: 14 }} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ width: 'fit-content', gap: 6 }}
+                            onClick={() => setEditingTask({ ...editingTask, filePaths: [...(editingTask.filePaths || []), ''] })}
+                          >
+                            <Plus style={{ width: 14, height: 14 }} /> Add Path
+                          </button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+              </div>
+
+              {/* Footer */}
+              <div style={{
+                padding: '16px 24px',
+                borderTop: '1px solid var(--border)',
+                display: 'flex', gap: 12, justifyContent: 'flex-end',
+                flexShrink: 0, background: 'var(--surface)',
+              }}>
+                <button className="btn btn-ghost" onClick={() => setEditingTask(null)}>Cancel</button>
+                <button
+                  className="btn btn-primary"
+                  onClick={handleUpdateTask}
+                  disabled={!editingTask.taskName.trim()}
+                  style={{ minWidth: 120 }}
+                >
+                  Save Changes
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       {/* ── Due-date prompt after a milestone update on an alerting task ── */}
       <AnimatePresence>

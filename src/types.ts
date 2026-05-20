@@ -24,7 +24,7 @@ export interface AppUser {
 
 export type CorrespondingStatus = 'Unread' | 'Reviewing' | 'Assigned' | 'Closed';
 
-export type CorrespondingCategory = 'Project' | 'Internal' | 'External' | 'Other...';
+export type CorrespondingCategory = string;
 
 export interface Corresponding {
   id: string;

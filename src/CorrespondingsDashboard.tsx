@@ -436,7 +436,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
           <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
             <option value="All">All Departments</option>
-            {DEPARTMENT_OPTIONS.map(d => <option key={d}>{d}</option>)}
+            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d}>{d}</option>)}
           </select>
         </div>
 
@@ -649,22 +649,56 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={closeModal}>
             <motion.div className="modal" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 30 }} onClick={e => e.stopPropagation()}>
               {/* Modal header */}
-              <div style={{ padding: '24px 28px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontWeight: 800, fontSize: 20, color: 'var(--text-primary)' }}>
-                  {isViewing ? 'Correspondence Details' : (editing ? 'Edit Corresponding' : 'New Corresponding')}
-                </h2>
-                <button className="btn btn-ghost btn-icon" onClick={closeModal}><X className="w-4 h-4" /></button>
+              <div style={{
+                borderBottom: '1px solid var(--border)',
+                background: isViewing ? 'var(--surface-2)' : 'var(--surface)',
+              }}>
+                {/* Accent strip */}
+                <div style={{ height: 4, background: isViewing ? 'var(--accent)' : editing ? '#f59e0b' : 'var(--green-500)' }} />
+                <div style={{ padding: '16px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, letterSpacing: '0.07em', textTransform: 'uppercase',
+                        padding: '2px 8px',
+                        background: isViewing ? 'var(--blue-100)' : editing ? '#fef3c7' : '#dcfce7',
+                        color: isViewing ? 'var(--blue-700)' : editing ? '#92400e' : '#15803d',
+                      }}>
+                        {isViewing ? 'View' : editing ? 'Editing' : 'New'}
+                      </span>
+                      {(editing || isViewing) && formData.serialNumber && (
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+                          #{formData.serialNumber}
+                        </span>
+                      )}
+                      {isViewing && formData.status && (
+                        <span className={statusBadgeClass(formData.status)} style={{ fontSize: 11 }}>
+                          {formData.status}
+                        </span>
+                      )}
+                    </div>
+                    <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.2 }}>
+                      {isViewing ? (formData.subject || 'Correspondence Details') : (editing ? 'Edit Correspondence' : 'New Correspondence')}
+                    </h2>
+                    {isViewing && formData.sentFrom && (
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>From: {formData.sentFrom}</div>
+                    )}
+                  </div>
+                  <button className="btn btn-ghost btn-icon" onClick={closeModal} style={{ flexShrink: 0, marginTop: 2 }}><X className="w-4 h-4" /></button>
+                </div>
               </div>
 
-              <form onSubmit={handleSubmit} style={{ padding: '20px 28px 28px' }}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 24 }}>
+              <form onSubmit={handleSubmit} style={{ padding: '0 0 0' }}>
+                {/* ── Section: Core ── */}
+                <div style={{ padding: '20px 24px 0' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
                   {/* Subject */}
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="input-label">Subject</label>
                     {isViewing ? (
-                      <div style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)' }}>{formData.subject}</div>
+                      <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{formData.subject}</div>
                     ) : (
-                      <input className="input" value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
+                      <input className="input" style={{ fontSize: 16, fontWeight: 600 }} value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
                     )}
                   </div>
                   {/* Body */}
@@ -696,22 +730,39 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         color: formData.category === 'Project' ? '#1d4ed8' : formData.category === 'External' ? '#15803d' : '#6d28d9',
                       }}>{formData.category}</span>
                     ) : (
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content' }}>
-                        {CATEGORY_OPTIONS.map(c => (
-                          <button
-                            key={c} type="button"
-                            onClick={() => handleOtherSelection('category', c)}
-                            style={{
-                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
-                              whiteSpace: 'nowrap',
-                              background: formData.category === c ? 'var(--accent)' : 'transparent',
-                              color: formData.category === c ? '#fff' : 'var(--text-muted)',
-                              transition: 'all 0.15s'
-                            }}
-                          >
-                            {c}
-                          </button>
-                        ))}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: '100%' }}>
+                          {CATEGORY_OPTIONS.map(c => {
+                            const isOther = c === 'Other...';
+                            const isActive = isOther
+                              ? !CATEGORY_OPTIONS.filter(x => x !== 'Other...').includes(formData.category)
+                              : formData.category === c;
+                            return (
+                              <button
+                                key={c} type="button"
+                                onClick={() => isOther ? set('category', '') : set('category', c)}
+                                style={{
+                                  flex: '1 0 auto', padding: '5px 10px', fontSize: 12, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                                  whiteSpace: 'nowrap',
+                                  background: isActive ? 'var(--accent)' : 'transparent',
+                                  color: isActive ? '#fff' : 'var(--text-muted)',
+                                  transition: 'all 0.15s'
+                                }}
+                              >
+                                {c}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        {!CATEGORY_OPTIONS.filter(c => c !== 'Other...').includes(formData.category) && (
+                          <input
+                            className="input"
+                            placeholder="Type custom category..."
+                            value={formData.category}
+                            onChange={e => set('category', e.target.value)}
+                            autoFocus
+                          />
+                        )}
                       </div>
                     )}
                   </div>
@@ -721,13 +772,13 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <span className={priorityBadgeClass(formData.priority)}>{formData.priority}</span>
                     ) : (
-                      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: '100%' }}>
                         {PRIORITY_OPTIONS.map(p => (
                           <button
                             key={p} type="button"
                             onClick={() => set('priority', p)}
                             style={{
-                              padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                              flex: '1 0 auto', padding: '5px 10px', fontSize: 12, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
                               whiteSpace: 'nowrap',
                               background: formData.priority === p ? (p === 'Urgent' ? '#ef4444' : p === 'High' ? '#f97316' : p === 'Medium' ? '#3b82f6' : '#64748b') : 'transparent',
                               color: formData.priority === p ? '#fff' : 'var(--text-muted)',
@@ -740,15 +791,31 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       </div>
                     )}
                   </div>
+                  </div>{/* end grid: Core */}
+                </div>{/* end section: Core */}
+
+                {/* ── Section: Classification ── */}
+                <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Classification</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
                   {/* Department */}
                   <div>
                     <label className="input-label">Department</label>
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.department}</div>
                     ) : (
-                      <select className="input" value={formData.department} onChange={e => { handleOtherSelection('department', e.target.value); set('subCategory', 'None'); }}>
-                        {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
-                      </select>
+                      <>
+                        <input
+                          className="input"
+                          list="corrDepartmentList"
+                          placeholder="Select or type department..."
+                          value={formData.department === 'None' ? '' : formData.department}
+                          onChange={e => { set('department', e.target.value || 'None'); set('subCategory', 'None'); }}
+                        />
+                        <datalist id="corrDepartmentList">
+                          {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
+                        </datalist>
+                      </>
                     )}
                   </div>
                   {/* Sub-category */}
@@ -774,19 +841,44 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   {/* Actions */}
                   <div>
                     <label className="input-label">Actions</label>
-                    {isViewing ? (
-                      <span style={{
-                        display: 'inline-flex', alignItems: 'center', padding: '4px 12px',
-                        borderRadius: 0, fontSize: 12, fontWeight: 700,
-                        background: '#fee2e2', color: '#dc2626',
-                        border: '1px solid #fecaca'
-                      }}>{formData.actions}</span>
-                    ) : (
-                      <select className="input" value={formData.actions} onChange={e => set('actions', e.target.value)}>
-                        {['None', 'For info', 'SR for approval', 'Action needed'].map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
+                    {isViewing ? (() => {
+                      const actionStyles: Record<string, {bg: string; color: string; border: string}> = {
+                        'None':            { bg: 'var(--surface-3)', color: 'var(--text-muted)', border: '1px solid var(--border)' },
+                        'For info':        { bg: '#dbeafe', color: '#1d4ed8', border: '1px solid #bfdbfe' },
+                        'SR for approval': { bg: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' },
+                        'Action needed':   { bg: '#fee2e2', color: '#dc2626', border: '1px solid #fecaca' },
+                      };
+                      const s = actionStyles[formData.actions] ?? actionStyles['None'];
+                      return (
+                        <span style={{ display: 'inline-flex', alignItems: 'center', padding: '4px 12px', borderRadius: 0, fontSize: 12, fontWeight: 700, ...s }}>
+                          {formData.actions}
+                        </span>
+                      );
+                    })() : (
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, border: '1px solid var(--border)', width: '100%' }}>
+                        {(['None', 'For info', 'SR for approval', 'Action needed'] as const).map(a => (
+                          <button
+                            key={a} type="button"
+                            onClick={() => set('actions', a)}
+                            style={{
+                              flex: '1 0 auto', padding: '5px 10px', fontSize: 12, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                              background: formData.actions === a ? (a === 'Action needed' ? '#ef4444' : a === 'SR for approval' ? '#f59e0b' : a === 'For info' ? 'var(--accent)' : '#64748b') : 'transparent',
+                              color: formData.actions === a ? '#fff' : 'var(--text-muted)',
+                              transition: 'all 0.15s'
+                            }}
+                          >{a}</button>
+                        ))}
+                      </div>
                     )}
                   </div>
+                  </div>{/* end grid: Classification */}
+                </div>{/* end section: Classification */}
+
+                {/* ── Section: Workflow ── */}
+                <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Workflow</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
                   {/* Date received */}
                   <div>
                     <label className="input-label">Date Received</label>
@@ -812,13 +904,13 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
                     ) : (
                       (appUser.role === 'Admin' || appUser.role === 'Manager') ? (
-                        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: 'fit-content', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: '100%' }}>
                           {(['Unread','Reviewing','Assigned','Closed'] as CorrespondingStatus[]).map(s => (
                             <button
                               key={s} type="button"
                               onClick={() => set('status', s)}
                               style={{
-                                padding: '4px 12px', fontSize: 13, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
+                                flex: '1 0 auto', padding: '5px 10px', fontSize: 12, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
                                 whiteSpace: 'nowrap',
                                 background: formData.status === s ? 'var(--accent)' : 'transparent',
                                 color: formData.status === s ? '#fff' : 'var(--text-muted)',
@@ -867,9 +959,16 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       </select>
                     )}
                   </div>
+                  </div>{/* end grid: Workflow */}
+                </div>{/* end section: Workflow */}
+
+                {/* ── Section: Files & Notes ── */}
+                <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>Files & Notes</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                   {/* Shared Folder Paths */}
-                  <div style={{ gridColumn: '1 / -1' }}>
+                  <div>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                       <label className="input-label" style={{ marginBottom: 0 }}>Shared Folder Paths (Computer/Local)</label>
                       {!isViewing && (
@@ -1020,8 +1119,19 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       )
                     ) : (
                       <>
-                        <input type="file" onChange={handleFileUpload} style={{ color: 'var(--text-secondary)', fontSize: 13 }} />
-                        {isUploading && <div style={{ marginTop: 6, fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>}
+                        <label style={{
+                          display: 'flex', alignItems: 'center', gap: 10,
+                          padding: '12px 16px',
+                          border: '2px dashed var(--border-md)',
+                          background: 'var(--surface-2)',
+                          cursor: 'pointer',
+                          fontSize: 13, color: 'var(--text-muted)',
+                          transition: 'border-color 0.2s',
+                        }}>
+                          <Paperclip className="w-4 h-4" style={{ flexShrink: 0 }} />
+                          <span>{isUploading ? 'Uploading to Drive…' : 'Click to attach a file'}</span>
+                          <input type="file" onChange={handleFileUpload} style={{ display: 'none' }} />
+                        </label>
                         {formData.attachedFileName && (
                           <div style={{ marginTop: 12 }}>
                             <div style={{ fontSize: 12, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
@@ -1038,111 +1148,34 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       </>
                     )}
                   </div>
-                  {/* Shared Folder Paths */}
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <label className="input-label">Shared Folder Paths (Computer Paths)</label>
-                    {isViewing ? (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        {formData.filePaths && formData.filePaths.length > 0 ? (
-                          formData.filePaths.map((path, idx) => (
-                            <div key={idx} style={{ 
-                              display: 'flex', 
-                              alignItems: 'center', 
-                              gap: 12, 
-                              padding: '8px 12px', 
-                              background: 'var(--surface-2)', 
-                              border: '1px solid var(--border)',
-                              borderRadius: 0
-                            }}>
-                              <ExternalLink className="w-4 h-4 text-muted" />
-                              <code
-                                onClick={() => openOrCopyPath(path)}
-                                title="Click to open (web link) or copy this path"
-                                style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                              >{path}</code>
-                              <button
-                                type="button"
-                                className="btn btn-ghost btn-sm"
-                                onClick={() => openOrCopyPath(path)}
-                              >
-                                Open / Copy
-                              </button>
-                            </div>
-                          ))
-                        ) : (
-                          <div style={{ fontSize: 14, color: 'var(--text-muted)', fontStyle: 'italic' }}>No folder paths added</div>
-                        )}
-                      </div>
-                    ) : (
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                        {formData.filePaths.map((path, idx) => (
-                          <div key={idx} style={{ display: 'flex', gap: 8 }}>
-                            <input 
-                              className="input" 
-                              placeholder="e.g. \\server\share\folder or C:\Documents\..." 
-                              value={path}
-                              onChange={e => {
-                                const newPaths = [...formData.filePaths];
-                                newPaths[idx] = e.target.value;
-                                set('filePaths', newPaths);
-                              }}
-                            />
-                            <button 
-                              type="button" 
-                              className="btn btn-danger btn-icon" 
-                              onClick={() => {
-                                const newPaths = formData.filePaths.filter((_, i) => i !== idx);
-                                set('filePaths', newPaths);
-                              }}
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </div>
-                        ))}
-                        <button 
-                          type="button" 
-                          className="btn btn-ghost btn-sm" 
-                          style={{ width: 'fit-content', gap: 6 }}
-                          onClick={() => set('filePaths', [...formData.filePaths, ''])}
-                        >
-                          <Plus className="w-4 h-4" /> Add Path
-                        </button>
-                      </div>
-                    )}
-                  </div>
                   {/* Notes */}
-                  <div style={{ gridColumn: '1 / -1' }}>
+                  <div>
                     <label className="input-label">Manager Notes / Internal Comments</label>
                     {isViewing ? (
-                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 0, border: '1px solid var(--border)', fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 0, border: '1px solid var(--border)', fontStyle: 'italic', lineHeight: 1.6 }}>
                         {formData.notes || 'No notes available.'}
                       </div>
                     ) : (
                       <textarea className="input" rows={2} value={formData.notes} onChange={e => set('notes', e.target.value)} placeholder="Add internal notes or instructions…" />
                     )}
                   </div>
-                  {/* Serial Number */}
-                  {isViewing && formData.serialNumber && (
-                    <div>
-                      <label className="input-label">Serial Number</label>
-                      <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 800 }}>#{formData.serialNumber}</div>
-                    </div>
-                  )}
-                </div>
 
-                <div style={{ 
-                  display: 'flex', 
-                  gap: 10, 
-                  marginTop: 32, 
-                  justifyContent: 'flex-end', 
-                  borderTop: '1px solid var(--border)', 
-                  padding: '20px 28px',
+                  </div>{/* end flex: Files */}
+                </div>{/* end section: Files */}
+
+                {/* ── Sticky footer ── */}
+                <div style={{
+                  display: 'flex',
+                  gap: 10,
+                  justifyContent: 'flex-end',
+                  borderTop: '1px solid var(--border)',
+                  padding: '16px 24px',
                   background: 'var(--surface)',
                   position: 'sticky',
                   bottom: 0,
-                  margin: '0 -28px -28px',
-                  paddingBottom: 'calc(20px + var(--safe-area-bottom))',
-                  zIndex: 10
+                  paddingBottom: 'calc(16px + var(--safe-area-bottom))',
+                  zIndex: 10,
+                  marginTop: 16,
                 }}>
                   {isViewing ? (
                     <>
