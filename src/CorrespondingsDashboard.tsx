@@ -5,6 +5,7 @@ import {
   doc, serverTimestamp, orderBy, deleteField
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import {
   AppUser, Corresponding, CorrespondingStatus, Task,
@@ -321,7 +322,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       if (appUser.role === 'Employee') {
         const managers = projectUsers.filter(u => u.role === 'Manager' || u.role === 'Admin');
         for (const manager of managers) {
-          await addDoc(collection(db, 'notifications'), {
+          await createNotification({
             type: editing ? 'correspondence_updated' : 'correspondence_added',
             title: editing ? 'Correspondence Updated' : 'New Correspondence',
             message: `${appUser.displayName} ${editing ? 'updated' : 'added'} correspondence "${formData.subject}"`,
@@ -329,7 +330,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             read: false,
             relatedId: docId,
             createdAt: serverTimestamp(),
-          });
+          }, projectUsers);
         }
       }
 
@@ -343,7 +344,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
         // Notify new assignee
         if (formData.assignedToId) {
-          await addDoc(collection(db, 'notifications'), {
+          await createNotification({
             type: 'task_assigned',
             title: 'Task Reassigned',
             message: `The task for "${formData.subject}" has been reassigned to you by ${appUser.displayName}`,
@@ -351,7 +352,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             read: false,
             relatedId: editing.convertedToTaskId,
             createdAt: serverTimestamp(),
-          });
+          }, projectUsers);
         }
       }
 

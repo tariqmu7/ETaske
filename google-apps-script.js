@@ -23,9 +23,55 @@ function setup() {
   Logger.log("Authorization successful!");
 }
 
+/**
+ * Sends a push via the FCM HTTP v1 API using the script owner's OAuth token.
+ * No server key or service account needed — just make sure the Google account
+ * that owns this script has the "Firebase Cloud Messaging API Admin" role
+ * (or is a project owner) in the Firebase/GCP project.
+ *
+ * The required OAuth scope (https://www.googleapis.com/auth/firebase.messaging)
+ * must be listed in appsscript.json → oauthScopes. See instructions below.
+ */
+function sendFcmPush(token, title, body) {
+  if (!token) return { status: 'skipped' };
+
+  var projectId = 'gen-lang-client-0893475577';
+  var url = 'https://fcm.googleapis.com/v1/projects/' + projectId + '/messages:send';
+
+  var payload = JSON.stringify({
+    message: {
+      token: token,
+      notification: { title: title, body: body },
+      android: { priority: 'high' },
+      webpush: {
+        notification: { icon: '/favicon.png', badge: '/favicon.png' },
+        fcm_options: { link: '/' },
+      },
+    },
+  });
+
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    headers: { Authorization: 'Bearer ' + ScriptApp.getOAuthToken() },
+    payload: payload,
+    muteHttpExceptions: true,
+  });
+
+  return { status: 'sent', fcm: response.getContentText() };
+}
+
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+
+    // FCM push proxy
+    if (data.action === 'fcm') {
+      var result = sendFcmPush(data.token, data.title, data.body);
+      return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     var filename = data.filename;
     var base64 = data.base64.split(',')[1];
     var mimeType = data.mimeType;

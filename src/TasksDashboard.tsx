@@ -5,6 +5,7 @@ import {
   doc, serverTimestamp, orderBy, where, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import {
   AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding,
@@ -296,7 +297,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       }
 
       if (originalTask && originalTask.assignedById && originalTask.assignedById !== user.uid) {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotification({
           type: 'task_updated',
           title: 'Task Updated',
           message: `${appUser.displayName} updated the details of "${editingTask.taskName}".`,
@@ -304,12 +305,12 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           read: false,
           relatedId: editingTask.id,
           createdAt: serverTimestamp(),
-        });
+        }, projectUsers);
       }
 
       // Notify new assignee if changed
       if (originalTask && originalTask.assignedToId !== editingTask.assignedToId) {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotification({
           type: 'task_assigned',
           title: 'Task Reassigned',
           message: `Task "${editingTask.taskName}" has been reassigned to you by ${appUser.displayName}`,
@@ -317,7 +318,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           read: false,
           relatedId: editingTask.id,
           createdAt: serverTimestamp(),
-        });
+        }, projectUsers);
       }
 
       setEditingTask(null);
@@ -344,7 +345,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       }
 
       if (task && task.assignedById && task.assignedById !== user.uid) {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotification({
           type: 'task_status_updated',
           title: 'Task Status Updated',
           message: `${appUser.displayName} changed the status of "${task.taskName}" to ${status}.`,
@@ -352,7 +353,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           read: false,
           relatedId: taskId,
           createdAt: serverTimestamp(),
-        });
+        }, projectUsers);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
@@ -476,7 +477,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       });
 
       if (task?.assignedById) {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotification({
           type: 'milestone_added',
           title: 'Milestone Added',
           message: `${appUser.displayName} added milestone "${newMilestone.title}" to "${task.taskName}"`,
@@ -484,7 +485,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           read: false,
           relatedId: newMilestone.taskId,
           createdAt: serverTimestamp(),
-        });
+        }, projectUsers);
       }
 
       setNewMilestone(null);
@@ -598,7 +599,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
       });
 
       if (task.assignedById && task.assignedById !== user.uid) {
-        await addDoc(collection(db, 'notifications'), {
+        await createNotification({
           type: 'task_updated',
           title: 'Due Date Changed',
           message: `${appUser.displayName} moved the due date of "${task.taskName}" to ${newDue}.`,
@@ -606,7 +607,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           read: false,
           relatedId: task.id,
           createdAt: serverTimestamp(),
-        });
+        }, projectUsers);
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${task.id}`);

@@ -17,6 +17,7 @@ export interface AppUser {
   phoneNumber?: string;
   userColor?: string;
   lastSeen?: Timestamp;
+  fcmToken?: string;
 }
 
 // ─── Correspondences (incoming) ───────────────────────────────────────────────

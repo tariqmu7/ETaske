@@ -4,6 +4,7 @@ import {
   doc, serverTimestamp, orderBy, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import { AppUser, Corresponding, Task, PRIORITY_OPTIONS, OperationType } from './types';
 import { getNextSerialNumber } from './lib/counters';
@@ -178,7 +179,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       }
 
       // 3. Create notification for employee
-      await addDoc(collection(db, 'notifications'), {
+      await createNotification({
         type: 'task_assigned',
         title: isReassignment ? 'Task Reassigned' : 'New Task Assigned',
         message: `"${selectedCorr.subject}" has been ${isReassignment ? 'reassigned' : 'assigned'} to you by ${appUser.displayName}`,
@@ -186,7 +187,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         read: false,
         relatedId: taskId,
         createdAt: serverTimestamp(),
-      });
+      }, projectUsers);
 
       setSelectedCorr(null);
       setAssigneeId('');

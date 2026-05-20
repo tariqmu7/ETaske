@@ -4,6 +4,7 @@ import {
   serverTimestamp, arrayUnion,
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { pushAnnouncement } from '../lib/pushNotification';
 import { AppUser, Announcement } from '../types';
 import { timeAgo } from '../utils';
 import { Megaphone, Send, Trash2, Users } from 'lucide-react';
@@ -176,6 +177,13 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
         readBy: [appUser.id],
         createdAt: serverTimestamp(),
       });
+
+      // Push notification to recipients (fire-and-forget)
+      const targets = validRecipients.length > 0
+        ? selectable.filter(u => validRecipients.includes(u.id) && u.id !== appUser.id)
+        : selectable.filter(u => u.id !== appUser.id);
+      pushAnnouncement(targets, appUser.displayName, body);
+
       setText('');
       setRecipientIds([]);
     } catch (err: any) {
