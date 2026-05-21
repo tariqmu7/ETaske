@@ -33,7 +33,7 @@ from flask_cors import CORS
 PORT = 5111
 
 app = Flask(__name__)
-CORS(app)   # allow all origins — safe, localhost only
+CORS(app, allow_private_network=True)   # allow all origins + Private Network Access header
 
 
 # ---------------------------------------------------------------------------

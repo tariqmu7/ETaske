@@ -85,7 +85,7 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
 
   const checkStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${BRIDGE_URL}/status`, { signal: AbortSignal.timeout(3000) });
+      const res = await fetch(`${BRIDGE_URL}/status`, { signal: AbortSignal.timeout(3000), targetAddressSpace: 'local' } as RequestInit);
       if (res.ok) setStatus(await res.json());
       else setStatus(null);
     } catch {
@@ -99,7 +99,7 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
     try {
       const params = new URLSearchParams({ limit: '60' });
       if (searchQuery) params.set('search', searchQuery);
-      const res = await fetch(`${BRIDGE_URL}/emails?${params}`, { signal: AbortSignal.timeout(10000) });
+      const res = await fetch(`${BRIDGE_URL}/emails?${params}`, { signal: AbortSignal.timeout(10000), targetAddressSpace: 'local' } as RequestInit);
       if (!res.ok) throw new Error(`Bridge returned ${res.status}`);
       setEmails(await res.json());
     } catch (e: any) {
