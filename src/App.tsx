@@ -15,16 +15,17 @@ import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
 import DueSoonDashboard from './DueSoonDashboard';
+import OutlookFeed from './OutlookFeed';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone
+  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { onForegroundMessage } from './lib/fcm';
 
-export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon';
+export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -319,6 +320,9 @@ export default function App() {
         {activeView === 'admin' && (appUser.role === 'Admin') && (
           <AdminDashboard users={projectUsers} />
         )}
+        {activeView === 'outlook-feed' && (
+          <OutlookFeed {...sharedProps} />
+        )}
       </main>
 
       {/* Mobile Bottom Navigation — mirrors the desktop top nav
@@ -331,6 +335,7 @@ export default function App() {
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
           { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
           { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
+          { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },
           { id: 'admin',           label: 'Users',           icon: <Users />,       show: appUser.role === 'Admin' },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
           .filter(item => item.show)

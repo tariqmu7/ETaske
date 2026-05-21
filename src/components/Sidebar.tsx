@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Inbox, CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing
+  Download, BellOff, BellRing, Mail
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
@@ -108,6 +108,12 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       id: 'archive',
       label: 'Archive',
       icon: <Archive className="w-4 h-4" />,
+      show: true,
+    },
+    {
+      id: 'outlook-feed',
+      label: 'Outlook',
+      icon: <Mail className="w-4 h-4" />,
       show: true,
     },
     {
