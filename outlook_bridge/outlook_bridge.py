@@ -31,9 +31,21 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 
 PORT = 5111
+# Static token — only ETaske knows this value. Blocks other sites from reading the bridge.
+API_TOKEN = "etaske-bridge-2f9a7c"
 
 app = Flask(__name__)
-CORS(app, allow_private_network=True)   # allow all origins + Private Network Access header
+CORS(app, allow_private_network=True)
+
+
+@app.before_request
+def require_token():
+    # Allow preflight OPTIONS through (needed for CORS handshake)
+    if request.method == "OPTIONS":
+        return
+    token = request.headers.get("X-Bridge-Token") or request.args.get("token")
+    if token != API_TOKEN:
+        return jsonify({"error": "unauthorized"}), 401
 
 
 # ---------------------------------------------------------------------------
@@ -42,7 +54,7 @@ CORS(app, allow_private_network=True)   # allow all origins + Private Network Ac
 
 def _get_namespace():
     pythoncom.CoInitialize()
-    outlook = win32com.client.Dispatch("Outlook.Application")
+    outlook = win32com.client.dynamic.Dispatch("Outlook.Application")
     return outlook.GetNamespace("MAPI")
 
 
@@ -54,32 +66,49 @@ def _default_folder_id(name):
     return {"Inbox": 6, "Sent Items": 5, "Drafts": 16, "Deleted Items": 3}.get(name, 6)
 
 
-def _email_to_dict(item, folder_name="Inbox"):
-    received = item.ReceivedTime
-    received_iso = received.strftime("%Y-%m-%dT%H:%M:%S") if received else ""
+def _safe_get(item, attr, default=""):
+    try:
+        return getattr(item, attr) or default
+    except Exception:
+        return default
 
-    body_text = item.Body or ""
+
+def _email_to_dict(item, folder_name="Inbox"):
+    # ReceivedTime — pywintypes.datetime in frozen EXEs needs explicit str conversion
+    received_iso = ""
+    try:
+        rt = item.ReceivedTime
+        if rt:
+            received_iso = str(rt)[:19].replace(" ", "T")
+    except Exception:
+        pass
+
+    body_text = _safe_get(item, "Body", "")
     preview = body_text[:300].replace("\r\n", " ").replace("\n", " ").strip()
 
-    attachment_names = [item.Attachments[i].FileName for i in range(item.Attachments.Count)]
-
-    sender_email = ""
+    # Attachments — must use .Item(i) with 1-based index, NOT brackets
+    attachment_names = []
     try:
-        sender_email = item.SenderEmailAddress or ""
+        count = item.Attachments.Count
+        for i in range(1, count + 1):
+            try:
+                attachment_names.append(item.Attachments.Item(i).FileName)
+            except Exception:
+                pass
     except Exception:
         pass
 
     return {
-        "id": item.EntryID,
-        "subject": item.Subject or "(no subject)",
-        "sender": item.SenderName or "",
-        "sender_email": sender_email,
+        "id": _safe_get(item, "EntryID"),
+        "subject": _safe_get(item, "Subject", "(no subject)"),
+        "sender": _safe_get(item, "SenderName"),
+        "sender_email": _safe_get(item, "SenderEmailAddress"),
         "received_at": received_iso,
         "body_preview": preview,
         "body": body_text[:3000],
-        "is_read": item.UnRead is False,
-        "importance": _importance_label(item.Importance),
-        "has_attachments": item.Attachments.Count > 0,
+        "is_read": _safe_get(item, "UnRead", True) is False,
+        "importance": _importance_label(_safe_get(item, "Importance", 1)),
+        "has_attachments": len(attachment_names) > 0,
         "attachment_names": attachment_names,
         "folder": folder_name,
     }
@@ -98,6 +127,42 @@ def status():
         return jsonify({"running": True, "outlook_connected": True, "email_count": count, "version": "1.0.0"})
     except Exception as e:
         return jsonify({"running": True, "outlook_connected": False, "email_count": 0, "version": "1.0.0", "error": str(e)})
+
+
+@app.route("/diagnose")
+def diagnose():
+    """Returns detailed per-item error info — run this to find out why /emails returns 0."""
+    try:
+        ns = _get_namespace()
+        folder = ns.GetDefaultFolder(6)
+        items = folder.Items
+        total = items.Count
+        results = []
+        try:
+            items.Sort("[ReceivedTime]", True)
+            sort_ok = True
+        except Exception as se:
+            sort_ok = str(se)
+
+        for i in range(1, min(11, total + 1)):
+            row = {"index": i}
+            try:
+                item = items.Item(i)
+                row["item_ok"] = True
+                try: row["class"] = item.Class
+                except Exception as e: row["class_error"] = str(e)
+                try: row["subject"] = str(item.Subject)[:80]
+                except Exception as e: row["subject_error"] = str(e)
+                try: row["unread"] = item.UnRead
+                except Exception as e: row["unread_error"] = str(e)
+                try: row["sender"] = item.SenderName
+                except Exception as e: row["sender_error"] = str(e)
+            except Exception as e:
+                row["item_error"] = str(e)
+            results.append(row)
+        return jsonify({"total": total, "sort_ok": sort_ok, "items": results})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/debug")
@@ -169,7 +234,7 @@ def get_email(entry_id):
 def _get_email_count():
     try:
         pythoncom.CoInitialize()
-        outlook = win32com.client.Dispatch("Outlook.Application")
+        outlook = win32com.client.dynamic.Dispatch("Outlook.Application")
         ns = outlook.GetNamespace("MAPI")
         return ns.GetDefaultFolder(6).Items.Count
     except Exception:
