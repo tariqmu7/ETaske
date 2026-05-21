@@ -23,6 +23,7 @@ import {
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
+import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 
 export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed';
@@ -38,6 +39,7 @@ export default function App() {
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
 
   const pwa = usePWA(user?.uid ?? null);
+  const theme = useTheme();
 
   // Register SW + listen for foreground FCM messages once user is approved
   useEffect(() => {
@@ -290,6 +292,8 @@ export default function App() {
         announcementCount={unreadAnnouncements}
         onLogout={handleLogout}
         pwa={pwa}
+        isDark={theme.isDark}
+        onToggleTheme={theme.toggle}
       />
       <main className="main-content">
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (

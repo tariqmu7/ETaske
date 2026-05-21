@@ -180,7 +180,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     <Eye className="w-3.5 h-3.5" /> View Details
                   </button>
                   {task.status === 'Done' && (
-                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: '#94a3b8', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)} title="Archive Task">
+                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: 'var(--text-muted)', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)} title="Archive Task">
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   )}

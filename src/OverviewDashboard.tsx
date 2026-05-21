@@ -30,10 +30,13 @@ interface Props {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// bg is used as the gradient start; it deliberately uses hardcoded light pastels because
+// the gradient endpoint is var(--surface), so on dark mode the card fades from a subtle
+// tint to the surface colour rather than to white.
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; icon: React.ReactNode }> = {
-  Project:  { bg: '#dbeafe', text: '#1d4ed8', border: '#bfdbfe', icon: <Server className="w-4 h-4" /> },
-  Internal: { bg: '#f3e8ff', text: '#6d28d9', border: '#e9d5ff', icon: <Layers className="w-4 h-4" /> },
-  External: { bg: '#dcfce7', text: '#15803d', border: '#bbf7d0', icon: <Globe className="w-4 h-4" /> },
+  Project:  { bg: 'rgba(59,130,246,0.18)',  text: '#3b82f6', border: 'rgba(59,130,246,0.35)',  icon: <Server className="w-4 h-4" /> },
+  Internal: { bg: 'rgba(139,92,246,0.18)',  text: '#8b5cf6', border: 'rgba(139,92,246,0.35)',  icon: <Layers className="w-4 h-4" /> },
+  External: { bg: 'rgba(34,197,94,0.18)',   text: '#22c55e', border: 'rgba(34,197,94,0.35)',   icon: <Globe className="w-4 h-4" /> },
 };
 
 const STATUS_ORDER: CorrespondingStatus[] = ['Unread', 'Reviewing', 'Assigned', 'Closed'];
@@ -54,9 +57,9 @@ const priorityColor: Record<string, string> = {
 function StatCard({ label, value, sub, color }: { label: string; value: number | string; sub?: string; color: string }) {
   return (
     <div className="card" style={{ padding: '16px 20px', borderLeft: `4px solid ${color}` }}>
-      <div style={{ fontSize: 26, fontWeight: 800, color: '#0f172a' }}>{value}</div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{label}</div>
-      {sub && <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>{sub}</div>}
+      <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>{value}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{label}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{sub}</div>}
     </div>
   );
 }
@@ -101,23 +104,23 @@ const CorrCard: React.FC<{
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {item.serialNumber && (
-            <span style={{ fontSize: 9, fontWeight: 800, color: '#64748b', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
               #{item.serialNumber}
             </span>
           )}
-          <div style={{ fontWeight: 700, fontSize: 14, color: '#0f172a', lineHeight: 1.4 }}>{item.subject}</div>
+          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.subject}</div>
         </div>
-        <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: '#f1f5f9', color: '#475569', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+        <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-secondary)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
           {item.status}
         </span>
       </div>
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 12, flex: 1 }}>
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flex: 1 }}>
         <p style={{ marginBottom: 4 }}><strong>From:</strong> {item.sentFrom}</p>
         <p style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
       </div>
       
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || '#64748b', background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || '#64748b', background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
           {item.priority} Priority
         </span>
         {overdue && item.status !== 'Closed' && (
@@ -128,7 +131,7 @@ const CorrCard: React.FC<{
       </div>
 
       {item.assignedTo && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#475569', fontWeight: 600, marginBottom: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, marginBottom: 12 }}>
           {(() => {
             const u = projectUsers.find(pu => pu.id === item.assignedToId);
             return u?.photoURL ? (
@@ -141,7 +144,7 @@ const CorrCard: React.FC<{
         </div>
       )}
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 10, borderTop: '1px solid #f1f5f9' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: overdue ? '#dc2626' : '#94a3b8' }}>
           {item.deadline ? `Due ${item.deadline}` : 'No deadline'}
         </div>
@@ -358,24 +361,24 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginRight: 8 }}>
             {task.serialNumber && (
-              <span style={{ fontSize: 9, fontWeight: 800, color: '#64748b', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
                 #{task.serialNumber}
               </span>
             )}
-            <div style={{ fontWeight: 700, fontSize: 13, color: '#0f172a', lineHeight: 1.4 }}>{task.taskName}</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{task.taskName}</div>
           </div>
           <span style={{ padding: '3px 9px', borderRadius: 0, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-            background: task.status === 'Done' ? '#dcfce7' : task.status === 'In Progress' ? '#dbeafe' : '#f1f5f9',
-            color: task.status === 'Done' ? '#15803d' : task.status === 'In Progress' ? '#1d4ed8' : '#475569',
+            background: task.status === 'Done' ? 'var(--green-100)' : task.status === 'In Progress' ? 'var(--blue-100)' : 'var(--surface-3)',
+            color: task.status === 'Done' ? 'var(--green-400)' : task.status === 'In Progress' ? 'var(--blue-400)' : 'var(--text-secondary)',
           }}>{task.status}</span>
         </div>
-        <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             Assigned to: 
             {(() => {
               const u = projectUsers.find(pu => pu.id === task.assignedToId);
               return (
-                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600, color: '#334155' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontWeight: 600, color: 'var(--text-secondary)' }}>
                   {u?.photoURL ? (
                     <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover' }} alt="" />
                   ) : (
@@ -391,17 +394,17 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         </div>
         {taskMilestones.length > 0 && (
           <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
               <span>Milestones: {done}/{taskMilestones.length}</span>
               <span>{progress}%</span>
             </div>
-            <div style={{ height: 5, background: '#f1f5f9', borderRadius: 0, overflow: 'hidden' }}>
+            <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 0, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${progress}%`, background: '#3b82f6', borderRadius: 0, transition: 'width 0.4s' }} />
             </div>
           </div>
         )}
 
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid #f1f5f9' }}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
           <button 
             className="btn btn-ghost btn-sm" 
             style={{ padding: '2px 8px', height: 'auto', fontSize: 10, fontWeight: 800 }}
@@ -419,8 +422,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       {/* Stats Header */}
       <div className="ov-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
-          <p className="ov-subtitle" style={{ color: '#64748b', fontSize: 14 }}>Real-time stats and task monitoring.</p>
+          <h1 className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
+          <p className="ov-subtitle" style={{ color: 'var(--text-muted)', fontSize: 14 }}>Real-time stats and task monitoring.</p>
         </div>
 
         <div className="ov-datefilter" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -454,15 +457,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
           className="ov-duesoon"
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
-          style={{ marginBottom: 32, background: '#fff7ed', border: '1px solid #ffedd5', padding: '20px', borderRadius: 0 }}
+          style={{ marginBottom: 32, background: 'var(--surface-3)', border: '1px solid #f97316', padding: '20px', borderRadius: 0 }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
             <div style={{ background: '#f97316', padding: 6, borderRadius: 0 }}>
               <AlertCircle className="w-4 h-4" style={{ color: '#fff' }} />
             </div>
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: '#9a3412', margin: 0 }}>Due Soon (Within 48h)</h2>
-              <p style={{ fontSize: 12, color: '#c2410c', margin: 0 }}>Items that require immediate attention.</p>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Due Soon (Within 48h)</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Items that require immediate attention.</p>
             </div>
           </div>
 
@@ -473,7 +476,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 className="card"
                 style={{ 
                   padding: '12px 16px', 
-                  background: '#fff', 
+                  background: 'var(--surface)',
                   borderLeft: `4px solid #f97316`,
                   display: 'flex',
                   justifyContent: 'space-between',
@@ -490,10 +493,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               >
                 <div style={{ flex: 1, marginRight: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: '#1e293b', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
-                  <div style={{ fontSize: 11, color: '#64748b', marginTop: 2 }}>Due: {item.deadline || item.dueDate}</div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due: {item.deadline || item.dueDate}</div>
                 </div>
-                <ArrowRight className="w-4 h-4" style={{ color: '#94a3b8' }} />
+                <ArrowRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               </div>
             ))}
             {dueSoonItems.length > 4 && (
@@ -520,7 +523,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-4px)'}
                 onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div className="cat-card-head" style={{ padding: '24px', background: `linear-gradient(135deg, ${catStyle.bg}, #fff)`, borderBottom: `2px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div className="cat-card-head" style={{ padding: '24px', background: `linear-gradient(135deg, ${catStyle.bg}, var(--surface))`, borderBottom: `2px solid ${catStyle.border}`, display: 'flex', alignItems: 'center', gap: 12 }}>
                   <div style={{ color: '#fff', padding: 10, background: catStyle.text, borderRadius: 0, boxShadow: `0 4px 12px ${catStyle.border}` }}>
                     {catStyle.icon}
                   </div>
@@ -540,10 +543,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <MailOpen className="w-4 h-4" /> Correspondences
                     </span>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>{s.total}</span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{s.total}</span>
                   </div>
                   <div 
                     style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '8px', margin: '-8px', borderRadius: 0, transition: 'background 0.2s' }}
@@ -555,10 +558,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     onMouseEnter={e => e.currentTarget.style.background = 'rgba(0,0,0,0.02)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
-                    <span style={{ color: '#64748b', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                       <CheckSquare className="w-4 h-4" /> Related Tasks
                     </span>
-                    <span style={{ fontSize: 18, fontWeight: 800, color: '#0f172a' }}>{s.tasks}</span>
+                    <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{s.tasks}</span>
                   </div>
                   {s.overdue > 0 && (
                     <div 
@@ -596,7 +599,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               </button>
               
               <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
-                <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: '#94a3b8' }} />
+                <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
                 <input
                   className="input"
                   style={{ paddingLeft: 36, fontSize: 13 }}
@@ -643,7 +646,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               
               return (
                 <div key={subCat} style={{ marginBottom: 32 }}>
-                  <h3 style={{ fontSize: 16, fontWeight: 800, color: '#475569', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
+                  <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
                     <FolderOpen className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
                     {subCat}
                   </h3>
@@ -672,7 +675,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             })}
             
             {subCategoryGroups.size === 0 && (
-               <div style={{ textAlign: 'center', padding: '60px 20px', color: '#94a3b8' }}>
+               <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                  <BarChart3 style={{ width: 44, height: 44, margin: '0 auto 12px', opacity: 0.3 }} />
                  <p style={{ fontWeight: 600 }}>No data matches your criteria.</p>
                </div>
@@ -712,7 +715,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       color: priorityColor[selectedTask.priority] || '#475569'
                     }}>{selectedTask.priority} Priority</span>
                   </div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800, color: '#0f172a', margin: 0 }}>{selectedTask.taskName}</h2>
+                  <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedTask.taskName}</h2>
                 </div>
                   <button 
                    onClick={() => setSelectedTask(null)} 
@@ -726,13 +729,13 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               
               {/* Modal Body */}
               <div style={{ padding: '24px', flex: 1 }}>
-                <p style={{ color: '#475569', fontSize: 14, lineHeight: 1.6, marginBottom: 24, whiteSpace: 'pre-wrap' }}>
-                  {selectedTask.description || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No description provided.</span>}
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24, whiteSpace: 'pre-wrap' }}>
+                  {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No description provided.</span>}
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: '#f8fafc', borderRadius: 0, border: '1px solid var(--border)' }}>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedToId);
@@ -746,8 +749,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                   </div>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Assigned By</span>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Assigned By</span>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedById);
                         return u?.photoURL ? (
@@ -760,12 +763,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                   </div>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div>
-                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 4 }}>Linked Corresponding</span>
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Linked Corresponding</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}>
                         <Link2 className="w-4 h-4 flex-shrink-0" /> 
                         {(() => {
@@ -780,12 +783,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
                 {/* Milestones inside Modal */}
                 <div>
-                  <h4 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <h4 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
                     <Target className="w-4 h-4 text-primary" /> Milestones
                   </h4>
                   
                   {milestones.filter(m => m.taskId === selectedTask.id).length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: 0, border: '1px dashed var(--border)', color: '#94a3b8', fontSize: 13 }}>
+                    <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: 0, border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
                       No milestones for this task.
                     </div>
                   ) : (
@@ -802,7 +805,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                               <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? '#94a3b8' : '#0f172a', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</span>
                               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: 'var(--surface)', color: 'var(--text-muted)' }}>{ms.status}</span>
                             </div>
-                            <div style={{ fontSize: 12, color: '#64748b', display: 'flex', gap: 12 }}>
+                            <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
                               <span>Added by {ms.addedBy}</span>
                               {ms.targetDate && <span>Target: {ms.targetDate}</span>}
                             </div>
@@ -856,9 +859,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       {CATEGORY_COLORS[selectedCorr.category]?.icon} {selectedCorr.category}
                     </span>
                   </div>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
                   {selectedCorr.serialNumber && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginTop: 4, letterSpacing: '0.02em' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>
                       REF: {selectedCorr.serialNumber}
                     </div>
                   )}
@@ -878,29 +881,29 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
-                     <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
                    </div>
-                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: '#334155', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {selectedCorr.body || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No content provided.</span>}
+                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No content provided.</span>}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
                   <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4 text-muted" />
                       {selectedCorr.sentFrom}
                     </div>
                     {selectedCorr.department && (
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginLeft: 24 }}>{selectedCorr.department}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{selectedCorr.department}</div>
                     )}
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
                         Received: {selectedCorr.dateReceived}
                       </div>
@@ -912,7 +915,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedCorr.assignedToId);
@@ -926,9 +929,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                               </div>
                             )}
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedCorr.assignedTo || 'Unassigned'}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorr.assignedTo || 'Unassigned'}</div>
                               {selectedCorr.assignedAt && (
-                                <div style={{ fontSize: 11, color: '#64748b' }}>Assigned {formatDate(selectedCorr.assignedAt)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Assigned {formatDate(selectedCorr.assignedAt)}</div>
                               )}
                             </div>
                           </>
@@ -942,7 +945,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Link2 className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorr.filePaths.map((path, idx) => (
@@ -950,7 +953,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                           <span
                             onClick={() => openOrCopyPath(path)}
                             title="Click to open (web link) or copy this path"
-                            style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                            style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                           >{path}</span>
                           <button
                             onClick={() => openOrCopyPath(path)}
@@ -970,7 +973,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Paperclip className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
                     </div>
                     <a 
                       href={selectedCorr.attachedFile} 
@@ -1000,7 +1003,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Briefcase className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Internal Notes</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Internal Notes</h3>
                     </div>
                     <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 0, color: '#92400e', fontSize: 14, fontStyle: 'italic' }}>
                       "{selectedCorr.notes}"

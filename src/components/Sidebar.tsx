@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   Inbox, CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail
+  Download, BellOff, BellRing, Mail, Sun, Moon
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
@@ -20,9 +20,11 @@ interface Props {
   announcementCount: number;
   onLogout: () => void;
   pwa: ReturnType<typeof usePWA>;
+  isDark: boolean;
+  onToggleTheme: () => void;
 }
 
-export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout, pwa }: Props) {
+export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout, pwa, isDark, onToggleTheme }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -155,6 +157,18 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Theme toggle */}
+        <button
+          className="btn btn-ghost btn-icon"
+          onClick={onToggleTheme}
+          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {isDark
+            ? <Sun className="w-5 h-5" style={{ color: '#f59e0b' }} />
+            : <Moon className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+          }
+        </button>
+
         {/* Install PWA */}
         {pwa.canInstall && (
           <button
@@ -242,7 +256,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
           {showNotifications && (
             <div className="notif-dropdown">
-              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface)' }}>
+              <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-3)' }}>
                 <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Notifications</h3>
                 {unreadCount > 0 && (
                   <button onClick={handleClearAll} style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
@@ -262,7 +276,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                       className="notif-item"
                       style={{ 
                         padding: '12px 16px', borderBottom: '1px solid var(--border)', 
-                        background: n.read ? '#fff' : 'rgba(99,102,241,0.05)',
+                        background: n.read ? 'var(--surface)' : 'rgba(99,102,241,0.08)',
                         display: 'flex', gap: 12, alignItems: 'flex-start',
                         cursor: 'pointer'
                       }}
@@ -310,11 +324,11 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           {showUserMenu && (
             <div style={{
               position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-              background: '#fff', border: '1px solid var(--border)',
+              background: 'var(--surface)', border: '1px solid var(--border)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
               minWidth: 220, zIndex: 2000,
             }}>
-              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', background: 'var(--blue-50)' }}>
+              <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', background: 'var(--surface-3)' }}>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{appUser.displayName}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{appUser.email}</div>
                 <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', padding: '2px 8px', background: 'var(--blue-600)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>

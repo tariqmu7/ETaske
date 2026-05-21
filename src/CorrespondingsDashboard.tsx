@@ -1243,22 +1243,22 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface-3)' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                     <span className={statusBadgeClass(selectedCorrForDetails.status)}>{selectedCorrForDetails.status}</span>
                     <span className={priorityBadgeClass(selectedCorrForDetails.priority)}>{selectedCorrForDetails.priority} Priority</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: selectedCorrForDetails.category === 'Project' ? '#dbeafe' : selectedCorrForDetails.category === 'External' ? '#dcfce7' : '#f3e8ff',
-                      color: selectedCorrForDetails.category === 'Project' ? '#1d4ed8' : selectedCorrForDetails.category === 'External' ? '#15803d' : '#6d28d9',
+                      background: selectedCorrForDetails.category === 'Project' ? 'rgba(59,130,246,0.15)' : selectedCorrForDetails.category === 'External' ? 'rgba(34,197,94,0.15)' : 'rgba(139,92,246,0.15)',
+                      color: selectedCorrForDetails.category === 'Project' ? '#3b82f6' : selectedCorrForDetails.category === 'External' ? '#22c55e' : '#8b5cf6',
                       display: 'flex', alignItems: 'center', gap: 4
                     }}>
                        {selectedCorrForDetails.category}
                     </span>
                   </div>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
                   {selectedCorrForDetails.serialNumber && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginTop: 4, letterSpacing: '0.02em' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>
                       REF: {selectedCorrForDetails.serialNumber}
                     </div>
                   )}
@@ -1278,41 +1278,41 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
-                     <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
                    </div>
-                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: '#334155', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {selectedCorrForDetails.body || <span style={{ fontStyle: 'italic', color: '#94a3b8' }}>No content provided.</span>}
+                   <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                    {selectedCorrForDetails.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No content provided.</span>}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4 text-muted" />
                       {selectedCorrForDetails.sentFrom}
                     </div>
                     {selectedCorrForDetails.department && (
-                      <div style={{ fontSize: 12, color: '#64748b', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
                     )}
                   </div>
 
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
                         Received: {selectedCorrForDetails.dateReceived}
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Clock className="w-4 h-4 text-muted" />
                         Deadline: {selectedCorrForDetails.deadline || 'None'}
                       </div>
                     </div>
                   </div>
 
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#64748b', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedCorrForDetails.assignedToId);
@@ -1326,9 +1326,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               </div>
                             )}
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{selectedCorrForDetails.assignedTo || 'Unassigned'}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorrForDetails.assignedTo || 'Unassigned'}</div>
                               {selectedCorrForDetails.assignedAt && (
-                                <div style={{ fontSize: 11, color: '#64748b' }}>Assigned Recently</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Assigned Recently</div>
                               )}
                             </div>
                           </>
@@ -1342,15 +1342,15 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <ExternalLink className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorrForDetails.filePaths.map((path, idx) => (
-                        <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={idx} style={{ padding: '10px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span
                             onClick={() => openOrCopyPath(path)}
                             title="Click to open (web link) or copy this path"
-                            style={{ fontSize: 13, color: '#334155', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
+                            style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                           >{path}</span>
                           <button
                             onClick={() => openOrCopyPath(path)}
@@ -1370,21 +1370,21 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Paperclip className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: '#0f172a', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
                     </div>
                     <a 
                       href={selectedCorrForDetails.attachedFile} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       style={{ 
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: '#eff6ff', 
-                        border: '1px solid #bfdbfe', borderRadius: 0, color: '#1e40af', textDecoration: 'none',
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'var(--blue-50)',
+                        border: '1px solid var(--blue-200)', borderRadius: 0, color: 'var(--blue-400)', textDecoration: 'none',
                         transition: 'all 0.2s'
                       }}
                       onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
                       onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
                     >
-                      <div style={{ background: '#fff', padding: 8, borderRadius: 0 }}>
+                      <div style={{ background: 'var(--surface)', padding: 8, borderRadius: 0 }}>
                         <FileText className="w-5 h-5" />
                       </div>
                       <div style={{ flex: 1 }}>
