@@ -322,7 +322,8 @@ body {
 
 @media (max-width: 768px) {
   .main-content {
-    padding: 16px 12px calc(var(--bottomnav-h) + var(--safe-area-bottom) + 24px);
+    /* Extra 72px accounts for the chat FAB (56px) + gap above the bottom nav */
+    padding: 16px 12px calc(var(--bottomnav-h) + var(--safe-area-bottom) + 96px);
   }
 }
 

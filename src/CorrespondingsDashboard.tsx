@@ -441,7 +441,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         </div>
 
         <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus className="w-4 h-4" /> New Corresponding
+          <Plus className="w-4 h-4" /> New Correspondence
         </button>
       </div>
 
@@ -487,36 +487,17 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                }}
               onClick={() => setSelectedCorrForDetails(item)}
             >
-              {/* Top row */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <span className={statusBadgeClass(item.status)}>{item.status}</span>
-                  <span className={priorityBadgeClass(item.priority)}>{item.priority}</span>
-                  {item.category && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
-                      color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
-                    }}>{item.category}</span>
+              {/* Top row: ID + title + actions */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+                  {item.serialNumber && (
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'block', marginBottom: 2 }}>
+                      #{item.serialNumber}
+                    </span>
                   )}
-                   {item.actions && item.actions !== 'None' && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                      textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
-                      border: '1px solid #fecaca'
-                    }}>{item.actions}</span>
-                  )}
-                  {isOverdue(item.deadline) && item.status !== 'Closed' && (
-                    <span className="badge badge-urgent">OVERDUE</span>
-                  )}
-                  {isDueSoon(item.deadline) && item.status !== 'Closed' && (
-                    <span className="badge" style={{ background: '#f97316', color: '#fff' }}>DUE SOON</span>
-                  )}
+                  <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>{item.subject}</h3>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button
                     className="btn btn-ghost btn-icon btn-sm"
                     onClick={e => { e.stopPropagation(); openModal(item, false); }}
@@ -534,13 +515,33 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
-                {item.serialNumber && (
-                  <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    #{item.serialNumber}
-                  </span>
+              {/* Tags row — secondary, below title */}
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+                <span className={statusBadgeClass(item.status)}>{item.status}</span>
+                <span className={priorityBadgeClass(item.priority)}>{item.priority}</span>
+                {item.category && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                    borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                    textTransform: 'uppercase',
+                    background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
+                    color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
+                  }}>{item.category}</span>
                 )}
-                <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>{item.subject}</h3>
+                {item.actions && item.actions !== 'None' && (
+                  <span style={{
+                    display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                    borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                    textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
+                    border: '1px solid #fecaca'
+                  }}>{item.actions}</span>
+                )}
+                {isOverdue(item.deadline) && item.status !== 'Closed' && (
+                  <span className="badge badge-urgent">OVERDUE</span>
+                )}
+                {isDueSoon(item.deadline) && item.status !== 'Closed' && (
+                  <span className="badge" style={{ background: '#f97316', color: '#fff' }}>DUE SOON</span>
+                )}
               </div>
               <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 14, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
 
@@ -1239,11 +1240,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               animate={{ y: 0, scale: 1 }}
               exit={{ y: 20, scale: 0.95 }}
               className="card"
-              style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', overflowY: 'auto', padding: 0, display: 'flex', flexDirection: 'column' }}
+              style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', padding: 0, display: 'flex', flexDirection: 'column' }}
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface-3)' }}>
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface)', flexShrink: 0 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                     <span className={statusBadgeClass(selectedCorrForDetails.status)}>{selectedCorrForDetails.status}</span>
@@ -1256,25 +1257,25 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                        {selectedCorrForDetails.category}
                     </span>
                   </div>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
+                  <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary, #0f172a)', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
                   {selectedCorrForDetails.serialNumber && (
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary, #334155)', marginTop: 4, letterSpacing: '0.02em' }}>
                       REF: {selectedCorrForDetails.serialNumber}
                     </div>
                   )}
                 </div>
-                <button 
-                  onClick={() => setSelectedCorrForDetails(null)} 
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                <button
+                  onClick={() => setSelectedCorrForDetails(null)}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16, minWidth: 44, minHeight: 44 }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
-                  <X className="w-6 h-6 text-muted" />
+                  <X className="w-5 h-5" style={{ color: 'var(--text-primary)' }} />
                 </button>
               </div>
               
               {/* Modal Body */}
-              <div style={{ padding: '32px', flex: 1 }}>
+              <div style={{ padding: '32px', flex: 1, overflowY: 'auto' }}>
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
@@ -1289,11 +1290,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
-                      <Building2 className="w-4 h-4 text-muted" />
-                      {selectedCorrForDetails.sentFrom}
+                      <Building2 className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                      <span>{selectedCorrForDetails.sentFrom || '—'}</span>
                     </div>
                     {selectedCorrForDetails.department && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
                     )}
                   </div>
 
@@ -1301,13 +1302,15 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Calendar className="w-4 h-4 text-muted" />
-                        Received: {selectedCorrForDetails.dateReceived}
+                        <Calendar className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                        Received: {selectedCorrForDetails.dateReceived || '—'}
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Clock className="w-4 h-4 text-muted" />
-                        Deadline: {selectedCorrForDetails.deadline || 'None'}
-                      </div>
+                      {selectedCorrForDetails.deadline ? (
+                        <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Clock className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
+                          Deadline: {selectedCorrForDetails.deadline}
+                        </div>
+                      ) : null}
                     </div>
                   </div>
 
@@ -1328,7 +1331,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorrForDetails.assignedTo || 'Unassigned'}</div>
                               {selectedCorrForDetails.assignedAt && (
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Assigned Recently</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                                  Assigned {typeof selectedCorrForDetails.assignedAt === 'string'
+                                    ? selectedCorrForDetails.assignedAt
+                                    : selectedCorrForDetails.assignedAt?.toDate?.()?.toLocaleDateString?.() || ''}
+                                </div>
                               )}
                             </div>
                           </>
@@ -1345,23 +1352,32 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {selectedCorrForDetails.filePaths.map((path, idx) => (
-                        <div key={idx} style={{ padding: '10px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span
-                            onClick={() => openOrCopyPath(path)}
-                            title="Click to open (web link) or copy this path"
-                            style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
-                          >{path}</span>
-                          <button
-                            onClick={() => openOrCopyPath(path)}
-                            title="Open (web link) or copy this path"
-                            className="btn btn-ghost btn-sm"
-                            style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto' }}
-                          >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                      {selectedCorrForDetails.filePaths.map((path, idx) => {
+                        const friendlyName = path.split(/[/\\]/).filter(Boolean).pop() || path;
+                        const isUrl = path.startsWith('http://') || path.startsWith('https://');
+                        return (
+                          <div key={idx} style={{ padding: '10px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <span
+                                onClick={() => openOrCopyPath(path)}
+                                title={isUrl ? path : `Click to copy path: ${path}`}
+                                style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                              >{friendlyName}</span>
+                              {!isUrl && (
+                                <span style={{ fontSize: 11, color: 'var(--text-muted)', fontFamily: 'monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{path}</span>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => openOrCopyPath(path)}
+                              title="Open (web link) or copy this path"
+                              className="btn btn-ghost btn-sm"
+                              style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto', flexShrink: 0 }}
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -1396,34 +1412,36 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   </div>
                 )}
 
+              </div>
+
+              {/* Sticky Footer Actions */}
+              <div style={{ padding: '16px 24px', borderTop: '1px solid var(--border)', background: 'var(--surface)', display: 'flex', gap: 10, flexShrink: 0 }}>
                 {tasks.find(t => t.correspondingId === selectedCorrForDetails.id || t.id === selectedCorrForDetails.convertedToTaskId) && (
-                   <button 
-                    className="btn btn-primary w-full" 
-                    style={{ marginTop: 8, gap: 10, height: 48 }}
+                  <button
+                    className="btn btn-primary"
+                    style={{ gap: 8, height: 44, flex: 1 }}
                     onClick={() => {
                       const t = tasks.find(t => t.correspondingId === selectedCorrForDetails.id || t.id === selectedCorrForDetails.convertedToTaskId);
                       if (t) {
                         setSelectedCorrForDetails(null);
-                        onNavigate('tasks'); // Corrected from 'Tasks' to match AppView type
+                        onNavigate('tasks');
                       }
                     }}
-                   >
-                     <Edit2 className="w-4 h-4" /> View Linked Task
-                   </button>
-                )}
-                
-                <div style={{ marginTop: 20, display: 'flex', gap: 10 }}>
-                  <button 
-                    className="btn btn-ghost w-full" 
-                    onClick={() => {
-                      setSelectedCorrForDetails(null);
-                      openModal(selectedCorrForDetails, false);
-                    }}
                   >
-                    Edit Correspondence
+                    <Edit2 className="w-4 h-4" /> View Linked Task
                   </button>
-                  <button className="btn btn-ghost w-full" onClick={() => setSelectedCorrForDetails(null)}>Close</button>
-                </div>
+                )}
+                <button
+                  className="btn btn-ghost"
+                  style={{ height: 44, flex: 1 }}
+                  onClick={() => {
+                    setSelectedCorrForDetails(null);
+                    openModal(selectedCorrForDetails, false);
+                  }}
+                >
+                  Edit
+                </button>
+                <button className="btn btn-ghost" style={{ height: 44 }} onClick={() => setSelectedCorrForDetails(null)}>Close</button>
               </div>
             </motion.div>
           </motion.div>

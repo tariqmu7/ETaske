@@ -23,6 +23,7 @@ import {
   BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
+import { isOverdue, isDueSoon } from './utils';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 
@@ -161,12 +162,9 @@ export default function App() {
     let corrCount = 0;
 
     const checkDueSoon = (items: any[], dateField: string) => {
-      const now = new Date();
-      const fortyEightHoursLater = new Date(now.getTime() + 48 * 60 * 60 * 1000);
       return items.filter(item => {
-        if (!item[dateField]) return false;
-        const d = new Date(item[dateField]);
-        return d > now && d <= fortyEightHoursLater && item.status !== 'Done' && item.status !== 'Closed' && item.status !== 'Archived';
+        if (['Done', 'Closed', 'Archived'].includes(item.status)) return false;
+        return isOverdue(item[dateField]) || isDueSoon(item[dateField]);
       }).length;
     };
 

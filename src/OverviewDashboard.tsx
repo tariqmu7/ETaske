@@ -648,7 +648,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <div key={subCat} style={{ marginBottom: 32 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
                     <FolderOpen className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
-                    {subCat}
+                    {subCat === 'None' ? 'Unassigned' : subCat}
                   </h3>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
@@ -703,16 +703,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
+              <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface)' }}>
                 <div>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
                     <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: selectedTask.status === 'Done' ? '#dcfce7' : selectedTask.status === 'In Progress' ? '#dbeafe' : '#f1f5f9',
-                      color: selectedTask.status === 'Done' ? '#15803d' : selectedTask.status === 'In Progress' ? '#1d4ed8' : '#475569',
+                      background: selectedTask.status === 'Done' ? 'rgba(21,128,61,0.15)' : selectedTask.status === 'In Progress' ? 'rgba(29,78,216,0.15)' : 'var(--surface-3)',
+                      color: selectedTask.status === 'Done' ? '#15803d' : selectedTask.status === 'In Progress' ? '#1d4ed8' : 'var(--text-secondary)',
                     }}>{selectedTask.status}</span>
                     <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: priorityColor[selectedTask.priority] ? `${priorityColor[selectedTask.priority]}20` : '#f1f5f9',
-                      color: priorityColor[selectedTask.priority] || '#475569'
+                      background: priorityColor[selectedTask.priority] ? `${priorityColor[selectedTask.priority]}20` : 'var(--surface-3)',
+                      color: priorityColor[selectedTask.priority] || 'var(--text-secondary)'
                     }}>{selectedTask.priority} Priority</span>
                   </div>
                   <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedTask.taskName}</h2>
@@ -720,7 +720,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <button 
                    onClick={() => setSelectedTask(null)} 
                    style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 4, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <X className="w-5 h-5 text-muted" />
@@ -733,7 +733,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No description provided.</span>}
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: '#f8fafc', borderRadius: 0, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
@@ -764,7 +764,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
                   <div>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div>
@@ -788,22 +788,25 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </h4>
                   
                   {milestones.filter(m => m.taskId === selectedTask.id).length === 0 ? (
-                    <div style={{ padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: 0, border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
+                    <div style={{ padding: '20px', textAlign: 'center', background: 'var(--surface-3)', borderRadius: 0, border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
                       No milestones for this task.
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {milestones.filter(m => m.taskId === selectedTask.id).map(ms => (
                         <div key={ms.id} style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-                          <div style={{ width: 24, height: 24, borderRadius: 0, background: ms.status === 'Done' ? '#dcfce7' : ms.status === 'In Progress' ? '#dbeafe' : '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
+                          <div style={{ width: 24, height: 24, borderRadius: 0, background: ms.status === 'Done' ? 'rgba(21,128,61,0.15)' : ms.status === 'In Progress' ? 'rgba(29,78,216,0.15)' : 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 }}>
                             {ms.status === 'Done' && <CheckSquare className="w-3.5 h-3.5 text-success" style={{ color: '#15803d' }} />}
                             {ms.status === 'In Progress' && <Clock className="w-3.5 h-3.5 text-primary" style={{ color: '#1d4ed8' }} />}
                             {ms.status !== 'Done' && ms.status !== 'In Progress' && <div style={{ width: 6, height: 6, borderRadius: 0, background: '#94a3b8' }} />}
                           </div>
-                          <div style={{ flex: 1, padding: '12px 16px', background: '#f8fafc', borderRadius: 0, border: '1px solid var(--border)' }}>
+                          <div style={{ flex: 1, padding: '12px 16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                              <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? '#94a3b8' : '#0f172a', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</span>
-                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 0, background: 'var(--surface)', color: 'var(--text-muted)' }}>{ms.status}</span>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</span>
+                              <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 0,
+                                background: ms.status === 'Done' ? 'rgba(21,128,61,0.15)' : ms.status === 'In Progress' ? 'rgba(29,78,216,0.15)' : 'var(--surface-2)',
+                                color: ms.status === 'Done' ? '#15803d' : ms.status === 'In Progress' ? '#1d4ed8' : 'var(--text-muted)'
+                              }}>{ms.status}</span>
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
                               <span>Added by {ms.addedBy}</span>
@@ -840,7 +843,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               onClick={e => e.stopPropagation()}
             >
               {/* Modal Header */}
-              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: '#f8fafc' }}>
+              <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface)' }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
@@ -869,7 +872,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <button 
                   onClick={() => setSelectedCorr(null)} 
                   style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16 }}
-                  onMouseEnter={e => e.currentTarget.style.background = '#e2e8f0'}
+                  onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
                   <X className="w-6 h-6 text-muted" />
@@ -883,38 +886,40 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                      <FileText className="w-4 h-4 text-primary" />
                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
                    </div>
-                   <div style={{ padding: '20px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                   <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                     {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No content provided.</span>}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4 text-muted" />
-                      {selectedCorr.sentFrom}
+                      {selectedCorr.sentFrom || '—'}
                     </div>
                     {selectedCorr.department && (
                       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{selectedCorr.department}</div>
                     )}
                   </div>
 
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
                         Received: {selectedCorr.dateReceived}
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorr.deadline) && selectedCorr.status !== 'Closed' ? '#dc2626' : '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Flag className="w-4 h-4 text-muted" />
-                        Deadline: {selectedCorr.deadline || 'None'}
-                      </div>
+                      {selectedCorr.deadline && (
+                        <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorr.deadline) && selectedCorr.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Flag className="w-4 h-4 text-muted" />
+                          Deadline: {selectedCorr.deadline}
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  <div className="card-minimal" style={{ padding: '16px', background: '#f1f5f9', border: 'none' }}>
+                  <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
@@ -949,7 +954,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorr.filePaths.map((path, idx) => (
-                        <div key={idx} style={{ padding: '10px 14px', background: '#f8fafc', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div key={idx} style={{ padding: '10px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span
                             onClick={() => openOrCopyPath(path)}
                             title="Click to open (web link) or copy this path"
@@ -979,15 +984,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       href={selectedCorr.attachedFile} 
                       target="_blank" 
                       rel="noopener noreferrer"
-                      style={{ 
-                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: '#eff6ff', 
-                        border: '1px solid #bfdbfe', borderRadius: 0, color: '#1e40af', textDecoration: 'none',
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12, padding: '14px 18px', background: 'var(--blue-50, #eff6ff)',
+                        border: '1px solid var(--blue-200, #bfdbfe)', borderRadius: 0, color: 'var(--blue-400, #1e40af)', textDecoration: 'none',
                         transition: 'all 0.2s'
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = '#dbeafe'}
-                      onMouseLeave={e => e.currentTarget.style.background = '#eff6ff'}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--blue-100, #dbeafe)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'var(--blue-50, #eff6ff)'}
                     >
-                      <div style={{ background: '#fff', padding: 8, borderRadius: 0 }}>
+                      <div style={{ background: 'var(--surface)', padding: 8, borderRadius: 0 }}>
                         <FileText className="w-5 h-5" />
                       </div>
                       <div style={{ flex: 1 }}>
@@ -1005,7 +1010,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       <Briefcase className="w-4 h-4 text-primary" />
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Internal Notes</h3>
                     </div>
-                    <div style={{ padding: '16px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 0, color: '#92400e', fontSize: 14, fontStyle: 'italic' }}>
+                    <div style={{ padding: '16px', background: 'var(--yellow-50, #fffbeb)', border: '1px solid var(--yellow-200, #fde68a)', borderRadius: 0, color: 'var(--yellow-800, #92400e)', fontSize: 14, fontStyle: 'italic' }}>
                       "{selectedCorr.notes}"
                     </div>
                   </div>
