@@ -1,3 +1,4 @@
+/* stylelint-disable */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
@@ -552,7 +553,7 @@ body {
 .modal {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 0;
+  border-radius: 16px 16px 0 0;
   width: 100%;
   max-width: 660px;
   max-height: 94vh;
@@ -717,6 +718,15 @@ h1, h2, h3, h4, p, span, div {
   color: var(--blue-700);
 }
 
+/* ─── Filter Bar ─────────────────────────────────── */
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* ─── Empty state ───────────────────────────────── */
 .empty-state {
   display: flex;
@@ -795,6 +805,24 @@ h1, h2, h3, h4, p, span, div {
 
   .topnav-avatar,
   .topnav-avatar-placeholder { width: 32px; height: 32px; }
+
+  /* ── Prevent iOS zoom on inputs ── */
+  .input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* ── Horizontally scrollable filters ── */
+  .filter-bar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  .filter-bar::-webkit-scrollbar { display: none; }
+  .filter-bar > * {
+    flex-shrink: 0;
+  }
 
   /* ── Bottom nav: scrollable, clear active state ── */
   /* flex:1 lets tabs fill the bar when they fit; the

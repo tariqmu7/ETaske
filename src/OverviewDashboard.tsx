@@ -573,72 +573,6 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       )}
 
       
-      {selectedCategory === null && employeeKPIs.length > 0 && (
-        <div style={{ marginTop: 40, marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
-            <div style={{ padding: 10, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
-              <Users className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Team Performance KPIs")}</h2>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{t("Workload and completion stats for active members.")}</p>
-            </div>
-          </div>
-          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
-              <thead style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border)' }}>
-                <tr>
-                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Employee")}</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Active Corrs (Pts)")}</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Total Workload (Pts)")}</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Completed (Pts)")}</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("In Progress (Pts)")}</th>
-                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Overdue (Pts)")}</th>
-                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 700, width: 200 }}>{t("Completion Rate")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {employeeKPIs.map((kpi, idx) => (
-                  <tr key={kpi.user.id} style={{ borderBottom: '1px solid var(--border)', background: idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-3)' }}>
-                    <td style={{ padding: '12px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        {kpi.user.photoURL ? (
-                          <img src={kpi.user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
-                        ) : (
-                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: kpi.user.userColor || getUserColor(kpi.user.id), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
-                            {kpi.user.displayName?.charAt(0).toUpperCase()}
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{kpi.user.displayName}</div>
-                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{kpi.user.department || 'Staff'}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-secondary)' }}>{kpi.activeCorrs}</td>
-                    <td style={{ padding: '12px 16px', fontWeight: 800 }}>{kpi.totalTasks}</td>
-                    <td style={{ padding: '12px 16px', color: '#16a34a', fontWeight: 700 }}>{kpi.completedTasks}</td>
-                    <td style={{ padding: '12px 16px', color: '#d97706', fontWeight: 700 }}>{kpi.inProgressTasks}</td>
-                    <td style={{ padding: '12px 16px', color: kpi.overdueTasks > 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: kpi.overdueTasks > 0 ? 800 : 600 }}>
-                      {kpi.overdueTasks > 0 && <AlertCircle className="inline w-3 h-3 mr-1" />}
-                      {kpi.overdueTasks}
-                    </td>
-                    <td style={{ padding: '12px 24px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
-                          <div style={{ width: `${kpi.completionRate}%`, height: '100%', background: kpi.completionRate === 100 ? '#16a34a' : '#3b82f6', transition: 'width 0.5s' }} />
-                        </div>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', minWidth: 32 }}>{kpi.completionRate}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {selectedCategory === null ? (
         /* ── Category Grid View ── */
         <div className="ov-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
@@ -813,6 +747,79 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             )}
           </motion.div>
         </AnimatePresence>
+      )}
+
+      {selectedCategory === null && employeeKPIs.length > 0 && (
+        <div style={{ marginTop: 40, marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ padding: 10, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Team Performance KPIs")}</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{t("Workload and completion stats for active members.")}</p>
+            </div>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+            {employeeKPIs.map((kpi) => (
+              <div key={kpi.user.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {/* Header: Employee Info */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  {kpi.user.photoURL ? (
+                    <img src={kpi.user.photoURL} alt="" style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} />
+                  ) : (
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: kpi.user.userColor || getUserColor(kpi.user.id), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 16 }}>
+                      {kpi.user.displayName?.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>{kpi.user.displayName}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{kpi.user.department || 'Staff'}</div>
+                  </div>
+                </div>
+
+                {/* Body: Stats Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--surface-2)', padding: 16, borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Active Corrs")}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-secondary)' }}>{kpi.activeCorrs} pts</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Total Workload")}</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{kpi.totalTasks} pts</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Completed")}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a' }}>{kpi.completedTasks} pts</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("In Progress")}</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#d97706' }}>{kpi.inProgressTasks} pts</div>
+                  </div>
+                  {kpi.overdueTasks > 0 && (
+                    <div style={{ gridColumn: '1 / -1', background: '#fee2e2', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <AlertCircle className="w-4 h-4" /> {t("Overdue Work")}
+                      </span>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>{kpi.overdueTasks} pts</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer: Progress Bar */}
+                <div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
+                    <span>{t("Completion Rate")}</span>
+                    <span>{kpi.completionRate}%</span>
+                  </div>
+                  <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ width: `${kpi.completionRate}%`, height: '100%', background: kpi.completionRate === 100 ? '#16a34a' : '#3b82f6', transition: 'width 0.5s' }} />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {/* ── Task Details Modal ── */}

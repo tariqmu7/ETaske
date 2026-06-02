@@ -402,7 +402,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       </div>
 
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+      <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
           <input

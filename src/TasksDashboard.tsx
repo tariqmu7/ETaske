@@ -643,7 +643,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         </button>
       </div>
 
-      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap', alignItems: 'center' }}>
+      <div className="filter-bar">
         <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
           {(['mine', 'all'] as const).map(v => (
             <button

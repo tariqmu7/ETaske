@@ -20,7 +20,7 @@ import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail
+  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon } from './utils';
@@ -35,6 +35,7 @@ export default function App() {
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<AppView>('tasks');
+  const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
@@ -164,7 +165,8 @@ export default function App() {
     const checkDueSoon = (items: any[], dateField: string) => {
       return items.filter(item => {
         if (['Done', 'Closed', 'Archived'].includes(item.status)) return false;
-        return isOverdue(item[dateField]) || isDueSoon(item[dateField]);
+        const dateValue = dateField === 'dueDate' ? item.dueDate : item.deadline;
+        return isOverdue(dateValue) || isDueSoon(dateValue);
       }).length;
     };
 
@@ -245,7 +247,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="spinner" style={{ width: 32, height: 32 }} />
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Loading ETaske…</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{'Loading ETaske…'}</p>
         </div>
       </div>
     );
@@ -295,22 +297,22 @@ export default function App() {
       />
       <main className="main-content">
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
-          <OverviewDashboard {...sharedProps} />
+          <OverviewDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
         {activeView === 'correspondences' && (
-          <CorrespondingsDashboard {...sharedProps} onNavigate={setActiveView} />
+          <CorrespondingsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
         {activeView === 'manager-inbox' && (
-          <ManagerInbox {...sharedProps} onNavigate={setActiveView} />
+          <ManagerInbox user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
         {activeView === 'tasks' && (
-          <TasksDashboard {...sharedProps} />
+          <TasksDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
         {activeView === 'archive' && (
-          <ArchiveDashboard {...sharedProps} />
+          <ArchiveDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
         {activeView === 'due-soon' && (
-          <DueSoonDashboard {...sharedProps} onNavigate={setActiveView} />
+          <DueSoonDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
         {activeView === 'announcements' && (
           <Announcements
@@ -323,35 +325,84 @@ export default function App() {
           <AdminDashboard users={projectUsers} />
         )}
         {activeView === 'outlook-feed' && (
-          <OutlookFeed {...sharedProps} />
+          <OutlookFeed user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
       </main>
 
-      {/* Mobile Bottom Navigation — mirrors the desktop top nav
-          (Archive included; the bar scrolls when it overflows). */}
+      {/* Mobile Bottom Navigation — limited to core tabs, plus a More menu. */}
       <nav className="bottom-nav">
         {([
-          { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
-          { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
-          { id: 'manager-inbox',   label: 'Inbox',           icon: <Inbox />,       show: true },
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
-          { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
-          { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
-          { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },
-          { id: 'admin',           label: 'Users',           icon: <Users />,       show: appUser.role === 'Admin' },
+          { id: 'correspondences', label: 'Letters',         icon: <MailOpen />,    show: true },
+          { id: 'manager-inbox',   label: 'Inbox',           icon: <Inbox />,       show: true },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
           .filter(item => item.show)
           .map(item => (
             <button
               key={item.id}
-              className={`bottom-tab${activeView === item.id ? ' active' : ''}`}
-              onClick={() => setActiveView(item.id)}
+              className={`bottom-tab${activeView === item.id && !showMoreMenu ? ' active' : ''}`}
+              onClick={() => { setActiveView(item.id); setShowMoreMenu(false); }}
             >
               {item.icon}
               <span>{item.label}</span>
             </button>
           ))}
+          <button
+            className={`bottom-tab${showMoreMenu ? ' active' : ''}`}
+            onClick={() => setShowMoreMenu(!showMoreMenu)}
+          >
+            <MoreHorizontal />
+            <span>{'More'}</span>
+          </button>
       </nav>
+
+      {/* More Menu Bottom Sheet */}
+      {showMoreMenu && (
+        <>
+          <div 
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 90 }}
+            onClick={() => setShowMoreMenu(false)}
+          />
+          <div style={{
+            position: 'fixed', bottom: 'calc(var(--bottomnav-h) + var(--safe-area-bottom))', left: 0, right: 0,
+            background: 'var(--surface)', borderRadius: '16px 16px 0 0', borderTop: '1px solid var(--border)',
+            padding: 16, zIndex: 95, boxShadow: '0 -4px 20px rgba(0,0,0,0.12)'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{'More Options'}</h3>
+              <button className="btn btn-ghost btn-icon" onClick={() => setShowMoreMenu(false)}>
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              {([
+                { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
+                { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
+                { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
+                { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },
+                { id: 'admin',           label: 'Users',           icon: <Users />,       show: appUser.role === 'Admin' },
+              ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
+                .filter(item => item.show)
+                .map(item => (
+                  <button
+                    key={item.id}
+                    onClick={() => { setActiveView(item.id); setShowMoreMenu(false); }}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: 12,
+                      background: activeView === item.id ? 'var(--blue-50)' : 'var(--surface-2)',
+                      border: '1px solid var(--border)', borderRadius: 8,
+                      color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
+                      fontWeight: 600, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer'
+                    }}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </button>
+                ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* Real-time Chat */}
       <ChatBox currentUser={appUser} allUsers={projectUsers} onNavigate={setActiveView} />
