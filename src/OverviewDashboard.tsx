@@ -16,6 +16,7 @@ import {
   Paperclip, ExternalLink, FileText, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+const t = (s: string) => s;
 import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
@@ -33,11 +34,11 @@ interface Props {
 // bg is used as the gradient start; it deliberately uses hardcoded light pastels because
 // the gradient endpoint is var(--surface), so on dark mode the card fades from a subtle
 // tint to the surface colour rather than to white.
-const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; icon: React.ReactNode }> = {
-  Project:  { bg: 'rgba(59,130,246,0.18)',  text: '#3b82f6', border: 'rgba(59,130,246,0.35)',  icon: <Server className="w-4 h-4" /> },
-  Internal: { bg: 'rgba(139,92,246,0.18)',  text: '#8b5cf6', border: 'rgba(139,92,246,0.35)',  icon: <Layers className="w-4 h-4" /> },
-  External: { bg: 'rgba(34,197,94,0.18)',   text: '#22c55e', border: 'rgba(34,197,94,0.35)',   icon: <Globe className="w-4 h-4" /> },
-};
+const CATEGORY_COLORS = new Map<string, { bg: string; text: string; border: string; icon: React.ReactNode }>([
+  ['Project',  { bg: 'rgba(59,130,246,0.18)',  text: '#3b82f6', border: 'rgba(59,130,246,0.35)',  icon: <Server className="w-4 h-4" /> }],
+  ['Internal', { bg: 'rgba(139,92,246,0.18)',  text: '#8b5cf6', border: 'rgba(139,92,246,0.35)',  icon: <Layers className="w-4 h-4" /> }],
+  ['External', { bg: 'rgba(34,197,94,0.18)',   text: '#22c55e', border: 'rgba(34,197,94,0.35)',   icon: <Globe className="w-4 h-4" /> }],
+]);
 
 const STATUS_ORDER: CorrespondingStatus[] = ['Unread', 'Reviewing', 'Assigned', 'Closed'];
 const TASK_STATUS_ORDER: TaskStatus[] = ['Pending', 'In Progress', 'Done', 'Archived'];
@@ -49,9 +50,9 @@ function formatDate(d: Timestamp | string | undefined): string {
 }
 
 
-const priorityColor: Record<string, string> = {
-  Urgent: '#dc2626', High: '#ea580c', Medium: '#d97706', Low: '#16a34a'
-};
+const priorityColor = new Map<string, string>([
+  ['Urgent', '#dc2626'], ['High', '#ea580c'], ['Medium', '#d97706'], ['Low', '#16a34a']
+]);
 
 // ─── Mini stat card ───────────────────────────────────────────────────────────
 function StatCard({ label, value, sub, color }: { label: string; value: number | string; sub?: string; color: string }) {
@@ -115,12 +116,12 @@ const CorrCard: React.FC<{
         </span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flex: 1 }}>
-        <p style={{ marginBottom: 4 }}><strong>From:</strong> {item.sentFrom}</p>
+        <p style={{ marginBottom: 4 }}><strong>{t("From:")}</strong> {item.sentFrom}</p>
         <p style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
       </div>
       
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor[item.priority] || '#64748b', background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
+        <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor.get(item.priority) || '#64748b', background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
           {item.priority} Priority
         </span>
         {overdue && item.status !== 'Closed' && (
@@ -215,18 +216,18 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
   // ─── Root Categories Stats ───────────────────────────────────────────────
   const categoryStats = useMemo(() => {
-    const stats: Record<string, { total: number; tasks: number; overdue: number }> = {
-      Project: { total: 0, tasks: 0, overdue: 0 },
-      Internal: { total: 0, tasks: 0, overdue: 0 },
-      External: { total: 0, tasks: 0, overdue: 0 }
-    };
+    const stats = new Map<string, { total: number; tasks: number; overdue: number }>([
+      ['Project', { total: 0, tasks: 0, overdue: 0 }],
+      ['Internal', { total: 0, tasks: 0, overdue: 0 }],
+      ['External', { total: 0, tasks: 0, overdue: 0 }]
+    ]);
     correspondences.forEach(c => {
       const createdDate = c.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || c.dateReceived;
       if (dateFilter && createdDate !== dateFilter) return;
       const cat = c.category || 'Internal';
-      if (stats[cat]) {
-        stats[cat].total++;
-        if (isOverdue(c.deadline) && c.status !== 'Closed') stats[cat].overdue++;
+      if (stats.has(cat)) {
+        stats.get(cat)!.total++;
+        if (isOverdue(c.deadline) && c.status !== 'Closed') stats.get(cat)!.overdue++;
       }
     });
     tasks.forEach(t => {
@@ -234,7 +235,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       if (dateFilter && createdDate !== dateFilter) return;
       if (t.correspondingId) {
         const c = correspondences.find(corr => corr.id === t.correspondingId);
-        if (c && stats[c.category]) stats[c.category].tasks++;
+        if (c && stats.has(c.category)) stats.get(c.category)!.tasks++;
       }
     });
     return stats;
@@ -271,6 +272,69 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       return dateA.getTime() - dateB.getTime();
     });
   }, [correspondences, tasks]);
+
+
+  // ─── Employee KPIs ──────────────────────────────────────────────────────────
+  const getWeight = (priority?: string) => {
+    switch (priority) {
+      case 'Urgent': return 5;
+      case 'High': return 3;
+      case 'Medium': return 2;
+      case 'Low': return 1;
+      default: return 1;
+    }
+  };
+
+  const employeeKPIs = useMemo(() => {
+    return projectUsers.map(u => {
+      const uCorrs = correspondences.filter(c => c.assignedToId === u.id && c.status !== 'Closed');
+      const uTasks = tasks.filter(t => t.assignedToId === u.id && t.status !== 'Archived');
+      
+      const activeCorrsPts = uCorrs.reduce((acc, c) => acc + getWeight(c.priority), 0);
+      
+      let totalTasksPts = 0;
+      let completedTasksPts = 0;
+      let inProgressTasksPts = 0;
+      let overdueTasksPts = 0;
+      
+      uTasks.forEach(t => {
+        const baseWeight = getWeight(t.priority);
+        const tMilestones = milestones.filter(m => m.taskId === t.id);
+        
+        // Each milestone inherits the weight of its parent task
+        const milestoneWeight = baseWeight;
+        
+        totalTasksPts += baseWeight + (tMilestones.length * milestoneWeight);
+        
+        if (t.status === 'Done') completedTasksPts += baseWeight;
+        else if (t.status === 'In Progress') inProgressTasksPts += baseWeight;
+        
+        if (isOverdue(t.dueDate) && t.status !== 'Done') overdueTasksPts += baseWeight;
+        
+        tMilestones.forEach(m => {
+          if (m.status === 'Done') completedTasksPts += milestoneWeight;
+          else if (m.status === 'In Progress') inProgressTasksPts += milestoneWeight;
+          
+          if (isOverdue(m.targetDate) && m.status !== 'Done') overdueTasksPts += milestoneWeight;
+        });
+      });
+      
+      const rate = totalTasksPts > 0 ? Math.round((completedTasksPts / totalTasksPts) * 100) : 0;
+      
+      return {
+        user: u,
+        activeCorrs: activeCorrsPts,
+        totalTasks: totalTasksPts,
+        completedTasks: completedTasksPts,
+        inProgressTasks: inProgressTasksPts,
+        overdueTasks: overdueTasksPts,
+        completionRate: rate,
+        rawTaskCount: uTasks.length,
+        rawCorrCount: uCorrs.length
+      };
+    }).filter(kpi => kpi.rawCorrCount > 0 || kpi.rawTaskCount > 0)
+      .sort((a, b) => (b.totalTasks + b.activeCorrs) - (a.totalTasks + a.activeCorrs));
+  }, [projectUsers, correspondences, tasks, milestones]);
 
   // ─── Sub-Category Grouping for Selected Category ───────────────────────
   const subCategoryGroups = useMemo(() => {
@@ -395,7 +459,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         {taskMilestones.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-              <span>Milestones: {done}/{taskMilestones.length}</span>
+              <span>{t("Milestones:")} {done}/{taskMilestones.length}</span>
               <span>{progress}%</span>
             </div>
             <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 0, overflow: 'hidden' }}>
@@ -422,8 +486,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       {/* Stats Header */}
       <div className="ov-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>Dashboard Overview</h1>
-          <p className="ov-subtitle" style={{ color: 'var(--text-muted)', fontSize: 14 }}>Real-time stats and task monitoring.</p>
+          <h1 className="ov-title" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{t("Dashboard Overview")}</h1>
+          <p className="ov-subtitle" style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t("Real-time stats and task monitoring.")}</p>
         </div>
 
         <div className="ov-datefilter" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -464,8 +528,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               <AlertCircle className="w-4 h-4" style={{ color: '#fff' }} />
             </div>
             <div>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Due Soon (Within 48h)</h2>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>Items that require immediate attention.</p>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Due Soon (Within 48h)")}</h2>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>{t("Items that require immediate attention.")}</p>
             </div>
           </div>
 
@@ -494,7 +558,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <div style={{ flex: 1, marginRight: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due: {item.deadline || item.dueDate}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t("Due:")} {item.deadline || item.dueDate}</div>
                 </div>
                 <ArrowRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               </div>
@@ -508,12 +572,79 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
         </motion.div>
       )}
 
+      
+      {selectedCategory === null && employeeKPIs.length > 0 && (
+        <div style={{ marginTop: 40, marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+            <div style={{ padding: 10, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
+              <Users className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Team Performance KPIs")}</h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{t("Workload and completion stats for active members.")}</p>
+            </div>
+          </div>
+          <div className="card" style={{ overflowX: 'auto', padding: 0 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 14 }}>
+              <thead style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border)' }}>
+                <tr>
+                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Employee")}</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Active Corrs (Pts)")}</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Total Workload (Pts)")}</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Completed (Pts)")}</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("In Progress (Pts)")}</th>
+                  <th style={{ padding: '12px 16px', color: 'var(--text-secondary)', fontWeight: 700 }}>{t("Overdue (Pts)")}</th>
+                  <th style={{ padding: '12px 24px', color: 'var(--text-secondary)', fontWeight: 700, width: 200 }}>{t("Completion Rate")}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {employeeKPIs.map((kpi, idx) => (
+                  <tr key={kpi.user.id} style={{ borderBottom: '1px solid var(--border)', background: idx % 2 === 0 ? 'var(--surface)' : 'var(--surface-3)' }}>
+                    <td style={{ padding: '12px 24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        {kpi.user.photoURL ? (
+                          <img src={kpi.user.photoURL} alt="" style={{ width: 28, height: 28, borderRadius: '50%', objectFit: 'cover' }} />
+                        ) : (
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: kpi.user.userColor || getUserColor(kpi.user.id), color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 12 }}>
+                            {kpi.user.displayName?.charAt(0).toUpperCase()}
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{kpi.user.displayName}</div>
+                          <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>{kpi.user.department || 'Staff'}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '12px 16px', fontWeight: 600, color: 'var(--text-secondary)' }}>{kpi.activeCorrs}</td>
+                    <td style={{ padding: '12px 16px', fontWeight: 800 }}>{kpi.totalTasks}</td>
+                    <td style={{ padding: '12px 16px', color: '#16a34a', fontWeight: 700 }}>{kpi.completedTasks}</td>
+                    <td style={{ padding: '12px 16px', color: '#d97706', fontWeight: 700 }}>{kpi.inProgressTasks}</td>
+                    <td style={{ padding: '12px 16px', color: kpi.overdueTasks > 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: kpi.overdueTasks > 0 ? 800 : 600 }}>
+                      {kpi.overdueTasks > 0 && <AlertCircle className="inline w-3 h-3 mr-1" />}
+                      {kpi.overdueTasks}
+                    </td>
+                    <td style={{ padding: '12px 24px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ flex: 1, height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
+                          <div style={{ width: `${kpi.completionRate}%`, height: '100%', background: kpi.completionRate === 100 ? '#16a34a' : '#3b82f6', transition: 'width 0.5s' }} />
+                        </div>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', minWidth: 32 }}>{kpi.completionRate}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       {selectedCategory === null ? (
         /* ── Category Grid View ── */
         <div className="ov-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
           {['Project', 'Internal', 'External'].map(cat => {
-            const catStyle = CATEGORY_COLORS[cat] || CATEGORY_COLORS.Internal;
-            const s = categoryStats[cat];
+            const catStyle = CATEGORY_COLORS.get(cat) || CATEGORY_COLORS.get('Internal')!;
+            const s = categoryStats.get(cat);
             return (
               <div 
                 key={cat} 
@@ -529,7 +660,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
                   <div>
                     <h2 style={{ fontSize: 20, fontWeight: 800, color: catStyle.text, margin: 0 }}>{cat}</h2>
-                    <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>Category</span>
+                    <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>{t("Category")}</span>
                   </div>
                 </div>
                 <div className="cat-card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -572,7 +703,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                         setViewTab('Correspondences');
                       }}
                     >
-                      <span style={{ color: '#dc2626', fontSize: 14, fontWeight: 700 }}>Overdue Correspondences</span>
+                      <span style={{ color: '#dc2626', fontSize: 14, fontWeight: 700 }}>{t("Overdue Correspondences")}</span>
                       <span style={{ fontSize: 16, fontWeight: 800, color: '#dc2626' }}>{s.overdue}</span>
                     </div>
                   )}
@@ -677,7 +808,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
             {subCategoryGroups.size === 0 && (
                <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
                  <BarChart3 style={{ width: 44, height: 44, margin: '0 auto 12px', opacity: 0.3 }} />
-                 <p style={{ fontWeight: 600 }}>No data matches your criteria.</p>
+                 <p style={{ fontWeight: 600 }}>{t("No data matches your criteria.")}</p>
                </div>
             )}
           </motion.div>
@@ -711,8 +842,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       color: selectedTask.status === 'Done' ? '#15803d' : selectedTask.status === 'In Progress' ? '#1d4ed8' : 'var(--text-secondary)',
                     }}>{selectedTask.status}</span>
                     <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: priorityColor[selectedTask.priority] ? `${priorityColor[selectedTask.priority]}20` : 'var(--surface-3)',
-                      color: priorityColor[selectedTask.priority] || 'var(--text-secondary)'
+                      background: priorityColor.get(selectedTask.priority) ? `${priorityColor.get(selectedTask.priority)}20` : 'var(--surface-3)',
+                      color: priorityColor.get(selectedTask.priority) || 'var(--text-secondary)'
                     }}>{selectedTask.priority} Priority</span>
                   </div>
                   <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedTask.taskName}</h2>
@@ -730,12 +861,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               {/* Modal Body */}
               <div style={{ padding: '24px', flex: 1 }}>
                 <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24, whiteSpace: 'pre-wrap' }}>
-                  {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No description provided.</span>}
+                  {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No description provided.")}</span>}
                 </p>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Assigned To</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned To")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedToId);
@@ -749,7 +880,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                   </div>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Assigned By</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned By")}</span>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedById);
@@ -763,12 +894,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                     </div>
                   </div>
                   <div>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Due Date</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Due Date")}</span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div>
-                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Linked Corresponding</span>
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Linked Corresponding")}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}>
                         <Link2 className="w-4 h-4 flex-shrink-0" /> 
                         {(() => {
@@ -809,8 +940,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                               }}>{ms.status}</span>
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
-                              <span>Added by {ms.addedBy}</span>
-                              {ms.targetDate && <span>Target: {ms.targetDate}</span>}
+                              <span>{t("Added by")} {ms.addedBy}</span>
+                              {ms.targetDate && <span>{t("Target:")} {ms.targetDate}</span>}
                             </div>
                           </div>
                         </div>
@@ -851,15 +982,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       color: 'var(--text-secondary)',
                     }}>{selectedCorr.status}</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: priorityColor[selectedCorr.priority] ? `${priorityColor[selectedCorr.priority]}20` : '#f1f5f9',
-                      color: priorityColor[selectedCorr.priority] || '#475569'
+                      background: priorityColor.get(selectedCorr.priority) ? `${priorityColor.get(selectedCorr.priority)}20` : '#f1f5f9',
+                      color: priorityColor.get(selectedCorr.priority) || '#475569'
                     }}>{selectedCorr.priority} Priority</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
-                      background: CATEGORY_COLORS[selectedCorr.category]?.bg || '#f1f5f9',
-                      color: CATEGORY_COLORS[selectedCorr.category]?.text || '#475569',
+                      background: CATEGORY_COLORS.get(selectedCorr.category)?.bg || '#f1f5f9',
+                      color: CATEGORY_COLORS.get(selectedCorr.category)?.text || '#475569',
                       display: 'flex', alignItems: 'center', gap: 4
                     }}>
-                      {CATEGORY_COLORS[selectedCorr.category]?.icon} {selectedCorr.category}
+                      {CATEGORY_COLORS.get(selectedCorr.category)?.icon} {selectedCorr.category}
                     </span>
                   </div>
                   <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
@@ -884,16 +1015,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
-                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Correspondence Body</h3>
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Correspondence Body")}</h3>
                    </div>
                    <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
-                    {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>No content provided.</span>}
+                    {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No content provided.")}</span>}
                   </div>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Sent From</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Sent From")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4 text-muted" />
                       {selectedCorr.sentFrom || '—'}
@@ -904,7 +1035,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Dates</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Dates")}</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
@@ -920,7 +1051,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>Assignment</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Assignment")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedCorr.assignedToId);
@@ -936,7 +1067,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                             <div>
                               <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorr.assignedTo || 'Unassigned'}</div>
                               {selectedCorr.assignedAt && (
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Assigned {formatDate(selectedCorr.assignedAt)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t("Assigned")} {formatDate(selectedCorr.assignedAt)}</div>
                               )}
                             </div>
                           </>
@@ -950,7 +1081,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Link2 className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Shared Folders / Links</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Shared Folders / Links")}</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorr.filePaths.map((path, idx) => (
@@ -978,7 +1109,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Paperclip className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Attachment</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Attachment")}</h3>
                     </div>
                     <a 
                       href={selectedCorr.attachedFile} 
@@ -997,7 +1128,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorr.attachedFileName || 'View Attachment'}</div>
-                        <div style={{ fontSize: 11, opacity: 0.8 }}>Click to open in new tab</div>
+                        <div style={{ fontSize: 11, opacity: 0.8 }}>{t("Click to open in new tab")}</div>
                       </div>
                       <ExternalLink className="w-4 h-4" />
                     </a>
@@ -1008,7 +1139,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Briefcase className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Internal Notes</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Internal Notes")}</h3>
                     </div>
                     <div style={{ padding: '16px', background: 'var(--yellow-50, #fffbeb)', border: '1px solid var(--yellow-200, #fde68a)', borderRadius: 0, color: 'var(--yellow-800, #92400e)', fontSize: 14, fontStyle: 'italic' }}>
                       "{selectedCorr.notes}"
