@@ -399,10 +399,10 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflow: 'hidden', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'hidden', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
               {!selectedUser ? (
                 /* User List */
-                <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
+                <div style={{ padding: 16, overflowY: 'auto', flex: 1, minHeight: 0 }}>
                   <div style={{ position: 'relative', marginBottom: 16 }}>
                     <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
                     <input
@@ -512,8 +512,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                 </div>
               ) : (
                 /* Chat Messages */
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16 }}>
-                  <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16, minHeight: 0 }}>
+                  <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 0 }}>
                     {messages.length === 0 ? (
                       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', textAlign: 'center' }}>
                         <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -549,7 +549,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               flexDirection: 'column',
                               gap: hasRef && msg.text?.trim() ? 8 : 0
                             }}>
-                              {msg.text?.trim() && <span style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</span>}
+                              {msg.text?.trim() && <span dir="auto" style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{msg.text}</span>}
                               {hasRef && (
                                 <button
                                   onClick={() => openRef(msg)}
@@ -691,12 +691,25 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     >
                       <Link2 size={18} />
                     </button>
-                    <input
-                      ref={inputRef}
-                      type="text"
+                    <textarea
+                      ref={inputRef as any}
+                      dir="auto"
                       placeholder="Type a message..."
                       value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
+                      onChange={(e) => {
+                        setNewMessage(e.target.value);
+                        e.target.style.height = '40px';
+                        e.target.style.height = `${Math.min(e.target.scrollHeight, 120)}px`;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          if (newMessage.trim() || pendingAttach) {
+                            handleSendMessage(e as any);
+                            if (inputRef.current) (inputRef.current as any).style.height = '40px';
+                          }
+                        }
+                      }}
                       style={{
                         flex: 1,
                         minWidth: 0,
@@ -706,7 +719,13 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         fontSize: 14,
                         outline: 'none',
                         background: 'var(--surface)',
-                        color: 'var(--text-primary)'
+                        color: 'var(--text-primary)',
+                        resize: 'none',
+                        minHeight: 40,
+                        maxHeight: 120,
+                        lineHeight: '20px',
+                        fontFamily: 'inherit',
+                        overflowY: 'auto'
                       }}
                     />
                     <button

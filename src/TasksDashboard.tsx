@@ -1132,8 +1132,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                             borderRadius: 0,
                                             border: 'none',
                                             cursor: 'pointer',
-                                            background: task.status === s ? (s === 'Done' ? '#dcfce7' : s === 'In Progress' ? '#e0e7ff' : '#fef3c7') : 'transparent',
-                                            color: task.status === s ? (s === 'Done' ? '#166534' : s === 'In Progress' ? '#3730a3' : '#92400e') : 'var(--text-muted)',
+                                            background: task.status === s ? (s === 'Done' ? 'var(--green-100)' : s === 'In Progress' ? 'var(--blue-50)' : 'var(--surface)') : 'transparent',
+                                            color: task.status === s ? (s === 'Done' ? 'var(--green-400)' : s === 'In Progress' ? 'var(--blue-400)' : 'var(--text-primary)') : 'var(--text-muted)',
                                             transition: 'all 0.15s'
                                           }}
                                         >
@@ -1509,8 +1509,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                           border: 'none',
                                                           cursor: 'pointer',
                                                           whiteSpace: 'nowrap',
-                                                          background: ms.status === s ? (s === 'Done' ? '#dcfce7' : s === 'In Progress' ? '#e0e7ff' : s === 'Blocked' ? '#fee2e2' : '#f1f5f9') : 'transparent',
-                                                          color: ms.status === s ? (s === 'Done' ? '#166534' : s === 'In Progress' ? '#3730a3' : s === 'Blocked' ? '#991b1b' : 'var(--text-primary)') : 'var(--text-muted)',
+                                                          background: ms.status === s ? (s === 'Done' ? 'var(--green-100)' : s === 'In Progress' ? 'var(--blue-50)' : s === 'Blocked' ? 'rgba(239,68,68,0.15)' : 'var(--surface)') : 'transparent',
+                                                          color: ms.status === s ? (s === 'Done' ? 'var(--green-400)' : s === 'In Progress' ? 'var(--blue-400)' : s === 'Blocked' ? '#f87171' : 'var(--text-primary)') : 'var(--text-muted)',
                                                           transition: 'all 0.15s'
                                                         }}
                                                       >
