@@ -331,10 +331,10 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
             style={{
               width: 360,
               height: 500,
-              background: '#ffffff',
+              background: 'var(--surface)',
               borderRadius: 16,
               boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
-              border: '1px solid #e2e8f0',
+              border: '1px solid var(--border)',
               display: 'flex',
               flexDirection: 'column',
               overflow: 'hidden',
@@ -399,10 +399,10 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, overflowY: 'auto', background: '#f8fafc', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: 1, overflow: 'hidden', background: 'var(--surface-2)', display: 'flex', flexDirection: 'column' }}>
               {!selectedUser ? (
                 /* User List */
-                <div style={{ padding: 16 }}>
+                <div style={{ padding: 16, overflowY: 'auto', flex: 1 }}>
                   <div style={{ position: 'relative', marginBottom: 16 }}>
                     <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
                     <input
@@ -414,7 +414,9 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         width: '100%',
                         padding: '10px 12px 10px 40px',
                         borderRadius: 12,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--border)',
+                        background: 'var(--surface)',
+                        color: 'var(--text-primary)',
                         fontSize: 14,
                         outline: 'none'
                       }}
@@ -435,21 +437,21 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               padding: 12,
                               borderRadius: 12,
                               border: 'none',
-                              background: userUnreadCount > 0 ? '#eff6ff' : 'transparent',
+                              background: userUnreadCount > 0 ? 'var(--blue-50)' : 'transparent',
                               cursor: 'pointer',
                               textAlign: 'left',
                               width: '100%',
                               transition: 'background 0.2s',
                               position: 'relative'
                             }}
-                            onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
-                            onMouseLeave={e => e.currentTarget.style.background = userUnreadCount > 0 ? '#eff6ff' : 'transparent'}
+                            onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                            onMouseLeave={e => e.currentTarget.style.background = userUnreadCount > 0 ? 'var(--blue-50)' : 'transparent'}
                           >
                             <div style={{ position: 'relative' }}>
                               {u.photoURL ? (
                                 <img src={u.photoURL} style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }} alt="" />
                               ) : (
-                                <div style={{ width: 40, height: 40, borderRadius: '50%', background: '#e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
+                                <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>
                                   <UserIcon size={20} />
                                 </div>
                               )}
@@ -480,7 +482,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                             </div>
                             <div style={{ flex: 1 }}>
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                                <div style={{ fontWeight: userUnreadCount > 0 ? 700 : 600, fontSize: 14, color: '#1e293b' }}>{u.displayName}</div>
+                                <div style={{ fontWeight: userUnreadCount > 0 ? 700 : 600, fontSize: 14, color: 'var(--text-primary)' }}>{u.displayName}</div>
                                 {userUnreadCount > 0 && (
                                   <span style={{
                                     background: '#ef4444',
@@ -494,7 +496,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                   </span>
                                 )}
                               </div>
-                              <div style={{ fontSize: 12, color: '#64748b' }}>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                                 {u.role} · {presenceOf(u).label}
                               </div>
                             </div>
@@ -513,8 +515,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: 16 }}>
                   <div style={{ flex: 1, overflowY: 'auto', marginBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                     {messages.length === 0 ? (
-                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', textAlign: 'center' }}>
-                        <div style={{ width: 64, height: 64, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', textAlign: 'center' }}>
+                        <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                           <MessageSquare size={32} />
                         </div>
                         <p style={{ fontSize: 14 }}>No messages yet.<br/>Start the conversation!</p>
@@ -539,10 +541,10 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               padding: '10px 14px',
                               borderRadius: isMine ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
                               background: isMine ? 'var(--blue-600)' : 'var(--surface-3)',
-                              color: isMine ? '#ffffff' : '#1e293b',
+                              color: isMine ? '#ffffff' : 'var(--text-primary)',
                               fontSize: 14,
                               boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                              border: isMine ? 'none' : '1px solid #e2e8f0',
+                              border: isMine ? 'none' : '1px solid var(--border)',
                               display: 'flex',
                               flexDirection: 'column',
                               gap: hasRef && msg.text?.trim() ? 8 : 0
@@ -557,9 +559,9 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                     gap: 8,
                                     padding: '8px 10px',
                                     borderRadius: 10,
-                                    border: isMine ? '1px solid rgba(255,255,255,0.35)' : '1px solid #cbd5e1',
-                                    background: isMine ? 'rgba(255,255,255,0.15)' : '#ffffff',
-                                    color: isMine ? '#ffffff' : '#1e293b',
+                                    border: isMine ? '1px solid rgba(255,255,255,0.35)' : '1px solid var(--border)',
+                                    background: isMine ? 'rgba(255,255,255,0.15)' : 'var(--surface)',
+                                    color: isMine ? '#ffffff' : 'var(--text-primary)',
                                     cursor: 'pointer',
                                     textAlign: 'left',
                                     width: '100%'
@@ -579,7 +581,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                 </button>
                               )}
                             </div>
-                            <span style={{ fontSize: 10, color: '#94a3b8', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
                               {msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                               {isMine && idx === lastMineIdx && (
                                 msg.read ? (
@@ -607,8 +609,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 8,
                       padding: '8px 10px', marginBottom: 8,
-                      background: '#eff6ff', border: '1px solid #bfdbfe',
-                      borderRadius: 10, fontSize: 12, color: '#1e293b'
+                      background: 'var(--blue-50)', border: '1px solid var(--blue-200)',
+                      borderRadius: 10, fontSize: 12, color: 'var(--text-primary)'
                     }}>
                       {pendingAttach.refType === 'task'
                         ? <CheckSquare size={14} style={{ flexShrink: 0 }} />
@@ -618,7 +620,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       </span>
                       <button
                         onClick={() => setPendingAttach(null)}
-                        style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer', padding: 2, display: 'flex' }}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
                         aria-label="Remove attachment"
                       >
                         <X size={14} />
@@ -642,8 +644,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       padding: 8,
                       maxHeight: 200,
                       overflowY: 'auto',
-                      background: '#ffffff',
-                      border: '1px solid #e2e8f0',
+                      background: 'var(--surface)',
+                      border: '1px solid var(--border)',
                       borderRadius: 12,
                       boxShadow: '0 4px 12px rgba(0,0,0,0.12)',
                       zIndex: 6
@@ -654,7 +656,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                           type="button"
                           onClick={() => insertEmoji(em)}
                           style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 18, padding: 4, borderRadius: 6, lineHeight: 1 }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#f1f5f9'}
+                          onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                           onMouseLeave={e => e.currentTarget.style.background = 'none'}
                         >
                           {em}
@@ -669,8 +671,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       title="Emoji"
                       style={{
                         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                        background: showEmoji ? '#eff6ff' : '#f1f5f9',
-                        color: '#475569', border: 'none', cursor: 'pointer',
+                        background: showEmoji ? 'var(--blue-50)' : 'var(--surface-3)',
+                        color: 'var(--text-secondary)', border: 'none', cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}
                     >
@@ -682,8 +684,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       title="Share a task or correspondence"
                       style={{
                         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                        background: sharePickerOpen ? '#eff6ff' : '#f1f5f9',
-                        color: '#475569', border: 'none', cursor: 'pointer',
+                        background: sharePickerOpen ? 'var(--blue-50)' : 'var(--surface-3)',
+                        color: 'var(--text-secondary)', border: 'none', cursor: 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center'
                       }}
                     >
@@ -700,10 +702,11 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         minWidth: 0,
                         padding: '10px 14px',
                         borderRadius: 20,
-                        border: '1px solid #e2e8f0',
+                        border: '1px solid var(--border)',
                         fontSize: 14,
                         outline: 'none',
-                        background: '#ffffff'
+                        background: 'var(--surface)',
+                        color: 'var(--text-primary)'
                       }}
                     />
                     <button
@@ -742,7 +745,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                   style={{
                     position: 'absolute',
                     inset: 0,
-                    background: '#ffffff',
+                    background: 'var(--surface)',
                     display: 'flex',
                     flexDirection: 'column',
                     zIndex: 5
@@ -767,9 +770,9 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         onClick={() => setShareTab(tab)}
                         style={{
                           flex: 1, padding: '8px 0', borderRadius: 10, fontSize: 13, fontWeight: 600,
-                          border: '1px solid #e2e8f0', cursor: 'pointer',
-                          background: shareTab === tab ? 'var(--blue-600)' : '#ffffff',
-                          color: shareTab === tab ? '#ffffff' : '#475569'
+                          border: '1px solid var(--border)', cursor: 'pointer',
+                          background: shareTab === tab ? 'var(--blue-600)' : 'var(--surface)',
+                          color: shareTab === tab ? '#ffffff' : 'var(--text-secondary)'
                         }}
                       >
                         {tab === 'task' ? 'Tasks' : 'Correspondences'}
@@ -777,7 +780,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     ))}
                   </div>
                   <div style={{ position: 'relative', padding: '0 12px 12px' }}>
-                    <Search style={{ position: 'absolute', left: 24, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
+                    <Search style={{ position: 'absolute', left: 24, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={16} />
                     <input
                       type="text"
                       autoFocus
@@ -786,13 +789,14 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       onChange={e => setShareSearch(e.target.value)}
                       style={{
                         width: '100%', padding: '10px 12px 10px 40px', borderRadius: 12,
-                        border: '1px solid #e2e8f0', fontSize: 14, outline: 'none'
+                        border: '1px solid var(--border)', fontSize: 14, outline: 'none',
+                        background: 'var(--surface)', color: 'var(--text-primary)'
                       }}
                     />
                   </div>
                   <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {shareList.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', fontSize: 14 }}>
+                      <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 14 }}>
                         Nothing to show
                       </div>
                     ) : (
