@@ -1,0 +1,17 @@
+{
+  "eslint.ignore": [
+    "node_modules/**"
+  ],
+  "sonarlint.testFilePattern": "node_modules/**",
+  "sonarlint.analyzerProperties": {
+    "sonar.exclusions": "node_modules/**"
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bower_components": true,
+    "**/*.code-search": true
+  },
+  "files.watcherExclude": {
+    "**/node_modules/*/**": true
+  }
+}

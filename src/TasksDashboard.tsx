@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, orderBy, where, Timestamp
@@ -48,6 +49,7 @@ interface Props {
 }
 
 export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -700,25 +702,25 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
         )}
 
         <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="All">All Statuses</option>
+          <option value="All">{t('All Statuses')}</option>
           {['Pending', 'In Progress', 'Done'].map(s => <option key={s}>{s}</option>)}
         </select>
 
         <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-          <option value="All">All Departments</option>
+          <option value="All">{t('All Departments')}</option>
           {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         
         {isManagerOrAdmin && view === 'all' && (
           <select className="input" style={{ width: 'auto' }} value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}>
-            <option value="All">All Employees</option>
+            <option value="All">{t('All Employees')}</option>
             {projectUsers.filter(u => u.role === 'Employee' || u.role === 'Manager').map(e => <option key={e.id} value={e.displayName}>{e.displayName}</option>)}
           </select>
         )}
 
         {subCategoryFilter !== 'All' && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 0, fontSize: 12, fontWeight: 700 }}>
-            Tag: {subCategoryFilter}
+            {t('Tag:')} {subCategoryFilter}
             <button onClick={() => setSubCategoryFilter('All')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
               <X className="w-3.5 h-3.5" />
             </button>
@@ -793,8 +795,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     <Plus style={{ width: 16, height: 16, color: '#fff' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>New Task</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Fill in the details below</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{t('New Task')}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{t('Fill in the details below')}</div>
                   </div>
                 </div>
                 <button className="btn btn-ghost btn-icon" onClick={() => setIsAddingTask(false)}>
@@ -824,7 +826,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
                 {/* Description */}
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <label className="input-label">{t('Description')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
                   <textarea
                     className="input"
                     value={newTask.description}
@@ -842,13 +844,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
-                    <label className="input-label">Priority</label>
+                    <label className="input-label">{t('Priority')}</label>
                     <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Corresponding['priority'] })}>
                       {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="input-label">Due Date <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                    <label className="input-label">{t('Due Date')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
                     <input type="date" className="input" value={newTask.dueDate} onChange={e => setNewTask({ ...newTask, dueDate: e.target.value })} />
                   </div>
                 </div>
@@ -859,7 +861,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">Assignee</label>
+                  <label className="input-label">{t('Assignee')}</label>
                   <select
                     className="input"
                     value={newTask.assignedToId}
@@ -888,13 +890,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
-                    <label className="input-label">Category</label>
+                    <label className="input-label">{t('Category')}</label>
                     <select className="input" value={newTask.category} onChange={e => handleOtherSelection('category', e.target.value)}>
                       {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="input-label">Department</label>
+                    <label className="input-label">{t('Department')}</label>
                     <input
                       className="input"
                       list="taskDepartmentList"
@@ -907,7 +909,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     </datalist>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
-                    <label className="input-label">Sub-Category / Project</label>
+                    <label className="input-label">{t('Sub-Category / Project')}</label>
                     <input
                       className="input"
                       list="subCategoryList"
@@ -989,7 +991,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                       style={{ overflow: 'hidden' }}
                     >
                       <div style={{ marginBottom: 20 }}>
-                        <label className="input-label">Shared Folder Paths (Computer Paths)</label>
+                        <label className="input-label">{t('Shared Folder Paths (Computer Paths)')}</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
                           {newTask.filePaths.map((path, idx) => (
                             <div key={idx} style={{ display: 'flex', gap: 8 }}>
@@ -1038,7 +1040,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 display: 'flex', gap: 12, justifyContent: 'flex-end',
                 flexShrink: 0, background: 'var(--surface)',
               }}>
-                <button className="btn btn-ghost" onClick={() => setIsAddingTask(false)}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => setIsAddingTask(false)}>{t('Cancel')}</button>
                 <button
                   className="btn btn-primary"
                   onClick={handleCreateTask}
@@ -1145,8 +1147,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     <span className={statusBadge(task.status)}>{task.status}</span>
                                   )}
                                   <span className={priorityBadge(task.priority)}>{task.priority}</span>
-                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>OVERDUE</span>}
-                                  {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>DUE SOON</span>}
+                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>{t('OVERDUE')}</span>}
+                                  {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>}
                                   
                                   <div style={{ marginLeft: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
                                     <button
@@ -1332,7 +1334,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           </div>
                                           <div style={{ flex: 1 }}>
                                             <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || 'Attachment'}</div>
-                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                                            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                                           </div>
                                           <a 
                                             href={task.attachedFile} 
@@ -1441,7 +1443,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                           />
                                         </div>
                                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                                          <button className="btn btn-ghost btn-sm" onClick={() => setNewMilestone(null)}>Cancel</button>
+                                          <button className="btn btn-ghost btn-sm" onClick={() => setNewMilestone(null)}>{t('Cancel')}</button>
                                           <button className="btn btn-primary btn-sm" onClick={handleAddMilestone} disabled={isAddingMilestone || !newMilestone.title.trim()}>
                                             {isAddingMilestone ? 'Adding…' : 'Add'}
                                           </button>
@@ -1450,7 +1452,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                     )}
 
                                     {taskMilestones.length === 0 ? (
-                                      <p style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>No milestones yet. Add one to track progress.</p>
+                                      <p style={{ color: 'var(--text-muted)', fontSize: 13, fontStyle: 'italic' }}>{t('No milestones yet')}</p>
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }} className="milestone-line">
                                         {taskMilestones.map((ms, i) => (
@@ -1480,7 +1482,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                                     value={editingMilestone.targetDate}
                                                     onChange={e => setEditingMilestone(p => p ? { ...p, targetDate: e.target.value } : p)}
                                                   />
-                                                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingMilestone(null)}>Cancel</button>
+                                                  <button className="btn btn-ghost btn-sm" onClick={() => setEditingMilestone(null)}>{t('Cancel')}</button>
                                                   <button className="btn btn-primary btn-sm" onClick={handleUpdateMilestone} disabled={isSavingMilestone || !editingMilestone.title.trim()}>
                                                     {isSavingMilestone ? 'Saving…' : 'Save'}
                                                   </button>
@@ -1611,9 +1613,9 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
           <div className="empty-state-icon">
             <CheckCircle2 style={{ width: 28, height: 28 }} />
           </div>
-          <p className="empty-state-title">No tasks found</p>
+          <p className="empty-state-title">{t('No tasks found')}</p>
           <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
-          <button className="btn btn-ghost btn-sm" onClick={resetFilters}>Clear All Filters</button>
+          <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
         </div>
       )}
 
@@ -1667,7 +1669,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     <Edit2 style={{ width: 14, height: 14, color: 'var(--text-secondary)' }} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Edit Task</div>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{t('Edit Task')}</div>
                     {editingTask.serialNumber && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>#{editingTask.serialNumber}</div>
                     )}
@@ -1696,7 +1698,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">Description <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <label className="input-label">{t('Description')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
                   <textarea
                     className="input"
                     value={editingTask.description}
@@ -1712,13 +1714,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
-                    <label className="input-label">Priority</label>
+                    <label className="input-label">{t('Priority')}</label>
                     <select className="input" value={editingTask.priority} onChange={e => setEditingTask({ ...editingTask, priority: e.target.value as any })}>
                       {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="input-label">Due Date <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                    <label className="input-label">{t('Due Date')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
                     <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
                   </div>
                 </div>
@@ -1728,7 +1730,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">Assignee</label>
+                  <label className="input-label">{t('Assignee')}</label>
                   <select
                     className="input"
                     value={editingTask.assignedToId}
@@ -1757,13 +1759,13 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
-                    <label className="input-label">Category</label>
+                    <label className="input-label">{t('Category')}</label>
                     <select className="input" value={editingTask.category} onChange={e => handleOtherSelection('category', e.target.value, true)}>
                       {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="input-label">Department</label>
+                    <label className="input-label">{t('Department')}</label>
                     <input
                       className="input"
                       list="editTaskDepartmentList"
@@ -1776,7 +1778,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                     </datalist>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
-                    <label className="input-label">Sub-Category / Project</label>
+                    <label className="input-label">{t('Sub-Category / Project')}</label>
                     <input
                       className="input"
                       list="editSubCategoryList"
@@ -1866,7 +1868,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                       style={{ overflow: 'hidden' }}
                     >
                       <div style={{ marginBottom: 20 }}>
-                        <label className="input-label">Shared Folder Paths (Computer Paths)</label>
+                        <label className="input-label">{t('Shared Folder Paths (Computer Paths)')}</label>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
                           {(editingTask.filePaths || []).map((path, idx) => (
                             <div key={idx} style={{ display: 'flex', gap: 8 }}>
@@ -1915,7 +1917,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 display: 'flex', gap: 12, justifyContent: 'flex-end',
                 flexShrink: 0, background: 'var(--surface)',
               }}>
-                <button className="btn btn-ghost" onClick={() => setEditingTask(null)}>Cancel</button>
+                <button className="btn btn-ghost" onClick={() => setEditingTask(null)}>{t('Cancel')}</button>
                 <button
                   className="btn btn-primary"
                   onClick={handleUpdateTask}
@@ -1951,7 +1953,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
               <div style={{ padding: 28 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                   <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
-                  <h3 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', margin: 0 }}>Update the due date?</h3>
+                  <h3 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', margin: 0 }}>{t('Update the due date?')}</h3>
                 </div>
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
                   "<strong style={{ color: 'var(--text-secondary)' }}>{dueDatePrompt.task.taskName}</strong>" is{' '}
@@ -1961,7 +1963,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                 </p>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label className="label">New due date</label>
+                  <label className="label">{t('New due date')}</label>
                   <input
                     type="date"
                     className="input"

@@ -72,8 +72,8 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
   const isAdmin = appUser.role === 'Admin';
 
   const departmentByUserId = useMemo(() => {
-    const map: Record<string, string | undefined> = {};
-    projectUsers.forEach(u => { map[u.id] = u.department; });
+    const map = new Map<string, string | undefined>();
+    projectUsers.forEach(u => { map.set(u.id, u.department); });
     return map;
   }, [projectUsers]);
 
@@ -81,7 +81,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     if (isAdmin) return correspondences;
     return correspondences.filter(c =>
       c.userId === user.uid ||
-      (!!appUser.department && departmentByUserId[c.userId] === appUser.department)
+      (!!appUser.department && departmentByUserId.get(c.userId) === appUser.department)
     );
   }, [correspondences, isAdmin, departmentByUserId, appUser.department, user.uid]);
 
