@@ -1001,7 +1001,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 value={path}
                                 onChange={e => {
                                   const newPaths = [...newTask.filePaths];
-                                  newPaths[idx] = e.target.value;
+                                  newPaths[idx] = e.target.value.replace(/["']/g, '');
                                   setNewTask({ ...newTask, filePaths: newPaths });
                                 }}
                               />
@@ -1878,7 +1878,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 value={path}
                                 onChange={e => {
                                   const newPaths = [...(editingTask.filePaths || [])];
-                                  newPaths[idx] = e.target.value;
+                                  newPaths[idx] = e.target.value.replace(/["']/g, '');
                                   setEditingTask({ ...editingTask, filePaths: newPaths });
                                 }}
                               />

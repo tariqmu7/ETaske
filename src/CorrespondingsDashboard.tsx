@@ -99,7 +99,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const copyToClipboard = (path: string) => {
-    navigator.clipboard.writeText(path);
+    const cleanPath = path.replace(/["']/g, '');
+    navigator.clipboard.writeText(cleanPath);
     setCopiedPath(path);
     setTimeout(() => setCopiedPath(null), 2000);
   };
@@ -1024,7 +1025,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                 value={path} 
                                 onChange={e => {
                                   const newPaths = [...formData.filePaths];
-                                  newPaths[idx] = e.target.value;
+                                  newPaths[idx] = e.target.value.replace(/["']/g, '');
                                   set('filePaths', newPaths);
                                 }} 
                                 placeholder="e.g. \\SERVER\Documents\ProjectA" 

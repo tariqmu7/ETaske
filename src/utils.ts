@@ -148,7 +148,7 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
 export const openOrCopyPath = async (
   path?: string
 ): Promise<'opened' | 'copied' | 'prompted' | 'noop'> => {
-  const value = (path || '').trim();
+  const value = (path || '').trim().replace(/["']/g, '');
   if (!value) return 'noop';
   if (isWebUrl(value)) {
     window.open(value, '_blank', 'noopener,noreferrer');
