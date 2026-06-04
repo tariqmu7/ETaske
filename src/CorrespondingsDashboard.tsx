@@ -313,11 +313,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     }
     try {
       let docId = editing?.id;
+      let corrSerial = formData.serialNumber;
       if (editing) {
         await updateDoc(doc(db, 'correspondences', editing.id), data);
       } else {
-        const serial = await getNextSerialNumber('correspondences');
-        const docRef = await addDoc(collection(db, 'correspondences'), { ...data, serialNumber: serial, createdAt: serverTimestamp() });
+        corrSerial = await getNextSerialNumber('correspondences');
+        const docRef = await addDoc(collection(db, 'correspondences'), { ...data, serialNumber: corrSerial, createdAt: serverTimestamp() });
         docId = docRef.id;
       }
 
@@ -337,23 +338,76 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         }
       }
 
-      // Reassignment logic: update linked task if exists
-      if (editing && editing.convertedToTaskId && editing.assignedToId !== formData.assignedToId) {
-        await updateDoc(doc(db, 'tasks', editing.convertedToTaskId), {
+      // Auto-create task when assignee is set and no linked task exists yet
+      const hasLinkedTask = editing?.convertedToTaskId;
+
+      if (formData.assignedToId && !hasLinkedTask) {
+        // Create a new task from this correspondence
+        const taskSerial = await getNextSerialNumber('tasks');
+        const taskRef = await addDoc(collection(db, 'tasks'), {
+          taskName: formData.subject,
+          description: formData.body,
+          priority: formData.priority,
+          status: 'Pending',
+          category: formData.category,
+          subCategory: formData.subCategory || 'None',
+          department: formData.department || 'None',
+          serialNumber: taskSerial,
+          assignedTo: formData.assignedTo,
+          assignedToId: formData.assignedToId,
+          assignedBy: appUser.displayName,
+          assignedById: user.uid,
+          dueDate: formData.deadline || null,
+          correspondingId: docId,
+          correspondingSubject: formData.subject,
+          correspondingSerialNumber: corrSerial,
+          attachedFile: formData.attachedFile || null,
+          attachedFileName: formData.attachedFileName || null,
+          filePaths: formData.filePaths?.length ? formData.filePaths : [],
+          statusUpdate: 'Not Started',
+          notes: [],
+          userId: user.uid,
+          teamId: appUser.teamId || 'NONE',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+
+        // Link task back to the correspondence and mark as Assigned
+        await updateDoc(doc(db, 'correspondences', docId!), {
+          convertedToTaskId: taskRef.id,
+          status: 'Assigned',
+          assignedAt: serverTimestamp(),
+        });
+
+        // Notify assignee (skip if self-assigned)
+        if (formData.assignedToId !== user.uid) {
+          await createNotification({
+            type: 'task_assigned',
+            title: 'New Task Assigned',
+            message: `"${formData.subject}" has been assigned to you by ${appUser.displayName}`,
+            forUserId: formData.assignedToId,
+            read: false,
+            relatedId: taskRef.id,
+            createdAt: serverTimestamp(),
+          }, projectUsers);
+        }
+      } else if (hasLinkedTask && editing!.assignedToId !== formData.assignedToId) {
+        // Reassignment: update the existing linked task
+        await updateDoc(doc(db, 'tasks', editing!.convertedToTaskId!), {
           assignedTo: formData.assignedTo,
           assignedToId: formData.assignedToId,
           updatedAt: serverTimestamp(),
         });
 
-        // Notify new assignee
-        if (formData.assignedToId) {
+        // Notify new assignee (skip if self-assigned)
+        if (formData.assignedToId && formData.assignedToId !== user.uid) {
           await createNotification({
             type: 'task_assigned',
             title: 'Task Reassigned',
             message: `The task for "${formData.subject}" has been reassigned to you by ${appUser.displayName}`,
             forUserId: formData.assignedToId,
             read: false,
-            relatedId: editing.convertedToTaskId,
+            relatedId: editing!.convertedToTaskId,
             createdAt: serverTimestamp(),
           }, projectUsers);
         }
