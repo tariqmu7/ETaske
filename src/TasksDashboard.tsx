@@ -59,6 +59,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
   const [view, setView] = useState<'mine' | 'all'>('mine');
+  const [milestoneSort, setMilestoneSort] = useState<'asc' | 'desc'>('asc');
   const [newMilestone, setNewMilestone] = useState<{ taskId: string; title: string; targetDate: string } | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<{ id: string; taskId: string; title: string; targetDate: string } | null>(null);
   const [isSavingMilestone, setIsSavingMilestone] = useState(false);
@@ -1067,7 +1068,10 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <AnimatePresence>
                   {catTasks.map(task => {
-                    const taskMilestones = getMilestonesForTask(task.id);
+                    let taskMilestones = getMilestonesForTask(task.id);
+                    if (milestoneSort === 'desc') {
+                      taskMilestones = [...taskMilestones].reverse();
+                    }
                     const doneMilestones = taskMilestones.filter(m => m.status === 'Done').length;
                     const progress = taskMilestones.length > 0 ? Math.round((doneMilestones / taskMilestones.length) * 100) : 0;
                     const isExpanded = expandedTask === task.id;
@@ -1402,7 +1406,7 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
                             <AnimatePresence>
                               {isExpanded && (
-                                <motion.div
+<motion.div
                                   initial={{ height: 0, opacity: 0 }}
                                   animate={{ height: 'auto', opacity: 1 }}
                                   exit={{ height: 0, opacity: 0 }}
@@ -1410,10 +1414,30 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
                                 >
                                   <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingLeft: 62 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                                      <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                                        <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 6 }} />
-                                        Milestones
-                                      </h4>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                        <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                                          <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 6 }} />
+                                          Milestones
+                                        </h4>
+                                        <select 
+                                          value={milestoneSort}
+                                          onChange={e => setMilestoneSort(e.target.value as 'asc' | 'desc')}
+                                          style={{
+                                            fontSize: 11,
+                                            padding: '2px 6px',
+                                            background: 'var(--surface-2)',
+                                            border: '1px solid var(--border)',
+                                            color: 'var(--text-muted)',
+                                            outline: 'none',
+                                            cursor: 'pointer',
+                                            borderRadius: 4
+                                          }}
+                                          onClick={e => e.stopPropagation()}
+                                        >
+                                          <option value="asc">Oldest First</option>
+                                          <option value="desc">Newest First</option>
+                                        </select>
+                                      </div>
                                       {canEdit && (
                                         <button
                                           className="btn btn-ghost btn-sm"
