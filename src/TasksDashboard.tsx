@@ -381,11 +381,18 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
   const handleArchiveTask = async (taskId: string) => {
     try {
+      const task = tasks.find(t => t.id === taskId);
       await updateDoc(doc(db, 'tasks', taskId), {
         status: 'Archived' as TaskStatus,
         archivedAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       });
+      if (task?.correspondingId) {
+        await updateDoc(doc(db, 'correspondences', task.correspondingId), {
+          status: 'Closed',
+          updatedAt: serverTimestamp()
+        });
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
       setError('Failed to archive task.');

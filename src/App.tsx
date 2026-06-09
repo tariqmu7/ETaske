@@ -155,10 +155,13 @@ export default function App() {
     return () => unsub();
   }, [user, appUser]);
 
-  // Alerting system: items due within 48h
+  // Alerting system: items due within 48h.
+  // Dependencies use stable primitives (uid + status) so the listeners are NOT
+  // torn down and restarted on every lastSeen heartbeat (which recreates the
+  // appUser object reference every 60 s and would otherwise reset the counts).
   useEffect(() => {
     if (!user || !appUser || appUser.status !== 'Approved') return;
-    
+
     let taskCount = 0;
     let corrCount = 0;
 
@@ -184,7 +187,8 @@ export default function App() {
       unsubT();
       unsubC();
     };
-  }, [user, appUser]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.uid, appUser?.status]);
 
   // Presence heartbeat: keep our own lastSeen fresh while the tab is open so
   // other users get an accurate "last seen" in chat. Rules allow a self-update
