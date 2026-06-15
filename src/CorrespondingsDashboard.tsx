@@ -75,9 +75,10 @@ interface Props {
   appUser: AppUser;
   projectUsers: AppUser[];
   onNavigate: (v: AppView) => void;
+  initialStatusFilter?: string;
 }
 
-export default function CorrespondingsDashboard({ user, appUser, projectUsers, onNavigate }: Props) {
+export default function CorrespondingsDashboard({ user, appUser, projectUsers, onNavigate, initialStatusFilter }: Props) {
   const { t } = useTranslation();
   const [items, setItems] = useState<Corresponding[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,7 +86,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [isViewing, setIsViewing] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'All');
+
+  // Apply an incoming filter when navigated here from another view (e.g. Overview stat cards)
+  useEffect(() => {
+    if (initialStatusFilter) setStatusFilter(initialStatusFilter);
+  }, [initialStatusFilter]);
   const [deptFilter, setDeptFilter] = useState<string>('All');
   const [dateFilter, setDateFilter] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
@@ -174,7 +180,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const filtered = useMemo(() => {
     return visibleItems.filter(i => {
       if (search && !globalSearch(i, search)) return false;
-      if (statusFilter !== 'All' && i.status !== statusFilter) return false;
+      if (statusFilter === 'Open') { if (i.status === 'Closed') return false; }
+      else if (statusFilter !== 'All' && i.status !== statusFilter) return false;
       if (deptFilter !== 'All' && i.department !== deptFilter) return false;
       if (dateFilter && i.dateReceived !== dateFilter) return false;
       return true;
@@ -487,6 +494,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
           <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
             <option value="All">{t('All Statuses')}</option>
+            <option value="Open">{t('Open')}</option>
             {['Unread', 'Reviewing', 'Assigned', 'Closed'].map(s => <option key={s}>{s}</option>)}
           </select>
 

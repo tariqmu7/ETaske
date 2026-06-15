@@ -8,6 +8,7 @@ import {
   AppUser, Corresponding, Task, Milestone,
   CorrespondingCategory, CorrespondingStatus, TaskStatus, OperationType
 } from './types';
+import { AppView } from './App';
 import {
   BarChart3, MailOpen, CheckSquare, Clock, AlertCircle,
   ChevronDown, ChevronRight, Building2, Tag, Calendar,
@@ -27,6 +28,8 @@ interface Props {
   user: User;
   appUser: AppUser;
   projectUsers: AppUser[];
+  onNavigateCorrespondences?: (statusFilter: string) => void;
+  onNavigateTasks?: (statusFilter: string) => void;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -43,6 +46,31 @@ const CATEGORY_COLORS = new Map<string, { bg: string; text: string; border: stri
 const STATUS_ORDER: CorrespondingStatus[] = ['Unread', 'Reviewing', 'Assigned', 'Closed'];
 const TASK_STATUS_ORDER: TaskStatus[] = ['Pending', 'In Progress', 'Done', 'Archived'];
 
+// Top-level grouping buckets (task statuses). Correspondences are mapped onto these.
+type StatusBucket = 'Pending' | 'In Progress' | 'Done';
+const STATUS_BUCKETS: StatusBucket[] = ['Pending', 'In Progress', 'Done'];
+
+const STATUS_COLORS = new Map<string, { bg: string; text: string; border: string; icon: React.ReactNode }>([
+  ['Pending',     { bg: 'rgba(245,158,11,0.18)', text: '#f59e0b', border: 'rgba(245,158,11,0.35)', icon: <Clock className="w-4 h-4" /> }],
+  ['In Progress', { bg: 'rgba(59,130,246,0.18)',  text: '#3b82f6', border: 'rgba(59,130,246,0.35)', icon: <TrendingUp className="w-4 h-4" /> }],
+  ['Done',        { bg: 'rgba(34,197,94,0.18)',   text: '#22c55e', border: 'rgba(34,197,94,0.35)',  icon: <CheckSquare className="w-4 h-4" /> }],
+]);
+
+// Map a correspondence status onto one of the three task-status buckets.
+const corrStatusBucket = (s: CorrespondingStatus): StatusBucket | null => {
+  switch (s) {
+    case 'Unread':
+    case 'Reviewing': return 'Pending';
+    case 'Assigned':  return 'In Progress';
+    case 'Closed':    return 'Done';
+    default:          return null;
+  }
+};
+
+// Map a task status onto a bucket (Archived is excluded).
+const taskStatusBucket = (s: TaskStatus): StatusBucket | null =>
+  s === 'Pending' || s === 'In Progress' || s === 'Done' ? s : null;
+
 function formatDate(d: Timestamp | string | undefined): string {
   if (!d) return '—';
   if (typeof d === 'string') return d;
@@ -55,9 +83,18 @@ const priorityColor = new Map<string, string>([
 ]);
 
 // ─── Mini stat card ───────────────────────────────────────────────────────────
-function StatCard({ label, value, sub, color }: { label: string; value: number | string; sub?: string; color: string }) {
+function StatCard({ label, value, sub, color, onClick }: { label: string; value: number | string; sub?: string; color: string; onClick?: () => void }) {
   return (
-    <div className="card" style={{ padding: '16px 20px', borderLeft: `4px solid ${color}` }}>
+    <div
+      className="card"
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
+      style={{ padding: '16px 20px', borderLeft: `4px solid ${color}`, cursor: onClick ? 'pointer' : undefined, transition: 'transform 0.15s, box-shadow 0.15s' }}
+      onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)'; } : undefined}
+      onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } : undefined}
+    >
       <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>{value}</div>
       <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{label}</div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{sub}</div>}
@@ -176,7 +213,7 @@ const CorrCard: React.FC<{
 };
 
 // ─── Main component ────────────────────────────────────────────────────────────
-export default function OverviewDashboard({ user, appUser, projectUsers }: Props) {
+export default function OverviewDashboard({ user, appUser, projectUsers, onNavigateCorrespondences, onNavigateTasks }: Props) {
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -188,6 +225,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
   const [selectedCorr, setSelectedCorr] = useState<Corresponding | null>(null);
   const [dateFilter, setDateFilter] = useState('');
   const [viewTab, setViewTab] = useState<'Correspondences' | 'Tasks'>('Correspondences');
+  const [kpisExpanded, setKpisExpanded] = useState(false);
 
   // Load data
   useEffect(() => {
@@ -214,29 +252,30 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
     return () => unsubs.forEach(u => u());
   }, []);
 
-  // ─── Root Categories Stats ───────────────────────────────────────────────
+  // ─── Root Status Stats ────────────────────────────────────────────────────
+  // Tasks grouped by their own status; correspondences mapped onto the same buckets.
   const categoryStats = useMemo(() => {
     const stats = new Map<string, { total: number; tasks: number; overdue: number }>([
-      ['Project', { total: 0, tasks: 0, overdue: 0 }],
-      ['Internal', { total: 0, tasks: 0, overdue: 0 }],
-      ['External', { total: 0, tasks: 0, overdue: 0 }]
+      ['Pending', { total: 0, tasks: 0, overdue: 0 }],
+      ['In Progress', { total: 0, tasks: 0, overdue: 0 }],
+      ['Done', { total: 0, tasks: 0, overdue: 0 }]
     ]);
     correspondences.forEach(c => {
+      if (c.id === '--stats--') return;
       const createdDate = c.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || c.dateReceived;
       if (dateFilter && createdDate !== dateFilter) return;
-      const cat = c.category || 'Internal';
-      if (stats.has(cat)) {
-        stats.get(cat)!.total++;
-        if (isOverdue(c.deadline) && c.status !== 'Closed') stats.get(cat)!.overdue++;
+      const bucket = corrStatusBucket(c.status);
+      if (bucket && stats.has(bucket)) {
+        stats.get(bucket)!.total++;
+        if (isOverdue(c.deadline) && c.status !== 'Closed') stats.get(bucket)!.overdue++;
       }
     });
     tasks.forEach(t => {
+      if (t.id === '--stats--') return;
       const createdDate = t.createdAt?.toDate?.()?.toISOString()?.split('T')[0];
       if (dateFilter && createdDate !== dateFilter) return;
-      if (t.correspondingId) {
-        const c = correspondences.find(corr => corr.id === t.correspondingId);
-        if (c && stats.has(c.category)) stats.get(c.category)!.tasks++;
-      }
+      const bucket = taskStatusBucket(t.status);
+      if (bucket && stats.has(bucket)) stats.get(bucket)!.tasks++;
     });
     return stats;
   }, [correspondences, tasks]);
@@ -336,50 +375,47 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       .sort((a, b) => (b.totalTasks + b.activeCorrs) - (a.totalTasks + a.activeCorrs));
   }, [projectUsers, correspondences, tasks, milestones]);
 
-  // ─── Sub-Category Grouping for Selected Category ───────────────────────
+  // ─── Employee Grouping for Selected Status ─────────────────────────────
+  // selectedCategory holds a status bucket (Pending / In Progress / Done);
+  // within it, correspondences and tasks are grouped by their assignee.
   const subCategoryGroups = useMemo(() => {
     if (!selectedCategory) return new Map();
-    
-    const catCorrs = correspondences.filter(c => c.category === selectedCategory);
-    if (search) {
-      const q = search.toLowerCase();
-      // Only apply search if provided
-    }
+
     const map = new Map<string, { corrs: Corresponding[], tasks: Task[] }>();
-    
-    catCorrs.forEach(c => {
+
+    correspondences.forEach(c => {
+      if (c.id === '--stats--') return;
+      if (corrStatusBucket(c.status) !== selectedCategory) return;
       if (search && !globalSearch(c, search)) return;
       const createdDate = c.createdAt?.toDate?.()?.toISOString()?.split('T')[0] || c.dateReceived;
       if (dateFilter && createdDate !== dateFilter) return;
-      const sub = c.subCategory || 'General';
-      if (!map.has(sub)) map.set(sub, { corrs: [], tasks: [] });
-      map.get(sub)!.corrs.push(c);
+      const who = c.assignedTo || 'Unassigned';
+      if (!map.has(who)) map.set(who, { corrs: [], tasks: [] });
+      map.get(who)!.corrs.push(c);
     });
-    
+
     tasks.forEach(t => {
-      let isTaskInCat = false;
-      let sub = 'General';
+      if (t.id === '--stats--') return;
+      if (taskStatusBucket(t.status) !== selectedCategory) return;
+      if (search && !globalSearch(t, search)) return;
 
-      if (t.category) {
-        if (t.category === selectedCategory) {
-          isTaskInCat = true;
-          sub = t.subCategory || 'General';
-        }
-      } else if (t.correspondingId || t.id) {
-        const c = correspondences.find(corr => corr.id === t.correspondingId || corr.convertedToTaskId === t.id);
-        if (c && c.category === selectedCategory) {
-          isTaskInCat = true;
-          sub = c.subCategory || 'General';
-        }
+      const who = t.assignedTo || 'Unassigned';
+      if (!map.has(who)) map.set(who, { corrs: [], tasks: [] });
+      if (!map.get(who)!.tasks.find(ex => ex.id === t.id)) {
+        map.get(who)!.tasks.push(t);
       }
+    });
 
-      if (isTaskInCat) {
-         if (search && !globalSearch(t, search)) return;
-         if (!map.has(sub)) map.set(sub, { corrs: [], tasks: [] });
-         if (!map.get(sub)!.tasks.find(ex => ex.id === t.id)) {
-           map.get(sub)!.tasks.push(t);
-         }
-      }
+    // Sort each employee group newest-first.
+    const ts = (x: any): number => {
+      const d = x.createdAt?.toDate?.() ??
+        (x.dateReceived ? new Date(x.dateReceived) : null) ??
+        (x.dueDate ? new Date(x.dueDate) : null);
+      return d ? d.getTime() : 0;
+    };
+    map.forEach(group => {
+      group.corrs.sort((a, b) => ts(b) - ts(a));
+      group.tasks.sort((a, b) => ts(b) - ts(a));
     });
 
     return map;
@@ -392,6 +428,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       </div>
     );
   }
+
+  // Wraps the newest card in each employee group with a highlight ring + badge.
+  const NewestWrap: React.FC<{ isNewest: boolean; children: React.ReactNode }> = ({ isNewest, children }) => {
+    if (!isNewest) return <div style={{ position: 'relative' }}>{children}</div>;
+    return (
+      <div style={{ position: 'relative', outline: '2px solid var(--accent, #3b82f6)', outlineOffset: 2, borderRadius: 4 }}>
+        {children}
+      </div>
+    );
+  };
 
   // Task Card Component to be used inside sub-category view
   const TaskCard: React.FC<{ task: Task }> = ({ task }) => {
@@ -509,10 +555,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
 
       {/* ── Summary Stat Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 28 }}>
-        <StatCard label="Correspondences" value={summaryStats.totalCorrs} sub={`${summaryStats.openCorrs} open`} color="var(--blue-600)" />
-        <StatCard label="Active Tasks" value={summaryStats.activeTasks} sub={`${summaryStats.doneTasks} done`} color="var(--green-600)" />
-        <StatCard label="Overdue" value={summaryStats.overdue} sub="need attention" color="#ef4444" />
-        <StatCard label="Completion" value={`${summaryStats.rate}%`} sub="tasks done" color="var(--teal-500)" />
+        <StatCard label="Correspondences" value={summaryStats.totalCorrs} sub={`${summaryStats.openCorrs} open`} color="var(--blue-600)" onClick={onNavigateCorrespondences ? () => onNavigateCorrespondences('Open') : undefined} />
+        <StatCard label="Active Tasks" value={summaryStats.activeTasks} sub={`${summaryStats.doneTasks} done`} color="var(--green-600)" onClick={onNavigateTasks ? () => onNavigateTasks('Active') : undefined} />
+        <StatCard label="Overdue" value={summaryStats.overdue} sub="need attention" color="#ef4444" onClick={onNavigateTasks ? () => onNavigateTasks('Overdue') : undefined} />
+        <StatCard label="Completion" value={`${summaryStats.rate}%`} sub="tasks done" color="var(--teal-500)" onClick={onNavigateTasks ? () => onNavigateTasks('Done') : undefined} />
       </div>
 
       {/* ── Due Soon Alerts Section ── */}
@@ -576,9 +622,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       {selectedCategory === null ? (
         /* ── Category Grid View ── */
         <div className="ov-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginTop: 24 }}>
-          {['Project', 'Internal', 'External'].map(cat => {
-            const catStyle = CATEGORY_COLORS.get(cat) || CATEGORY_COLORS.get('Internal')!;
-            const s = categoryStats.get(cat);
+          {STATUS_BUCKETS.map(cat => {
+            const catStyle = STATUS_COLORS.get(cat) || STATUS_COLORS.get('Pending')!;
+            const s = categoryStats.get(cat)!;
             return (
               <div 
                 key={cat} 
@@ -594,7 +640,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                   </div>
                   <div>
                     <h2 style={{ fontSize: 20, fontWeight: 800, color: catStyle.text, margin: 0 }}>{cat}</h2>
-                    <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>{t("Category")}</span>
+                    <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>{t("Status")}</span>
                   </div>
                 </div>
                 <div className="cat-card-body" style={{ padding: '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -660,7 +706,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
                 className="btn btn-ghost"
                 style={{ gap: 8, paddingLeft: 8 }}
               >
-                <ArrowRight className="w-4 h-4" style={{ transform: 'rotate(180deg)' }} /> Back to Categories
+                <ArrowRight className="w-4 h-4" style={{ transform: 'rotate(180deg)' }} /> Back to Statuses
               </button>
               
               <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
@@ -712,26 +758,29 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               return (
                 <div key={subCat} style={{ marginBottom: 32 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
-                    <FolderOpen className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
-                    {subCat === 'None' ? 'Unassigned' : subCat}
+                    <Users className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
+                    {subCat}
                   </h3>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
                     {viewTab === 'Correspondences' ? (
-                      data.corrs.map(item => (
-                        <CorrCard 
-                          key={`corr-${item.id}`} 
-                          item={item} 
-                          tasks={tasks} 
-                          milestones={milestones} 
-                          onTaskClick={setSelectedTask} 
-                          onCorrClick={setSelectedCorr}
-                          projectUsers={projectUsers} 
-                        />
+                      data.corrs.map((item, idx) => (
+                        <NewestWrap key={`corr-${item.id}`} isNewest={idx === 0}>
+                          <CorrCard
+                            item={item}
+                            tasks={tasks}
+                            milestones={milestones}
+                            onTaskClick={setSelectedTask}
+                            onCorrClick={setSelectedCorr}
+                            projectUsers={projectUsers}
+                          />
+                        </NewestWrap>
                       ))
                     ) : (
-                      data.tasks.map(task => (
-                        <TaskCard key={`task-${task.id}`} task={task} />
+                      data.tasks.map((task, idx) => (
+                        <NewestWrap key={`task-${task.id}`} isNewest={idx === 0}>
+                          <TaskCard task={task} />
+                        </NewestWrap>
                       ))
                     )}
                   </div>
@@ -750,17 +799,23 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
       )}
 
       {selectedCategory === null && employeeKPIs.length > 0 && (
-        <div style={{ marginTop: 40, marginBottom: 24 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
+        <div className="card" style={{ marginTop: 40, marginBottom: 24, padding: 0, overflow: 'hidden' }}>
+          <button
+            onClick={() => setKpisExpanded(v => !v)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+          >
             <div style={{ padding: 10, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
               <Users className="w-5 h-5" />
             </div>
-            <div>
+            <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Team Performance KPIs")}</h2>
               <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>{t("Workload and completion stats for active members.")}</p>
             </div>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-muted)' }}>{employeeKPIs.length}</span>
+            {kpisExpanded ? <ChevronDown className="w-5 h-5 text-muted" /> : <ChevronRight className="w-5 h-5 text-muted" />}
+          </button>
+          {kpisExpanded && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16, padding: '0 16px 16px' }}>
             {employeeKPIs.map((kpi) => (
               <div key={kpi.user.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Header: Employee Info */}
@@ -819,6 +874,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers }: Props
               </div>
             ))}
           </div>
+          )}
         </div>
       )}
 

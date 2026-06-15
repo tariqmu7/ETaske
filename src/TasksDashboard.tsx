@@ -46,9 +46,11 @@ interface Props {
   user: User;
   appUser: AppUser;
   projectUsers: AppUser[];
+  initialStatusFilter?: string;
+  initialView?: 'mine' | 'all';
 }
 
-export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
+export default function TasksDashboard({ user, appUser, projectUsers, initialStatusFilter, initialView }: Props) {
   const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
@@ -56,9 +58,9 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [pendingOpenTaskId, setPendingOpenTaskId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
-  const [view, setView] = useState<'mine' | 'all'>('mine');
+  const [view, setView] = useState<'mine' | 'all'>(initialView || 'mine');
   const [milestoneSort, setMilestoneSort] = useState<'asc' | 'desc'>('asc');
   const [newMilestone, setNewMilestone] = useState<{ taskId: string; title: string; targetDate: string } | null>(null);
   const [editingMilestone, setEditingMilestone] = useState<{ id: string; taskId: string; title: string; targetDate: string } | null>(null);
@@ -164,12 +166,20 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
     return () => unsub();
   }, [appUser.status]);
 
+  // Apply incoming filter/view when navigated here from another view (e.g. Overview stat cards)
+  useEffect(() => {
+    if (initialStatusFilter) setStatusFilter(initialStatusFilter);
+    if (initialView) setView(initialView);
+  }, [initialStatusFilter, initialView]);
+
   const filtered = useMemo(() => {
     return tasks.filter(t => {
       if (t.status === 'Archived') return false;
       if (view === 'mine' && t.assignedToId !== user.uid) return false;
       if (search && !globalSearch(t, search)) return false;
-      if (statusFilter !== 'All' && t.status !== statusFilter) return false;
+      if (statusFilter === 'Active') { if (t.status === 'Done') return false; }
+      else if (statusFilter === 'Overdue') { if (t.status === 'Done' || !isOverdue(t.dueDate)) return false; }
+      else if (statusFilter !== 'All' && t.status !== statusFilter) return false;
       if (categoryFilter !== 'All' && t.category !== categoryFilter) return false;
       if (isManagerOrAdmin && employeeFilter !== 'All' && t.assignedTo !== employeeFilter) return false;
       if (subCategoryFilter !== 'All' && t.subCategory !== subCategoryFilter) return false;
@@ -711,6 +721,8 @@ export default function TasksDashboard({ user, appUser, projectUsers }: Props) {
 
         <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="All">{t('All Statuses')}</option>
+          <option value="Active">{t('Active')}</option>
+          <option value="Overdue">{t('Overdue')}</option>
           {['Pending', 'In Progress', 'Done'].map(s => <option key={s}>{s}</option>)}
         </select>
 

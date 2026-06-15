@@ -36,6 +36,8 @@ export default function App() {
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
   const [activeView, setActiveView] = useState<AppView>('tasks');
+  const [corrStatusFilter, setCorrStatusFilter] = useState<string>('All');
+  const [taskStatusFilter, setTaskStatusFilter] = useState<string>('All');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
@@ -245,6 +247,13 @@ export default function App() {
     }
   }, [appUser?.role]);
 
+  // Clear any stat-card-driven filters once the user leaves the targeted view,
+  // so manual navigation back starts unfiltered.
+  useEffect(() => {
+    if (activeView !== 'correspondences' && corrStatusFilter !== 'All') setCorrStatusFilter('All');
+    if (activeView !== 'tasks' && taskStatusFilter !== 'All') setTaskStatusFilter('All');
+  }, [activeView]);
+
   const handleLogout = () => signOut(auth);
 
   if (!isAuthReady) {
@@ -302,16 +311,28 @@ export default function App() {
       />
       <main className="main-content">
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
-          <OverviewDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
+          <OverviewDashboard
+            user={user}
+            appUser={appUser}
+            projectUsers={projectUsers}
+            onNavigateCorrespondences={(filter) => { setCorrStatusFilter(filter); setActiveView('correspondences'); }}
+            onNavigateTasks={(filter) => { setTaskStatusFilter(filter); setActiveView('tasks'); }}
+          />
         )}
         {activeView === 'correspondences' && (
-          <CorrespondingsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+          <CorrespondingsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} initialStatusFilter={corrStatusFilter} />
         )}
         {activeView === 'manager-inbox' && (
           <ManagerInbox user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
         {activeView === 'tasks' && (
-          <TasksDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
+          <TasksDashboard
+            user={user}
+            appUser={appUser}
+            projectUsers={projectUsers}
+            initialStatusFilter={taskStatusFilter}
+            initialView={taskStatusFilter !== 'All' ? 'all' : undefined}
+          />
         )}
         {activeView === 'projects' && (
           <ProjectsDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
