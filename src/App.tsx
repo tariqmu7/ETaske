@@ -16,18 +16,19 @@ import AdminDashboard from './AdminDashboard';
 import OverviewDashboard from './OverviewDashboard';
 import DueSoonDashboard from './DueSoonDashboard';
 import OutlookFeed from './OutlookFeed';
+import ProjectsDashboard from './ProjectsDashboard';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X
+  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon } from './utils';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 
-export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed';
+export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -312,6 +313,9 @@ export default function App() {
         {activeView === 'tasks' && (
           <TasksDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
+        {activeView === 'projects' && (
+          <ProjectsDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
+        )}
         {activeView === 'archive' && (
           <ArchiveDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
@@ -381,6 +385,7 @@ export default function App() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
               {([
                 { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
+                { id: 'projects',        label: 'Projects',        icon: <FolderKanban />,show: true },
                 { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
                 { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
                 { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },

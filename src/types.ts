@@ -130,6 +130,132 @@ export interface Task {
   updatedAt: Timestamp;
 }
 
+// ─── Projects ─────────────────────────────────────────────────────────────────
+
+export type ProjectStatus = 'Active' | 'On Hold' | 'Completed' | 'Cancelled';
+
+export const PROJECT_STATUS_OPTIONS: ProjectStatus[] = ['Active', 'On Hold', 'Completed', 'Cancelled'];
+
+export interface Project {
+  id: string;
+  serialNumber?: string;        // PR000001
+  name: string;
+  code?: string;                // contract number, e.g. 4600002981
+  client?: string;              // e.g. AGIBA
+  operator?: string;            // e.g. EPROM
+  description?: string;
+  location?: string;
+  status: ProjectStatus;
+  // Tracking summary (mirror of the latest projectUpdates entry)
+  currentStatus?: string;
+  lastUpdateText?: string;
+  lastUpdateAt?: Timestamp;
+  // Meta dates
+  issueDate?: string;
+  rev?: string;
+  startDate?: string;
+  endDate?: string;
+  // Ownership
+  userId: string;
+  teamId?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Contract tree node. `parentId` null => top-level item.
+export type ProjectContractType =
+  | 'contract'
+  | 'work_authorization'
+  | 'agreement'
+  | 'amendment'
+  | 'sub_contract';
+
+export const PROJECT_CONTRACT_TYPE_OPTIONS: { value: ProjectContractType; label: string }[] = [
+  { value: 'contract', label: 'Contract' },
+  { value: 'work_authorization', label: 'Work Authorization' },
+  { value: 'agreement', label: 'Agreement' },
+  { value: 'amendment', label: 'Amendment' },
+  { value: 'sub_contract', label: 'Sub-Contract' },
+];
+
+export interface ProjectContractItem {
+  id: string;
+  projectId: string;
+  parentId: string | null;
+  type: ProjectContractType;
+  contractNumber?: string;
+  subject?: string;
+  companyName?: string;
+  department?: string;          // requesting department
+  srDate?: string;
+  srValue?: number | string;
+  contractValue?: number | string;
+  currency?: string;
+  loaDate?: string;
+  startDate?: string;
+  endDate?: string;
+  status?: string;
+  logStatus?: string;
+  contractingMethod?: string;   // e.g. أمر مباشر / ممارسة
+  amendmentNumber?: string;     // رقم الملحق
+  valueAfterIncrease?: number | string;
+  remarks?: string;
+  inCharge?: string;
+  userId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ProjectSubcontract {
+  id: string;
+  projectId: string;
+  name: string;                 // subcontractor / supplier name
+  typeOfService?: string;
+  soOrContract?: string;        // SO / contract reference number
+  reference?: string;           // folder reference
+  startDate?: string;
+  expiryDate?: string;
+  price?: number | string;
+  currency?: string;
+  status?: string;
+  currentStatus?: string;
+  remarks?: string;
+  userId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export type ProjectFinancialType = 'invoice' | 'income' | 'expense' | 'budget';
+
+export const PROJECT_FINANCIAL_TYPE_OPTIONS: ProjectFinancialType[] = ['invoice', 'income', 'expense', 'budget'];
+
+export interface ProjectFinancialRecord {
+  id: string;
+  projectId: string;
+  type: ProjectFinancialType;
+  title: string;
+  amount?: number | string;
+  currency?: string;
+  date?: string;
+  relatedContractId?: string;
+  status?: string;
+  notes?: string;
+  userId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface ProjectUpdate {
+  id: string;
+  projectId: string;
+  status?: string;              // project status snapshot at time of update
+  text: string;
+  authorId: string;
+  authorName: string;
+  authorColor?: string;
+  createdAt: Timestamp;
+}
+
 // ─── Notifications (in-app) ───────────────────────────────────────────────────
 
 export type NotificationType =

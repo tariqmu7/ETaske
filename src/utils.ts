@@ -119,17 +119,38 @@ export const isWebUrl = (path?: string): boolean =>
 // leading drive letter to the share's UNC root makes the copied path portable
 // across every machine. Configurable via VITE_SHARE_UNC_ROOT; defaults to the
 // org's file server. UNC paths and web URLs are left untouched.
+const escapeRegExp = (s: string): string =>
+  s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const SHARE_UNC_ROOT = (
-  (import.meta.env.VITE_SHARE_UNC_ROOT as string | undefined) || '\\\\fs01'
+  (import.meta.env.VITE_SHARE_UNC_ROOT as string | undefined) ||
+  '\\\\fs01\\Business Development & Contracts'
 ).replace(/[\\/]+$/, '');
+
+// The last path segment of the share root (e.g. "Business Development &
+// Contracts"). A stored drive-letter path may already include this segment
+// (the drive maps to the share's parent on some machines), so we strip a
+// leading duplicate to avoid "...\Business Development & Contracts\Business
+// Development & Contracts\...".
+const SHARE_LEAF = SHARE_UNC_ROOT.split('\\').filter(Boolean).pop() || '';
+
+const joinShare = (rest: string): string => {
+  let tail = rest;
+  if (SHARE_LEAF) {
+    const dupe = new RegExp(`^${escapeRegExp(SHARE_LEAF)}[\\\\/]+`, 'i');
+    tail = tail.replace(dupe, '');
+  }
+  return tail ? `${SHARE_UNC_ROOT}\\${tail}` : SHARE_UNC_ROOT;
+};
 
 export const toUncPath = (path?: string): string => {
   const value = (path || '').trim().replace(/["']/g, '');
   if (!value) return value;
   if (value.startsWith('\\\\') || isWebUrl(value)) return value;
-  // "X:\Folder\file" or "X:/Folder/file" -> "\\fs01\Folder\file"
+  // "X:\Folder\file" or "X:/Folder/file" -> "\\fs01\Business Development &
+  // Contracts\Folder\file" (de-duplicating the share leaf if already present)
   const m = value.match(/^[A-Za-z]:[\\/](.*)$/);
-  if (m) return `${SHARE_UNC_ROOT}\\${m[1]}`;
+  if (m) return joinShare(m[1]);
   // Bare drive root, e.g. "X:" or "X:\"
   if (/^[A-Za-z]:[\\/]?$/.test(value)) return SHARE_UNC_ROOT;
   return value;
