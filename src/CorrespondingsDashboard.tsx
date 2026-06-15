@@ -20,7 +20,7 @@ import {
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
+import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
@@ -99,8 +99,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [tasks, setTasks] = useState<Task[]>([]);
 
   const copyToClipboard = (path: string) => {
-    const cleanPath = path.replace(/["']/g, '');
-    navigator.clipboard.writeText(cleanPath);
+    navigator.clipboard.writeText(toUncPath(path));
     setCopiedPath(path);
     setTimeout(() => setCopiedPath(null), 2000);
   };

@@ -113,6 +113,28 @@ export const timeAgo = (when?: { toDate?: () => Date } | Date | number | null): 
 export const isWebUrl = (path?: string): boolean =>
   /^https?:\/\//i.test((path || '').trim());
 
+// The shared folder is mapped to a network drive whose letter differs per
+// machine (one user mounts it as X:, another as W:, …). A stored "X:\…" path
+// therefore won't resolve for anyone whose mapping differs. Rewriting the
+// leading drive letter to the share's UNC root makes the copied path portable
+// across every machine. Configurable via VITE_SHARE_UNC_ROOT; defaults to the
+// org's file server. UNC paths and web URLs are left untouched.
+const SHARE_UNC_ROOT = (
+  (import.meta.env.VITE_SHARE_UNC_ROOT as string | undefined) || '\\\\fs01'
+).replace(/[\\/]+$/, '');
+
+export const toUncPath = (path?: string): string => {
+  const value = (path || '').trim().replace(/["']/g, '');
+  if (!value) return value;
+  if (value.startsWith('\\\\') || isWebUrl(value)) return value;
+  // "X:\Folder\file" or "X:/Folder/file" -> "\\fs01\Folder\file"
+  const m = value.match(/^[A-Za-z]:[\\/](.*)$/);
+  if (m) return `${SHARE_UNC_ROOT}\\${m[1]}`;
+  // Bare drive root, e.g. "X:" or "X:\"
+  if (/^[A-Za-z]:[\\/]?$/.test(value)) return SHARE_UNC_ROOT;
+  return value;
+};
+
 // Copy text to the clipboard, with a fallback for non-secure contexts
 // and older browsers. Resolves to whether the copy succeeded.
 export const copyToClipboard = async (text: string): Promise<boolean> => {
@@ -148,7 +170,7 @@ export const copyToClipboard = async (text: string): Promise<boolean> => {
 export const openOrCopyPath = async (
   path?: string
 ): Promise<'opened' | 'copied' | 'prompted' | 'noop'> => {
-  const value = (path || '').trim().replace(/["']/g, '');
+  const value = toUncPath(path);
   if (!value) return 'noop';
   if (isWebUrl(value)) {
     window.open(value, '_blank', 'noopener,noreferrer');
