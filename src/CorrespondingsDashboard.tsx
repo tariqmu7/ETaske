@@ -606,7 +606,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
       {/* Unified layout: list (left) + team workload panel (right, managers only) */}
       <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: isManager ? '1fr 300px' : '1fr', gap: 24, alignItems: 'start' }}>
-      <div>
+      <div style={{ minWidth: 0 }}>
       {/* Toolbar */}
       <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>

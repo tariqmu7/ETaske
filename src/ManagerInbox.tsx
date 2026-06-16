@@ -259,7 +259,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
       <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 280px', gap: 24, alignItems: 'start' }}>
       {/* Left: toolbar + card list */}
-      <div>
+      <div style={{ minWidth: 0 }}>
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: 1 }}>
