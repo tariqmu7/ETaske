@@ -8,8 +8,7 @@ import PendingScreen from './PendingScreen';
 import RejectedScreen from './RejectedScreen';
 import UsernameSetupScreen from './UsernameSetupScreen';
 import TopNav from './components/Sidebar';
-import CorrespondingsDashboard from './CorrespondingsDashboard';
-import ManagerInbox from './ManagerInbox';
+import CorrespondenceInbox from './CorrespondenceInbox';
 import TasksDashboard from './TasksDashboard';
 import ArchiveDashboard from './ArchiveDashboard';
 import AdminDashboard from './AdminDashboard';
@@ -21,7 +20,7 @@ import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, Inbox, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban
+  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon } from './utils';
@@ -319,11 +318,15 @@ export default function App() {
             onNavigateTasks={(filter) => { setTaskStatusFilter(filter); setActiveView('tasks'); }}
           />
         )}
-        {activeView === 'correspondences' && (
-          <CorrespondingsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} initialStatusFilter={corrStatusFilter} />
-        )}
-        {activeView === 'manager-inbox' && (
-          <ManagerInbox user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        {(activeView === 'correspondences' || activeView === 'manager-inbox') && (
+          <CorrespondenceInbox
+            user={user}
+            appUser={appUser}
+            projectUsers={projectUsers}
+            onNavigate={setActiveView}
+            initialStatusFilter={corrStatusFilter}
+            initialTab={activeView === 'manager-inbox' ? 'inbox' : 'correspondences'}
+          />
         )}
         {activeView === 'tasks' && (
           <TasksDashboard
@@ -362,8 +365,7 @@ export default function App() {
       <nav className="bottom-nav">
         {([
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
-          { id: 'correspondences', label: 'Letters',         icon: <MailOpen />,    show: true },
-          { id: 'manager-inbox',   label: 'Inbox',           icon: <Inbox />,       show: true },
+          { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
           .filter(item => item.show)
           .map(item => (

@@ -226,6 +226,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
   const [dateFilter, setDateFilter] = useState('');
   const [viewTab, setViewTab] = useState<'Correspondences' | 'Tasks'>('Correspondences');
   const [kpisExpanded, setKpisExpanded] = useState(false);
+  const [newCollapsed, setNewCollapsed] = useState(false);
+  const [showAllNew, setShowAllNew] = useState(false);
+  const [newRange, setNewRange] = useState<'today' | 'yesterday' | 'week'>('today');
 
   // Load data
   useEffect(() => {
@@ -312,6 +315,43 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
     });
   }, [correspondences, tasks]);
 
+  // ─── New feed (recency) ───────────────────────────────────────────────────
+  // Correspondences + tasks created within the focused window. When a manager
+  // picks an explicit date in the filter, that day wins; otherwise the
+  // Today / Yesterday / This Week tabs control the window. Answers "what's new?".
+  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
+  const yesterdayStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return d.toLocaleDateString('en-CA');
+  })();
+  const weekStartStr = (() => {
+    const d = new Date();
+    d.setDate(d.getDate() - 6); // rolling last 7 days, inclusive of today
+    return d.toLocaleDateString('en-CA');
+  })();
+  const newTodayItems = useMemo(() => {
+    const dayOf = (x: any): string =>
+      x.createdAt?.toDate?.()?.toLocaleDateString('en-CA') || x.dateReceived || '';
+
+    // YYYY-MM-DD strings compare correctly lexicographically.
+    const inRange = (day: string): boolean => {
+      if (!day) return false;
+      if (dateFilter) return day === dateFilter;
+      if (newRange === 'today') return day === todayStr;
+      if (newRange === 'yesterday') return day === yesterdayStr;
+      return day >= weekStartStr && day <= todayStr; // 'week'
+    };
+
+    const corrs = correspondences
+      .filter(c => c.id !== '--stats--' && inRange(dayOf(c)))
+      .map(c => ({ kind: 'Correspondence' as const, item: c, ts: c.createdAt?.toDate?.()?.getTime() || 0 }));
+    const tks = tasks
+      .filter(t => t.id !== '--stats--' && inRange(dayOf(t)))
+      .map(t => ({ kind: 'Task' as const, item: t, ts: t.createdAt?.toDate?.()?.getTime() || 0 }));
+
+    return [...corrs, ...tks].sort((a, b) => b.ts - a.ts);
+  }, [correspondences, tasks, dateFilter, newRange, todayStr, yesterdayStr, weekStartStr]);
 
   // ─── Employee KPIs ──────────────────────────────────────────────────────────
   const getWeight = (priority?: string) => {
@@ -396,7 +436,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
 
     tasks.forEach(t => {
       if (t.id === '--stats--') return;
-      if (taskStatusBucket(t.status) !== selectedCategory) return;
+      // Archived has no bucket of its own; surface it in the drill-in under Done
+      // so completed/archived task cards stay visible instead of disappearing.
+      const drillBucket = t.status === 'Archived' ? 'Done' : taskStatusBucket(t.status);
+      if (drillBucket !== selectedCategory) return;
       if (search && !globalSearch(t, search)) return;
 
       const who = t.assignedTo || 'Unassigned';
@@ -428,6 +471,28 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       </div>
     );
   }
+
+  // Small avatar + name (or a red "Unassigned" pill) used in the New Today feed.
+  const AssigneeChip: React.FC<{ id?: string; name?: string; size?: number }> = ({ id, name, size = 16 }) => {
+    if (!id && !name) {
+      return (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fee2e2', color: '#dc2626' }}>
+          Unassigned
+        </span>
+      );
+    }
+    const u = projectUsers.find(pu => pu.id === id);
+    return (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>
+        {u?.photoURL ? (
+          <img src={u.photoURL} className="avatar" style={{ width: size, height: size, objectFit: 'cover' }} alt="" />
+        ) : (
+          <span style={{ width: Math.round(size * 0.6), height: Math.round(size * 0.6), borderRadius: 0, background: u?.userColor || getUserColor(id || name || '') }} />
+        )}
+        {u?.displayName || name}
+      </span>
+    );
+  };
 
   // Wraps the newest card in each employee group with a highlight ring + badge.
   const NewestWrap: React.FC<{ isNewest: boolean; children: React.ReactNode }> = ({ isNewest, children }) => {
@@ -560,6 +625,129 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         <StatCard label="Overdue" value={summaryStats.overdue} sub="need attention" color="#ef4444" onClick={onNavigateTasks ? () => onNavigateTasks('Overdue') : undefined} />
         <StatCard label="Completion" value={`${summaryStats.rate}%`} sub="tasks done" color="var(--teal-500)" onClick={onNavigateTasks ? () => onNavigateTasks('Done') : undefined} />
       </div>
+
+      {/* ── New Today (recency feed) ── */}
+      {selectedCategory === null && (
+        <div className="card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
+          <button
+            onClick={() => setNewCollapsed(v => !v)}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+          >
+            <div style={{ padding: 10, background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
+              <MailOpen className="w-5 h-5" />
+            </div>
+            <div style={{ flex: 1 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                {dateFilter
+                  ? `New on ${formatDate(dateFilter)}`
+                  : newRange === 'today'
+                    ? t('New Today')
+                    : newRange === 'yesterday'
+                      ? t('New Yesterday')
+                      : t('New This Week')}
+              </h2>
+              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+                {t('Correspondences and tasks that just came in — and who they went to.')}
+              </p>
+            </div>
+            <span style={{ fontSize: 13, fontWeight: 800, color: newTodayItems.length ? '#3b82f6' : 'var(--text-muted)', padding: '2px 10px', background: 'var(--surface-3)', borderRadius: 0 }}>{newTodayItems.length}</span>
+            {newCollapsed ? <ChevronRight className="w-5 h-5 text-muted" /> : <ChevronDown className="w-5 h-5 text-muted" />}
+          </button>
+
+          {!newCollapsed && !dateFilter && (
+            <div style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
+              {([
+                ['today', t('Today')],
+                ['yesterday', t('Yesterday')],
+                ['week', t('This Week')],
+              ] as const).map(([key, label]) => {
+                const active = newRange === key;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => { setNewRange(key); setShowAllNew(false); }}
+                    style={{
+                      padding: '6px 14px',
+                      fontSize: 12,
+                      fontWeight: 800,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.04em',
+                      cursor: 'pointer',
+                      border: '1px solid var(--border)',
+                      borderRadius: 0,
+                      background: active ? '#3b82f6' : 'var(--surface-3)',
+                      color: active ? '#fff' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          {!newCollapsed && (
+            newTodayItems.length === 0 ? (
+              <div style={{ padding: '0 16px 20px', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600 }}>
+                {dateFilter
+                  ? t('Nothing was created on this day.')
+                  : newRange === 'today'
+                    ? t('Nothing new yet today.')
+                    : newRange === 'yesterday'
+                      ? t('Nothing was created yesterday.')
+                      : t('Nothing was created this week.')}
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', padding: '0 16px 16px' }}>
+                {(showAllNew ? newTodayItems : newTodayItems.slice(0, 8)).map(({ kind, item }) => {
+                  const isTask = kind === 'Task';
+                  const c = item as any;
+                  const ov = isTask
+                    ? (isOverdue(c.dueDate) && c.status !== 'Done')
+                    : (isOverdue(c.deadline) && c.status !== 'Closed');
+                  return (
+                    <div
+                      key={`${kind}-${item.id}`}
+                      onClick={() => isTask ? setSelectedTask(item as Task) : setSelectedCorr(item as Corresponding)}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 8px', borderTop: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                    >
+                      <span style={{ flexShrink: 0, width: 96, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: isTask ? '#16a34a' : '#3b82f6' }}>
+                        {isTask ? <CheckSquare className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
+                        {isTask ? 'Task' : 'Corr'}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {c.serialNumber && <span style={{ color: 'var(--text-muted)', fontWeight: 800, marginRight: 6 }}>#{c.serialNumber}</span>}
+                          {isTask ? c.taskName : c.subject}
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
+                          {isTask ? `Due ${c.dueDate || '—'}` : `From ${c.sentFrom || '—'}`}
+                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginLeft: 8 }}>⚠ Overdue</span>}
+                        </div>
+                      </div>
+                      <div style={{ flexShrink: 0 }}>
+                        <AssigneeChip id={c.assignedToId} name={c.assignedTo} />
+                      </div>
+                      <ArrowRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
+                    </div>
+                  );
+                })}
+                {newTodayItems.length > 8 && (
+                  <button
+                    className="btn btn-ghost btn-sm"
+                    style={{ marginTop: 12, alignSelf: 'center', fontWeight: 700 }}
+                    onClick={() => setShowAllNew(v => !v)}
+                  >
+                    {showAllNew ? t('Show less') : `Show all ${newTodayItems.length}`}
+                  </button>
+                )}
+              </div>
+            )
+          )}
+        </div>
+      )}
 
       {/* ── Due Soon Alerts Section ── */}
       {dueSoonItems.length > 0 && selectedCategory === null && (

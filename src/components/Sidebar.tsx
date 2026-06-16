@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import {
-  Inbox, CheckSquare, Archive,
+  CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
   Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban
 } from 'lucide-react';
@@ -95,12 +95,6 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       show: true,
     },
     {
-      id: 'manager-inbox',
-      label: 'Inbox',
-      icon: <Inbox className="w-4 h-4" />,
-      show: true,
-    },
-    {
       id: 'tasks',
       label: 'Tasks',
       icon: <CheckSquare className="w-4 h-4" />,
@@ -144,11 +138,16 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* Nav tabs */}
       <nav className="topnav-tabs">
-        {navItems.filter(i => i.show).map(item => (
+        {navItems.filter(i => i.show).map(item => {
+          // The merged Correspondences & Inbox tab stays active for either
+          // underlying view (notifications can still deep-link to manager-inbox).
+          const isActive = activeView === item.id
+            || (item.id === 'correspondences' && activeView === 'manager-inbox');
+          return (
           <button
             key={item.id}
             onClick={() => onNavigate(item.id)}
-            className={`nav-tab${activeView === item.id ? ' active' : ''}`}
+            className={`nav-tab${isActive ? ' active' : ''}`}
           >
             {item.icon}
             <span>{item.label}</span>
@@ -158,7 +157,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
               </span>
             )}
           </button>
-        ))}
+          );
+        })}
       </nav>
 
       {/* User + logout */}

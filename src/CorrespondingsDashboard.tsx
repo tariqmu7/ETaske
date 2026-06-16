@@ -9,7 +9,7 @@ import { db, auth } from './lib/firebase';
 import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Corresponding, CorrespondingStatus, Task,
+  AppUser, Corresponding, CorrespondingStatus, Task, TaskNote,
   DEPARTMENT_OPTIONS, PROJECT_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
@@ -17,7 +17,8 @@ import { getNextSerialNumber } from './lib/counters';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
-  Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink
+  Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
+  UserPlus, Send, MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
@@ -86,7 +87,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [isViewing, setIsViewing] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'All');
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'Unassigned');
 
   // Apply an incoming filter when navigated here from another view (e.g. Overview stat cards)
   useEffect(() => {
@@ -103,6 +104,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
   const [pendingOpenCorrId, setPendingOpenCorrId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  // Inline quick-assign drafts for unassigned cards, keyed by correspondence id
+  const [assignDraft, setAssignDraft] = useState<Record<string, { toId: string; comment: string }>>({});
+  const [assigningId, setAssigningId] = useState<string | null>(null);
+
+  const setDraft = (id: string, patch: Partial<{ toId: string; comment: string }>) =>
+    setAssignDraft(p => ({ ...p, [id]: { toId: '', comment: '', ...p[id], ...patch } }));
 
   const copyToClipboard = (path: string) => {
     navigator.clipboard.writeText(toUncPath(path));
@@ -181,6 +188,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     return visibleItems.filter(i => {
       if (search && !globalSearch(i, search)) return false;
       if (statusFilter === 'Open') { if (i.status === 'Closed') return false; }
+      else if (statusFilter === 'NeedsReview') { if (i.status !== 'Unread' && i.status !== 'Reviewing') return false; }
+      else if (statusFilter === 'Unassigned') { if (i.assignedToId || i.status === 'Closed') return false; }
       else if (statusFilter !== 'All' && i.status !== statusFilter) return false;
       if (deptFilter !== 'All' && i.department !== deptFilter) return false;
       if (dateFilter && i.dateReceived !== dateFilter) return false;
@@ -202,9 +211,23 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const stats = useMemo(() => ({
     total: visibleItems.length,
     unread: visibleItems.filter(i => i.status === 'Unread').length,
+    unassigned: visibleItems.filter(i => !i.assignedToId && i.status !== 'Closed').length,
+    needsReview: visibleItems.filter(i => i.status === 'Unread' || i.status === 'Reviewing').length,
     assigned: visibleItems.filter(i => i.status === 'Assigned').length,
     closed: visibleItems.filter(i => i.status === 'Closed').length,
   }), [visibleItems]);
+
+  // Managers/Admins get the review + team-workload affordances; everyone else
+  // sees the plain intake list.
+  const isManager = appUser.role === 'Admin' || appUser.role === 'Manager';
+
+  // Team members this manager can hand work to (mirrors the assignee dropdown).
+  const targetUsers = useMemo(() => {
+    return projectUsers.filter(u =>
+      u.status === 'Approved' &&
+      (u.id === user.uid || isAdmin || (u.department === appUser.department && u.teamId === appUser.teamId))
+    );
+  }, [projectUsers, isAdmin, appUser.department, appUser.teamId, user.uid]);
 
   const dynamicDepartments = useMemo(() => {
     return DEPARTMENT_OPTIONS;
@@ -426,6 +449,87 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     }
   };
 
+  // Inline quick-assign straight from an unassigned card: spins up a linked task,
+  // attaches the manager's comment as the first task note, marks the
+  // correspondence Assigned, and notifies the assignee — mirrors the modal flow.
+  const quickAssign = async (item: Corresponding) => {
+    const draft = assignDraft[item.id];
+    if (!draft?.toId) return;
+    const assignee = projectUsers.find(u => u.id === draft.toId);
+    if (!assignee) return;
+    setAssigningId(item.id);
+    try {
+      const comment = draft.comment.trim();
+      const taskSerial = await getNextSerialNumber('tasks');
+      const noteArr: TaskNote[] = comment ? [{
+        id: `${Date.now()}`,
+        text: comment,
+        isCompleted: false,
+        addedBy: appUser.displayName,
+        addedAt: new Date().toISOString(),
+      }] : [];
+
+      const taskRef = await addDoc(collection(db, 'tasks'), {
+        taskName: item.subject,
+        description: item.body,
+        priority: item.priority,
+        status: 'Pending',
+        category: item.category || 'Internal',
+        subCategory: item.subCategory || 'None',
+        department: item.department || 'None',
+        serialNumber: taskSerial,
+        assignedTo: assignee.displayName,
+        assignedToId: assignee.id,
+        assignedBy: appUser.displayName,
+        assignedById: user.uid,
+        dueDate: item.deadline || null,
+        correspondingId: item.id,
+        correspondingSubject: item.subject,
+        correspondingSerialNumber: item.serialNumber || '',
+        attachedFile: item.attachedFile || null,
+        attachedFileName: item.attachedFileName || null,
+        filePaths: item.filePaths?.length ? item.filePaths : [],
+        statusUpdate: 'Not Started',
+        notes: noteArr,
+        userId: user.uid,
+        teamId: appUser.teamId || 'NONE',
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+
+      await updateDoc(doc(db, 'correspondences', item.id), {
+        convertedToTaskId: taskRef.id,
+        assignedTo: assignee.displayName,
+        assignedToId: assignee.id,
+        status: 'Assigned',
+        assignedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        ...(comment ? { notes: comment } : {}),
+      });
+
+      if (assignee.id !== user.uid) {
+        await createNotification({
+          type: 'task_assigned',
+          title: 'New Task Assigned',
+          message: comment
+            ? `"${item.subject}" assigned to you by ${appUser.displayName}: ${comment}`
+            : `"${item.subject}" has been assigned to you by ${appUser.displayName}`,
+          forUserId: assignee.id,
+          read: false,
+          relatedId: taskRef.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers);
+      }
+
+      setAssignDraft(p => { const n = { ...p }; delete n[item.id]; return n; });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `correspondences/${item.id}`);
+      setError('Failed to assign.');
+    } finally {
+      setAssigningId(null);
+    }
+  };
+
   const confirmDelete = async () => {
     if (!deleteTarget) return;
     try {
@@ -440,73 +544,46 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   return (
     <div style={{ padding: '20px 0', minHeight: '60vh' }}>
       {/* Header */}
-      <div style={{ marginBottom: 32 }}>
+      <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
           Correspondences
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          Log incoming documents — managers will review and assign them as tasks.
+          {isManager
+            ? 'Log, review, and assign incoming documents as tasks — all in one place.'
+            : 'Log incoming documents — managers will review and assign them as tasks.'}
         </p>
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 28 }}>
+      {/* Segmented status filter (doubles as the stats row) */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total', value: stats.total, cls: 'stat-indigo' },
-          { label: 'Unread', value: stats.unread, cls: 'stat-amber' },
-          { label: 'Assigned', value: stats.assigned, cls: 'stat-sky' },
-          { label: 'Closed', value: stats.closed, cls: 'stat-green' },
-        ].map(s => (
-          <div key={s.label} className={`card ${s.cls}`} style={{ padding: '20px 24px' }}>
-            <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Toolbar */}
-      <div className="filter-bar">
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
-          <input
-            className="input"
-            style={{ paddingLeft: 40 }}
-            placeholder="Search subject or sender…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input 
-            type="date" 
-            className="input" 
-            style={{ width: 'auto' }} 
-            value={dateFilter} 
-            onChange={e => setDateFilter(e.target.value)}
-            title="Filter by day"
-          />
-          {dateFilter && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-              Clear Date
+          { key: 'Unassigned',  label: 'Unassigned',   value: stats.unassigned,  cls: 'stat-red' },
+          { key: 'All',         label: 'Total',        value: stats.total,       cls: 'stat-indigo' },
+          { key: 'Assigned',    label: 'Assigned',     value: stats.assigned,    cls: 'stat-sky' },
+          { key: 'Closed',      label: 'Closed',       value: stats.closed,      cls: 'stat-green' },
+        ].map(s => {
+          const active = statusFilter === s.key;
+          return (
+            <button
+              key={s.key}
+              type="button"
+              onClick={() => setStatusFilter(s.key)}
+              className={`card ${s.cls} card-interactive`}
+              aria-pressed={active}
+              style={{
+                padding: '20px 24px', textAlign: 'left', cursor: 'pointer',
+                fontFamily: 'inherit',
+                borderColor: active ? 'var(--accent)' : undefined,
+                boxShadow: active ? '0 0 0 1px var(--accent) inset' : undefined,
+                opacity: active || statusFilter === 'All' ? 1 : 0.7,
+              }}
+            >
+              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
+              <div style={{ fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
             </button>
-          )}
-
-          <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-            <option value="All">{t('All Statuses')}</option>
-            <option value="Open">{t('Open')}</option>
-            {['Unread', 'Reviewing', 'Assigned', 'Closed'].map(s => <option key={s}>{s}</option>)}
-          </select>
-
-          <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-            <option value="All">{t('All Departments')}</option>
-            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d}>{d}</option>)}
-          </select>
-        </div>
-
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus className="w-4 h-4" /> New Correspondence
-        </button>
+          );
+        })}
       </div>
 
       {error && (
@@ -527,105 +604,143 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         }))}
       />
 
-      {/* Items grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: 16 }}>
+      {/* Unified layout: list (left) + team workload panel (right, managers only) */}
+      <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: isManager ? '1fr 300px' : '1fr', gap: 24, alignItems: 'start' }}>
+      <div>
+      {/* Toolbar */}
+      <div className="filter-bar">
+        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+          <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
+          <input
+            className="input"
+            style={{ paddingLeft: 40 }}
+            placeholder="Search subject or sender…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+        </div>
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            type="date"
+            className="input"
+            style={{ width: 'auto' }}
+            value={dateFilter}
+            onChange={e => setDateFilter(e.target.value)}
+            title="Filter by day"
+          />
+          {dateFilter && (
+            <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
+              Clear Date
+            </button>
+          )}
+
+          <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+            <option value="All">{t('All Departments')}</option>
+            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
+
+        <button className="btn btn-primary" onClick={() => openModal()}>
+          <Plus className="w-4 h-4" /> New Correspondence
+        </button>
+      </div>
+
+      {/* Items list */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <AnimatePresence>
-          {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(item => (
+          {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(item => {
+            // Unassigned cards are rendered "full" (whole body + links + an inline
+            // quick-assign panel) and are NOT clickable — everything is on the card.
+            const isUnassignedCard = !item.assignedToId && item.status !== 'Closed';
+            const draft = assignDraft[item.id] || { toId: '', comment: '' };
+            return (
             <motion.div
               layout
               key={item.id}
-              initial={{ opacity: 0, y: 20 }}
+              initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-               className="card card-interactive"
-               style={{ 
-                 padding: '24px', 
-                 cursor: 'pointer',
-                 borderLeft: isDueSoon(item.deadline) && item.status !== 'Closed' 
-                   ? '4px solid #f97316' 
+              exit={{ opacity: 0, scale: 0.98 }}
+               className={isUnassignedCard ? 'card' : 'card card-interactive'}
+               style={{
+                 padding: '14px 18px',
+                 cursor: isUnassignedCard ? 'default' : 'pointer',
+                 display: 'flex',
+                 alignItems: isUnassignedCard ? 'flex-start' : 'center',
+                 gap: 16,
+                 borderLeft: isDueSoon(item.deadline) && item.status !== 'Closed'
+                   ? '4px solid #f97316'
                    : `4px solid ${(() => {
                      const u = projectUsers.find(pu => pu.id === item.assignedToId);
                      return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
                    })()}`,
                  backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? '#fffcf9' : 'var(--surface)'
                }}
-              onClick={() => setSelectedCorrForDetails(item)}
+              onClick={isUnassignedCard ? undefined : () => setSelectedCorrForDetails(item)}
             >
-              {/* Top row: ID + title + actions */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, marginRight: 8 }}>
+              {/* Main column */}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Title row: serial + subject + badges */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                   {item.serialNumber && (
-                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', display: 'block', marginBottom: 2 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', flexShrink: 0 }}>
                       #{item.serialNumber}
                     </span>
                   )}
-                  <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4 }}>{item.subject}</h3>
+                  <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{item.subject}</h3>
+                  <span className={statusBadgeClass(item.status)}>{item.status}</span>
+                  <span className={priorityBadgeClass(item.priority)}>{item.priority}</span>
+                  {item.category && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
+                      color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
+                    }}>{item.category}</span>
+                  )}
+                  {item.actions && item.actions !== 'None' && (
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
+                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
+                      textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
+                      border: '1px solid #fecaca'
+                    }}>{item.actions}</span>
+                  )}
+                  {!item.assignedToId && item.status !== 'Closed' && (
+                    <span className="badge" style={{ background: '#f43f5e', color: '#fff' }}>{t('UNASSIGNED')}</span>
+                  )}
+                  {isOverdue(item.deadline) && item.status !== 'Closed' && (
+                    <span className="badge badge-urgent">{t('OVERDUE')}</span>
+                  )}
+                  {isDueSoon(item.deadline) && item.status !== 'Closed' && (
+                    <span className="badge" style={{ background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>
+                  )}
                 </div>
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  <button
-                    className="btn btn-ghost btn-icon btn-sm"
-                    onClick={e => { e.stopPropagation(); openModal(item, false); }}
-                    title="Edit"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    className="btn btn-danger btn-icon btn-sm"
-                    onClick={e => { e.stopPropagation(); setDeleteTarget(item); }}
-                    title="Delete"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
 
-              {/* Tags row — secondary, below title */}
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                <span className={statusBadgeClass(item.status)}>{item.status}</span>
-                <span className={priorityBadgeClass(item.priority)}>{item.priority}</span>
-                {item.category && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                    borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                    textTransform: 'uppercase',
-                    background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
-                    color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
-                  }}>{item.category}</span>
+                {/* Body — full on unassigned cards, one-line snippet elsewhere */}
+                {item.body && (
+                  <p style={isUnassignedCard
+                    ? { color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 8px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }
+                    : { color: 'var(--text-muted)', fontSize: 13, margin: '0 0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.body}</p>
                 )}
-                {item.actions && item.actions !== 'None' && (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                    borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                    textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
-                    border: '1px solid #fecaca'
-                  }}>{item.actions}</span>
-                )}
-                {isOverdue(item.deadline) && item.status !== 'Closed' && (
-                  <span className="badge badge-urgent">{t('OVERDUE')}</span>
-                )}
-                {isDueSoon(item.deadline) && item.status !== 'Closed' && (
-                  <span className="badge" style={{ background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>
-                )}
-              </div>
-              <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 14, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
 
-              {/* Meta */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                  <Building2 className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                  {item.department}{item.subCategory ? ` › ${item.subCategory}` : ''}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--text-secondary)' }}>
-                  <MailOpen className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                  {t('From:')} {item.sentFrom}
-                </div>
-                {item.deadline && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#fbbf24' }}>
-                    <Calendar className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                    Deadline: {item.deadline}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', marginTop: 12, alignItems: 'center' }}>
+                {/* Meta line */}
+                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <Building2 className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                    {item.department}{item.subCategory ? ` › ${item.subCategory}` : ''}
+                  </span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <MailOpen className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                    {t('From:')} {item.sentFrom}
+                  </span>
+                  {item.deadline && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fbbf24' }}>
+                      <Calendar className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                      {item.deadline}
+                    </span>
+                  )}
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     {(() => {
                       const u = projectUsers.find(pu => pu.id === item.userId);
@@ -635,7 +750,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
                       );
                     })()}
-                    Logged by {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
+                    {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
                   </span>
                   {item.assignedTo && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -647,23 +762,130 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
                         );
                       })()}
-                      Assigned to: {item.assignedTo}
+                      → {item.assignedTo}
                     </span>
                   )}
-                  <button 
-                    className="btn btn-ghost btn-sm" 
-                    style={{ marginLeft: 'auto', padding: '2px 8px', height: 'auto', minHeight: 'auto', fontSize: 10, fontWeight: 700 }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedCorrForDetails(item);
-                    }}
-                  >
-                    FULL DETAILS
-                  </button>
                 </div>
+
+                {/* ── Full info shown inline on unassigned cards ── */}
+                {isUnassignedCard && (
+                  <>
+                    {/* Shared folders / links — fully expanded, no need to open the card */}
+                    {item.filePaths && item.filePaths.length > 0 && (
+                      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <ExternalLink className="w-3.5 h-3.5" /> {t('Shared Folders / Links')}
+                        </div>
+                        {item.filePaths.map((path, idx) => {
+                          const friendlyName = path.split(/[/\\]/).filter(Boolean).pop() || path;
+                          const isUrl = path.startsWith('http://') || path.startsWith('https://');
+                          return (
+                            <div key={idx} style={{ padding: '8px 12px', background: 'var(--surface-3)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <span
+                                  onClick={() => openOrCopyPath(path)}
+                                  title={isUrl ? path : `Click to copy path: ${path}`}
+                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                                >{friendlyName}</span>
+                                {!isUrl && (
+                                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{path}</span>
+                                )}
+                              </div>
+                              <button
+                                onClick={() => openOrCopyPath(path)}
+                                title="Open (web link) or copy this path"
+                                className="btn btn-ghost btn-sm"
+                                style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto', flexShrink: 0 }}
+                              >
+                                {copiedPath === path ? <Check className="w-3.5 h-3.5 text-green" /> : <ExternalLink className="w-3.5 h-3.5" />}
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* Attachment link */}
+                    {item.attachedFile && (
+                      <a
+                        href={item.attachedFile}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--blue-50)', border: '1px solid var(--blue-200)', color: 'var(--blue-400)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}
+                      >
+                        <Paperclip className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.attachedFileName || 'View attachment'}</span>
+                        <ExternalLink className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                      </a>
+                    )}
+
+                    {/* Quick assign — pick an employee, add a comment, hand it off */}
+                    {isManager && (
+                      <div style={{ marginTop: 14, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <UserPlus className="w-3.5 h-3.5" /> {t('Quick Assign')}
+                        </div>
+                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                          <select
+                            className="input"
+                            style={{ flex: '1 1 180px', minWidth: 160 }}
+                            value={draft.toId}
+                            onClick={e => e.stopPropagation()}
+                            onChange={e => setDraft(item.id, { toId: e.target.value })}
+                          >
+                            <option value="">— {t('Select employee')} —</option>
+                            {targetUsers.map(u => (
+                              <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                            ))}
+                          </select>
+                          <div style={{ position: 'relative', flex: '2 1 220px', minWidth: 180 }}>
+                            <MessageSquare style={{ position: 'absolute', left: 10, top: 12, width: 14, height: 14, color: 'var(--text-muted)' }} />
+                            <textarea
+                              className="input"
+                              style={{ paddingLeft: 32, minHeight: 38, resize: 'vertical' }}
+                              rows={1}
+                              placeholder={t('Add a comment for them…')}
+                              value={draft.comment}
+                              onChange={e => setDraft(item.id, { comment: e.target.value })}
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-primary"
+                            disabled={!draft.toId || assigningId === item.id}
+                            onClick={() => quickAssign(item)}
+                            style={{ gap: 6, flexShrink: 0 }}
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            {assigningId === item.id ? t('Assigning…') : t('Assign')}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Action buttons */}
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button
+                  className="btn btn-ghost btn-icon btn-sm"
+                  onClick={e => { e.stopPropagation(); openModal(item, false); }}
+                  title="Edit"
+                >
+                  <Edit2 className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  className="btn btn-danger btn-icon btn-sm"
+                  onClick={e => { e.stopPropagation(); setDeleteTarget(item); }}
+                  title="Delete"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </AnimatePresence>
       </div>
 
@@ -707,6 +929,78 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <p className="empty-state-sub">{t('No items match your filters')}<br />Use the button above to add a new correspondence.</p>
         </div>
       )}
+      </div>{/* end left column */}
+
+      {/* Right: team workload panel (managers/admins only) */}
+      {isManager && (
+        <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
+              Team Workload
+            </div>
+            {targetUsers.length === 0 ? (
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No team members</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                {[...targetUsers].sort((a, b) => {
+                  const aActive = tasks.filter(t => t.assignedToId === a.id && (t.status === 'In Progress' || t.status === 'Pending')).length;
+                  const bActive = tasks.filter(t => t.assignedToId === b.id && (t.status === 'In Progress' || t.status === 'Pending')).length;
+                  if (bActive !== aActive) return bActive - aActive;
+                  const aDone = tasks.filter(t => t.assignedToId === a.id && (t.status === 'Done' || t.status === 'Archived')).length;
+                  const bDone = tasks.filter(t => t.assignedToId === b.id && (t.status === 'Done' || t.status === 'Archived')).length;
+                  return bDone - aDone;
+                }).slice(0, 12).map(emp => {
+                  const activeTasks = tasks.filter(t => t.assignedToId === emp.id && (t.status === 'In Progress' || t.status === 'Pending'));
+                  const inProgress = activeTasks.length;
+                  const done = tasks.filter(t => t.assignedToId === emp.id && (t.status === 'Done' || t.status === 'Archived')).length;
+                  const total = inProgress + done;
+                  const donePercent = total > 0 ? Math.round((done / total) * 100) : 0;
+                  const oldestActive = activeTasks.reduce<Date | null>((oldest, t) => {
+                    if (!t.createdAt) return oldest;
+                    const d = t.createdAt.toDate();
+                    return !oldest || d < oldest ? d : oldest;
+                  }, null);
+                  return (
+                    <div key={emp.id}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        {emp.photoURL
+                          ? <img src={emp.photoURL} referrerPolicy="no-referrer" className="avatar" style={{ width: 26, height: 26, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                          : <div style={{ width: 26, height: 26, borderRadius: 0, background: emp.userColor || 'linear-gradient(135deg,#6366f1,#818cf8)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+                              {emp.displayName?.[0]?.toUpperCase()}
+                            </div>
+                        }
+                        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.displayName}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
+                        <div style={{ flex: 1, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', padding: '5px 8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: inProgress > 0 ? '#fbbf24' : 'var(--text-muted)', lineHeight: 1 }}>{inProgress}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Active</div>
+                        </div>
+                        <div style={{ flex: 1, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 8px', textAlign: 'center' }}>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: done > 0 ? '#4ade80' : 'var(--text-muted)', lineHeight: 1 }}>{done}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Done</div>
+                        </div>
+                      </div>
+                      {total > 0 && (
+                        <div style={{ height: 4, background: 'var(--surface-2)', borderRadius: 2, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${donePercent}%`, background: 'linear-gradient(90deg,#22c55e,#4ade80)', borderRadius: 2, transition: 'width 0.4s ease' }} />
+                        </div>
+                      )}
+                      {oldestActive && (
+                        <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                          <span style={{ opacity: 0.6 }}>Since</span>
+                          <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{oldestActive.toLocaleDateString('en-GB')}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      </div>{/* end inbox-grid */}
 
       {/* Modal */}
       <AnimatePresence>
