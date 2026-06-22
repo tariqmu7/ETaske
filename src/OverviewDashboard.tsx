@@ -1115,22 +1115,22 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No description provided.")}</span>}
                 </p>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24, padding: '16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
-                  <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16, marginBottom: 24, padding: '16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
+                  <div style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned To")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedToId);
                         return u?.photoURL ? (
-                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
+                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover', flexShrink: 0 }} alt="" />
                         ) : (
-                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
+                          <span style={{ width: 10, height: 10, borderRadius: 0, flexShrink: 0, background: u?.userColor || getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
                         );
                       })()}
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedTask.assignedTo || 'Unassigned'}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedTask.assignedTo || 'Unassigned'}>{selectedTask.assignedTo || 'Unassigned'}</span>
                     </div>
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned By")}</span>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {(() => {
@@ -1144,12 +1144,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       {selectedTask.assignedBy || '—'}
                     </div>
                   </div>
-                  <div>
+                  <div style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Due Date")}</span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
-                    <div>
+                    <div style={{ minWidth: 0 }}>
                       <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Linked Corresponding")}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}>
                         <Link2 className="w-4 h-4 flex-shrink-0" /> 
