@@ -123,7 +123,6 @@ export interface Task {
   attachedFileName?: string;
   serialNumber?: string;
   filePaths?: string[];         // New: list of local/share folder paths
-  sharedLinks?: string[];       // New: list of shared folder / web links (URLs)
   // Meta
   userId: string;
   teamId: string;

@@ -164,6 +164,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           correspondingSerialNumber: selectedCorr.serialNumber,
           attachedFile: selectedCorr.attachedFile || null,
           attachedFileName: selectedCorr.attachedFileName || null,
+          filePaths: selectedCorr.filePaths || [],
           statusUpdate: 'Not Started',
           notes: [],
           userId: user.uid,
