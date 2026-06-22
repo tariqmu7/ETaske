@@ -98,6 +98,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     assignedTo: appUser.displayName,
     assignedToId: user.uid,
     filePaths: [] as string[],
+    sharedLinks: [] as string[],
   });
 
   const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
@@ -300,6 +301,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         assignedTo: editingTask.assignedTo,
         assignedToId: editingTask.assignedToId,
         filePaths: editingTask.filePaths || [],
+        sharedLinks: editingTask.sharedLinks || [],
         updatedAt: serverTimestamp(),
       });
 
@@ -543,6 +545,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         teamId: appUser.teamId || 'NONE',
         dueDate: newTask.dueDate || null,
         filePaths: newTask.filePaths || [],
+        sharedLinks: newTask.sharedLinks || [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -558,6 +561,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         assignedTo: appUser.displayName,
         assignedToId: user.uid,
         filePaths: [],
+        sharedLinks: [],
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
@@ -1047,6 +1051,43 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                           </button>
                         </div>
                       </div>
+                      <div style={{ marginBottom: 20 }}>
+                        <label className="input-label">{t('Shared Folders / Links')}</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                          {newTask.sharedLinks.map((link, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                className="input"
+                                placeholder={`https://... (SharePoint, Drive, web link)`}
+                                value={link}
+                                onChange={e => {
+                                  const newLinks = [...newTask.sharedLinks];
+                                  newLinks[idx] = e.target.value;
+                                  setNewTask({ ...newTask, sharedLinks: newLinks });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-icon"
+                                onClick={() => {
+                                  const newLinks = newTask.sharedLinks.filter((_, i) => i !== idx);
+                                  setNewTask({ ...newTask, sharedLinks: newLinks });
+                                }}
+                              >
+                                <X style={{ width: 14, height: 14 }} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ width: 'fit-content', gap: 6 }}
+                            onClick={() => setNewTask({ ...newTask, sharedLinks: [...newTask.sharedLinks, ''] })}
+                          >
+                            <Plus style={{ width: 14, height: 14 }} /> {t('Add Link')}
+                          </button>
+                        </div>
+                      </div>
                     </motion.div>
                   )}
                 </AnimatePresence>
@@ -1401,6 +1442,36 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                           >
                                             Open / Copy
                                           </button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                {/* Shared Folders / Links Display */}
+                                {isExpanded && task.sharedLinks && task.sharedLinks.length > 0 && (
+                                  <div style={{ marginTop: 24 }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Shared Folders / Links')}</div>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                      {task.sharedLinks.map((link, idx) => (
+                                        <div key={idx} style={{
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: 12,
+                                          padding: '8px 12px',
+                                          background: 'var(--surface-2)',
+                                          border: '1px solid var(--border)',
+                                          borderRadius: 0
+                                        }}>
+                                          <ExternalLink className="w-4 h-4 text-muted" />
+                                          <a
+                                            href={link}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            onClick={(e) => e.stopPropagation()}
+                                            title={link}
+                                            style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline' }}
+                                          >{link}</a>
                                         </div>
                                       ))}
                                     </div>
@@ -1944,6 +2015,43 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                             onClick={() => setEditingTask({ ...editingTask, filePaths: [...(editingTask.filePaths || []), ''] })}
                           >
                             <Plus style={{ width: 14, height: 14 }} /> Add Path
+                          </button>
+                        </div>
+                      </div>
+                      <div style={{ marginBottom: 20 }}>
+                        <label className="input-label">{t('Shared Folders / Links')}</label>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 8 }}>
+                          {(editingTask.sharedLinks || []).map((link, idx) => (
+                            <div key={idx} style={{ display: 'flex', gap: 8 }}>
+                              <input
+                                className="input"
+                                placeholder={`https://... (SharePoint, Drive, web link)`}
+                                value={link}
+                                onChange={e => {
+                                  const newLinks = [...(editingTask.sharedLinks || [])];
+                                  newLinks[idx] = e.target.value;
+                                  setEditingTask({ ...editingTask, sharedLinks: newLinks });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                className="btn btn-danger btn-icon"
+                                onClick={() => {
+                                  const newLinks = (editingTask.sharedLinks || []).filter((_, i) => i !== idx);
+                                  setEditingTask({ ...editingTask, sharedLinks: newLinks });
+                                }}
+                              >
+                                <X style={{ width: 14, height: 14 }} />
+                              </button>
+                            </div>
+                          ))}
+                          <button
+                            type="button"
+                            className="btn btn-ghost btn-sm"
+                            style={{ width: 'fit-content', gap: 6 }}
+                            onClick={() => setEditingTask({ ...editingTask, sharedLinks: [...(editingTask.sharedLinks || []), ''] })}
+                          >
+                            <Plus style={{ width: 14, height: 14 }} /> {t('Add Link')}
                           </button>
                         </div>
                       </div>
