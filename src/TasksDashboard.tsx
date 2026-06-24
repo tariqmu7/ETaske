@@ -18,7 +18,8 @@ import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
-  TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink
+  TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
+  Users, ArrowLeft
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
@@ -181,7 +182,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       else if (statusFilter === 'Overdue') { if (t.status === 'Done' || !isOverdue(t.dueDate)) return false; }
       else if (statusFilter !== 'All' && t.status !== statusFilter) return false;
       if (categoryFilter !== 'All' && t.category !== categoryFilter) return false;
-      if (isManagerOrAdmin && employeeFilter !== 'All' && t.assignedTo !== employeeFilter) return false;
+      if (employeeFilter !== 'All' && t.assignedTo !== employeeFilter) return false;
       if (subCategoryFilter !== 'All' && t.subCategory !== subCategoryFilter) return false;
       if (deptFilter !== 'All' && t.department !== deptFilter) return false;
       if (dateFilter) {
@@ -217,13 +218,39 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
   const groupedTasks = useMemo(() => {
     const groups: Record<string, Task[]> = {};
-    paginatedTasks.forEach(t => {
-      const cat = t.category || 'Uncategorized';
-      if (!groups[cat]) groups[cat] = [];
-      groups[cat].push(t);
-    });
+    // When drilled into a single employee, group by status (Pending → In
+    // Progress → Done); otherwise group by category. Tasks already arrive
+    // newest-first (query orders by createdAt desc), so each group stays sorted.
+    if (view === 'all' && employeeFilter !== 'All') {
+      (['Pending', 'In Progress', 'Done'] as TaskStatus[]).forEach(s => {
+        const list = paginatedTasks.filter(t => t.status === s);
+        if (list.length) groups[s] = list;
+      });
+    } else {
+      paginatedTasks.forEach(t => {
+        const cat = t.category || 'Uncategorized';
+        if (!groups[cat]) groups[cat] = [];
+        groups[cat].push(t);
+      });
+    }
     return groups;
-  }, [paginatedTasks]);
+  }, [paginatedTasks, view, employeeFilter]);
+
+  // When viewing "All Tasks" with no specific employee picked, the task list is
+  // replaced by a grid of employee cards. Group the (otherwise-filtered) tasks
+  // by assignee so each card can show that person's task counts. Clicking a card
+  // sets `employeeFilter`, which falls through to the normal filtered list.
+  const showEmployeeGrid = view === 'all' && employeeFilter === 'All';
+
+  const employeeGroups = useMemo(() => {
+    const map = new Map<string, { name: string; id?: string; tasks: Task[] }>();
+    filtered.forEach(tsk => {
+      const key = tsk.assignedToId || tsk.assignedTo || 'Unassigned';
+      if (!map.has(key)) map.set(key, { name: tsk.assignedTo || 'Unassigned', id: tsk.assignedToId, tasks: [] });
+      map.get(key)!.tasks.push(tsk);
+    });
+    return Array.from(map.values()).sort((a, b) => b.tasks.length - a.tasks.length);
+  }, [filtered]);
 
   const stats = useMemo(() => ({
     pending: tasks.filter(t => t.status === 'Pending' && (view === 'all' || t.assignedTo === appUser.displayName)).length,
@@ -1075,6 +1102,80 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         )}
       </AnimatePresence>
 
+      {showEmployeeGrid ? (
+        employeeGroups.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-state-icon">
+              <Users style={{ width: 28, height: 28 }} />
+            </div>
+            <p className="empty-state-title">{t('No tasks found')}</p>
+            <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
+            <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
+            {employeeGroups.map(emp => {
+              const u = emp.id ? projectUsers.find(pu => pu.id === emp.id) : undefined;
+              const color = u?.userColor || getUserColor(emp.id || emp.name);
+              const pending = emp.tasks.filter(tk => tk.status === 'Pending').length;
+              const inProgress = emp.tasks.filter(tk => tk.status === 'In Progress').length;
+              const done = emp.tasks.filter(tk => tk.status === 'Done').length;
+              const overdue = emp.tasks.filter(tk => tk.status !== 'Done' && isOverdue(tk.dueDate)).length;
+              return (
+                <button
+                  key={emp.id || emp.name}
+                  onClick={() => setEmployeeFilter(emp.name)}
+                  className="card"
+                  style={{
+                    textAlign: 'left', cursor: 'pointer', padding: 20, borderLeft: `4px solid ${color}`,
+                    display: 'flex', flexDirection: 'column', gap: 16, fontFamily: 'inherit',
+                    background: 'var(--surface)', transition: 'transform 0.15s, box-shadow 0.15s',
+                  }}
+                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(15,23,42,0.1)'; }}
+                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    {u?.photoURL ? (
+                      <img src={u.photoURL} className="avatar" style={{ width: 44, height: 44, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                    ) : (
+                      <span style={{ width: 44, height: 44, flexShrink: 0, background: color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800 }}>
+                        {emp.name.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</div>
+                      {u?.role && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.role}</div>}
+                    </div>
+                    <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', flexShrink: 0 }} />
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+                    <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{emp.tasks.length}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{emp.tasks.length === 1 ? 'task' : 'tasks'}</span>
+                    {overdue > 0 && <span className="badge badge-urgent" style={{ marginLeft: 'auto' }}>{overdue} {t('OVERDUE')}</span>}
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700 }}>
+                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--surface-2)', color: 'var(--text-muted)' }}>{pending} Pending</span>
+                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--blue-50)', color: 'var(--blue-400)' }}>{inProgress} Active</span>
+                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--green-100)', color: 'var(--green-400)' }}>{done} Done</span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        )
+      ) : (
+      <>
+      {view === 'all' && employeeFilter !== 'All' && (
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={() => setEmployeeFilter('All')}
+          style={{ marginBottom: 16 }}
+        >
+          <ArrowLeft className="w-4 h-4" /> {t('All Employees')}
+        </button>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {(Object.entries(groupedTasks) as [string, Task[]][]).map(([cat, catTasks]) => {
           return (
@@ -1660,6 +1761,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
           <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
         </div>
+      )}
+      </>
       )}
 
       {/* ── Edit Task slide-over ── */}
