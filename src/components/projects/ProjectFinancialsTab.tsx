@@ -7,8 +7,10 @@ import { db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
 import {
   Project, ProjectFinancialRecord, ProjectFinancialType, PROJECT_FINANCIAL_TYPE_OPTIONS,
+  ProjectContractItem, CURRENCY_OPTIONS,
 } from '../../types';
-import { Plus, X, Edit2, Trash2, DollarSign } from 'lucide-react';
+import { parseAmount, formatMoney } from '../../utils';
+import { Plus, X, Edit2, Trash2, DollarSign, Link2 } from 'lucide-react';
 
 interface Props { project: Project; user: User; }
 
@@ -20,6 +22,7 @@ const emptyForm = () => ({
   date: '',
   status: '',
   notes: '',
+  relatedContractId: '',
 });
 
 function typeBadge(t: ProjectFinancialType) {
@@ -32,14 +35,9 @@ function typeBadge(t: ProjectFinancialType) {
   }
 }
 
-const fmtAmount = (n?: number | string) => {
-  const v = typeof n === 'string' ? parseFloat(n.replace(/[^0-9.\-]/g, '')) : n;
-  if (v == null || isNaN(v as number)) return String(n ?? '');
-  return (v as number).toLocaleString('en-US');
-};
-
 export default function ProjectFinancialsTab({ project, user }: Props) {
   const [records, setRecords] = useState<ProjectFinancialRecord[]>([]);
+  const [contracts, setContracts] = useState<ProjectContractItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectFinancialRecord | null>(null);
   const [form, setForm] = useState(emptyForm());
@@ -55,15 +53,36 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
     return () => unsub();
   }, [project.id]);
 
+  // Contracts power the optional "linked contract" picker on each record.
+  useEffect(() => {
+    const q = query(collection(db, 'projectContracts'), where('projectId', '==', project.id));
+    const unsub = onSnapshot(q, snap => {
+      setContracts(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectContractItem)));
+    }, err => console.error('projectContracts listener:', err));
+    return () => unsub();
+  }, [project.id]);
+
+  const contractLabel = (id?: string) => {
+    if (!id) return '';
+    const c = contracts.find(x => x.id === id);
+    if (!c) return '';
+    return c.contractNumber || c.subject || c.companyName || 'Contract';
+  };
+
+  // Per-currency rollup. Invoice and income are kept separate so that logging
+  // an invoice and then its received income doesn't double-count revenue:
+  // Net = income − expense, while Invoiced and Budget are shown for context.
   const totals = useMemo(() => {
-    const byCur: Record<string, { income: number; expense: number }> = {};
+    const byCur: Record<string, { income: number; expense: number; invoiced: number; budget: number }> = {};
     records.forEach(r => {
       const cur = r.currency || '—';
-      const v = typeof r.amount === 'string' ? parseFloat(r.amount.replace(/[^0-9.\-]/g, '')) : (r.amount || 0);
-      if (isNaN(v as number)) return;
-      byCur[cur] = byCur[cur] || { income: 0, expense: 0 };
-      if (r.type === 'income' || r.type === 'invoice') byCur[cur].income += v as number;
-      if (r.type === 'expense') byCur[cur].expense += v as number;
+      const v = parseAmount(r.amount);
+      if (v == null) return;
+      byCur[cur] = byCur[cur] || { income: 0, expense: 0, invoiced: 0, budget: 0 };
+      if (r.type === 'income') byCur[cur].income += v;
+      else if (r.type === 'expense') byCur[cur].expense += v;
+      else if (r.type === 'invoice') byCur[cur].invoiced += v;
+      else if (r.type === 'budget') byCur[cur].budget += v;
     });
     return byCur;
   }, [records]);
@@ -71,7 +90,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setIsOpen(true); };
   const openEdit = (r: ProjectFinancialRecord) => {
     setEditing(r);
-    setForm({ type: r.type, title: r.title || '', amount: String(r.amount ?? ''), currency: r.currency || 'EGP', date: r.date || '', status: r.status || '', notes: r.notes || '' });
+    setForm({ type: r.type, title: r.title || '', amount: String(r.amount ?? ''), currency: r.currency || 'EGP', date: r.date || '', status: r.status || '', notes: r.notes || '', relatedContractId: r.relatedContractId || '' });
     setIsOpen(true);
   };
 
@@ -103,15 +122,34 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
     <div>
       {/* Totals */}
       {Object.keys(totals).length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12, marginBottom: 18 }}>
-          {Object.entries(totals).map(([cur, t]) => (
-            <div key={cur} className="card stat-green" style={{ padding: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{cur}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginTop: 4 }}>In: <b style={{ color: '#16a34a' }}>{t.income.toLocaleString('en-US')}</b></div>
-              <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Out: <b style={{ color: '#dc2626' }}>{t.expense.toLocaleString('en-US')}</b></div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginTop: 4 }}>Net: {(t.income - t.expense).toLocaleString('en-US')}</div>
-            </div>
-          ))}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginBottom: 18 }}>
+          {Object.entries(totals).map(([cur, t]) => {
+            const net = t.income - t.expense;
+            return (
+              <div key={cur} className="card stat-green" style={{ padding: 14 }}>
+                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{cur}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
+                  <span>Income</span><b style={{ color: '#16a34a' }}>{t.income.toLocaleString('en-US')}</b>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)' }}>
+                  <span>Expense</span><b style={{ color: '#dc2626' }}>{t.expense.toLocaleString('en-US')}</b>
+                </div>
+                {t.invoiced > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                    <span>Invoiced</span><b style={{ color: 'var(--text-secondary)' }}>{t.invoiced.toLocaleString('en-US')}</b>
+                  </div>
+                )}
+                {t.budget > 0 && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text-muted)' }}>
+                    <span>Budget</span><b style={{ color: 'var(--text-secondary)' }}>{t.budget.toLocaleString('en-US')}</b>
+                  </div>
+                )}
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
+                  <span>Net</span><span style={{ color: net < 0 ? '#dc2626' : '#16a34a' }}>{net.toLocaleString('en-US')}</span>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -140,8 +178,16 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
               {records.map(r => (
                 <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 14px' }}><span className={typeBadge(r.type)} style={{ textTransform: 'capitalize' }}>{r.type}</span></td>
-                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>{r.title}{r.notes && <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{r.notes}</div>}</td>
-                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{fmtAmount(r.amount)} {r.currency || ''}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>
+                    {r.title}
+                    {r.relatedContractId && contractLabel(r.relatedContractId) && (
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginLeft: 8 }}>
+                        <Link2 className="w-3 h-3" /> {contractLabel(r.relatedContractId)}
+                      </div>
+                    )}
+                    {r.notes && <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{r.notes}</div>}
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{formatMoney(r.amount, r.currency)}</td>
                   <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.date || '—'}</td>
                   <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{r.status || '—'}</td>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
@@ -157,7 +203,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
 
       {isOpen && (
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
-          <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 480, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? 'Edit record' : 'Add record'}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
@@ -167,17 +213,29 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
                 <L label="Type"><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectFinancialType })} style={inp}>{PROJECT_FINANCIAL_TYPE_OPTIONS.map(t => <option key={t} value={t} style={{ textTransform: 'capitalize' }}>{t}</option>)}</select></L>
                 <L label="Date"><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inp} /></L>
               </div>
-              <L label="Title *"><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={inp} /></L>
+              <L label="Title *"><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={inp} placeholder="e.g. Milestone 1 invoice" /></L>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Amount"><input value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} style={inp} placeholder="0" /></L>
-                <L label="Currency"><input value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp} /></L>
+                <L label="Amount"><input value={form.amount} inputMode="decimal" onChange={e => setForm({ ...form, amount: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label="Currency">
+                  <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
+                    {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </L>
               </div>
+              {contracts.length > 0 && (
+                <L label="Linked contract">
+                  <select value={form.relatedContractId} onChange={e => setForm({ ...form, relatedContractId: e.target.value })} style={inp}>
+                    <option value="">— None —</option>
+                    {contracts.map(c => <option key={c.id} value={c.id}>{c.contractNumber || c.subject || c.companyName || 'Contract'}</option>)}
+                  </select>
+                </L>
+              )}
               <L label="Status"><input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inp} placeholder="Paid / Pending…" /></L>
               <L label="Notes"><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inp} rows={2} /></L>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
               <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-primary" disabled={!form.title.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
             </div>
           </div>
         </div>
@@ -185,7 +243,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
 
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 380, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>Delete this record?</h2>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>

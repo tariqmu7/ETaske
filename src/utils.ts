@@ -108,6 +108,25 @@ export const timeAgo = (when?: { toDate?: () => Date } | Date | number | null): 
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 };
 
+// Parse a money value that may arrive as a number or a free-typed string
+// ("1,250", "EGP 1250.50", "  3000 "). Returns null when there is no usable
+// number, so callers can tell "empty/invalid" apart from a real 0.
+export const parseAmount = (n?: number | string | null): number | null => {
+  if (n == null || n === '') return null;
+  if (typeof n === 'number') return isNaN(n) ? null : n;
+  const v = parseFloat(String(n).replace(/[^0-9.\-]/g, ''));
+  return isNaN(v) ? null : v;
+};
+
+// Group-format a money value. Falls back to the raw string when it isn't
+// numeric (so a value like "TBD" is preserved rather than shown as NaN).
+export const formatMoney = (n?: number | string | null, currency?: string): string => {
+  const v = parseAmount(n);
+  if (v == null) return n == null ? '' : String(n);
+  const formatted = v.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return currency ? `${formatted} ${currency}` : formatted;
+};
+
 // True for http(s) links (openable in a browser tab) vs. a local/UNC
 // computer path, which a web page is not allowed to navigate to.
 export const isWebUrl = (path?: string): boolean =>

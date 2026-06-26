@@ -2,10 +2,10 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home
+  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
-import { AppView } from '../App';
+import { AppView, NavCounts } from '../App';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
@@ -18,16 +18,20 @@ interface Props {
   notifications: AppNotification[];
   dueSoonCount: number;
   announcementCount: number;
+  navCounts: NavCounts;
+  onOpenPalette: () => void;
   onLogout: () => void;
   pwa: ReturnType<typeof usePWA>;
   isDark: boolean;
   onToggleTheme: () => void;
 }
 
-export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, onLogout, pwa, isDark, onToggleTheme }: Props) {
+export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, navCounts, onOpenPalette, onLogout, pwa, isDark, onToggleTheme }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showMore, setShowMore] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const moreRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -40,6 +44,15 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showUserMenu]);
+
+  useEffect(() => {
+    if (!showMore) return;
+    const handler = (e: MouseEvent) => {
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMore(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showMore]);
 
   const handleClearAll = () => {
     const unread = notifications.filter(n => !n.read);
@@ -81,56 +94,38 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
-  const navItems: { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean }[] = [
-    {
-      id: 'home',
-      label: 'Home',
-      icon: <Home className="w-4 h-4" />,
-      show: true,
-    },
-    {
-      id: 'overview',
-      label: 'Overview',
-      icon: <BarChart3 className="w-4 h-4" />,
-      show: isManagerOrAdmin,
-    },
+  type NavItem = { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean };
+
+  // High-frequency tabs stay visible; low-frequency ones (Archive, Outlook,
+  // Users) collapse into a "More" dropdown so the bar doesn't overflow/scroll
+  // on mid-size screens. Badges surface pending work without a click.
+  const primaryItems: NavItem[] = [
+    { id: 'home', label: 'Home', icon: <Home className="w-4 h-4" />, show: true },
+    { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
     {
       id: 'correspondences',
       label: 'Correspondences',
       icon: <MailOpen className="w-4 h-4" />,
+      badge: isManagerOrAdmin ? navCounts.corrNeedsReview : navCounts.corrUnread,
       show: true,
     },
     {
       id: 'tasks',
       label: 'Tasks',
       icon: <CheckSquare className="w-4 h-4" />,
+      badge: navCounts.myActiveTasks,
       show: true,
     },
-    {
-      id: 'projects',
-      label: 'Projects',
-      icon: <FolderKanban className="w-4 h-4" />,
-      show: true,
-    },
-    {
-      id: 'archive',
-      label: 'Archive',
-      icon: <Archive className="w-4 h-4" />,
-      show: true,
-    },
-    {
-      id: 'outlook-feed',
-      label: 'Outlook',
-      icon: <Mail className="w-4 h-4" />,
-      show: true,
-    },
-    {
-      id: 'admin',
-      label: 'Users',
-      icon: <Users className="w-4 h-4" />,
-      show: appUser.role === 'Admin',
-    },
+    { id: 'projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, show: true },
   ];
+
+  const overflowItems: NavItem[] = [
+    { id: 'archive', label: 'Archive', icon: <Archive className="w-4 h-4" />, show: true },
+    { id: 'outlook-feed', label: 'Outlook', icon: <Mail className="w-4 h-4" />, show: true },
+    { id: 'admin', label: 'Users', icon: <Users className="w-4 h-4" />, show: appUser.role === 'Admin' },
+  ];
+
+  const moreActive = overflowItems.some(i => i.show && i.id === activeView);
 
   return (
     <header className="topnav">
@@ -149,7 +144,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
       {/* Nav tabs */}
       <nav className="topnav-tabs">
-        {navItems.filter(i => i.show).map(item => {
+        {primaryItems.filter(i => i.show).map(item => {
           // The merged Correspondences & Inbox tab stays active for either
           // underlying view (notifications can still deep-link to manager-inbox).
           const isActive = activeView === item.id
@@ -162,7 +157,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           >
             {item.icon}
             <span>{item.label}</span>
-            {item.badge !== undefined && (
+            {item.badge !== undefined && item.badge > 0 && (
               <span className="tab-badge">
                 {item.badge > 99 ? '99+' : item.badge}
               </span>
@@ -170,10 +165,55 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           </button>
           );
         })}
+
+        {/* "More" dropdown — collapses low-frequency tabs on desktop too. */}
+        <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
+          <button
+            onClick={() => setShowMore(v => !v)}
+            className={`nav-tab${moreActive ? ' active' : ''}`}
+            aria-haspopup="menu"
+            aria-expanded={showMore}
+          >
+            <MoreHorizontal className="w-4 h-4" />
+            <span>More</span>
+          </button>
+          {showMore && (
+            <div role="menu" style={{
+              position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 180,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              boxShadow: '0 12px 32px rgba(0,0,0,0.16)', zIndex: 1000, padding: '6px 0',
+            }}>
+              {overflowItems.filter(i => i.show).map(item => (
+                <button
+                  key={item.id}
+                  role="menuitem"
+                  onClick={() => { onNavigate(item.id); setShowMore(false); }}
+                  style={{
+                    width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+                    padding: '9px 14px', background: activeView === item.id ? 'var(--blue-50)' : 'transparent',
+                    border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+                    color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
+                  }}
+                >
+                  {item.icon}{item.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </nav>
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>
+        {/* Global search / command palette */}
+        <button
+          className="btn btn-ghost btn-icon"
+          onClick={onOpenPalette}
+          title="Search everything (Ctrl/⌘ + K)"
+        >
+          <Search className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+        </button>
+
         {/* Theme toggle */}
         <button
           className="btn btn-ghost btn-icon"

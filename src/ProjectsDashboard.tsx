@@ -54,12 +54,14 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status'>('recent');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<Project | null>(null);
   const [formData, setFormData] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   useEffect(() => {
@@ -75,24 +77,42 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
     return () => unsub();
   }, []);
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = { Active: 0, 'On Hold': 0, Completed: 0, Cancelled: 0 };
+    projects.forEach(p => { if (p.status) counts[p.status] = (counts[p.status] || 0) + 1; });
+    return counts;
+  }, [projects]);
+
+  const statusRank: Record<string, number> = { Active: 0, 'On Hold': 1, Completed: 2, Cancelled: 3 };
+
   const visible = useMemo(() => {
-    return projects.filter(p => {
+    const rows = projects.filter(p => {
       if (statusFilter !== 'All' && p.status !== statusFilter) return false;
       if (search && !globalSearch(p, search)) return false;
       return true;
     });
-  }, [projects, search, statusFilter]);
+    rows.sort((a, b) => {
+      if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
+      if (sortBy === 'status') return (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0); // recent
+    });
+    return rows;
+  }, [projects, search, statusFilter, sortBy]);
+
+  const isFiltering = search.trim() !== '' || statusFilter !== 'All';
 
   const selected = useMemo(() => projects.find(p => p.id === selectedId) || null, [projects, selectedId]);
 
   const openCreate = () => {
     setEditing(null);
     setFormData(emptyForm());
+    setFormError(null);
     setIsModalOpen(true);
   };
 
   const openEdit = (p: Project) => {
     setEditing(p);
+    setFormError(null);
     setFormData({
       name: p.name || '',
       code: p.code || '',
@@ -110,19 +130,29 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) { setError('Project name is required.'); return; }
+    const name = formData.name.trim();
+    if (!name) { setFormError('Project name is required.'); return; }
+    if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
+      setFormError('End date cannot be before the start date.');
+      return;
+    }
+    // Trim every text field so stray whitespace never reaches Firestore.
+    const cleaned = Object.fromEntries(
+      Object.entries(formData).map(([k, v]) => [k, typeof v === 'string' ? v.trim() : v])
+    ) as typeof formData;
     setSaving(true);
+    setFormError(null);
     setError(null);
     try {
       if (editing) {
         await updateDoc(doc(db, 'projects', editing.id), {
-          ...formData,
+          ...cleaned,
           updatedAt: serverTimestamp(),
         });
       } else {
         const serialNumber = await getNextSerialNumber('projects');
         await addDoc(collection(db, 'projects'), {
-          ...formData,
+          ...cleaned,
           serialNumber,
           userId: user.uid,
           teamId: appUser.teamId || '',
@@ -134,7 +164,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       setEditing(null);
     } catch (e) {
       console.error('Save project failed:', e);
-      setError('Failed to save project.');
+      setFormError('Failed to save project. Please try again.');
     } finally {
       setSaving(false);
     }
@@ -191,6 +221,32 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
         </div>
       )}
 
+      {/* Summary stats */}
+      {projects.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
+          {[
+            { label: 'Total', value: projects.length, filter: 'All' as const, color: 'var(--text-primary)' },
+            { label: 'Active', value: statusCounts['Active'], filter: 'Active', color: '#3b82f6' },
+            { label: 'On Hold', value: statusCounts['On Hold'], filter: 'On Hold', color: '#f59e0b' },
+            { label: 'Completed', value: statusCounts['Completed'], filter: 'Completed', color: '#16a34a' },
+            { label: 'Cancelled', value: statusCounts['Cancelled'], filter: 'Cancelled', color: '#94a3b8' },
+          ].map(s => {
+            const active = statusFilter === s.filter;
+            return (
+              <button
+                key={s.label}
+                onClick={() => setStatusFilter(active && s.filter !== 'All' ? 'All' : s.filter)}
+                className="card"
+                style={{ padding: '12px 14px', textAlign: 'left', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
+              >
+                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 4 }}>{s.label}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ position: 'relative', flex: '1 1 240px' }}>
@@ -211,6 +267,16 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
           <option value="All">All statuses</option>
           {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
         </select>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+          title="Sort projects"
+        >
+          <option value="recent">Most recent</option>
+          <option value="name">Name (A–Z)</option>
+          <option value="status">Status</option>
+        </select>
       </div>
 
       {/* Grid */}
@@ -221,11 +287,21 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       ) : visible.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><FolderKanban className="w-8 h-8" /></div>
-          <div className="empty-state-title">No projects yet</div>
-          <div className="empty-state-sub">Create your first project to start tracking contracts, financials and updates.</div>
-          <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Project
-          </button>
+          <div className="empty-state-title">{isFiltering ? 'No matching projects' : 'No projects yet'}</div>
+          <div className="empty-state-sub">
+            {isFiltering
+              ? 'No projects match your search or filter. Try clearing them.'
+              : 'Create your first project to start tracking contracts, financials and updates.'}
+          </div>
+          {isFiltering ? (
+            <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStatusFilter('All'); }}>
+              Clear filters
+            </button>
+          ) : (
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
+              <Plus className="w-4 h-4" /> New Project
+            </button>
+          )}
         </div>
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -283,7 +359,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       {/* Create / Edit modal */}
       {isModalOpen && (
         <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
-          <div className="modal" style={{ maxWidth: 560 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 560, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                 {editing ? 'Edit Project' : 'New Project'}
@@ -319,9 +395,15 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
               <Field label="Description"><textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="proj-input" rows={3} /></Field>
             </div>
 
+            {formError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: '#fee2e2', color: '#991b1b', marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+                <AlertCircle className="w-4 h-4" style={{ flexShrink: 0 }} /> {formError}
+              </div>
+            )}
+
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
               <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" disabled={saving} onClick={handleSave}>{saving ? 'Saving…' : (editing ? 'Save changes' : 'Create project')}</button>
+              <button className="btn btn-primary" disabled={saving || !formData.name.trim()} onClick={handleSave}>{saving ? 'Saving…' : (editing ? 'Save changes' : 'Create project')}</button>
             </div>
           </div>
         </div>
@@ -330,7 +412,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       {/* Delete confirm */}
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal" style={{ maxWidth: 420 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete project?</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
               "{deleteTarget.name}" will be removed. Its contracts, financials and updates are not auto-deleted.

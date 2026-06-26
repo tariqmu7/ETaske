@@ -136,6 +136,10 @@ export type ProjectStatus = 'Active' | 'On Hold' | 'Completed' | 'Cancelled';
 
 export const PROJECT_STATUS_OPTIONS: ProjectStatus[] = ['Active', 'On Hold', 'Completed', 'Cancelled'];
 
+// Currencies used across project contracts, subcontracts and financials.
+// Free text is still accepted, but these power the quick-pick selects.
+export const CURRENCY_OPTIONS: string[] = ['EGP', 'USD', 'EUR', 'GBP', 'SAR', 'AED'];
+
 export interface Project {
   id: string;
   serialNumber?: string;        // PR000001

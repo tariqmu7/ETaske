@@ -1,13 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
 } from 'firebase/firestore';
 import { db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
-import { Project, ProjectSubcontract } from '../../types';
-import { isOverdue, isDueSoon } from '../../utils';
-import { Plus, X, Edit2, Trash2, Truck, Building2 } from 'lucide-react';
+import { Project, ProjectSubcontract, CURRENCY_OPTIONS } from '../../types';
+import { isOverdue, isDueSoon, parseAmount, formatMoney } from '../../utils';
+import { Plus, X, Edit2, Trash2, Truck, Building2, AlertTriangle } from 'lucide-react';
 
 interface Props { project: Project; user: User; }
 
@@ -42,6 +42,18 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
     return () => unsub();
   }, [project.id]);
 
+  // Surface validity at a glance: how many subcontracts have expired or are
+  // within their final 30 days.
+  const expirySummary = useMemo(() => {
+    let expired = 0, expiringSoon = 0;
+    items.forEach(s => {
+      if (!s.expiryDate) return;
+      if (isOverdue(s.expiryDate)) expired++;
+      else if (isDueSoon(s.expiryDate, 24 * 30)) expiringSoon++;
+    });
+    return { expired, expiringSoon };
+  }, [items]);
+
   const openCreate = () => { setEditing(null); setForm(emptyForm()); setIsOpen(true); };
   const openEdit = (s: ProjectSubcontract) => {
     setEditing(s);
@@ -72,6 +84,15 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
         <button className="btn btn-primary btn-sm" onClick={openCreate}><Plus className="w-4 h-4" /> Add subcontract</button>
       </div>
 
+      {(expirySummary.expired > 0 || expirySummary.expiringSoon > 0) && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '9px 14px', marginBottom: 14, background: 'rgba(245,158,11,0.12)', color: '#92400e', fontSize: 13, fontWeight: 600 }}>
+          <AlertTriangle className="w-4 h-4" style={{ flexShrink: 0 }} />
+          {expirySummary.expired > 0 && <span>{expirySummary.expired} expired</span>}
+          {expirySummary.expired > 0 && expirySummary.expiringSoon > 0 && <span>·</span>}
+          {expirySummary.expiringSoon > 0 && <span>{expirySummary.expiringSoon} expiring within 30 days</span>}
+        </div>
+      )}
+
       {items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><Truck className="w-8 h-8" /></div>
@@ -97,7 +118,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
                 {s.typeOfService && <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{s.typeOfService}</div>}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
                   {s.soOrContract && <span>SO/Contract: <b style={{ color: 'var(--text-secondary)' }}>{s.soOrContract}</b></span>}
-                  {(s.price !== '' && s.price != null) && <span>{s.price} {s.currency || ''}</span>}
+                  {parseAmount(s.price) != null && <span>{formatMoney(s.price, s.currency)}</span>}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
                   {(s.startDate || s.expiryDate) && <span>📅 {[s.startDate, s.expiryDate].filter(Boolean).join(' → ')}</span>}
@@ -114,7 +135,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
 
       {isOpen && (
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
-          <div className="modal" style={{ maxWidth: 520 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 520, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? 'Edit subcontract' : 'Add subcontract'}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
@@ -127,8 +148,12 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
                 <L label="Reference"><input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} style={inp} /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Price"><input value={form.price} onChange={e => setForm({ ...form, price: e.target.value })} style={inp} /></L>
-                <L label="Currency"><input value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp} /></L>
+                <L label="Price"><input value={form.price} inputMode="decimal" onChange={e => setForm({ ...form, price: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label="Currency">
+                  <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
+                    {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <L label="Start date"><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
@@ -139,7 +164,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
               <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-primary" disabled={!form.name.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
             </div>
           </div>
         </div>
@@ -147,7 +172,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
 
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal" style={{ maxWidth: 380 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 380, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>Delete "{deleteTarget.name}"?</h2>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
               <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>

@@ -27,6 +27,17 @@ import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon } from './utils';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
+import { useHashRoute } from './hooks/useHashRoute';
+import { useKeyboardNav } from './hooks/useKeyboardNav';
+import CommandPalette from './components/CommandPalette';
+import Breadcrumbs from './components/Breadcrumbs';
+import KeyboardHelp from './components/KeyboardHelp';
+
+export interface NavCounts {
+  corrNeedsReview: number;  // correspondences Unread/Reviewing (manager triage queue)
+  corrUnread: number;       // brand-new intake (status Unread)
+  myActiveTasks: number;    // tasks assigned to me, not Done/Archived
+}
 
 export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects';
 
@@ -35,13 +46,16 @@ export default function App() {
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [activeView, setActiveView] = useState<AppView>('home');
+  const [activeView, setActiveView] = useHashRoute('home');
   const [corrStatusFilter, setCorrStatusFilter] = useState<string>('All');
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('All');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
+  const [navCounts, setNavCounts] = useState<NavCounts>({ corrNeedsReview: 0, corrUnread: 0, myActiveTasks: 0 });
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
 
   const pwa = usePWA(user?.uid ?? null);
   const theme = useTheme();
@@ -176,14 +190,26 @@ export default function App() {
       }).length;
     };
 
+    const uid = user.uid;
+
     const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
-      taskCount = checkDueSoon(snap.docs.filter(d => d.id !== '--stats--').map(d => d.data()), 'dueDate');
+      const rows = snap.docs.filter(d => d.id !== '--stats--').map(d => d.data());
+      taskCount = checkDueSoon(rows, 'dueDate');
       setDueSoonCount(taskCount + corrCount);
+      const myActiveTasks = rows.filter(t =>
+        t.assignedToId === uid && !['Done', 'Archived'].includes(t.status)).length;
+      setNavCounts(prev => ({ ...prev, myActiveTasks }));
     });
 
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
-      corrCount = checkDueSoon(snap.docs.filter(d => d.id !== '--stats--').map(d => d.data()), 'deadline');
+      const rows = snap.docs.filter(d => d.id !== '--stats--').map(d => d.data());
+      corrCount = checkDueSoon(rows, 'deadline');
       setDueSoonCount(taskCount + corrCount);
+      setNavCounts(prev => ({
+        ...prev,
+        corrNeedsReview: rows.filter(c => ['Unread', 'Reviewing'].includes(c.status)).length,
+        corrUnread: rows.filter(c => c.status === 'Unread').length,
+      }));
     });
 
     return () => {
@@ -247,6 +273,14 @@ export default function App() {
     if (activeView !== 'tasks' && taskStatusFilter !== 'All') setTaskStatusFilter('All');
   }, [activeView]);
 
+  // Global keyboard shortcuts: Cmd/Ctrl+K & "/" open the command palette,
+  // "g"+letter jumps between sections, "?" shows the shortcut cheatsheet.
+  useKeyboardNav({
+    onNavigate: setActiveView,
+    onOpenPalette: () => setPaletteOpen(true),
+    onShowHelp: () => setHelpOpen(true),
+  });
+
   const handleLogout = () => signOut(auth);
 
   if (!isAuthReady) {
@@ -297,12 +331,15 @@ export default function App() {
         notifications={notifications}
         dueSoonCount={dueSoonCount}
         announcementCount={unreadAnnouncements}
+        navCounts={navCounts}
+        onOpenPalette={() => setPaletteOpen(true)}
         onLogout={handleLogout}
         pwa={pwa}
         isDark={theme.isDark}
         onToggleTheme={theme.toggle}
       />
       <main className="main-content">
+        <Breadcrumbs view={activeView} onNavigate={setActiveView} />
         {activeView === 'home' && (
           <HomeDashboard
             appUser={appUser}
@@ -310,6 +347,7 @@ export default function App() {
             dueSoonCount={dueSoonCount}
             announcementCount={unreadAnnouncements}
             unreadNotifications={notifications.filter(n => !n.read).length}
+            navCounts={navCounts}
           />
         )}
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
@@ -442,6 +480,17 @@ export default function App() {
 
       {/* Real-time Chat */}
       <ChatBox currentUser={appUser} allUsers={projectUsers} onNavigate={setActiveView} />
+
+      {/* Command palette (Cmd/Ctrl+K) — cross-section search & jump */}
+      <CommandPalette
+        open={paletteOpen}
+        onClose={() => setPaletteOpen(false)}
+        onNavigate={setActiveView}
+        appUser={appUser}
+      />
+
+      {/* Keyboard shortcut cheatsheet ("?") */}
+      <KeyboardHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
 
       {/* Soft re-sync after a long idle gap (no hard reload) */}
       <IdleResyncBanner />

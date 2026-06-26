@@ -7,7 +7,9 @@ import { db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
 import {
   Project, ProjectContractItem, ProjectContractType, PROJECT_CONTRACT_TYPE_OPTIONS,
+  CURRENCY_OPTIONS,
 } from '../../types';
+import { parseAmount, formatMoney } from '../../utils';
 import {
   Plus, X, Edit2, Trash2, FileText, ChevronRight, ChevronDown,
   CornerDownRight,
@@ -82,6 +84,20 @@ export default function ProjectContractsTab({ project, user }: Props) {
     roots.sort(sortFn);
     Object.values(childrenOf).forEach(arr => arr.sort(sortFn));
     return { roots, childrenOf };
+  }, [items]);
+
+  // Total contracted value per currency. An amendment's "value after increase"
+  // supersedes its base value when present, so the rollup reflects the latest
+  // agreed figure rather than summing both.
+  const valueByCurrency = useMemo(() => {
+    const byCur: Record<string, number> = {};
+    items.forEach(i => {
+      const v = parseAmount(i.valueAfterIncrease) ?? parseAmount(i.contractValue);
+      if (v == null) return;
+      const cur = i.currency || '—';
+      byCur[cur] = (byCur[cur] || 0) + v;
+    });
+    return byCur;
   }, [items]);
 
   const openCreate = (parent: ProjectContractItem | null) => {
@@ -160,7 +176,8 @@ export default function ProjectContractsTab({ project, user }: Props) {
             {item.subject && <div style={{ fontSize: 13.5, color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.4 }}>{item.subject}</div>}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
               {item.companyName && <span>🏢 {item.companyName}</span>}
-              {item.contractValue !== '' && item.contractValue != null && <span>💰 {item.contractValue} {item.currency || ''}</span>}
+              {parseAmount(item.contractValue) != null && <span>💰 {formatMoney(item.contractValue, item.currency)}</span>}
+              {parseAmount(item.valueAfterIncrease) != null && <span style={{ color: '#16a34a', fontWeight: 600 }}>⬆ {formatMoney(item.valueAfterIncrease, item.currency)}</span>}
               {(item.startDate || item.endDate) && <span>📅 {[item.startDate, item.endDate].filter(Boolean).join(' → ')}</span>}
               {item.contractingMethod && <span>📝 {item.contractingMethod}</span>}
               {item.inCharge && <span>👤 {item.inCharge}</span>}
@@ -186,6 +203,17 @@ export default function ProjectContractsTab({ project, user }: Props) {
         <button className="btn btn-primary btn-sm" onClick={() => openCreate(null)}><Plus className="w-4 h-4" /> Add contract</button>
       </div>
 
+      {Object.keys(valueByCurrency).length > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
+          {Object.entries(valueByCurrency).map(([cur, total]) => (
+            <div key={cur} className="card" style={{ padding: '10px 16px' }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total value · {cur}</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>{total.toLocaleString('en-US')}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {roots.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><FileText className="w-8 h-8" /></div>
@@ -198,7 +226,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
 
       {isOpen && (
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
-          <div className="modal" style={{ maxWidth: 640 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 640, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                 {editing ? 'Edit item' : parentFor ? `Add under ${parentFor.contractNumber || typeLabel(parentFor.type)}` : 'Add contract'}
@@ -216,8 +244,20 @@ export default function ProjectContractsTab({ project, user }: Props) {
                 <L label="Department"><input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} style={inp} /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Contract value"><input value={form.contractValue} onChange={e => setForm({ ...form, contractValue: e.target.value })} style={inp} /></L>
-                <L label="Currency"><input value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp} /></L>
+                <L label="Contract value"><input value={form.contractValue} inputMode="decimal" onChange={e => setForm({ ...form, contractValue: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label="Currency">
+                  <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
+                    {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </L>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <L label="SR date"><input type="date" value={form.srDate} onChange={e => setForm({ ...form, srDate: e.target.value })} style={inp} /></L>
+                <L label="SR value"><input value={form.srValue} inputMode="decimal" onChange={e => setForm({ ...form, srValue: e.target.value })} style={inp} placeholder="0" /></L>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <L label="LOA date"><input type="date" value={form.loaDate} onChange={e => setForm({ ...form, loaDate: e.target.value })} style={inp} /></L>
+                <L label="Value after increase"><input value={form.valueAfterIncrease} inputMode="decimal" onChange={e => setForm({ ...form, valueAfterIncrease: e.target.value })} style={inp} placeholder="0" /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <L label="Start date"><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
@@ -233,9 +273,12 @@ export default function ProjectContractsTab({ project, user }: Props) {
               </div>
               <L label="Remarks"><textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} style={inp} rows={2} /></L>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
+            {!form.subject.trim() && !form.contractNumber.trim() && !form.companyName.trim() && (
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 0' }}>Enter at least a contract #, subject or company to save.</p>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
               <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-primary" disabled={!form.subject.trim() && !form.contractNumber.trim() && !form.companyName.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
             </div>
           </div>
         </div>
@@ -243,7 +286,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
 
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
-          <div className="modal" style={{ maxWidth: 400 }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ maxWidth: 400, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete this item?</h2>
             <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '0 0 18px' }}>Any sub-items under it will also be deleted.</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>

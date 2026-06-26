@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   BarChart3, MailOpen, CheckSquare, FolderKanban, Archive,
-  Megaphone, Mail, Users, AlertCircle, ArrowRight
+  Megaphone, Mail, Users, AlertCircle, ArrowRight, Clock, Plus
 } from 'lucide-react';
 import { AppUser } from './types';
-import { AppView } from './App';
+import { AppView, NavCounts } from './App';
+import { getRecents, RecentItem } from './lib/recents';
+import { requestOpen } from './lib/deepLink';
 
 interface Props {
   appUser: AppUser;
@@ -12,6 +14,7 @@ interface Props {
   dueSoonCount: number;
   announcementCount: number;
   unreadNotifications: number;
+  navCounts: NavCounts;
 }
 
 interface Tile {
@@ -21,14 +24,38 @@ interface Tile {
   icon: React.ReactNode;
   gradient: string;
   badge?: number;
+  stat?: string;     // live one-liner, e.g. "3 awaiting review"
   show: boolean;
 }
 
-export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications }: Props) {
+const recentIcon = (kind: RecentItem['kind']) =>
+  kind === 'task' ? <CheckSquare className="w-4 h-4" />
+    : kind === 'corresponding' ? <MailOpen className="w-4 h-4" />
+      : <FolderKanban className="w-4 h-4" />;
+
+export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications, navCounts }: Props) {
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const firstName = (appUser.displayName || '').split(' ')[0] || appUser.displayName;
+
+  // "Jump back in" — recently opened records, kept fresh via the recents bus.
+  const [recents, setRecents] = useState<RecentItem[]>(() => getRecents());
+  useEffect(() => {
+    const refresh = () => setRecents(getRecents());
+    window.addEventListener('etaske:recents', refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener('etaske:recents', refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, []);
+
+  const openRecent = (r: RecentItem) => {
+    if (r.kind === 'task') { requestOpen({ type: 'task', id: r.id, label: r.label, serial: r.serial }); onNavigate('tasks'); }
+    else if (r.kind === 'corresponding') { requestOpen({ type: 'corresponding', id: r.id, label: r.label, serial: r.serial }); onNavigate('correspondences'); }
+    else onNavigate('projects');
+  };
 
   const tiles: Tile[] = [
     {
@@ -47,6 +74,9 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
         : 'Incoming letters and requests waiting to be triaged.',
       icon: <MailOpen className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #6366f1, #2563eb)',
+      stat: isManagerOrAdmin
+        ? (navCounts.corrNeedsReview > 0 ? `${navCounts.corrNeedsReview} awaiting review` : 'Inbox clear')
+        : (navCounts.corrUnread > 0 ? `${navCounts.corrUnread} new` : 'Nothing new'),
       show: true,
     },
     {
@@ -55,6 +85,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       description: 'Your active work, milestones and deadlines.',
       icon: <CheckSquare className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #16a34a, #14b8a6)',
+      stat: navCounts.myActiveTasks > 0 ? `${navCounts.myActiveTasks} active` : 'None assigned',
       show: true,
     },
     {
@@ -72,6 +103,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       icon: <AlertCircle className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #f97316, #ef4444)',
       badge: dueSoonCount,
+      stat: dueSoonCount > 0 ? `${dueSoonCount} need attention` : 'All on track',
       show: true,
     },
     {
@@ -126,6 +158,57 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
         </p>
       </div>
 
+      {/* Quick actions — emphasised when there's nothing pressing to do. */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+        <button
+          onClick={() => onNavigate('correspondences')}
+          className="btn"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'var(--blue-600)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
+        >
+          <Plus className="w-4 h-4" /> New correspondence
+        </button>
+        <button
+          onClick={() => onNavigate('tasks')}
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
+        >
+          <CheckSquare className="w-4 h-4" /> View my tasks
+        </button>
+        {dueSoonCount > 0 && (
+          <button
+            onClick={() => onNavigate('due-soon')}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'rgba(249,115,22,0.1)', color: '#ea580c', border: '1px solid rgba(249,115,22,0.3)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
+          >
+            <AlertCircle className="w-4 h-4" /> Review {dueSoonCount} due soon
+          </button>
+        )}
+      </div>
+
+      {/* Jump back in — recently opened records */}
+      {recents.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+            <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+            <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Jump back in</h2>
+          </div>
+          <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
+            {recents.map(r => (
+              <button
+                key={`${r.kind}-${r.id}`}
+                onClick={() => openRecent(r)}
+                className="card card-interactive"
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, maxWidth: 260, textAlign: 'left' }}
+              >
+                <span style={{ color: 'var(--blue-600)', flexShrink: 0, display: 'flex' }}>{recentIcon(r.kind)}</span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.label}</span>
+                  {r.serial && <span style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>{r.serial}</span>}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Card grid */}
       <div style={{
         display: 'grid',
@@ -175,6 +258,11 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
               <p style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 6, lineHeight: 1.45 }}>
                 {tile.description}
               </p>
+              {tile.stat && (
+                <div style={{ marginTop: 10, display: 'inline-flex', alignItems: 'center', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '3px 9px' }}>
+                  {tile.stat}
+                </div>
+              )}
             </div>
           </button>
         ))}

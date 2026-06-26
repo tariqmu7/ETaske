@@ -6,7 +6,17 @@
 // while already mounted (`subscribeOpen`). This avoids a router and keeps the
 // existing local-state navigation model (see CLAUDE.md → App shell & navigation).
 
-export type DeepLinkRef = { type: 'task' | 'corresponding'; id: string };
+import { recordRecent } from './recents';
+
+export type DeepLinkRef = {
+  type: 'task' | 'corresponding';
+  id: string;
+  // Optional display metadata. When present it feeds the "Jump back in"
+  // recents list (src/lib/recents.ts); callers without it (e.g. a bare
+  // notification) simply don't contribute a label.
+  label?: string;
+  serial?: string;
+};
 
 let pending: DeepLinkRef | null = null;
 const listeners = new Set<(ref: DeepLinkRef) => void>();
@@ -15,6 +25,9 @@ const listeners = new Set<(ref: DeepLinkRef) => void>();
  *  right after calling this. */
 export function requestOpen(ref: DeepLinkRef) {
   pending = ref;
+  if (ref.label) {
+    recordRecent({ kind: ref.type, id: ref.id, label: ref.label, serial: ref.serial });
+  }
   listeners.forEach(fn => fn(ref));
 }
 
