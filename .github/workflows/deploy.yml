@@ -37,6 +37,7 @@ jobs:
         run: npm run build
         env:
             VITE_GOOGLE_SCRIPT_URL: ${{ secrets.VITE_GOOGLE_SCRIPT_URL }}
+            VITE_GOOGLE_SCRIPT_SECRET: ${{ secrets.VITE_GOOGLE_SCRIPT_SECRET }}
             VITE_FIREBASE_VAPID_KEY: ${{ secrets.VITE_FIREBASE_VAPID_KEY }}
       - name: Setup Pages
         uses: actions/configure-pages@v4

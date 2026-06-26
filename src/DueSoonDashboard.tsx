@@ -117,7 +117,7 @@ export default function DueSoonDashboard({ onNavigate }: Props) {
       animate={{ opacity: 1, y: 0 }}
       onClick={() => open(r)}
       style={{
-        padding: '14px 18px', background: '#fff', cursor: 'pointer',
+        padding: '14px 18px', background: 'var(--surface)', cursor: 'pointer',
         borderLeft: `4px solid ${r.overdue ? '#ef4444' : '#f97316'}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
       }}
@@ -129,8 +129,8 @@ export default function DueSoonDashboard({ onNavigate }: Props) {
             color: r.kind === 'Task' ? '#6366f1' : '#0ea5e9',
           }}>{r.kind}</span>
         </div>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}>{r.title}</div>
-        <div style={{ fontSize: 12, color: r.overdue ? '#dc2626' : '#64748b', marginTop: 3 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{r.title}</div>
+        <div style={{ fontSize: 12, color: r.overdue ? '#f87171' : 'var(--text-muted)', marginTop: 3 }}>
           Due: {fmt(r.due)}{r.assignedTo ? ` · ${r.assignedTo}` : ''}
         </div>
       </div>

@@ -15,12 +15,51 @@
 // 5. Copy the NEW "Web app URL" provided.
 // 6. Go to your app's Settings -> Environment Variables, and set VITE_GOOGLE_SCRIPT_URL to the new URL.
 // 7. Restart the dev server.
+//
+// SHARED SECRET (abuse gate):
+//   This web app is deployed with "Anyone" access, so its URL alone would let
+//   anyone upload files to the Drive folder or send push notifications. To raise
+//   the bar, every request must carry a shared secret that matches a Script
+//   Property named SHARED_SECRET.
+//   - Set it once: Project Settings (gear) -> Script Properties -> Add property
+//     SHARED_SECRET = <a long random string>.
+//   - Put the SAME value in the client env var VITE_GOOGLE_SCRIPT_SECRET
+//     (and the matching GitHub Actions secret used by the deploy workflow).
+//   NOTE: a VITE_-prefixed value is bundled into the static client, so it is not
+//   cryptographically secret against someone who reads the JS. It blocks
+//   drive-by / scripted hits to the URL; the durable fix is to move uploads and
+//   push behind an authenticated Cloud Function.
+
+// Upload limits (defense in depth against the open endpoint).
+var MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
+var ALLOWED_MIME_PREFIXES = ['image/', 'application/pdf', 'application/msword',
+  'application/vnd.openxmlformats-officedocument', 'application/vnd.ms-excel',
+  'text/plain'];
 
 function setup() {
   // Run this function manually once to trigger the authorization prompt for DriveApp.
   var folderId = "1BCyJMwQ1ve84jhPmp6THzd1Mwk9azpTD";
   DriveApp.getFolderById(folderId);
   Logger.log("Authorization successful!");
+}
+
+function isSecretValid(data) {
+  var expected = PropertiesService.getScriptProperties().getProperty('SHARED_SECRET');
+  // If no secret has been configured yet, fail closed rather than open.
+  return !!expected && data && data.secret === expected;
+}
+
+function jsonError(message) {
+  return ContentService.createTextOutput(JSON.stringify({ status: "error", message: message }))
+    .setMimeType(ContentService.MimeType.JSON);
+}
+
+function isAllowedMime(mimeType) {
+  if (!mimeType) return false;
+  for (var i = 0; i < ALLOWED_MIME_PREFIXES.length; i++) {
+    if (mimeType.indexOf(ALLOWED_MIME_PREFIXES[i]) === 0) return true;
+  }
+  return false;
 }
 
 /**
@@ -65,6 +104,11 @@ function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
 
+    // Abuse gate: reject anything without the shared secret.
+    if (!isSecretValid(data)) {
+      return jsonError("Unauthorized");
+    }
+
     // FCM push proxy
     if (data.action === 'fcm') {
       var result = sendFcmPush(data.token, data.title, data.body);
@@ -73,10 +117,23 @@ function doPost(e) {
     }
 
     var filename = data.filename;
-    var base64 = data.base64.split(',')[1];
     var mimeType = data.mimeType;
+
+    if (!isAllowedMime(mimeType)) {
+      return jsonError("Unsupported file type");
+    }
+    if (typeof data.base64 !== 'string' || data.base64.indexOf(',') === -1) {
+      return jsonError("Malformed upload payload");
+    }
+
+    var base64 = data.base64.split(',')[1];
+    // base64 expands ~4/3; reject oversized uploads before decoding.
+    if (!base64 || base64.length * 0.75 > MAX_UPLOAD_BYTES) {
+      return jsonError("File too large");
+    }
+
     var folderId = "1BCyJMwQ1ve84jhPmp6THzd1Mwk9azpTD"; // The folder you requested!
-    
+
     var folder = DriveApp.getFolderById(folderId);
     var blob = Utilities.newBlob(Utilities.base64Decode(base64), mimeType, filename);
     var file = folder.createFile(blob);

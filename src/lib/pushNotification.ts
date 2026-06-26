@@ -3,6 +3,7 @@ import { db } from './firebase';
 import { AppNotification, AppUser } from '../types';
 
 const SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL as string | undefined;
+const SCRIPT_SECRET = import.meta.env.VITE_GOOGLE_SCRIPT_SECRET as string | undefined;
 
 /** Fire-and-forget push to one FCM token via the Apps Script proxy. */
 async function pushToToken(token: string, title: string, body: string): Promise<void> {
@@ -11,7 +12,7 @@ async function pushToToken(token: string, title: string, body: string): Promise<
     await fetch(SCRIPT_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'fcm', token, title, body }),
+      body: JSON.stringify({ action: 'fcm', secret: SCRIPT_SECRET, token, title, body }),
     });
   } catch {
     // Non-critical — in-app notification already written

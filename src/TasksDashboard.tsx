@@ -454,6 +454,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
+        secret: import.meta.env.VITE_GOOGLE_SCRIPT_SECRET,
         filename: file.name,
         mimeType: file.type,
         base64: base64
