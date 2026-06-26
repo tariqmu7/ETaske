@@ -8,6 +8,7 @@ import PendingScreen from './PendingScreen';
 import RejectedScreen from './RejectedScreen';
 import UsernameSetupScreen from './UsernameSetupScreen';
 import TopNav from './components/Sidebar';
+import HomeDashboard from './HomeDashboard';
 import CorrespondenceInbox from './CorrespondenceInbox';
 import TasksDashboard from './TasksDashboard';
 import ArchiveDashboard from './ArchiveDashboard';
@@ -20,21 +21,21 @@ import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban
+  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon } from './utils';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 
-export type AppView = 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects';
+export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
   const [isAuthReady, setIsAuthReady] = useState(false);
-  const [activeView, setActiveView] = useState<AppView>('tasks');
+  const [activeView, setActiveView] = useState<AppView>('home');
   const [corrStatusFilter, setCorrStatusFilter] = useState<string>('All');
   const [taskStatusFilter, setTaskStatusFilter] = useState<string>('All');
   const [showMoreMenu, setShowMoreMenu] = useState(false);
@@ -236,15 +237,8 @@ export default function App() {
     return () => unsub();
   }, [user, appUser?.status, appUser?.department]);
 
-  // Default view by role
-  useEffect(() => {
-    if (!appUser) return;
-    if (appUser.role === 'Manager' || appUser.role === 'Admin') {
-      setActiveView('overview');
-    } else {
-      setActiveView('tasks');
-    }
-  }, [appUser?.role]);
+  // The app always opens at the Home launcher (grid of section cards),
+  // regardless of role. From there the user picks where to go.
 
   // Clear any stat-card-driven filters once the user leaves the targeted view,
   // so manual navigation back starts unfiltered.
@@ -309,6 +303,15 @@ export default function App() {
         onToggleTheme={theme.toggle}
       />
       <main className="main-content">
+        {activeView === 'home' && (
+          <HomeDashboard
+            appUser={appUser}
+            onNavigate={setActiveView}
+            dueSoonCount={dueSoonCount}
+            announcementCount={unreadAnnouncements}
+            unreadNotifications={notifications.filter(n => !n.read).length}
+          />
+        )}
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
           <OverviewDashboard
             user={user}
@@ -364,6 +367,7 @@ export default function App() {
       {/* Mobile Bottom Navigation — limited to core tabs, plus a More menu. */}
       <nav className="bottom-nav">
         {([
+          { id: 'home',            label: 'Home',            icon: <Home />,       show: true },
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
           { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])

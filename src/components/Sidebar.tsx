@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban
+  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView } from '../App';
@@ -83,6 +83,12 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
   const navItems: { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean }[] = [
     {
+      id: 'home',
+      label: 'Home',
+      icon: <Home className="w-4 h-4" />,
+      show: true,
+    },
+    {
       id: 'overview',
       label: 'Overview',
       icon: <BarChart3 className="w-4 h-4" />,
@@ -128,13 +134,18 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
   return (
     <header className="topnav">
-      {/* Logo */}
-      <div className="topnav-logo">
+      {/* Logo — click to return to Home launcher */}
+      <button
+        className="topnav-logo"
+        onClick={() => onNavigate('home')}
+        title="Home"
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+      >
         <div className="topnav-logo-icon">
           <Briefcase className="w-4 h-4" style={{ color: '#fff' }} />
         </div>
         <span className="topnav-brand">ETaske</span>
-      </div>
+      </button>
 
       {/* Nav tabs */}
       <nav className="topnav-tabs">
