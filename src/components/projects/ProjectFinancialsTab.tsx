@@ -11,6 +11,7 @@ import {
 } from '../../types';
 import { parseAmount, formatMoney } from '../../utils';
 import { Plus, X, Edit2, Trash2, DollarSign, Link2 } from 'lucide-react';
+import ListControls, { SortDir } from './ListControls';
 
 interface Props { project: Project; user: User; }
 
@@ -42,16 +43,35 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
   const [editing, setEditing] = useState<ProjectFinancialRecord | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [deleteTarget, setDeleteTarget] = useState<ProjectFinancialRecord | null>(null);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
     const q = query(collection(db, 'projectFinancials'), where('projectId', '==', project.id));
     const unsub = onSnapshot(q, snap => {
-      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectFinancialRecord));
-      rows.sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-      setRecords(rows);
+      setRecords(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectFinancialRecord)));
     }, err => console.error('projectFinancials listener:', err));
     return () => unsub();
   }, [project.id]);
+
+  const visible = useMemo(() => {
+    let rows = records.slice();
+    if (typeFilter !== 'all') rows = rows.filter(r => r.type === typeFilter);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      let r = 0;
+      switch (sortKey) {
+        case 'amount': r = (parseAmount(a.amount) ?? -Infinity) - (parseAmount(b.amount) ?? -Infinity); break;
+        case 'title': r = (a.title || '').localeCompare(b.title || ''); break;
+        case 'type': r = a.type.localeCompare(b.type); break;
+        case 'status': r = (a.status || '').localeCompare(b.status || ''); break;
+        default: r = (a.date || '').localeCompare(b.date || '');
+      }
+      return r * dir;
+    });
+    return rows;
+  }, [records, typeFilter, sortKey, sortDir]);
 
   // Contracts power the optional "linked contract" picker on each record.
   useEffect(() => {
@@ -165,6 +185,30 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
           <div className="empty-state-sub">Track invoices, income, expenses and budgets for this project.</div>
         </div>
       ) : (
+        <>
+        <ListControls
+          filters={[
+            { key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [
+              { value: 'all', label: 'All types' },
+              ...PROJECT_FINANCIAL_TYPE_OPTIONS.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
+            ] },
+          ]}
+          sortOptions={[
+            { value: 'date', label: 'Date' },
+            { value: 'amount', label: 'Amount' },
+            { value: 'title', label: 'Title' },
+            { value: 'type', label: 'Type' },
+            { value: 'status', label: 'Status' },
+          ]}
+          sortValue={sortKey}
+          onSortChange={setSortKey}
+          sortDir={sortDir}
+          onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+          trailing={`${visible.length} of ${records.length}`}
+        />
+        {visible.length === 0 ? (
+          <div className="empty-state"><div className="empty-state-title">No records match</div></div>
+        ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
             <thead style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border)' }}>
@@ -175,7 +219,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
               </tr>
             </thead>
             <tbody>
-              {records.map(r => (
+              {visible.map(r => (
                 <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
                   <td style={{ padding: '10px 14px' }}><span className={typeBadge(r.type)} style={{ textTransform: 'capitalize' }}>{r.type}</span></td>
                   <td style={{ padding: '10px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -199,6 +243,8 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
             </tbody>
           </table>
         </div>
+        )}
+        </>
       )}
 
       {isOpen && (

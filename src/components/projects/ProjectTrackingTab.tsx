@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc,
   doc, serverTimestamp,
@@ -8,6 +8,7 @@ import { User } from 'firebase/auth';
 import { AppUser, Project, ProjectUpdate, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../types';
 import { getUserColor } from '../../utils';
 import { Activity, Send, Clock } from 'lucide-react';
+import ListControls, { SortDir } from './ListControls';
 
 interface Props {
   project: Project;
@@ -20,6 +21,9 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
   const [text, setText] = useState('');
   const [status, setStatus] = useState<ProjectStatus>(project.status || 'Active');
   const [posting, setPosting] = useState(false);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('date');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
 
   useEffect(() => {
     const q = query(collection(db, 'projectUpdates'), where('projectId', '==', project.id));
@@ -30,6 +34,25 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
     }, err => console.error('projectUpdates listener:', err));
     return () => unsub();
   }, [project.id]);
+
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    updates.forEach(u => { if (u.status) set.add(u.status); });
+    return [{ value: 'all', label: 'All statuses' }, ...Array.from(set).sort().map(v => ({ value: v, label: v }))];
+  }, [updates]);
+
+  const visible = useMemo(() => {
+    let rows = updates.slice();
+    if (statusFilter !== 'all') rows = rows.filter(u => u.status === statusFilter);
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      const r = sortKey === 'status'
+        ? (a.status || '').localeCompare(b.status || '')
+        : (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+      return r * dir;
+    });
+    return rows;
+  }, [updates, statusFilter, sortKey, sortDir]);
 
   const post = async () => {
     if (!text.trim()) return;
@@ -109,8 +132,26 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
         {updates.length === 0 ? (
           <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No updates yet.</div>
         ) : (
+          <>
+          <ListControls
+            filters={[
+              { key: 'status', label: 'Status', value: statusFilter, options: statusOptions, onChange: setStatusFilter },
+            ]}
+            sortOptions={[
+              { value: 'date', label: 'Date posted' },
+              { value: 'status', label: 'Status' },
+            ]}
+            sortValue={sortKey}
+            onSortChange={setSortKey}
+            sortDir={sortDir}
+            onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            trailing={`${visible.length} of ${updates.length}`}
+          />
+          {visible.length === 0 ? (
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No updates match.</div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, borderLeft: '2px solid var(--border)', paddingLeft: 18, marginLeft: 6 }}>
-            {updates.map(u => (
+            {visible.map(u => (
               <div key={u.id} style={{ position: 'relative', paddingBottom: 18 }}>
                 <span style={{ position: 'absolute', left: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: u.authorColor || 'var(--accent)' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
@@ -122,6 +163,8 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
               </div>
             ))}
           </div>
+          )}
+          </>
         )}
       </div>
     </div>

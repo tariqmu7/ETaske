@@ -8,6 +8,7 @@ import { User } from 'firebase/auth';
 import { Project, ProjectSubcontract, CURRENCY_OPTIONS } from '../../types';
 import { isOverdue, isDueSoon, parseAmount, formatMoney } from '../../utils';
 import { Plus, X, Edit2, Trash2, Truck, Building2, AlertTriangle } from 'lucide-react';
+import ListControls, { SortDir } from './ListControls';
 
 interface Props { project: Project; user: User; }
 
@@ -31,16 +32,54 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
   const [editing, setEditing] = useState<ProjectSubcontract | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [deleteTarget, setDeleteTarget] = useState<ProjectSubcontract | null>(null);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [validityFilter, setValidityFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('name');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   useEffect(() => {
     const q = query(collection(db, 'projectSubcontracts'), where('projectId', '==', project.id));
     const unsub = onSnapshot(q, snap => {
-      const rows = snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectSubcontract));
-      rows.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-      setItems(rows);
+      setItems(snap.docs.map(d => ({ id: d.id, ...d.data() } as ProjectSubcontract)));
     }, err => console.error('projectSubcontracts listener:', err));
     return () => unsub();
   }, [project.id]);
+
+  const statusOf = (s: ProjectSubcontract) => (s.currentStatus || s.status || '').trim();
+
+  // Filter dropdown is populated from the statuses actually in use.
+  const statusOptions = useMemo(() => {
+    const set = new Set<string>();
+    items.forEach(s => { const v = statusOf(s); if (v) set.add(v); });
+    return [{ value: 'all', label: 'All statuses' }, ...Array.from(set).sort().map(v => ({ value: v, label: v }))];
+  }, [items]);
+
+  const visible = useMemo(() => {
+    let rows = items.slice();
+    if (statusFilter !== 'all') rows = rows.filter(s => statusOf(s) === statusFilter);
+    if (validityFilter !== 'all') {
+      rows = rows.filter(s => {
+        if (validityFilter === 'expired') return s.expiryDate && isOverdue(s.expiryDate);
+        if (validityFilter === 'soon') return s.expiryDate && !isOverdue(s.expiryDate) && isDueSoon(s.expiryDate, 24 * 30);
+        if (validityFilter === 'valid') return s.expiryDate && !isOverdue(s.expiryDate) && !isDueSoon(s.expiryDate, 24 * 30);
+        return true;
+      });
+    }
+    const dir = sortDir === 'asc' ? 1 : -1;
+    rows.sort((a, b) => {
+      let r = 0;
+      switch (sortKey) {
+        case 'price': r = (parseAmount(a.price) ?? -Infinity) - (parseAmount(b.price) ?? -Infinity); break;
+        case 'startDate': r = (a.startDate || '').localeCompare(b.startDate || ''); break;
+        case 'expiryDate': r = (a.expiryDate || '').localeCompare(b.expiryDate || ''); break;
+        case 'status': r = statusOf(a).localeCompare(statusOf(b)); break;
+        case 'createdAt': r = (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0); break;
+        default: r = (a.name || '').localeCompare(b.name || '');
+      }
+      return r * dir;
+    });
+    return rows;
+  }, [items, statusFilter, validityFilter, sortKey, sortDir]);
 
   // Surface validity at a glance: how many subcontracts have expired or are
   // within their final 30 days.
@@ -100,8 +139,36 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
           <div className="empty-state-sub">Track subcontractors / service orders, their service, validity and current status.</div>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
-          {items.map(s => {
+        <>
+          <ListControls
+            filters={[
+              { key: 'status', label: 'Status', value: statusFilter, options: statusOptions, onChange: setStatusFilter },
+              { key: 'validity', label: 'Validity', value: validityFilter, onChange: setValidityFilter, options: [
+                { value: 'all', label: 'All' },
+                { value: 'valid', label: 'Valid' },
+                { value: 'soon', label: 'Expiring soon' },
+                { value: 'expired', label: 'Expired' },
+              ] },
+            ]}
+            sortOptions={[
+              { value: 'name', label: 'Name' },
+              { value: 'price', label: 'Price' },
+              { value: 'startDate', label: 'Start date' },
+              { value: 'expiryDate', label: 'Expiry date' },
+              { value: 'status', label: 'Status' },
+              { value: 'createdAt', label: 'Recently added' },
+            ]}
+            sortValue={sortKey}
+            onSortChange={setSortKey}
+            sortDir={sortDir}
+            onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            trailing={`${visible.length} of ${items.length}`}
+          />
+          {visible.length === 0 ? (
+            <div className="empty-state"><div className="empty-state-title">No subcontracts match</div></div>
+          ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+          {visible.map(s => {
             const dl = daysLeftLabel(s.expiryDate);
             return (
               <div key={s.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -130,7 +197,9 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
               </div>
             );
           })}
-        </div>
+          </div>
+          )}
+        </>
       )}
 
       {isOpen && (

@@ -14,6 +14,7 @@ import {
   Plus, X, Edit2, Trash2, FileText, ChevronRight, ChevronDown,
   CornerDownRight,
 } from 'lucide-react';
+import ListControls, { SortDir } from './ListControls';
 
 interface Props { project: Project; user: User; }
 
@@ -60,6 +61,9 @@ export default function ProjectContractsTab({ project, user }: Props) {
   const [parentFor, setParentFor] = useState<ProjectContractItem | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [deleteTarget, setDeleteTarget] = useState<ProjectContractItem | null>(null);
+  const [typeFilter, setTypeFilter] = useState('all');
+  const [sortKey, setSortKey] = useState('created');
+  const [sortDir, setSortDir] = useState<SortDir>('asc');
 
   useEffect(() => {
     const q = query(collection(db, 'projectContracts'), where('projectId', '==', project.id));
@@ -69,10 +73,29 @@ export default function ProjectContractsTab({ project, user }: Props) {
     return () => unsub();
   }, [project.id]);
 
+  const comparator = useMemo(() => {
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return (a: ProjectContractItem, b: ProjectContractItem) => {
+      let r = 0;
+      switch (sortKey) {
+        case 'contractNumber': r = (a.contractNumber || '').localeCompare(b.contractNumber || ''); break;
+        case 'companyName': r = (a.companyName || '').localeCompare(b.companyName || ''); break;
+        case 'value': {
+          const av = parseAmount(a.valueAfterIncrease) ?? parseAmount(a.contractValue) ?? -Infinity;
+          const bv = parseAmount(b.valueAfterIncrease) ?? parseAmount(b.contractValue) ?? -Infinity;
+          r = av - bv; break;
+        }
+        case 'startDate': r = (a.startDate || '').localeCompare(b.startDate || ''); break;
+        case 'type': r = a.type.localeCompare(b.type); break;
+        default: r = (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
+      }
+      return r * dir;
+    };
+  }, [sortKey, sortDir]);
+
   const { roots, childrenOf } = useMemo(() => {
     const childrenOf: Record<string, ProjectContractItem[]> = {};
     const roots: ProjectContractItem[] = [];
-    const sortFn = (a: ProjectContractItem, b: ProjectContractItem) => (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0);
     const ids = new Set(items.map(i => i.id));
     items.forEach(i => {
       if (i.parentId && ids.has(i.parentId)) {
@@ -81,10 +104,17 @@ export default function ProjectContractsTab({ project, user }: Props) {
         roots.push(i);
       }
     });
-    roots.sort(sortFn);
-    Object.values(childrenOf).forEach(arr => arr.sort(sortFn));
+    roots.sort(comparator);
+    Object.values(childrenOf).forEach(arr => arr.sort(comparator));
     return { roots, childrenOf };
-  }, [items]);
+  }, [items, comparator]);
+
+  // A type filter breaks the parent→child hierarchy, so when one is active we
+  // switch to a flat, sorted list of just the matching items.
+  const filteredFlat = useMemo(() => {
+    if (typeFilter === 'all') return null;
+    return items.filter(i => i.type === typeFilter).sort(comparator);
+  }, [items, typeFilter, comparator]);
 
   // Total contracted value per currency. An amendment's "value after increase"
   // supersedes its base value when present, so the rollup reflects the latest
@@ -149,8 +179,8 @@ export default function ProjectContractsTab({ project, user }: Props) {
     } catch (e) { console.error('delete contract failed:', e); }
   };
 
-  const Node = ({ item, depth }: { item: ProjectContractItem; depth: number }) => {
-    const kids = childrenOf[item.id] || [];
+  const Node = ({ item, depth, flat = false }: { item: ProjectContractItem; depth: number; flat?: boolean }) => {
+    const kids = flat ? [] : (childrenOf[item.id] || []);
     const isCollapsed = collapsed[item.id];
     return (
       <div>
@@ -214,14 +244,43 @@ export default function ProjectContractsTab({ project, user }: Props) {
         </div>
       )}
 
-      {roots.length === 0 ? (
+      {items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><FileText className="w-8 h-8" /></div>
           <div className="empty-state-title">No contracts yet</div>
           <div className="empty-state-sub">Add a contract, then attach amendments, agreements, work authorizations or sub-contracts under it.</div>
         </div>
       ) : (
-        <div>{roots.map(r => <Node key={r.id} item={r} depth={0} />)}</div>
+        <>
+          <ListControls
+            filters={[
+              { key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [
+                { value: 'all', label: 'All types' },
+                ...PROJECT_CONTRACT_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+              ] },
+            ]}
+            sortOptions={[
+              { value: 'created', label: 'Date added' },
+              { value: 'contractNumber', label: 'Contract #' },
+              { value: 'value', label: 'Value' },
+              { value: 'companyName', label: 'Company' },
+              { value: 'startDate', label: 'Start date' },
+              { value: 'type', label: 'Type' },
+            ]}
+            sortValue={sortKey}
+            onSortChange={setSortKey}
+            sortDir={sortDir}
+            onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+            trailing={filteredFlat ? `${filteredFlat.length} of ${items.length}` : undefined}
+          />
+          {filteredFlat ? (
+            filteredFlat.length === 0
+              ? <div className="empty-state"><div className="empty-state-title">No items match</div></div>
+              : <div>{filteredFlat.map(r => <Node key={r.id} item={r} depth={0} flat />)}</div>
+          ) : (
+            <div>{roots.map(r => <Node key={r.id} item={r} depth={0} />)}</div>
+          )}
+        </>
       )}
 
       {isOpen && (
