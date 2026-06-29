@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, serverTimestamp, updateDoc, query, where, orderBy } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { AppUser, AppNotification, Announcement } from './types';
 import LoginScreen from './LoginScreen';
 import PendingScreen from './PendingScreen';
@@ -192,8 +193,8 @@ export default function App() {
 
     const uid = user.uid;
 
-    const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
-      const rows = snap.docs.filter(d => d.id !== '--stats--').map(d => d.data());
+    // Privacy-aware: count only tasks this user may read (public + own).
+    const unsubT = subscribeVisibleTasks(uid, rows => {
       taskCount = checkDueSoon(rows, 'dueDate');
       setDueSoonCount(taskCount + corrCount);
       const myActiveTasks = rows.filter(t =>

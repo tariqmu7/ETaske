@@ -163,6 +163,7 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
         teamId: appUser.teamId || 'NONE',
         dueDate: newTask.dueDate || null,
         filePaths: [],
+        isPrivate: false,
         // Traceability back to the email
         correspondingSubject: creatingFrom.subject,
         userId: user.uid,

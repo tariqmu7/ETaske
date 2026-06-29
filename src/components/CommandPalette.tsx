@@ -5,6 +5,7 @@ import {
   ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle,
 } from 'lucide-react';
 import { db } from '../lib/firebase';
+import { getVisibleTasks } from '../lib/taskVisibility';
 import { globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
 import { recordRecent } from '../lib/recents';
@@ -47,12 +48,12 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     (async () => {
       try {
         const [t, c, p] = await Promise.all([
-          getDocs(collection(db, 'tasks')),
+          getVisibleTasks(appUser.id),
           getDocs(collection(db, 'correspondences')),
           getDocs(collection(db, 'projects')),
         ]);
         if (cancelled) return;
-        setTasks(stripStats(t.docs).map(d => ({ id: d.id, ...d.data() })));
+        setTasks(t);
         setCorrs(stripStats(c.docs).map(d => ({ id: d.id, ...d.data() })));
         setProjects(stripStats(p.docs).map(d => ({ id: d.id, ...d.data() })));
         setLoaded(true);

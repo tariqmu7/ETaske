@@ -5,6 +5,7 @@ import {
   updateDoc, doc
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
+import { subscribeVisibleTasks } from '../lib/taskVisibility';
 import { AppUser, ChatMessage, Task, Corresponding } from '../types';
 import { timeAgo, globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
@@ -210,16 +211,17 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
   }, [currentUser.id]);
 
   // Share picker data — only subscribed while the picker is open.
+  // Privacy-aware: only tasks this user may share (public + own).
   useEffect(() => {
     if (!sharePickerOpen) return;
-    const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
-      setShareTasks(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Task)));
-    }, err => console.warn('Share picker tasks error:', err.code));
+    const unsubT = subscribeVisibleTasks(currentUser.id,
+      rows => setShareTasks(rows),
+      err => console.warn('Share picker tasks error:', err?.code));
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
       setShareCorr(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     }, err => console.warn('Share picker correspondences error:', err.code));
     return () => { unsubT(); unsubC(); };
-  }, [sharePickerOpen]);
+  }, [sharePickerOpen, currentUser.id]);
 
   // Mark messages as read when viewing them
   const markingRef = useRef(new Set<string>());

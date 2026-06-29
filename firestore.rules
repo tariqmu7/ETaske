@@ -104,16 +104,34 @@ service cloud.firestore {
     }
 
     // ─── Tasks ────────────────────────────────────────────────────────────────
+    // A task may be PRIVATE (isPrivate == true): readable and writable ONLY by
+    // its owner — the assignee (assignedToId) — not managers, not admin, not the
+    // manager who assigned it. PUBLIC tasks (isPrivate false/absent) keep the
+    // shared-org-board behaviour. Old docs without the field count as public via
+    // .get(..., false). Because rules are guards (not row filters), clients must
+    // read tasks via the public-OR-mine split in src/lib/taskVisibility.ts.
     match /tasks/{taskId} {
-      allow read: if isApproved();
+      function taskIsPrivate(data) { return data.get('isPrivate', false) == true; }
+      function ownsTask(data)      { return data.assignedToId == request.auth.uid; }
+
+      allow read: if isApproved() &&
+        (!taskIsPrivate(resource.data) || ownsTask(resource.data));
       allow create: if isApproved() && taskId != '--stats--' &&
         request.resource.data.assignedById == request.auth.uid;
+      // Owner can always edit. Non-owners (managers/admin or the assigner) may
+      // only edit PUBLIC tasks — this also stops a manager from flipping someone
+      // else's private task to public to read it.
       allow update: if isApproved() && taskId != '--stats--' && (
-        isManagerOrAdmin() ||
-        resource.data.assignedToId == request.auth.uid ||
-        resource.data.assignedById == request.auth.uid
+        ownsTask(resource.data) ||
+        (!taskIsPrivate(resource.data) &&
+          (isManagerOrAdmin() || resource.data.assignedById == request.auth.uid))
       );
-      allow delete: if isManagerOrAdmin() && taskId != '--stats--';
+      // Private tasks: owner-only delete. Public tasks keep the prior
+      // manager/admin-only delete (the assignee cannot delete a public task).
+      allow delete: if isApproved() && taskId != '--stats--' && (
+        (taskIsPrivate(resource.data) && ownsTask(resource.data)) ||
+        (!taskIsPrivate(resource.data) && isManagerOrAdmin())
+      );
     }
 
     // ─── Milestones ───────────────────────────────────────────────────────────

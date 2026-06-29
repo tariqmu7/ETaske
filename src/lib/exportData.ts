@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { collection, getDocs, Timestamp } from 'firebase/firestore';
-import { db } from './firebase';
+import { db, auth } from './firebase';
+import { getVisibleTasks } from './taskVisibility';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const PROJECT_ID = firebaseConfig.projectId;
@@ -84,8 +85,23 @@ export async function downloadFullBackup(): Promise<BackupResult> {
   const counts: Record<string, number> = {};
   const skipped: { collection: string; reason: string }[] = [];
 
+  const uid = auth.currentUser?.uid ?? '';
+
   for (const name of BACKUP_COLLECTIONS) {
     try {
+      // `tasks` can't be read with one unfiltered query anymore (private tasks
+      // would trip the rules); read the public-OR-mine union instead. Other
+      // users' private tasks aren't included in a browser backup — use the
+      // server-side `npm run firestore:backup` for a complete copy.
+      if (name === 'tasks') {
+        const tasks = await getVisibleTasks(uid);
+        backup[name] = tasks.map(({ id, ...data }) => ({
+          name: `projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${name}/${id}`,
+          fields: toRestFields(data),
+        }));
+        counts[name] = tasks.length;
+        continue;
+      }
       const snap = await getDocs(collection(db, name));
       backup[name] = snap.docs.map(d => ({
         name: `projects/${PROJECT_ID}/databases/${DATABASE_ID}/documents/${name}/${d.id}`,
@@ -162,6 +178,7 @@ const TASK_COLUMNS: [string, string][] = [
   ['description', 'Description'],
   ['priority', 'Priority'],
   ['status', 'Status'],
+  ['isPrivate', 'Private'],
   ['category', 'Category'],
   ['subCategory', 'Sub-Category'],
   ['department', 'Department'],
@@ -211,16 +228,14 @@ export interface ExcelResult {
 // Export all correspondences and tasks to a two-sheet .xlsx workbook.
 // The per-collection serial-counter doc (`--stats--`) is excluded.
 export async function exportToExcel(): Promise<ExcelResult> {
-  const [corrSnap, taskSnap] = await Promise.all([
+  const [corrSnap, visibleTasks] = await Promise.all([
     getDocs(collection(db, 'correspondences')),
-    getDocs(collection(db, 'tasks')),
+    getVisibleTasks(auth.currentUser?.uid ?? ''),
   ]);
   const correspondences = corrSnap.docs
     .filter(d => d.id !== '--stats--')
     .map(d => ({ id: d.id, ...d.data() }));
-  const tasks = taskSnap.docs
-    .filter(d => d.id !== '--stats--')
-    .map(d => ({ id: d.id, ...d.data() }));
+  const tasks = visibleTasks;
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(

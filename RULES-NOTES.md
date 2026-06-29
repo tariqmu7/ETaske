@@ -113,3 +113,49 @@ the live rules reject announcement writes and the chat seen-receipt write.
   so no rule change was needed for it. Cost: one `users` write per active tab
   per minute, fanned out to every open client via the existing users listener —
   acceptable for a small org, standard presence trade-off.
+
+## Update — per-task privacy (public / private tasks)
+
+Adds the first **deliberate per-record read isolation** on the board, scoped to
+tasks. A task carries `isPrivate: boolean` (absent/false = public). A **private**
+task is readable, updatable, and deletable **only by its owner — the assignee
+(`assignedToId`)**: not managers, not the admin, not even the manager who
+assigned it. Public tasks keep the shared-board behaviour. **Requires a fresh
+`firebase deploy --only firestore:rules` to the named DB.**
+
+- **Rules (`tasks`):** `read` now requires `!isPrivate || assignedToId == uid`
+  (missing field read via `.get('isPrivate', false)` so legacy docs count as
+  public). `update`/`delete` allow the owner unconditionally, but non-owners
+  (managers/admin or the assigner) only on **public** tasks — this stops a
+  manager from flipping someone's private task to public to read it.
+- **Why the client had to change (the Firestore gotcha):** security rules are
+  guards, not row filters — a single unconstrained `collection('tasks')` query is
+  rejected with `permission-denied` the moment another user owns a private task.
+  So every task read now goes through `src/lib/taskVisibility.ts`, which reads
+  the **union** of two rule-safe queries — `where('isPrivate','==',false)` (the
+  public board) and `where('assignedToId','==',uid)` (your own, incl. private) —
+  and merges them by id. ~10 listeners were converted (TasksDashboard, Overview,
+  Archive, ManagerInbox, DueSoon, App due-soon counter, Correspondings link
+  loader, CommandPalette, ChatBox share picker, exportData). Both filters are
+  single-field equality, so **no composite index** is needed.
+- **Behaviour changes that fall out of this:** the old admin-sees-all-tasks and
+  team-scoped (`teamId`) task listeners are gone — everyone now sees *public +
+  own* org-wide. Admin analytics/backup/export likewise exclude **other users'**
+  private tasks (private means private; admin has no bypass). If you instead want
+  the admin to retain oversight, add `isAdminEmail()` as a third disjunct to the
+  `tasks` `read` rule and give the admin path a separate unconstrained listener.
+- **Mandatory backfill (data migration):** a `==` filter never matches docs
+  missing the field, so existing tasks without `isPrivate` would vanish from
+  every non-owner's board. Run **`npm run firestore:backfill-privacy`** (stamps
+  `isPrivate:false` on all existing task docs; idempotent) **before/with** the
+  rules deploy. The rule treats missing as public, so this is a visibility fix,
+  not a security one.
+- **Residual leak (documented, not fixed):** `milestones` of a private task are
+  still readable by any Approved member (milestone reads remain board-wide to
+  keep the unfiltered milestone listeners working). Milestone *titles* could
+  therefore leak even though the parent task is hidden. Gating them would require
+  a parent-task `get()` per milestone and splitting the milestone listeners —
+  deferred, same class of trade-off as the original "no read isolation" residual.
+- **Tests:** `scripts/firestore-rules.test.ts` gained a "Private-task isolation"
+  block (owner reads; manager/admin denied read, flip, and delete) — run
+  `npm run rules:test`.

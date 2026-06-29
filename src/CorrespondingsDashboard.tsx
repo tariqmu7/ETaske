@@ -6,6 +6,7 @@ import {
   doc, serverTimestamp, orderBy, deleteField
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import {
@@ -176,13 +177,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     [visibleItems]
   );
 
-  // Load tasks for linking
+  // Load tasks for linking (privacy-aware: public + own only)
   useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'tasks'), snap => {
-      setTasks(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Task)));
-    });
+    const unsub = subscribeVisibleTasks(user.uid, rows => setTasks(rows));
     return () => unsub();
-  }, []);
+  }, [user.uid]);
 
   const filtered = useMemo(() => {
     return visibleItems.filter(i => {
@@ -396,6 +395,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           filePaths: formData.filePaths?.length ? formData.filePaths : [],
           statusUpdate: 'Not Started',
           notes: [],
+          isPrivate: false,
           userId: user.uid,
           teamId: appUser.teamId || 'NONE',
           createdAt: serverTimestamp(),
@@ -492,6 +492,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         filePaths: item.filePaths?.length ? item.filePaths : [],
         statusUpdate: 'Not Started',
         notes: noteArr,
+        isPrivate: false,
         userId: user.uid,
         teamId: appUser.teamId || 'NONE',
         createdAt: serverTimestamp(),

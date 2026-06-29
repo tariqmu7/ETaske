@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { User } from 'firebase/auth';
 import { AppUser, Task, Corresponding } from './types';
 import { AppView } from './App';
@@ -33,19 +34,18 @@ const CLOSED = ['Done', 'Closed', 'Archived'];
  * deep-links into the originating dashboard and opens that exact record
  * (src/lib/deepLink.ts). Reached from the orange alert icon in the top nav.
  */
-export default function DueSoonDashboard({ onNavigate }: Props) {
+export default function DueSoonDashboard({ user, onNavigate }: Props) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [corrs, setCorrs] = useState<Corresponding[]>([]);
 
   useEffect(() => {
-    const unsubT = onSnapshot(collection(db, 'tasks'), snap => {
-      setTasks(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Task)));
-    });
+    // Privacy-aware: only tasks this user may read (public + own).
+    const unsubT = subscribeVisibleTasks(user.uid, rows => setTasks(rows));
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
       setCorrs(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     });
     return () => { unsubT(); unsubC(); };
-  }, []);
+  }, [user.uid]);
 
   const rows = useMemo<Row[]>(() => {
     const out: Row[] = [];

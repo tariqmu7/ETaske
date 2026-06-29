@@ -3,6 +3,7 @@ import {
   collection, query, onSnapshot, orderBy, Timestamp
 } from 'firebase/firestore';
 import { db } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { User } from 'firebase/auth';
 import {
   AppUser, Corresponding, Task, Milestone,
@@ -240,9 +241,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       e => handleFirestoreError(e, OperationType.LIST, 'correspondences')
     ));
 
-    unsubs.push(onSnapshot(
-      query(collection(db, 'tasks'), orderBy('createdAt', 'desc')),
-      snap => { setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task))); },
+    // Privacy-aware: reads public tasks + the viewer's own (incl. private).
+    // Other users' private tasks are intentionally excluded from analytics.
+    unsubs.push(subscribeVisibleTasks(
+      user.uid,
+      rows => { setTasks(rows); },
       e => handleFirestoreError(e, OperationType.LIST, 'tasks')
     ));
 
@@ -253,7 +256,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
     ));
 
     return () => unsubs.forEach(u => u());
-  }, []);
+  }, [user.uid]);
 
   // ─── Root Status Stats ────────────────────────────────────────────────────
   // Tasks grouped by their own status; correspondences mapped onto the same buckets.

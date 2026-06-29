@@ -4,6 +4,7 @@ import {
   doc, serverTimestamp, orderBy, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { createNotification } from './lib/pushNotification';
 import { User } from 'firebase/auth';
 import { AppUser, Corresponding, Task, PRIORITY_OPTIONS, OperationType } from './types';
@@ -53,18 +54,17 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     return () => unsub();
   }, [appUser.status]);
 
-  // Load tasks for overview
+  // Load tasks for overview (privacy-aware: public + own only)
   useEffect(() => {
     if (!appUser || appUser.status !== 'Approved') return;
 
-    const q = query(collection(db, 'tasks'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, snap => {
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+    const unsub = subscribeVisibleTasks(user.uid, rows => {
+      setTasks(rows);
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'tasks');
     });
     return () => unsub();
-  }, [appUser.status]);
+  }, [appUser.status, user.uid]);
 
   // Department scoping (mirrors CorrespondingsDashboard): an Admin reviews
   // every correspondence; a Manager only reviews ones whose creator is in
@@ -167,6 +167,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           filePaths: selectedCorr.filePaths || [],
           statusUpdate: 'Not Started',
           notes: [],
+          isPrivate: false,
           userId: user.uid,
           teamId: appUser.teamId || employee.teamId || 'NONE',
           createdAt: serverTimestamp(),

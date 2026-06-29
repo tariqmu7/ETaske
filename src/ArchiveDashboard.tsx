@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   collection, query, onSnapshot, updateDoc,
-  doc, serverTimestamp, orderBy, where
+  doc, serverTimestamp, orderBy
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { User } from 'firebase/auth';
 import { AppUser, Task, Corresponding, Milestone, OperationType } from './types';
 import {
@@ -28,16 +29,16 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const isAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
-    const q = isAdmin
-      ? query(collection(db, 'tasks'), where('status', 'in', ['Done', 'Archived']), orderBy('updatedAt', 'desc'))
-      : query(collection(db, 'tasks'), where('teamId', '==', appUser.teamId || 'NONE'), where('status', 'in', ['Done', 'Archived']), orderBy('updatedAt', 'desc'));
-
-    const unsub = onSnapshot(q, snap => {
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+    // Privacy-aware read (public + own); the Done/Archived filter and the
+    // updatedAt sort are applied client-side since the union is unsorted.
+    const unsub = subscribeVisibleTasks(user.uid, rows => {
+      const archived = rows
+        .filter(t => t.status === 'Done' || t.status === 'Archived')
+        .sort((a, b) => (b.updatedAt?.toMillis?.() ?? 0) - (a.updatedAt?.toMillis?.() ?? 0));
+      setTasks(archived);
     }, err => { console.error(err); setError('Failed to load archive.'); });
     return () => unsub();
-  }, [appUser]);
+  }, [user.uid]);
 
   useEffect(() => {
     const q = query(collection(db, 'milestones'), orderBy('createdAt', 'asc'));

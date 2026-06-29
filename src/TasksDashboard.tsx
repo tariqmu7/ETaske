@@ -14,12 +14,13 @@ import {
   CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
+import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
-  Users, ArrowLeft
+  Users, ArrowLeft, Lock, Globe
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
@@ -37,6 +38,45 @@ function priorityBadge(p: string) {
 function statusBadge(s: string) {
   const map: Record<string, string> = { 'In Progress': 'badge-inprogress', Done: 'badge-done', Pending: 'badge-pending', Archived: 'badge-archived' };
   return `badge ${map[s] || 'badge-pending'}`;
+}
+
+// Public / Private segmented control. Private tasks are visible & editable only
+// to their owner (the assignee) — enforced in firestore.rules.
+function PrivacyToggle({ isPrivate, onChange }: { isPrivate: boolean; onChange: (v: boolean) => void }) {
+  const opts: { value: boolean; label: string; icon: React.ReactNode; hint: string }[] = [
+    { value: false, label: 'Public', icon: <Globe style={{ width: 14, height: 14 }} />, hint: 'Everyone on the board can see it' },
+    { value: true, label: 'Private', icon: <Lock style={{ width: 14, height: 14 }} />, hint: 'Only you can see it' },
+  ];
+  return (
+    <div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        {opts.map(o => {
+          const active = o.value === isPrivate;
+          return (
+            <button
+              key={o.label}
+              type="button"
+              onClick={() => onChange(o.value)}
+              style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                padding: '10px 12px', cursor: 'pointer',
+                border: `1.5px solid ${active ? 'var(--blue-500)' : 'var(--border-md)'}`,
+                background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface-2)',
+                color: active ? 'var(--blue-600)' : 'var(--text-secondary)',
+                fontSize: 13, fontWeight: 600, transition: 'all 0.15s',
+              }}
+            >
+              {o.icon}{o.label}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        {isPrivate ? <Lock style={{ width: 12, height: 12 }} /> : <Globe style={{ width: 12, height: 12 }} />}
+        {isPrivate ? 'Only you can view or edit this task — not managers or admins.' : 'Visible to everyone on the shared board.'}
+      </div>
+    </div>
+  );
 }
 function msBadge(s: MilestoneStatus) {
   const map: Record<string, string> = { 'In Progress': 'badge-inprogress', Done: 'badge-done', Planned: 'badge-pending', Blocked: 'badge-urgent' };
@@ -99,6 +139,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     assignedTo: appUser.displayName,
     assignedToId: user.uid,
     filePaths: [] as string[],
+    isPrivate: false,
   });
 
   const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
@@ -127,23 +168,23 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     return Array.from(new Set([...PROJECT_OPTIONS, ...fromTasks])).sort();
   }, [tasks]);
 
-  // Tasks listener
+  // Tasks listener — reads the public-OR-mine union so private tasks owned by
+  // other users are never requested (see src/lib/taskVisibility.ts). Sorted
+  // client-side below (the union is returned unsorted).
   useEffect(() => {
     if (!appUser || appUser.status !== 'Approved') return;
 
-    const isAdmin = appUser.role === 'Admin';
-    const q = isAdmin
-      ? query(collection(db, 'tasks'), orderBy('createdAt', 'desc'))
-      : query(collection(db, 'tasks'), where('teamId', '==', appUser.teamId || 'NONE'), orderBy('createdAt', 'desc'));
-
-    const unsub = onSnapshot(q, snap => {
-      setTasks(snap.docs.map(d => ({ id: d.id, ...d.data() } as Task)));
+    const unsub = subscribeVisibleTasks(user.uid, rows => {
+      const sorted = [...rows].sort(
+        (a, b) => (b.createdAt?.toMillis?.() ?? 0) - (a.createdAt?.toMillis?.() ?? 0)
+      );
+      setTasks(sorted);
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'tasks');
       setError('Failed to load tasks. Check your connection.');
     });
     return () => unsub();
-  }, [appUser]);
+  }, [appUser, user.uid]);
 
   // Milestones listener
   useEffect(() => {
@@ -327,6 +368,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         assignedTo: editingTask.assignedTo,
         assignedToId: editingTask.assignedToId,
         filePaths: editingTask.filePaths || [],
+        isPrivate: !!editingTask.isPrivate,
         updatedAt: serverTimestamp(),
       });
 
@@ -571,21 +613,23 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         teamId: appUser.teamId || 'NONE',
         dueDate: newTask.dueDate || null,
         filePaths: newTask.filePaths || [],
+        isPrivate: !!newTask.isPrivate,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
       setIsAddingTask(false);
-      setNewTask({ 
-        taskName: '', 
-        description: '', 
-        priority: 'Medium', 
-        dueDate: '', 
-        category: 'Project', 
-        subCategory: 'None', 
+      setNewTask({
+        taskName: '',
+        description: '',
+        priority: 'Medium',
+        dueDate: '',
+        category: 'Project',
+        subCategory: 'None',
         department: 'None',
         assignedTo: appUser.displayName,
         assignedToId: user.uid,
         filePaths: [],
+        isPrivate: false,
       });
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'tasks');
@@ -931,6 +975,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   </select>
                 </div>
 
+                {/* Divider: Visibility */}
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Visibility</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <PrivacyToggle
+                    isPrivate={!!newTask.isPrivate}
+                    onChange={v => setNewTask({ ...newTask, isPrivate: v })}
+                  />
+                </div>
+
                 {/* Divider: Classification */}
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>Classification</span>
@@ -1272,6 +1328,15 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     <span className={statusBadge(task.status)}>{task.status}</span>
                                   )}
                                   <span className={priorityBadge(task.priority)}>{task.priority}</span>
+                                  {task.isPrivate && (
+                                    <span
+                                      className="badge"
+                                      style={{ marginLeft: 8, background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                      title="Private — only you can see this task"
+                                    >
+                                      <Lock style={{ width: 11, height: 11 }} /> {t('Private')}
+                                    </span>
+                                  )}
                                   {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>{t('OVERDUE')}</span>}
                                   {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>}
                                   
@@ -1898,6 +1963,17 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                       ))
                     }
                   </select>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>Visibility</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <PrivacyToggle
+                    isPrivate={!!editingTask.isPrivate}
+                    onChange={v => setEditingTask({ ...editingTask, isPrivate: v })}
+                  />
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

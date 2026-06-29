@@ -12,6 +12,7 @@
     "lint": "tsc --noEmit",
     "firestore:backup": "tsx scripts/firestore-backup.ts",
     "firestore:restore": "tsx scripts/firestore-restore.ts",
+    "firestore:backfill-privacy": "tsx scripts/backfill-task-privacy.ts",
     "rules:test": "firebase emulators:exec --only firestore \"tsx scripts/firestore-rules.test.ts\""
   },
   "dependencies": {

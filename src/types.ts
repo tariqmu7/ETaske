@@ -101,6 +101,10 @@ export interface Task {
   category?: CorrespondingCategory;
   subCategory?: string;
   department?: string;
+  // Privacy: when true the task is visible/editable ONLY to its owner
+  // (assignedToId) — not managers, not admin. Absent/false = public (shared
+  // org board). Enforced in firestore.rules + src/lib/taskVisibility.ts.
+  isPrivate?: boolean;
   // Assignments
   assignedTo?: string;        // employee displayName
   assignedToId?: string;      // employee uid

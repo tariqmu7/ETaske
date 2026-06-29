@@ -66,6 +66,9 @@ async function main() {
     await setDoc(doc(db, 'users/emp'), { status: 'Approved', role: 'Employee', name: 'E' });
     await setDoc(doc(db, 'users/mgr'), { status: 'Approved', role: 'Manager', name: 'M' });
     await setDoc(doc(db, 'tasks/T1'), { assignedById: 'mgr', assignedToId: 'emp', title: 't' });
+    // Privacy fixtures: TPRIV is a private task owned by emp; TPUB is public.
+    await setDoc(doc(db, 'tasks/TPRIV'), { assignedById: 'mgr', assignedToId: 'emp', isPrivate: true, title: 'secret' });
+    await setDoc(doc(db, 'tasks/TPUB'), { assignedById: 'mgr', assignedToId: 'emp', isPrivate: false, title: 'open' });
     await setDoc(doc(db, 'tasks/--stats--'), { value: 5 });
     await setDoc(doc(db, 'correspondences/C1'), { userId: 'emp', subject: 's' });
     await setDoc(doc(db, 'correspondences/--stats--'), { value: 3 });
@@ -158,6 +161,27 @@ async function main() {
     deleteDoc(doc(emp, 'tasks/T1')));
   await check('mgr can delete task T1', 'ok',
     deleteDoc(doc(mgr, 'tasks/T1')));
+
+  // ── 7. Private-task isolation (owner-only: not managers, not admin) ────────
+  console.log('\n[Private-task isolation]');
+  await check('emp (owner) reads own private task TPRIV', 'ok',
+    getDoc(doc(emp, 'tasks/TPRIV')));
+  await check('emp reads public task TPUB', 'ok',
+    getDoc(doc(emp, 'tasks/TPUB')));
+  await check("mgr CANNOT read emp's private task TPRIV", 'deny',
+    getDoc(doc(mgr, 'tasks/TPRIV')));
+  await check("admin CANNOT read emp's private task TPRIV", 'deny',
+    getDoc(doc(admin, 'tasks/TPRIV')));
+  await check('mgr can read public task TPUB', 'ok',
+    getDoc(doc(mgr, 'tasks/TPUB')));
+  await check("mgr CANNOT flip emp's private task to public", 'deny',
+    updateDoc(doc(mgr, 'tasks/TPRIV'), { isPrivate: false }));
+  await check("mgr CANNOT delete emp's private task TPRIV", 'deny',
+    deleteDoc(doc(mgr, 'tasks/TPRIV')));
+  await check('emp (owner) can update own private task TPRIV', 'ok',
+    updateDoc(doc(emp, 'tasks/TPRIV'), { status: 'In Progress' }));
+  await check('emp can make own task private', 'ok',
+    updateDoc(doc(emp, 'tasks/TPUB'), { isPrivate: true }));
 
   await env.cleanup();
 
