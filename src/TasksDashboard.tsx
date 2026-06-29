@@ -78,6 +78,59 @@ function PrivacyToggle({ isPrivate, onChange }: { isPrivate: boolean; onChange: 
     </div>
   );
 }
+// Multi-select for adding co-workers to a task. The primary owner (assignee)
+// is excluded — they can't also be a collaborator. Mirrors the assignee select's
+// department/role visibility filter.
+function CollaboratorPicker({
+  users, selectedIds, ownerId, onChange,
+}: {
+  users: AppUser[];
+  selectedIds: string[];
+  ownerId?: string;
+  onChange: (ids: string[]) => void;
+}) {
+  const available = users.filter(u => u.id !== ownerId);
+  const toggle = (id: string) => {
+    onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
+  };
+  if (available.length === 0) {
+    return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No other team members available.</div>;
+  }
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {available.map(u => {
+          const active = selectedIds.includes(u.id);
+          return (
+            <button
+              key={u.id}
+              type="button"
+              onClick={() => toggle(u.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6,
+                padding: '6px 10px', cursor: 'pointer',
+                border: `1.5px solid ${active ? 'var(--blue-500)' : 'var(--border-md)'}`,
+                background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface-2)',
+                color: active ? 'var(--blue-600)' : 'var(--text-secondary)',
+                fontSize: 12, fontWeight: 600, transition: 'all 0.15s',
+              }}
+            >
+              <span style={{ width: 9, height: 9, borderRadius: 0, background: u.userColor || getUserColor(u.id) }} />
+              {u.displayName}
+              {active && <Check style={{ width: 12, height: 12 }} />}
+            </button>
+          );
+        })}
+      </div>
+      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <Users style={{ width: 12, height: 12 }} />
+        {selectedIds.length
+          ? `${selectedIds.length} collaborator${selectedIds.length > 1 ? 's' : ''} — they can view and edit this task.`
+          : 'Add co-workers so this task is shared with and editable by them.'}
+      </div>
+    </div>
+  );
+}
 function msBadge(s: MilestoneStatus) {
   const map: Record<string, string> = { 'In Progress': 'badge-inprogress', Done: 'badge-done', Planned: 'badge-pending', Blocked: 'badge-urgent' };
   return `badge ${map[s] || 'badge-pending'}`;
@@ -138,6 +191,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     department: 'None',
     assignedTo: appUser.displayName,
     assignedToId: user.uid,
+    collaboratorIds: [] as string[],
     filePaths: [] as string[],
     isPrivate: false,
   });
@@ -217,7 +271,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const filtered = useMemo(() => {
     return tasks.filter(t => {
       if (t.status === 'Archived') return false;
-      if (view === 'mine' && t.assignedToId !== user.uid) return false;
+      if (view === 'mine' && t.assignedToId !== user.uid && !(t.collaboratorIds || []).includes(user.uid)) return false;
       if (search && !globalSearch(t, search)) return false;
       if (statusFilter === 'Active') { if (t.status === 'Done') return false; }
       else if (statusFilter === 'Overdue') { if (t.status === 'Done' || !isOverdue(t.dueDate)) return false; }
@@ -367,12 +421,29 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         dueDate: editingTask.dueDate || null,
         assignedTo: editingTask.assignedTo,
         assignedToId: editingTask.assignedToId,
+        collaboratorIds: editingTask.collaboratorIds || [],
+        collaborators: (editingTask.collaboratorIds || []).map(id => projectUsers.find(u => u.id === id)?.displayName || ''),
         filePaths: editingTask.filePaths || [],
         isPrivate: !!editingTask.isPrivate,
         updatedAt: serverTimestamp(),
       });
 
       const originalTask = tasks.find(t => t.id === editingTask.id);
+
+      // Notify collaborators newly added in this edit.
+      const prevCollabs = originalTask?.collaboratorIds || [];
+      const addedCollabs = (editingTask.collaboratorIds || []).filter(id => !prevCollabs.includes(id) && id !== user.uid);
+      for (const cid of addedCollabs) {
+        await createNotification({
+          type: 'task_assigned',
+          title: 'Added as Collaborator',
+          message: `${appUser.displayName} added you as a collaborator on "${editingTask.taskName}".`,
+          forUserId: cid,
+          read: false,
+          relatedId: editingTask.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers);
+      }
       
       // Update linked correspondence if exists
       if (originalTask?.correspondingId) {
@@ -597,7 +668,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     if (!newTask.taskName.trim()) return;
     try {
       const serial = await getNextSerialNumber('tasks');
-      await addDoc(collection(db, 'tasks'), {
+      const taskRef = await addDoc(collection(db, 'tasks'), {
         taskName: newTask.taskName.trim(),
         description: newTask.description.trim(),
         status: 'Pending',
@@ -610,6 +681,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         assignedToId: newTask.assignedToId || user.uid,
         assignedBy: appUser.displayName,
         assignedById: user.uid,
+        collaboratorIds: newTask.collaboratorIds,
+        collaborators: newTask.collaboratorIds.map(id => projectUsers.find(u => u.id === id)?.displayName || ''),
         teamId: appUser.teamId || 'NONE',
         dueDate: newTask.dueDate || null,
         filePaths: newTask.filePaths || [],
@@ -617,6 +690,21 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
+
+      // Notify each collaborator they were added.
+      for (const cid of newTask.collaboratorIds) {
+        if (cid === user.uid) continue;
+        await createNotification({
+          type: 'task_assigned',
+          title: 'Added as Collaborator',
+          message: `${appUser.displayName} added you as a collaborator on "${newTask.taskName.trim()}".`,
+          forUserId: cid,
+          read: false,
+          relatedId: taskRef.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers);
+      }
+
       setIsAddingTask(false);
       setNewTask({
         taskName: '',
@@ -628,6 +716,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         department: 'None',
         assignedTo: appUser.displayName,
         assignedToId: user.uid,
+        collaboratorIds: [],
         filePaths: [],
         isPrivate: false,
       });
@@ -973,6 +1062,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                       ))
                     }
                   </select>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <CollaboratorPicker
+                    users={projectUsers.filter(u =>
+                      appUser.role === 'Admin' ||
+                      (u.department === appUser.department && u.teamId === appUser.teamId)
+                    )}
+                    ownerId={newTask.assignedToId}
+                    selectedIds={newTask.collaboratorIds}
+                    onChange={ids => setNewTask({ ...newTask, collaboratorIds: ids })}
+                  />
                 </div>
 
                 {/* Divider: Visibility */}
@@ -1444,6 +1545,22 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         );
                                       })()}
                                       By {task.assignedBy}
+                                    </span>
+                                  )}
+                                  {!!(task.collaboratorIds && task.collaboratorIds.length) && (
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={`Collaborators: ${(task.collaborators || []).filter(Boolean).join(', ')}`}>
+                                      <Users style={{ width: 12, height: 12 }} />
+                                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                                        {task.collaboratorIds.slice(0, 4).map((cid, i) => {
+                                          const cu = projectUsers.find(pu => pu.id === cid);
+                                          return cu?.photoURL ? (
+                                            <img key={cid} src={cu.photoURL} className="avatar" style={{ width: 16, height: 16, objectFit: 'cover', marginLeft: i ? -5 : 0, border: '1.5px solid var(--surface-1)' }} alt="" />
+                                          ) : (
+                                            <span key={cid} style={{ width: 12, height: 12, borderRadius: 0, background: cu?.userColor || getUserColor(cid), marginLeft: i ? -3 : 0 }} />
+                                          );
+                                        })}
+                                      </span>
+                                      {task.collaboratorIds.length > 4 && <span>+{task.collaboratorIds.length - 4}</span>}
                                     </span>
                                   )}
                                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
@@ -1963,6 +2080,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                       ))
                     }
                   </select>
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <CollaboratorPicker
+                    users={projectUsers.filter(u =>
+                      appUser.role === 'Admin' ||
+                      (u.department === appUser.department && u.teamId === appUser.teamId)
+                    )}
+                    ownerId={editingTask.assignedToId}
+                    selectedIds={editingTask.collaboratorIds || []}
+                    onChange={ids => setEditingTask({ ...editingTask, collaboratorIds: ids })}
+                  />
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

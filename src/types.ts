@@ -106,10 +106,17 @@ export interface Task {
   // org board). Enforced in firestore.rules + src/lib/taskVisibility.ts.
   isPrivate?: boolean;
   // Assignments
-  assignedTo?: string;        // employee displayName
-  assignedToId?: string;      // employee uid
+  assignedTo?: string;        // employee displayName (primary owner)
+  assignedToId?: string;      // employee uid (primary owner)
   assignedBy?: string;        // manager displayName
   assignedById?: string;      // manager uid
+  // Collaboration: additional users the task is shared with / related to.
+  // The primary owner stays `assignedToId`; collaborators can read & edit the
+  // task (and its private variant). `collaborators` is a denormalized snapshot
+  // of display names for rendering; `collaboratorIds` is the source of truth and
+  // is what firestore.rules + taskVisibility.ts key off.
+  collaboratorIds?: string[];
+  collaborators?: string[];
   // Dates
   dueDate?: string;
   archivedAt?: Timestamp;

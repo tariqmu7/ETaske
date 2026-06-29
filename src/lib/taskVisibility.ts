@@ -15,14 +15,16 @@ import type { Task } from '../types';
  * unconstrained `collection('tasks')` listener is REJECTED with
  * permission-denied the moment any other user owns a private task (the query
  * could surface a doc the caller can't read). So every place that used to read
- * the whole `tasks` collection must instead read the union of two rule-safe
+ * the whole `tasks` collection must instead read the union of three rule-safe
  * queries and merge them:
- *   1. all PUBLIC tasks        — where('isPrivate', '==', false)
- *   2. the caller's OWN tasks  — where('assignedToId', '==', uid)  (incl. private)
+ *   1. all PUBLIC tasks            — where('isPrivate', '==', false)
+ *   2. the caller's OWN tasks      — where('assignedToId', '==', uid)  (incl. private)
+ *   3. tasks the caller COLLABS on — where('collaboratorIds', 'array-contains', uid) (incl. private)
  *
- * Both filters are single-field equality, so Firestore's automatic indexes
- * cover them — no composite index is required. Results are merged + de-duped by
- * id and returned UNSORTED; callers already sort/filter client-side as before.
+ * All three filters are single-field (equality / array-contains), so
+ * Firestore's automatic indexes cover them — no composite index is required.
+ * Results are merged + de-duped by id and returned UNSORTED; callers already
+ * sort/filter client-side as before.
  *
  * NOTE: existing task docs created before this feature have no `isPrivate`
  * field and therefore won't match query (1). They must be backfilled with
@@ -59,11 +61,15 @@ export function subscribeVisibleTasks(
 ): Unsubscribe {
   let publicTasks: Task[] = [];
   let myTasks: Task[] = [];
+  let collabTasks: Task[] = [];
   let gotPublic = false;
   let gotMine = false;
+  let gotCollab = false;
 
   const emit = () => {
-    if (gotPublic && gotMine) onData(mergeById(publicTasks, myTasks));
+    if (gotPublic && gotMine && gotCollab) {
+      onData(mergeById(mergeById(publicTasks, myTasks), collabTasks));
+    }
   };
 
   const unsubPublic = onSnapshot(
@@ -76,8 +82,13 @@ export function subscribeVisibleTasks(
     snap => { myTasks = toTasks(snap.docs); gotMine = true; emit(); },
     err => onError?.(err),
   );
+  const unsubCollab = onSnapshot(
+    query(collection(db, 'tasks'), where('collaboratorIds', 'array-contains', uid)),
+    snap => { collabTasks = toTasks(snap.docs); gotCollab = true; emit(); },
+    err => onError?.(err),
+  );
 
-  return () => { unsubPublic(); unsubMine(); };
+  return () => { unsubPublic(); unsubMine(); unsubCollab(); };
 }
 
 /**
@@ -85,9 +96,10 @@ export function subscribeVisibleTasks(
  * The `getDocs` equivalent of {@link subscribeVisibleTasks}.
  */
 export async function getVisibleTasks(uid: string): Promise<Task[]> {
-  const [pub, mine] = await Promise.all([
+  const [pub, mine, collab] = await Promise.all([
     getDocs(query(collection(db, 'tasks'), where('isPrivate', '==', false))),
     getDocs(query(collection(db, 'tasks'), where('assignedToId', '==', uid))),
+    getDocs(query(collection(db, 'tasks'), where('collaboratorIds', 'array-contains', uid))),
   ]);
-  return mergeById(toTasks(pub.docs), toTasks(mine.docs));
+  return mergeById(mergeById(toTasks(pub.docs), toTasks(mine.docs)), toTasks(collab.docs));
 }

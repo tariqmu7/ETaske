@@ -113,16 +113,24 @@ service cloud.firestore {
     match /tasks/{taskId} {
       function taskIsPrivate(data) { return data.get('isPrivate', false) == true; }
       function ownsTask(data)      { return data.assignedToId == request.auth.uid; }
+      // A collaborator is explicitly added to the task and is treated like a
+      // co-owner: can read & edit even when the task is private.
+      function isCollaborator(data) {
+        return request.auth.uid in data.get('collaboratorIds', []);
+      }
 
       allow read: if isApproved() &&
-        (!taskIsPrivate(resource.data) || ownsTask(resource.data));
+        (!taskIsPrivate(resource.data) || ownsTask(resource.data) || isCollaborator(resource.data));
       allow create: if isApproved() && taskId != '--stats--' &&
         request.resource.data.assignedById == request.auth.uid;
-      // Owner can always edit. Non-owners (managers/admin or the assigner) may
-      // only edit PUBLIC tasks — this also stops a manager from flipping someone
-      // else's private task to public to read it.
+      // Owner and collaborators can always edit. Other non-owners (managers/admin
+      // or the assigner) may only edit PUBLIC tasks — this also stops a manager
+      // from flipping someone else's private task to public to read it. A
+      // non-collaborator cannot self-add to a private task: to write at all they
+      // must already be owner/collaborator.
       allow update: if isApproved() && taskId != '--stats--' && (
         ownsTask(resource.data) ||
+        isCollaborator(resource.data) ||
         (!taskIsPrivate(resource.data) &&
           (isManagerOrAdmin() || resource.data.assignedById == request.auth.uid))
       );
@@ -143,7 +151,8 @@ service cloud.firestore {
       allow update, delete: if isApproved() && (
         isManagerOrAdmin() ||
         resource.data.addedById == request.auth.uid ||
-        get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assignedToId == request.auth.uid
+        get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.assignedToId == request.auth.uid ||
+        request.auth.uid in get(/databases/$(database)/documents/tasks/$(resource.data.taskId)).data.get('collaboratorIds', [])
       );
     }
 

@@ -123,21 +123,31 @@ task is readable, updatable, and deletable **only by its owner — the assignee
 assigned it. Public tasks keep the shared-board behaviour. **Requires a fresh
 `firebase deploy --only firestore:rules` to the named DB.**
 
-- **Rules (`tasks`):** `read` now requires `!isPrivate || assignedToId == uid`
-  (missing field read via `.get('isPrivate', false)` so legacy docs count as
-  public). `update`/`delete` allow the owner unconditionally, but non-owners
+- **Rules (`tasks`):** `read` now requires `!isPrivate || assignedToId == uid ||
+  uid in collaboratorIds` (missing fields read via `.get(..., default)` so legacy
+  docs count as public with no collaborators). `update`/`delete` allow the owner
+  and collaborators unconditionally (a collaborator is an explicitly added
+  co-owner, so private tasks stay editable for them); other non-owners
   (managers/admin or the assigner) only on **public** tasks — this stops a
-  manager from flipping someone's private task to public to read it.
+  manager from flipping someone's private task to public to read it. A
+  non-collaborator can't self-add to a private task: to write at all they must
+  already be owner or collaborator.
+- **Collaborators (shared tasks):** a task may list extra users in
+  `collaboratorIds` (display-name snapshot in `collaborators`). They are related
+  to the task, can read/edit it (incl. when private), and it surfaces in their
+  "My Tasks". Added/managed in the TasksDashboard create & edit modals.
 - **Why the client had to change (the Firestore gotcha):** security rules are
   guards, not row filters — a single unconstrained `collection('tasks')` query is
   rejected with `permission-denied` the moment another user owns a private task.
   So every task read now goes through `src/lib/taskVisibility.ts`, which reads
-  the **union** of two rule-safe queries — `where('isPrivate','==',false)` (the
-  public board) and `where('assignedToId','==',uid)` (your own, incl. private) —
-  and merges them by id. ~10 listeners were converted (TasksDashboard, Overview,
-  Archive, ManagerInbox, DueSoon, App due-soon counter, Correspondings link
-  loader, CommandPalette, ChatBox share picker, exportData). Both filters are
-  single-field equality, so **no composite index** is needed.
+  the **union** of three rule-safe queries — `where('isPrivate','==',false)` (the
+  public board), `where('assignedToId','==',uid)` (your own, incl. private), and
+  `where('collaboratorIds','array-contains',uid)` (tasks you collaborate on,
+  incl. private) — and merges them by id. ~10 listeners were converted
+  (TasksDashboard, Overview, Archive, ManagerInbox, DueSoon, App due-soon
+  counter, Correspondings link loader, CommandPalette, ChatBox share picker,
+  exportData). All filters are single-field (equality / array-contains), so **no
+  composite index** is needed.
 - **Behaviour changes that fall out of this:** the old admin-sees-all-tasks and
   team-scoped (`teamId`) task listeners are gone — everyone now sees *public +
   own* org-wide. Admin analytics/backup/export likewise exclude **other users'**
