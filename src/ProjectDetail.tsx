@@ -12,6 +12,16 @@ import ProjectSubcontractsTab from './components/projects/ProjectSubcontractsTab
 
 type Tab = 'tracking' | 'financials' | 'contracts' | 'subcontracts';
 
+function statusColors(status: string): { bg: string; fg: string } {
+  switch (status) {
+    case 'Active':    return { bg: 'rgba(22,163,74,0.12)',  fg: '#16a34a' };
+    case 'On Hold':   return { bg: 'rgba(245,158,11,0.14)', fg: '#b45309' };
+    case 'Completed': return { bg: 'rgba(37,99,235,0.12)',  fg: '#2563eb' };
+    case 'Cancelled': return { bg: 'rgba(220,38,38,0.12)',  fg: '#dc2626' };
+    default:          return { bg: 'var(--surface-3)',      fg: 'var(--text-secondary)' };
+  }
+}
+
 interface Props {
   project: Project;
   user: User;
@@ -47,6 +57,14 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
       <div className="card" style={{ padding: 20, marginBottom: 18 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{project.name}</h1>
+          {(() => {
+            const c = statusColors(project.status);
+            return (
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: c.fg, background: c.bg, padding: '4px 10px', whiteSpace: 'nowrap' }}>
+                {project.status}
+              </span>
+            );
+          })()}
           {project.serialNumber && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{project.serialNumber}</span>}
         </div>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>

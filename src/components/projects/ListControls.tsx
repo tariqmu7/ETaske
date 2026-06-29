@@ -1,5 +1,5 @@
 import React from 'react';
-import { ArrowDown, ArrowUp, ListFilter } from 'lucide-react';
+import { ArrowDown, ArrowUp, ListFilter, X } from 'lucide-react';
 
 export type SortDir = 'asc' | 'desc';
 
@@ -22,49 +22,65 @@ interface Props {
   trailing?: React.ReactNode;
 }
 
+/** A filter is "active" when it's set to anything other than its first
+ *  (all-pass) option, so we can highlight it and offer a one-tap reset. */
+const isActive = (f: FilterDef) => f.options.length > 0 && f.value !== f.options[0].value;
+
 /**
  * Compact filter + sort toolbar shared across the project detail tabs.
- * Matches the inline-style / CSS-variable idiom used elsewhere in the app.
+ * Flat / CSS-variable idiom: contained bar, custom-chevron selects, active
+ * highlighting and a clear-all shortcut.
  */
 export default function ListControls({
   filters = [], sortOptions, sortValue, onSortChange, sortDir, onSortDirToggle, trailing,
 }: Props) {
+  const activeCount = filters.filter(isActive).length;
+  const clearAll = () => filters.forEach(f => { if (isActive(f)) f.onChange(f.options[0].value); });
+
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
-      <ListFilter className="w-4 h-4" style={{ color: 'var(--text-muted)', marginBottom: 8, flexShrink: 0 }} />
+    <div className="list-controls">
+      <div className="lc-rail" title={activeCount ? `${activeCount} filter${activeCount > 1 ? 's' : ''} active` : 'Filter & sort'}>
+        <ListFilter className="w-4 h-4" />
+      </div>
 
       {filters.map(f => (
-        <label key={f.key} style={field}>
-          <span style={fieldLabel}>{f.label}</span>
-          <select value={f.value} onChange={e => f.onChange(e.target.value)} style={ctrl}>
+        <label key={f.key} className="lc-field">
+          <span className="lc-label">{f.label}</span>
+          <select
+            value={f.value}
+            onChange={e => f.onChange(e.target.value)}
+            className={`lc-select${isActive(f) ? ' is-active' : ''}`}
+          >
             {f.options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
         </label>
       ))}
 
-      <label style={field}>
-        <span style={fieldLabel}>Sort by</span>
-        <div style={{ display: 'flex', gap: 4 }}>
-          <select value={sortValue} onChange={e => onSortChange(e.target.value)} style={ctrl}>
+      <label className="lc-field">
+        <span className="lc-label">Sort by</span>
+        <div className="lc-sortgroup">
+          <select value={sortValue} onChange={e => onSortChange(e.target.value)} className="lc-select">
             {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
           </select>
           <button
             type="button"
-            className="btn btn-ghost btn-icon btn-sm"
+            className="lc-sortdir"
             onClick={onSortDirToggle}
+            aria-label={sortDir === 'asc' ? 'Sorted ascending — switch to descending' : 'Sorted descending — switch to ascending'}
             title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
-            style={{ border: '1px solid var(--border)' }}
           >
             {sortDir === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
           </button>
         </div>
       </label>
 
-      {trailing != null && <div style={{ marginLeft: 'auto', alignSelf: 'center', fontSize: 12, color: 'var(--text-muted)' }}>{trailing}</div>}
+      {activeCount > 0 && (
+        <button type="button" className="lc-clear" onClick={clearAll} title="Reset filters">
+          <X className="w-3.5 h-3.5" /> Clear
+        </button>
+      )}
+
+      {trailing != null && <div className="lc-count">{trailing}</div>}
     </div>
   );
 }
-
-const field: React.CSSProperties = { display: 'flex', flexDirection: 'column', gap: 4 };
-const fieldLabel: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' };
-const ctrl: React.CSSProperties = { padding: '7px 9px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 13, fontFamily: 'inherit' };
