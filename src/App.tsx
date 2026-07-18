@@ -64,9 +64,11 @@ export default function App() {
   const theme = useTheme();
 
   // Read inside the due-soon listener, which deliberately keeps stable deps —
-  // a ref lets it see a freshly-linked Telegram account without re-subscribing.
-  const telegramChatIdRef = useRef<string | undefined>(undefined);
-  telegramChatIdRef.current = appUser?.telegramChatId;
+  // refs let it see the current user list / role without re-subscribing.
+  const projectUsersRef = useRef<AppUser[]>([]);
+  projectUsersRef.current = projectUsers;
+  const isManagerRef = useRef(false);
+  isManagerRef.current = appUser?.role === 'Manager' || appUser?.role === 'Admin';
 
   // Register SW + listen for foreground FCM messages once user is approved
   useEffect(() => {
@@ -202,22 +204,27 @@ export default function App() {
 
     const uid = user.uid;
 
-    // Telegram alerts go out only for records the user personally owns —
-    // the counts above are board-wide, but a DM about someone else's task is
-    // exactly the noise we're trying to avoid.
-    const alertOnMine = (candidates: DueCandidate[]) =>
-      runDueAlerts(uid, telegramChatIdRef.current, candidates);
+    // Employees are alerted only about records they personally own — an alert
+    // about someone else's task is exactly the noise we're avoiding. Managers
+    // and admins are the oversight layer, so they get the whole visible board.
+    const alertOn = (candidates: DueCandidate[]) =>
+      void runDueAlerts(uid, projectUsersRef.current, candidates);
+
+    const mine = <T extends { assignedToId?: string }>(rows: T[]) =>
+      isManagerRef.current ? rows : rows.filter(r => r.assignedToId === uid);
 
     // Privacy-aware: count only tasks this user may read (public + own).
     const unsubT = subscribeVisibleTasks(uid, rows => {
       taskCount = checkDueSoon(rows, 'dueDate');
       setDueSoonCount(taskCount + corrCount);
 
-      alertOnMine(rows
-        .filter(t => t.assignedToId === uid && isDueItem(t, t.dueDate))
+      alertOn(mine(rows)
+        .filter(t => isDueItem(t, t.dueDate))
         .map(t => ({
           id: t.id, type: 'task' as const, label: t.taskName,
           due: t.dueDate, serial: t.serialNumber,
+          description: t.description, priority: t.priority, status: t.status,
+          assignedTo: t.assignedTo, ownerId: t.assignedToId,
         })));
 
       const myActiveTasks = rows.filter(t =>
@@ -232,11 +239,13 @@ export default function App() {
       corrCount = checkDueSoon(rows, 'deadline');
       setDueSoonCount(taskCount + corrCount);
 
-      alertOnMine(rows
-        .filter(c => c.assignedToId === uid && isDueItem(c, c.deadline))
+      alertOn(mine(rows)
+        .filter(c => isDueItem(c, c.deadline))
         .map(c => ({
           id: c.id, type: 'corresponding' as const, label: c.subject,
           due: c.deadline, serial: c.serialNumber,
+          description: c.body, priority: c.priority, status: c.status,
+          assignedTo: c.assignedTo, ownerId: c.assignedToId,
         })));
 
       setNavCounts(prev => ({

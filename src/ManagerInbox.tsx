@@ -5,7 +5,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
-import { createNotification } from './lib/pushNotification';
+import { createNotification, notifyManagers } from './lib/pushNotification';
+import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import { AppUser, Corresponding, Task, PRIORITY_OPTIONS, OperationType } from './types';
 import { getNextSerialNumber } from './lib/counters';
@@ -180,16 +181,44 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         });
       }
 
-      // 3. Create notification for employee
+      // 3. Notify the employee, then the rest of the management team.
+      const taskSnapshot = {
+        taskName: selectedCorr.subject,
+        description: managerNote
+          ? `${selectedCorr.body}\nManager note: ${managerNote}`
+          : selectedCorr.body,
+        serialNumber: selectedCorr.serialNumber,
+        priority: selectedCorr.priority,
+        status: 'Pending' as const,
+        dueDate: dueDate || selectedCorr.deadline,
+        assignedTo: employee.displayName,
+      };
+      const verb = isReassignment ? 'reassigned' : 'assigned';
+
       await createNotification({
         type: 'task_assigned',
         title: isReassignment ? 'Task Reassigned' : 'New Task Assigned',
-        message: `"${selectedCorr.subject}" has been ${isReassignment ? 'reassigned' : 'assigned'} to you by ${appUser.displayName}`,
+        message: taskDetails(
+          `"${selectedCorr.subject}" has been ${verb} to you by ${appUser.displayName}`,
+          taskSnapshot,
+        ),
         forUserId: assigneeId,
         read: false,
         relatedId: taskId,
         createdAt: serverTimestamp(),
       }, projectUsers);
+
+      await notifyManagers({
+        type: 'task_assigned',
+        title: isReassignment ? 'Task Reassigned' : 'Task Assigned',
+        message: taskDetails(
+          `${appUser.displayName} ${verb} "${selectedCorr.subject}" to ${employee.displayName}.`,
+          taskSnapshot,
+        ),
+        read: false,
+        relatedId: taskId,
+        createdAt: serverTimestamp(),
+      }, projectUsers, { actorId: user.uid, excludeIds: [assigneeId] });
 
       setSelectedCorr(null);
       setAssigneeId('');

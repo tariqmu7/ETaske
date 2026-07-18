@@ -85,6 +85,38 @@ export async function createNotification(
 }
 
 /**
+ * Fan a notification out to every approved Manager/Admin so the management side
+ * sees all workflow activity, not just the one manager who happens to be a
+ * record's `assignedById`.
+ *
+ * `actorId` (whoever performed the action) and `excludeIds` (recipients who
+ * already got a direct, differently-worded notification) are skipped so nobody
+ * is notified twice about one event.
+ */
+export async function notifyManagers(
+  data: WithFieldValue<Omit<AppNotification, 'id' | 'forUserId'>>,
+  projectUsers: AppUser[],
+  opts: { actorId?: string; excludeIds?: (string | undefined)[] } = {},
+): Promise<void> {
+  const skip = new Set(
+    [opts.actorId, ...(opts.excludeIds ?? [])].filter(Boolean) as string[],
+  );
+
+  const managers = projectUsers.filter(
+    (u) =>
+      (u.role === 'Manager' || u.role === 'Admin') &&
+      u.status === 'Approved' &&
+      !skip.has(u.id),
+  );
+
+  await Promise.all(
+    managers.map((m) =>
+      createNotification({ ...data, forUserId: m.id, forRole: m.role }, projectUsers),
+    ),
+  );
+}
+
+/**
  * Send a push to every recipient of an announcement.
  * targetUsers should already be filtered to the intended audience (excl. author).
  */
