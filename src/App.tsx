@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, serverTimestamp, updateDoc, query, where, orderBy } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
@@ -29,6 +29,8 @@ import { isOverdue, isDueSoon } from './utils';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 import { useHashRoute } from './hooks/useHashRoute';
+import { runDueAlerts, DueCandidate } from './lib/dueAlerts';
+import { readHashOpenRef, requestOpen } from './lib/deepLink';
 import { useKeyboardNav } from './hooks/useKeyboardNav';
 import CommandPalette from './components/CommandPalette';
 import Breadcrumbs from './components/Breadcrumbs';
@@ -60,6 +62,11 @@ export default function App() {
 
   const pwa = usePWA(user?.uid ?? null);
   const theme = useTheme();
+
+  // Read inside the due-soon listener, which deliberately keeps stable deps —
+  // a ref lets it see a freshly-linked Telegram account without re-subscribing.
+  const telegramChatIdRef = useRef<string | undefined>(undefined);
+  telegramChatIdRef.current = appUser?.telegramChatId;
 
   // Register SW + listen for foreground FCM messages once user is approved
   useEffect(() => {
@@ -183,29 +190,55 @@ export default function App() {
     let taskCount = 0;
     let corrCount = 0;
 
+    const isDueItem = (item: any, dateValue?: string) =>
+      !['Done', 'Closed', 'Archived'].includes(item.status) &&
+      (isOverdue(dateValue) || isDueSoon(dateValue));
+
     const checkDueSoon = (items: any[], dateField: string) => {
-      return items.filter(item => {
-        if (['Done', 'Closed', 'Archived'].includes(item.status)) return false;
-        const dateValue = dateField === 'dueDate' ? item.dueDate : item.deadline;
-        return isOverdue(dateValue) || isDueSoon(dateValue);
-      }).length;
+      return items.filter(item =>
+        isDueItem(item, dateField === 'dueDate' ? item.dueDate : item.deadline)
+      ).length;
     };
 
     const uid = user.uid;
+
+    // Telegram alerts go out only for records the user personally owns —
+    // the counts above are board-wide, but a DM about someone else's task is
+    // exactly the noise we're trying to avoid.
+    const alertOnMine = (candidates: DueCandidate[]) =>
+      runDueAlerts(uid, telegramChatIdRef.current, candidates);
 
     // Privacy-aware: count only tasks this user may read (public + own).
     const unsubT = subscribeVisibleTasks(uid, rows => {
       taskCount = checkDueSoon(rows, 'dueDate');
       setDueSoonCount(taskCount + corrCount);
+
+      alertOnMine(rows
+        .filter(t => t.assignedToId === uid && isDueItem(t, t.dueDate))
+        .map(t => ({
+          id: t.id, type: 'task' as const, label: t.taskName,
+          due: t.dueDate, serial: t.serialNumber,
+        })));
+
       const myActiveTasks = rows.filter(t =>
         t.assignedToId === uid && !['Done', 'Archived'].includes(t.status)).length;
       setNavCounts(prev => ({ ...prev, myActiveTasks }));
     });
 
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
-      const rows = snap.docs.filter(d => d.id !== '--stats--').map(d => d.data());
+      const rows = snap.docs
+        .filter(d => d.id !== '--stats--')
+        .map(d => ({ id: d.id, ...d.data() } as any));
       corrCount = checkDueSoon(rows, 'deadline');
       setDueSoonCount(taskCount + corrCount);
+
+      alertOnMine(rows
+        .filter(c => c.assignedToId === uid && isDueItem(c, c.deadline))
+        .map(c => ({
+          id: c.id, type: 'corresponding' as const, label: c.subject,
+          due: c.deadline, serial: c.serialNumber,
+        })));
+
       setNavCounts(prev => ({
         ...prev,
         corrNeedsReview: rows.filter(c => ['Unread', 'Reviewing'].includes(c.status)).length,
@@ -263,6 +296,18 @@ export default function App() {
     );
     return () => unsub();
   }, [user, appUser?.status, appUser?.department]);
+
+  // Deep link from an out-of-app notification ("…#/tasks?open=<id>"). The view
+  // itself comes from useHashRoute; this hands the record id to the dashboard
+  // via the deep-link bus once the user is approved and mounted.
+  useEffect(() => {
+    if (!appUser || appUser.status !== 'Approved') return;
+    const ref = readHashOpenRef();
+    if (!ref) return;
+    requestOpen(ref);
+    // Strip ?open= so a later refresh or Back doesn't re-open the modal.
+    window.history.replaceState(null, '', window.location.hash.split('?')[0]);
+  }, [appUser?.status]);
 
   // The app always opens at the Home launcher (grid of section cards),
   // regardless of role. From there the user picks where to go.
