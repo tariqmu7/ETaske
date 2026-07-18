@@ -287,7 +287,8 @@ export type NotificationType =
   | 'task_status_updated'
   | 'milestone_added'
   | 'task_done'
-  | 'task_overdue';
+  | 'task_overdue'
+  | 'corresponding_overdue';
 
 export interface AppNotification {
   id: string;

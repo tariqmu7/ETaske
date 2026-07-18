@@ -6,12 +6,14 @@ import {
   doc, serverTimestamp, orderBy, where, Timestamp
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
-import { createNotification } from './lib/pushNotification';
+import { createNotification, notifyManagers } from './lib/pushNotification';
+import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
   AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding,
   PRIORITY_OPTIONS, MILESTONE_STATUS_OPTIONS, OperationType,
-  CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS
+  CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS,
+  NotificationType
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
@@ -437,7 +439,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         await createNotification({
           type: 'task_assigned',
           title: 'Added as Collaborator',
-          message: `${appUser.displayName} added you as a collaborator on "${editingTask.taskName}".`,
+          message: taskDetails(
+            `${appUser.displayName} added you as a collaborator on "${editingTask.taskName}".`,
+            editingTask,
+          ),
           forUserId: cid,
           read: false,
           relatedId: editingTask.id,
@@ -454,11 +459,16 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         });
       }
 
+      const updatedBody = taskDetails(
+        `${appUser.displayName} updated the details of "${editingTask.taskName}".`,
+        editingTask,
+      );
+
       if (originalTask && originalTask.assignedById && originalTask.assignedById !== user.uid) {
         await createNotification({
           type: 'task_updated',
           title: 'Task Updated',
-          message: `${appUser.displayName} updated the details of "${editingTask.taskName}".`,
+          message: updatedBody,
           forUserId: originalTask.assignedById,
           read: false,
           relatedId: editingTask.id,
@@ -466,12 +476,31 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         }, projectUsers);
       }
 
+      // Keep the wider management team in the loop. Private tasks are owner-only
+      // by design (see taskVisibility.ts), so they never fan out.
+      if (!editingTask.isPrivate) {
+        await notifyManagers({
+          type: 'task_updated',
+          title: 'Task Updated',
+          message: updatedBody,
+          read: false,
+          relatedId: editingTask.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers, {
+          actorId: user.uid,
+          excludeIds: [originalTask?.assignedById],
+        });
+      }
+
       // Notify new assignee if changed
       if (originalTask && originalTask.assignedToId !== editingTask.assignedToId) {
         await createNotification({
           type: 'task_assigned',
           title: 'Task Reassigned',
-          message: `Task "${editingTask.taskName}" has been reassigned to you by ${appUser.displayName}`,
+          message: taskDetails(
+            `Task "${editingTask.taskName}" has been reassigned to you by ${appUser.displayName}`,
+            editingTask,
+          ),
           forUserId: editingTask.assignedToId,
           read: false,
           relatedId: editingTask.id,
@@ -502,16 +531,34 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         });
       }
 
-      if (task && task.assignedById && task.assignedById !== user.uid) {
-        await createNotification({
-          type: 'task_status_updated',
-          title: 'Task Status Updated',
-          message: `${appUser.displayName} changed the status of "${task.taskName}" to ${status}.`,
-          forUserId: task.assignedById,
+      if (task) {
+        const isDone = status === 'Done';
+        const body = taskDetails(
+          `${appUser.displayName} changed the status of "${task.taskName}" to ${status}.`,
+          { ...task, status },
+        );
+        const payload = {
+          type: (isDone ? 'task_done' : 'task_status_updated') as NotificationType,
+          title: isDone ? 'Task Completed' : 'Task Status Updated',
+          message: body,
           read: false,
           relatedId: taskId,
-          createdAt: serverTimestamp(),
-        }, projectUsers);
+        };
+
+        if (task.assignedById && task.assignedById !== user.uid) {
+          await createNotification({
+            ...payload,
+            forUserId: task.assignedById,
+            createdAt: serverTimestamp(),
+          }, projectUsers);
+        }
+
+        if (!task.isPrivate) {
+          await notifyManagers({ ...payload, createdAt: serverTimestamp() }, projectUsers, {
+            actorId: user.uid,
+            excludeIds: [task.assignedById],
+          });
+        }
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
@@ -642,16 +689,32 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         updatedAt: serverTimestamp(),
       });
 
-      if (task?.assignedById) {
-        await createNotification({
-          type: 'milestone_added',
+      if (task) {
+        const payload = {
+          type: 'milestone_added' as NotificationType,
           title: 'Milestone Added',
-          message: `${appUser.displayName} added milestone "${newMilestone.title}" to "${task.taskName}"`,
-          forUserId: task.assignedById,
+          message: taskDetails(
+            `${appUser.displayName} added milestone "${title}" to "${task.taskName}"`,
+            task,
+          ),
           read: false,
           relatedId: newMilestone.taskId,
-          createdAt: serverTimestamp(),
-        }, projectUsers);
+        };
+
+        if (task.assignedById && task.assignedById !== user.uid) {
+          await createNotification({
+            ...payload,
+            forUserId: task.assignedById,
+            createdAt: serverTimestamp(),
+          }, projectUsers);
+        }
+
+        if (!task.isPrivate) {
+          await notifyManagers({ ...payload, createdAt: serverTimestamp() }, projectUsers, {
+            actorId: user.uid,
+            excludeIds: [task.assignedById],
+          });
+        }
       }
 
       setNewMilestone(null);
@@ -691,18 +754,64 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         updatedAt: serverTimestamp(),
       });
 
+      // Snapshot of what was just written, for the notification bodies.
+      const created: Partial<Task> = {
+        taskName: newTask.taskName.trim(),
+        description: newTask.description.trim(),
+        serialNumber: serial,
+        priority: newTask.priority,
+        status: 'Pending',
+        dueDate: newTask.dueDate || undefined,
+        assignedTo: newTask.assignedTo || appUser.displayName,
+      };
+      const assigneeId = newTask.assignedToId || user.uid;
+
+      // The assignee learns about their own new task. (Self-assignment is the
+      // common case here, hence the guard.)
+      if (assigneeId !== user.uid) {
+        await createNotification({
+          type: 'task_assigned',
+          title: 'New Task Assigned',
+          message: taskDetails(
+            `${appUser.displayName} assigned you the task "${created.taskName}".`,
+            created,
+          ),
+          forUserId: assigneeId,
+          read: false,
+          relatedId: taskRef.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers);
+      }
+
       // Notify each collaborator they were added.
       for (const cid of newTask.collaboratorIds) {
-        if (cid === user.uid) continue;
+        if (cid === user.uid || cid === assigneeId) continue;
         await createNotification({
           type: 'task_assigned',
           title: 'Added as Collaborator',
-          message: `${appUser.displayName} added you as a collaborator on "${newTask.taskName.trim()}".`,
+          message: taskDetails(
+            `${appUser.displayName} added you as a collaborator on "${created.taskName}".`,
+            created,
+          ),
           forUserId: cid,
           read: false,
           relatedId: taskRef.id,
           createdAt: serverTimestamp(),
         }, projectUsers);
+      }
+
+      if (!newTask.isPrivate) {
+        await notifyManagers({
+          type: 'task_assigned',
+          title: 'New Task Created',
+          message: taskDetails(
+            `${appUser.displayName} created "${created.taskName}" for ${created.assignedTo}.`,
+            created,
+          ),
+          read: false,
+          relatedId: taskRef.id,
+          createdAt: serverTimestamp(),
+        }, projectUsers, { actorId: user.uid, excludeIds: [assigneeId] });
       }
 
       setIsAddingTask(false);
@@ -788,7 +897,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         await createNotification({
           type: 'task_updated',
           title: 'Due Date Changed',
-          message: `${appUser.displayName} moved the due date of "${task.taskName}" to ${newDue}.`,
+          message: taskDetails(
+            `${appUser.displayName} moved the due date of "${task.taskName}" to ${newDue}.`,
+            { ...task, dueDate: newDue },
+          ),
           forUserId: task.assignedById,
           read: false,
           relatedId: task.id,

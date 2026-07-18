@@ -7,7 +7,8 @@ import {
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
-import { createNotification } from './lib/pushNotification';
+import { createNotification, notifyManagers } from './lib/pushNotification';
+import { taskDetails, corrDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
   AppUser, Corresponding, CorrespondingStatus, Task, TaskNote,
@@ -351,21 +352,19 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         docId = docRef.id;
       }
 
-      // Notify managers/admins if an employee added or updated a correspondence
-      if (appUser.role === 'Employee') {
-        const managers = projectUsers.filter(u => u.role === 'Manager' || u.role === 'Admin');
-        for (const manager of managers) {
-          await createNotification({
-            type: editing ? 'correspondence_updated' : 'correspondence_added',
-            title: editing ? 'Correspondence Updated' : 'New Correspondence',
-            message: `${appUser.displayName} ${editing ? 'updated' : 'added'} correspondence "${formData.subject}"`,
-            forUserId: manager.id,
-            read: false,
-            relatedId: docId,
-            createdAt: serverTimestamp(),
-          }, projectUsers);
-        }
-      }
+      // Every manager/admin sees intake activity, whoever logged it — the actor
+      // is skipped so a manager doesn't get pinged for their own entry.
+      await notifyManagers({
+        type: editing ? 'correspondence_updated' : 'correspondence_added',
+        title: editing ? 'Correspondence Updated' : 'New Correspondence',
+        message: corrDetails(
+          `${appUser.displayName} ${editing ? 'updated' : 'added'} correspondence "${formData.subject}"`,
+          { ...formData, serialNumber: corrSerial },
+        ),
+        read: false,
+        relatedId: docId,
+        createdAt: serverTimestamp(),
+      }, projectUsers, { actorId: user.uid });
 
       // Auto-create task when assignee is set and no linked task exists yet
       const hasLinkedTask = editing?.convertedToTaskId;
@@ -414,7 +413,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           await createNotification({
             type: 'task_assigned',
             title: 'New Task Assigned',
-            message: `"${formData.subject}" has been assigned to you by ${appUser.displayName}`,
+            message: taskDetails(
+              `"${formData.subject}" has been assigned to you by ${appUser.displayName}`,
+              {
+                taskName: formData.subject,
+                description: formData.body,
+                serialNumber: taskSerial,
+                priority: formData.priority,
+                status: 'Pending',
+                dueDate: formData.deadline || undefined,
+                assignedTo: formData.assignedTo,
+              },
+            ),
             forUserId: formData.assignedToId,
             read: false,
             relatedId: taskRef.id,
@@ -434,7 +444,16 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           await createNotification({
             type: 'task_assigned',
             title: 'Task Reassigned',
-            message: `The task for "${formData.subject}" has been reassigned to you by ${appUser.displayName}`,
+            message: taskDetails(
+              `The task for "${formData.subject}" has been reassigned to you by ${appUser.displayName}`,
+              {
+                taskName: formData.subject,
+                description: formData.body,
+                priority: formData.priority,
+                dueDate: formData.deadline || undefined,
+                assignedTo: formData.assignedTo,
+              },
+            ),
             forUserId: formData.assignedToId,
             read: false,
             relatedId: editing!.convertedToTaskId,
@@ -509,13 +528,46 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         ...(comment ? { notes: comment } : {}),
       });
 
+      const assignedBody = taskDetails(
+        comment
+          ? `"${item.subject}" assigned to you by ${appUser.displayName}: ${comment}`
+          : `"${item.subject}" has been assigned to you by ${appUser.displayName}`,
+        {
+          taskName: item.subject,
+          description: item.body,
+          serialNumber: taskSerial,
+          priority: item.priority,
+          status: 'Pending',
+          dueDate: item.deadline,
+          assignedTo: assignee.displayName,
+        },
+      );
+
+      await notifyManagers({
+        type: 'task_assigned',
+        title: 'Task Assigned',
+        message: taskDetails(
+          `${appUser.displayName} assigned "${item.subject}" to ${assignee.displayName}.`,
+          {
+            taskName: item.subject,
+            description: item.body,
+            serialNumber: taskSerial,
+            priority: item.priority,
+            status: 'Pending',
+            dueDate: item.deadline,
+            assignedTo: assignee.displayName,
+          },
+        ),
+        read: false,
+        relatedId: taskRef.id,
+        createdAt: serverTimestamp(),
+      }, projectUsers, { actorId: user.uid, excludeIds: [assignee.id] });
+
       if (assignee.id !== user.uid) {
         await createNotification({
           type: 'task_assigned',
           title: 'New Task Assigned',
-          message: comment
-            ? `"${item.subject}" assigned to you by ${appUser.displayName}: ${comment}`
-            : `"${item.subject}" has been assigned to you by ${appUser.displayName}`,
+          message: assignedBody,
           forUserId: assignee.id,
           read: false,
           relatedId: taskRef.id,

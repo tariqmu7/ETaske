@@ -362,7 +362,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                       </div>
                       <div style={{ flex: 1 }}>
                         <div style={{ fontSize: 13, fontWeight: n.read ? 600 : 800, color: 'var(--text-primary)', marginBottom: 2 }}>{n.title}</div>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4 }}>{n.message}</div>
+                        {/* Bodies carry a multi-line detail block (notifyDetails.ts) */}
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, whiteSpace: 'pre-line' }}>{n.message}</div>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
                           {n.createdAt ? new Date(n.createdAt.seconds * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Just now'}
                         </div>
