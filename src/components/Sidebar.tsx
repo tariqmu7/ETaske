@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal
+  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView, NavCounts } from '../App';
@@ -10,6 +10,7 @@ import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
 import { usePWA } from '../hooks/usePWA';
+import { connectTelegram, disconnectTelegram } from '../lib/telegram';
 
 interface Props {
   appUser: AppUser;
@@ -30,6 +31,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMore, setShowMore] = useState(false);
+  const [tgConnecting, setTgConnecting] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -59,6 +61,23 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     unread.forEach(n => {
       updateDoc(doc(db, 'notifications', n.id), { read: true }).catch(console.error);
     });
+  };
+
+  const handleConnectTelegram = async () => {
+    setTgConnecting(true);
+    try {
+      const result = await connectTelegram(appUser.id);
+      if (result === 'timeout') {
+        alert('Telegram not linked yet. Tap “Connect Telegram” again and press Start in the bot.');
+      }
+      // On success the users listener updates appUser.telegramChatId and the
+      // button flips to “connected” automatically.
+    } catch (e) {
+      console.error(e);
+      alert('Could not connect Telegram. Please try again.');
+    } finally {
+      setTgConnecting(false);
+    }
   };
 
   const handleNotificationClick = (n: AppNotification) => {
@@ -393,6 +412,38 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                 </div>
               </div>
               <div style={{ padding: '6px 8px' }}>
+                {appUser.telegramChatId ? (
+                  <button
+                    onClick={() => { disconnectTelegram(appUser.id).catch(console.error); }}
+                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    title="Stop receiving notifications on Telegram"
+                  >
+                    <Send className="w-4 h-4" style={{ color: '#22c55e' }} />
+                    <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      Telegram connected
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Tap to disconnect</span>
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    onClick={handleConnectTelegram}
+                    disabled={tgConnecting}
+                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: tgConnecting ? 'default' : 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: tgConnecting ? 0.7 : 1, transition: 'background 0.15s' }}
+                    onMouseEnter={e => { if (!tgConnecting) e.currentTarget.style.background = 'var(--surface-3)'; }}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    title="Get your notifications on Telegram"
+                  >
+                    <Send className="w-4 h-4" style={{ color: '#229ED9' }} />
+                    {tgConnecting ? (
+                      <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                        Waiting for Telegram…
+                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Tap Start in the bot</span>
+                      </span>
+                    ) : 'Connect Telegram'}
+                  </button>
+                )}
                 <button
                   onClick={() => { setShowUserMenu(false); onLogout(); }}
                   style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
