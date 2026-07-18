@@ -19,6 +19,39 @@ async function pushToToken(token: string, title: string, body: string): Promise<
   }
 }
 
+/** Fire-and-forget Telegram DM to one chat id via the Apps Script proxy. */
+export async function pushTelegram(chatId: string, title: string, body: string): Promise<void> {
+  if (!SCRIPT_URL || !chatId) return;
+  try {
+    await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'telegram', secret: SCRIPT_SECRET, chatId, title, body }),
+    });
+  } catch {
+    // Non-critical — in-app notification already written
+  }
+}
+
+/**
+ * Ask the proxy whether a pending Telegram link code has been claimed yet (the
+ * user tapped Start in the bot). Returns the chat id once linked, else null.
+ */
+export async function checkTelegramLink(code: string): Promise<string | null> {
+  if (!SCRIPT_URL) return null;
+  try {
+    const res = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'checkLink', secret: SCRIPT_SECRET, code }),
+    });
+    const data = (await res.json()) as { chatId?: string | null };
+    return data.chatId ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Write a notification doc to Firestore and send a push to the recipient
  * if they have an FCM token in the projectUsers list.
@@ -36,6 +69,9 @@ export async function createNotification(
   if (recipient?.fcmToken) {
     pushToToken(recipient.fcmToken, title, message);
   }
+  if (recipient?.telegramChatId) {
+    pushTelegram(recipient.telegramChatId, title, message);
+  }
 }
 
 /**
@@ -52,5 +88,6 @@ export function pushAnnouncement(
   const body = text.slice(0, 200);
   for (const user of targetUsers) {
     if (user.fcmToken) pushToToken(user.fcmToken, title, body);
+    if (user.telegramChatId) pushTelegram(user.telegramChatId, title, body);
   }
 }

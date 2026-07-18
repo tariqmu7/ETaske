@@ -29,6 +29,17 @@
 //   cryptographically secret against someone who reads the JS. It blocks
 //   drive-by / scripted hits to the URL; the durable fix is to move uploads and
 //   push behind an authenticated Cloud Function.
+//
+// TELEGRAM NOTIFICATIONS (t.me/E_TASK_bot):
+//   Add two more Script Properties (Project Settings gear -> Script Properties):
+//     TELEGRAM_BOT_TOKEN     = the bot token from @BotFather (keep it here, NOT
+//                              in the client bundle).
+//     TELEGRAM_WEBHOOK_SECRET = any long random string of your choice.
+//   After deploying a NEW web-app version, register the bot's webhook once
+//   (Apps Script can't read headers, so we pass the secret as a query param):
+//     https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook?url=<WEB_APP_URL>?tgsecret=<TELEGRAM_WEBHOOK_SECRET>
+//   (URL-encode the inner "?" as %3F if your shell mangles it; expect {"ok":true}.)
+//   Verify: https://api.telegram.org/bot<TOKEN>/getWebhookInfo
 
 // Upload limits (defense in depth against the open endpoint).
 var MAX_UPLOAD_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -100,8 +111,90 @@ function sendFcmPush(token, title, body) {
   return { status: 'sent', fcm: response.getContentText() };
 }
 
+/**
+ * Telegram helpers.
+ * The bot token lives in a Script Property named TELEGRAM_BOT_TOKEN (never in the
+ * client bundle). Notifications are sent with HTML parse mode, so we only need to
+ * escape &, < and >.
+ */
+function tgEscapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function sendTelegramMessage(chatId, title, body) {
+  var token = PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN');
+  if (!token || !chatId) return { status: 'skipped' };
+  var text = body
+    ? '<b>' + tgEscapeHtml(title) + '</b>\n' + tgEscapeHtml(body)
+    : '<b>' + tgEscapeHtml(title) + '</b>';
+  var url = 'https://api.telegram.org/bot' + token + '/sendMessage';
+  var response = UrlFetchApp.fetch(url, {
+    method: 'post',
+    contentType: 'application/json',
+    payload: JSON.stringify({
+      chat_id: chatId,
+      text: text,
+      parse_mode: 'HTML',
+      disable_web_page_preview: true,
+    }),
+    muteHttpExceptions: true,
+  });
+  return { status: 'sent', telegram: response.getContentText() };
+}
+
+/**
+ * Telegram webhook handler. Telegram POSTs every bot message to this web app.
+ * Apps Script can't read request headers, so we authenticate the webhook via a
+ * `?tgsecret=` query param matched against the TELEGRAM_WEBHOOK_SECRET property
+ * (set the webhook URL to <scripturl>?tgsecret=<secret>).
+ *
+ * On `/start <code>` we cache code -> chatId for 10 minutes; the ETaske client
+ * polls checkLink to pick it up and stores telegramChatId on the user's own doc.
+ */
+function handleTelegramWebhook(e) {
+  var expected = PropertiesService.getScriptProperties().getProperty('TELEGRAM_WEBHOOK_SECRET');
+  if (!expected || e.parameter.tgsecret !== expected) {
+    return ContentService.createTextOutput('forbidden');
+  }
+  var ok = ContentService.createTextOutput('ok');
+  var update;
+  try { update = JSON.parse(e.postData.contents); } catch (err) { return ok; }
+
+  var msg = update && update.message;
+  if (!msg || !msg.chat || msg.chat.id == null) return ok;
+
+  var chatId = String(msg.chat.id);
+  var text = (msg.text || '').trim();
+
+  if (text.indexOf('/start') === 0) {
+    var code = text.slice('/start'.length).trim();
+    if (code) {
+      CacheService.getScriptCache().put('tglink_' + code, chatId, 600); // 10 min
+      sendTelegramMessage(chatId, '✅ ETaske connected',
+        "You're all set — return to ETaske. Your notifications will arrive here. Send /stop to unsubscribe.");
+    } else {
+      sendTelegramMessage(chatId, 'ETaske',
+        'Open ETaske and tap “Connect Telegram” to link your account.');
+    }
+  } else if (text.indexOf('/stop') === 0) {
+    sendTelegramMessage(chatId, 'ETaske',
+      'To stop notifications, open ETaske → your avatar menu → Disconnect Telegram.');
+  } else {
+    sendTelegramMessage(chatId, 'ETaske',
+      'Open ETaske and tap “Connect Telegram” to link your account.');
+  }
+  return ok;
+}
+
 function doPost(e) {
   try {
+    // Telegram webhook calls arrive with ?tgsecret=... and no shared secret in the
+    // body — handle (and authenticate) them before the app's secret gate.
+    if (e && e.parameter && e.parameter.tgsecret) {
+      return handleTelegramWebhook(e);
+    }
+
     var data = JSON.parse(e.postData.contents);
 
     // Abuse gate: reject anything without the shared secret.
@@ -113,6 +206,20 @@ function doPost(e) {
     if (data.action === 'fcm') {
       var result = sendFcmPush(data.token, data.title, data.body);
       return ContentService.createTextOutput(JSON.stringify(result))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Telegram DM proxy
+    if (data.action === 'telegram') {
+      var tgResult = sendTelegramMessage(data.chatId, data.title, data.body);
+      return ContentService.createTextOutput(JSON.stringify(tgResult))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // Link polling: has the user finished /start yet? Returns their chatId once.
+    if (data.action === 'checkLink') {
+      var linkedChatId = CacheService.getScriptCache().get('tglink_' + data.code);
+      return ContentService.createTextOutput(JSON.stringify({ status: 'ok', chatId: linkedChatId || null }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

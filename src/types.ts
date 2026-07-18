@@ -18,6 +18,10 @@ export interface AppUser {
   userColor?: string;
   lastSeen?: Timestamp;
   fcmToken?: string;
+  // Telegram notifications (t.me/E_TASK_bot). Set once the user links their
+  // account via the Connect Telegram flow (src/lib/telegram.ts): the bot reports
+  // their chat id through the Apps Script webhook and the client stores it here.
+  telegramChatId?: string;
 }
 
 // ─── Correspondences (incoming) ───────────────────────────────────────────────
