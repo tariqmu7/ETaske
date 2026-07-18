@@ -47,3 +47,34 @@ export function subscribeOpen(fn: (ref: DeepLinkRef) => void): () => void {
   listeners.add(fn);
   return () => { listeners.delete(fn); };
 }
+
+/** Which dashboard a notification type points at (mirrors Sidebar's routing). */
+export function refTypeForNotification(type: string): DeepLinkRef['type'] | null {
+  if (type.includes('task') || type.includes('milestone')) return 'task';
+  if (type.includes('correspond')) return 'corresponding';
+  return null;
+}
+
+const viewForType = (type: DeepLinkRef['type']) =>
+  type === 'task' ? 'tasks' : 'correspondences';
+
+/**
+ * Absolute URL that opens one record. Shared out of the app (Telegram DMs,
+ * FCM pushes), so it must survive a cold load: the "#/<view>" part is picked up
+ * by useHashRoute, and "?open=<id>" by readHashOpenRef below.
+ */
+export function buildDeepLinkUrl(type: DeepLinkRef['type'], id: string): string {
+  const { origin, pathname } = window.location;
+  return `${origin}${pathname}#/${viewForType(type)}?open=${encodeURIComponent(id)}`;
+}
+
+/** Parse "#/tasks?open=<id>" from the current URL. Null if absent/unknown. */
+export function readHashOpenRef(): DeepLinkRef | null {
+  const [view, qs] = window.location.hash.replace(/^#\/?/, '').split('?');
+  if (!qs) return null;
+  const id = new URLSearchParams(qs).get('open');
+  if (!id) return null;
+  if (view === 'tasks' || view === 'archive') return { type: 'task', id };
+  if (view === 'correspondences' || view === 'manager-inbox') return { type: 'corresponding', id };
+  return null;
+}

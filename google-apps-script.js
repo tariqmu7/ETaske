@@ -82,7 +82,7 @@ function isAllowedMime(mimeType) {
  * The required OAuth scope (https://www.googleapis.com/auth/firebase.messaging)
  * must be listed in appsscript.json → oauthScopes. See instructions below.
  */
-function sendFcmPush(token, title, body) {
+function sendFcmPush(token, title, body, url) {
   if (!token) return { status: 'skipped' };
 
   var projectId = 'gen-lang-client-0893475577';
@@ -95,7 +95,7 @@ function sendFcmPush(token, title, body) {
       android: { priority: 'high' },
       webpush: {
         notification: { icon: '/favicon.png', badge: '/favicon.png' },
-        fcm_options: { link: '/' },
+        fcm_options: { link: url || '/' },
       },
     },
   });
@@ -122,12 +122,16 @@ function tgEscapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function sendTelegramMessage(chatId, title, body) {
+function sendTelegramMessage(chatId, title, body, url) {
   var token = PropertiesService.getScriptProperties().getProperty('TELEGRAM_BOT_TOKEN');
   if (!token || !chatId) return { status: 'skipped' };
   var text = body
     ? '<b>' + tgEscapeHtml(title) + '</b>\n' + tgEscapeHtml(body)
     : '<b>' + tgEscapeHtml(title) + '</b>';
+  // Deep link to the exact task / correspondence, when the caller supplied one.
+  if (url) {
+    text += '\n\n<a href="' + tgEscapeHtml(url) + '">🔗 فتح في ETaske</a>';
+  }
   var url = 'https://api.telegram.org/bot' + token + '/sendMessage';
   var response = UrlFetchApp.fetch(url, {
     method: 'post',
@@ -161,6 +165,21 @@ function handleTelegramWebhook(e) {
   var update;
   try { update = JSON.parse(e.postData.contents); } catch (err) { return ok; }
 
+  var cache = CacheService.getScriptCache();
+
+  // ── Redelivery guard ───────────────────────────────────────────────────────
+  // An Apps Script web app answers with a 302 to script.googleusercontent.com,
+  // which Telegram scores as a failed delivery — so it redelivers the SAME
+  // update on a backoff, forever, and every redelivery used to send another
+  // reply. That is what produced the flood of identical "ETaske connected"
+  // messages. update_id is unique and stable per update, so processing each one
+  // at most once makes the redeliveries harmless no-ops.
+  if (update && update.update_id != null) {
+    var seenKey = 'tgseen_' + update.update_id;
+    if (cache.get(seenKey)) return ok;
+    cache.put(seenKey, '1', 21600); // 6 h — far longer than Telegram retries
+  }
+
   var msg = update && update.message;
   if (!msg || !msg.chat || msg.chat.id == null) return ok;
 
@@ -170,9 +189,15 @@ function handleTelegramWebhook(e) {
   if (text.indexOf('/start') === 0) {
     var code = text.slice('/start'.length).trim();
     if (code) {
-      CacheService.getScriptCache().put('tglink_' + code, chatId, 600); // 10 min
-      sendTelegramMessage(chatId, '✅ ETaske connected',
-        "You're all set — return to ETaske. Your notifications will arrive here. Send /stop to unsubscribe.");
+      cache.put('tglink_' + code, chatId, 600); // 10 min
+      // Second guard: repeated Start taps in one linking session shouldn't each
+      // earn a confirmation DM.
+      var greetKey = 'tggreet_' + chatId;
+      if (!cache.get(greetKey)) {
+        cache.put(greetKey, '1', 300); // 5 min
+        sendTelegramMessage(chatId, '✅ ETaske connected',
+          "You're all set — return to ETaske. Your notifications will arrive here. Send /stop to unsubscribe.");
+      }
     } else {
       sendTelegramMessage(chatId, 'ETaske',
         'Open ETaske and tap “Connect Telegram” to link your account.');
@@ -180,10 +205,9 @@ function handleTelegramWebhook(e) {
   } else if (text.indexOf('/stop') === 0) {
     sendTelegramMessage(chatId, 'ETaske',
       'To stop notifications, open ETaske → your avatar menu → Disconnect Telegram.');
-  } else {
-    sendTelegramMessage(chatId, 'ETaske',
-      'Open ETaske and tap “Connect Telegram” to link your account.');
   }
+  // Anything else: stay silent. Replying to every stray message is pure noise
+  // and, combined with redelivery, was a second source of the flood.
   return ok;
 }
 
@@ -204,14 +228,14 @@ function doPost(e) {
 
     // FCM push proxy
     if (data.action === 'fcm') {
-      var result = sendFcmPush(data.token, data.title, data.body);
+      var result = sendFcmPush(data.token, data.title, data.body, data.url);
       return ContentService.createTextOutput(JSON.stringify(result))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     // Telegram DM proxy
     if (data.action === 'telegram') {
-      var tgResult = sendTelegramMessage(data.chatId, data.title, data.body);
+      var tgResult = sendTelegramMessage(data.chatId, data.title, data.body, data.url);
       return ContentService.createTextOutput(JSON.stringify(tgResult))
         .setMimeType(ContentService.MimeType.JSON);
     }
