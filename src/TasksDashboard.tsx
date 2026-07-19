@@ -1,5 +1,5 @@
 /// <reference types="vite/client" />
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
@@ -153,6 +153,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [pendingOpenTaskId, setPendingOpenTaskId] = useState<string | null>(null);
+  // Set while a specific task is being opened from outside the list (deep link,
+  // Due Soon banner). It bypasses the employee grid, which would otherwise
+  // replace the very list the task lives in. Cleared when that task collapses.
+  const [focusedTaskId, setFocusedTaskId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'All');
   const [categoryFilter, setCategoryFilter] = useState<string>('All');
@@ -290,8 +294,14 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     });
   }, [tasks, view, search, statusFilter, categoryFilter, employeeFilter, subCategoryFilter, deptFilter, appUser.displayName, isManagerOrAdmin, dateFilter, user.uid]);
 
-  // Reset page when filters change
+  // Reset page when filters change — except when handleOpenTask changed them
+  // itself, since it already computed the page holding the target task.
+  const skipPageResetRef = useRef(false);
   useEffect(() => {
+    if (skipPageResetRef.current) {
+      skipPageResetRef.current = false;
+      return;
+    }
     setCurrentPage(1);
   }, [search, statusFilter, categoryFilter, employeeFilter, subCategoryFilter, deptFilter, dateFilter, view]);
 
@@ -304,6 +314,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     setDeptFilter('All');
     setDateFilter('');
     setView('mine');
+    setFocusedTaskId(null);
   };
 
   const paginatedTasks = useMemo(() => {
@@ -337,7 +348,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   // replaced by a grid of employee cards. Group the (otherwise-filtered) tasks
   // by assignee so each card can show that person's task counts. Clicking a card
   // sets `employeeFilter`, which falls through to the normal filtered list.
-  const showEmployeeGrid = view === 'all' && employeeFilter === 'All';
+  const showEmployeeGrid = view === 'all' && employeeFilter === 'All' && !focusedTaskId;
 
   const employeeGroups = useMemo(() => {
     const map = new Map<string, { name: string; id?: string; tasks: Task[] }>();
@@ -375,11 +386,15 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     setDeptFilter('All');
     setDateFilter('');
     setView('all');
+    // "All Tasks" + "All Employees" normally renders the employee card grid
+    // instead of the list, which would hide the task we are opening.
+    setFocusedTaskId(taskId);
 
     // With all filters cleared + "All Tasks", `filtered` is just the
     // non-archived tasks in listener order, so its page math is reproducible.
     const defaultFiltered = tasks.filter(t => t.status !== 'Archived');
     const idx = defaultFiltered.findIndex(t => t.id === taskId);
+    skipPageResetRef.current = true;
     setCurrentPage(idx >= 0 ? Math.floor(idx / itemsPerPage) + 1 : 1);
 
     setExpandedTask(taskId);
@@ -941,7 +956,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           {(['mine', 'all'] as const).map(v => (
             <button
               key={v}
-              onClick={() => setView(v)}
+              onClick={() => { setView(v); setFocusedTaskId(null); }}
               style={{
                 padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600,
                 border: 'none', cursor: 'pointer', fontFamily: 'inherit',
@@ -1437,10 +1452,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         )
       ) : (
       <>
-      {view === 'all' && employeeFilter !== 'All' && (
+      {view === 'all' && (employeeFilter !== 'All' || focusedTaskId) && (
         <button
           className="btn btn-ghost btn-sm"
-          onClick={() => setEmployeeFilter('All')}
+          onClick={() => { setEmployeeFilter('All'); setFocusedTaskId(null); }}
           style={{ marginBottom: 16 }}
         >
           <ArrowLeft className="w-4 h-4" /> {t('All Employees')}
@@ -1490,7 +1505,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                           <>
                             <div
                               style={{ padding: '20px 24px', display: 'flex', gap: 16, cursor: 'pointer', alignItems: 'flex-start' }}
-                              onClick={() => setExpandedTask(isExpanded ? null : task.id)}
+                              onClick={() => {
+                                setExpandedTask(isExpanded ? null : task.id);
+                                if (isExpanded && focusedTaskId === task.id) setFocusedTaskId(null);
+                              }}
                             >
                               <button
                                 onClick={e => {
