@@ -185,20 +185,24 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           );
         })}
 
-        {/* "More" dropdown — collapses low-frequency tabs on desktop too. */}
-        <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
-          <button
-            onClick={() => setShowMore(v => !v)}
-            className={`nav-tab${moreActive ? ' active' : ''}`}
-            aria-haspopup="menu"
-            aria-expanded={showMore}
-          >
-            <MoreHorizontal className="w-4 h-4" />
-            <span>More</span>
-          </button>
-          {showMore && (
+      </nav>
+
+      {/* "More" dropdown — collapses low-frequency tabs on desktop too.
+          Lives OUTSIDE .topnav-tabs: that element is an overflow-x scroll
+          container, which would clip this absolutely-positioned menu. */}
+      <div ref={moreRef} className="topnav-more" style={{ position: 'relative', flexShrink: 0 }}>
+        <button
+          onClick={() => setShowMore(v => !v)}
+          className={`nav-tab${moreActive ? ' active' : ''}`}
+          aria-haspopup="menu"
+          aria-expanded={showMore}
+        >
+          <MoreHorizontal className="w-4 h-4" />
+          <span>More</span>
+        </button>
+        {showMore && (
             <div role="menu" style={{
-              position: 'absolute', top: 'calc(100% + 6px)', left: 0, minWidth: 180,
+              position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 180,
               background: 'var(--surface)', border: '1px solid var(--border)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.16)', zIndex: 1000, padding: '6px 0',
             }}>
@@ -219,8 +223,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
               ))}
             </div>
           )}
-        </div>
-      </nav>
+      </div>
 
       {/* User + logout */}
       <div className="topnav-user" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 16 }}>

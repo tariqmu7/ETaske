@@ -154,7 +154,8 @@ body {
 }
 
 @media (max-width: 768px) {
-  .topnav-tabs { display: none !important; }
+  .topnav-tabs,
+  .topnav-more { display: none !important; }
 }
 
 @media (min-width: 480px) {
