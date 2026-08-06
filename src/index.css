@@ -31,6 +31,11 @@
   --surface:   #ffffff;
   --surface-2: #f8fafc;
   --surface-3: #f1f5f9;
+  /* due-soon / warning tinted surfaces (theme-aware — never hardcode the light values) */
+  --surface-warn:        #fffcf9;
+  --surface-warn-strong: #fff7ed;
+  --surface-warn-border: #ffedd5;
+  --surface-warn-text:   #92400e;
   --border:    rgba(0,0,0,0.08);
   --border-md: rgba(0,0,0,0.12);
 
@@ -56,6 +61,10 @@
   --surface:   #1e2433;
   --surface-2: #161b2b;
   --surface-3: #252d40;
+  --surface-warn:        #2a2620;
+  --surface-warn-strong: #2e2519;
+  --surface-warn-border: rgba(249,115,22,0.30);
+  --surface-warn-text:   #fbbf24;
   --border:    rgba(255,255,255,0.08);
   --border-md: rgba(255,255,255,0.13);
 

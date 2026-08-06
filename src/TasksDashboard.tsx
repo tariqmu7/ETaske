@@ -941,7 +941,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                             const u = projectUsers.find(pu => pu.id === task.assignedToId);
                             return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
                           })()}`),
-                          backgroundColor: isTaskDueSoon ? '#fffcf9' : (task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)'),
+                          backgroundColor: isTaskDueSoon ? 'var(--surface-warn)' : (task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)'),
                           transition: 'background-color 0.2s ease'
                         }}
                       >

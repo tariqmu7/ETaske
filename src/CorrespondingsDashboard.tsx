@@ -723,7 +723,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                      const u = projectUsers.find(pu => pu.id === item.assignedToId);
                      return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
                    })()}`,
-                 backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? '#fffcf9' : 'var(--surface)'
+                 backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? 'var(--surface-warn)' : 'var(--surface)'
                }}
               onClick={isUnassignedCard ? undefined : () => setSelectedCorrForDetails(item)}
             >
