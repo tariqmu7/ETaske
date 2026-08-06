@@ -1395,7 +1395,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       <Briefcase className="w-4 h-4 text-primary" />
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Internal Notes")}</h3>
                     </div>
-                    <div style={{ padding: '16px', background: 'var(--yellow-50, #fffbeb)', border: '1px solid var(--yellow-200, #fde68a)', borderRadius: 0, color: 'var(--yellow-800, #92400e)', fontSize: 14, fontStyle: 'italic' }}>
+                    <div style={{ padding: '16px', background: 'var(--surface-warn-strong)', border: '1px solid var(--surface-warn-border)', borderRadius: 0, color: 'var(--surface-warn-text)', fontSize: 14, fontStyle: 'italic' }}>
                       "{selectedCorr.notes}"
                     </div>
                   </div>
