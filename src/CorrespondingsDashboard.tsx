@@ -27,6 +27,7 @@ import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueS
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
+import ComboBox from './components/ComboBox';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -229,14 +230,19 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     );
   }, [projectUsers, isAdmin, appUser.department, appUser.teamId, user.uid]);
 
-  const dynamicDepartments = useMemo(() => {
-    return DEPARTMENT_OPTIONS;
-  }, []);
-
   const dynamicSubCategories = useMemo(() => {
     if (formData.category === 'Project') return PROJECT_OPTIONS;
     return Array.from(new Set(visibleItems.filter(i => i.department === formData.department).map(i => i.subCategory).filter(Boolean))).sort();
   }, [visibleItems, formData.department, formData.category]);
+
+  // Departments already used on correspondences become suggestions, so a value
+  // added once through the combobox is offered from then on.
+  const dynamicDepartments = useMemo(() => {
+    const used = visibleItems.map(i => i.department).filter(Boolean) as string[];
+    return Array.from(new Set([...DEPARTMENT_OPTIONS, ...used]))
+      .filter(d => d && d !== 'None' && d !== 'Other...')
+      .sort();
+  }, [visibleItems]);
 
   const openModal = (item?: Corresponding, viewing = false) => {
     setIsViewing(viewing);
@@ -263,17 +269,6 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const closeModal = () => { setIsModalOpen(false); setEditing(null); };
 
   const set = (f: string, v: any) => setFormData(p => ({ ...p, [f]: v }));
-
-  const handleOtherSelection = (field: string, value: string) => {
-    if (value === 'Other...') {
-      const custom = prompt(`Enter custom value for ${field}:`);
-      if (custom) {
-        set(field, custom);
-      }
-    } else {
-      set(field, value);
-    }
-  };
 
   const uploadToGoogleDrive = async (file: File): Promise<string> => {
     const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
@@ -1217,18 +1212,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.department}</div>
                     ) : (
-                      <>
-                        <input
-                          className="input"
-                          list="corrDepartmentList"
-                          placeholder="Select or type department..."
-                          value={formData.department === 'None' ? '' : formData.department}
-                          onChange={e => { set('department', e.target.value || 'None'); set('subCategory', 'None'); }}
-                        />
-                        <datalist id="corrDepartmentList">
-                          {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
-                        </datalist>
-                      </>
+                      <ComboBox
+                        value={formData.department}
+                        onChange={v => { set('department', v || 'None'); set('subCategory', 'None'); }}
+                        options={dynamicDepartments}
+                        placeholder={t('Select or add a department…')}
+                        emptyValue="None"
+                        listLabel={t('Departments')}
+                      />
                     )}
                   </div>
                   {/* Sub-category */}
@@ -1237,18 +1228,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-primary)' }}>{formData.subCategory || 'None'}</div>
                     ) : (
-                      <>
-                        <input 
-                          className="input" 
-                          list="corrSubCategoryList"
-                          placeholder="Search or type project..."
-                          value={formData.subCategory} 
-                          onChange={e => set('subCategory', e.target.value)} 
-                        />
-                        <datalist id="corrSubCategoryList">
-                          {dynamicSubCategories.map(s => <option key={s} value={s} />)}
-                        </datalist>
-                      </>
+                      <ComboBox
+                        value={formData.subCategory}
+                        onChange={v => set('subCategory', v || 'None')}
+                        options={dynamicSubCategories}
+                        placeholder={t('Select or add a project…')}
+                        emptyValue="None"
+                        listLabel={t('Projects')}
+                      />
                     )}
                   </div>
                   {/* Actions */}
