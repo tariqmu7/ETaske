@@ -210,8 +210,15 @@ export default function App() {
     const alertOn = (candidates: DueCandidate[]) =>
       void runDueAlerts(uid, projectUsersRef.current, candidates);
 
-    const mine = <T extends { assignedToId?: string }>(rows: T[]) =>
-      isManagerRef.current ? rows : rows.filter(r => r.assignedToId === uid);
+    // A task belongs to me if I'm the assignee OR a collaborator — collaborators
+    // are co-owners (they can edit the task and add milestones), so they get the
+    // same alerts and the same "My Tasks" count. Correspondences have no
+    // collaborators, so the array is simply absent there.
+    const isMine = (r: { assignedToId?: string; collaboratorIds?: string[] }) =>
+      r.assignedToId === uid || (r.collaboratorIds || []).includes(uid);
+
+    const mine = <T extends { assignedToId?: string; collaboratorIds?: string[] }>(rows: T[]) =>
+      isManagerRef.current ? rows : rows.filter(isMine);
 
     // Privacy-aware: count only tasks this user may read (public + own).
     const unsubT = subscribeVisibleTasks(uid, rows => {
@@ -228,7 +235,7 @@ export default function App() {
         })));
 
       const myActiveTasks = rows.filter(t =>
-        t.assignedToId === uid && !['Done', 'Archived'].includes(t.status)).length;
+        isMine(t) && !['Done', 'Archived'].includes(t.status)).length;
       setNavCounts(prev => ({ ...prev, myActiveTasks }));
     });
 

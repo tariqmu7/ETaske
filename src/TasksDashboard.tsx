@@ -28,6 +28,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 import { Copy, Check } from 'lucide-react';
 import DueSoonBanner from './components/DueSoonBanner';
+import ComboBox from './components/ComboBox';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -202,31 +203,28 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     isPrivate: false,
   });
 
-  const handleOtherSelection = (field: string, value: string, isEditingForm = false) => {
-    if (value === 'Other...') {
-      const custom = prompt(`Enter custom value for ${field}:`);
-      if (custom) {
-        if (isEditingForm && editingTask) {
-          setEditingTask({ ...editingTask, [field]: custom });
-        } else {
-          setNewTask({ ...newTask, [field]: custom });
-        }
-      }
-    } else {
-      if (isEditingForm && editingTask) {
-        setEditingTask({ ...editingTask, [field]: value });
-      } else {
-        setNewTask({ ...newTask, [field]: value });
-      }
-    }
-  };
-
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
   const dynamicSubCategories = useMemo(() => {
     const fromTasks = Array.from(new Set(tasks.map(t => t.subCategory).filter(Boolean))).sort();
     return Array.from(new Set([...PROJECT_OPTIONS, ...fromTasks])).sort();
   }, [tasks]);
+
+  // Departments typed into earlier tasks become suggestions, so a value added
+  // once through the combobox is offered from then on.
+  const dynamicDepartments = useMemo(() => {
+    const fromTasks = tasks.map(t => t.department).filter(Boolean) as string[];
+    return Array.from(new Set([...DEPARTMENT_OPTIONS, ...fromTasks]))
+      .filter(d => d && d !== 'None' && d !== 'Other...')
+      .sort();
+  }, [tasks]);
+
+  // 'Other...' was only a trigger for a browser prompt(); the combobox creates
+  // values inline, so it is no longer offered as a category.
+  const categoryOptions = useMemo(
+    () => CATEGORY_OPTIONS.filter(c => c !== 'Other...'),
+    []
+  );
 
   // Tasks listener — reads the public-OR-mine union so private tasks owned by
   // other users are never requested (see src/lib/taskVisibility.ts). Sorted
@@ -1223,37 +1221,36 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
                     <label className="input-label">{t('Category')}</label>
-                    <select className="input" value={newTask.category} onChange={e => handleOtherSelection('category', e.target.value)}>
-                      {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <ComboBox
+                      value={newTask.category}
+                      onChange={v => setNewTask({ ...newTask, category: (v || 'Project') as CorrespondingCategory })}
+                      options={categoryOptions}
+                      placeholder={t('Select or add a category…')}
+                      clearable={false}
+                      listLabel={t('Categories')}
+                    />
                   </div>
                   <div>
                     <label className="input-label">{t('Department')}</label>
-                    <input
-                      className="input"
-                      list="taskDepartmentList"
-                      placeholder="Select or type department..."
-                      value={newTask.department === 'None' ? '' : newTask.department}
-                      onChange={e => setNewTask({ ...newTask, department: e.target.value || 'None' })}
+                    <ComboBox
+                      value={newTask.department}
+                      onChange={v => setNewTask({ ...newTask, department: v || 'None' })}
+                      options={dynamicDepartments}
+                      placeholder={t('Select or add a department…')}
+                      emptyValue="None"
+                      listLabel={t('Departments')}
                     />
-                    <datalist id="taskDepartmentList">
-                      {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
-                    </datalist>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <label className="input-label">{t('Sub-Category / Project')}</label>
-                    <input
-                      className="input"
-                      list="subCategoryList"
-                      placeholder="Search or type project..."
+                    <ComboBox
                       value={newTask.subCategory}
-                      onChange={e => setNewTask({ ...newTask, subCategory: e.target.value })}
+                      onChange={v => setNewTask({ ...newTask, subCategory: v || 'None' })}
+                      options={newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories}
+                      placeholder={t('Select or add a project…')}
+                      emptyValue="None"
+                      listLabel={t('Projects')}
                     />
-                    <datalist id="subCategoryList">
-                      {(newTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                        <option key={s} value={s} />
-                      ))}
-                    </datalist>
                   </div>
                 </div>
 
@@ -2242,37 +2239,36 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
                   <div>
                     <label className="input-label">{t('Category')}</label>
-                    <select className="input" value={editingTask.category} onChange={e => handleOtherSelection('category', e.target.value, true)}>
-                      {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
+                    <ComboBox
+                      value={editingTask.category}
+                      onChange={v => setEditingTask({ ...editingTask, category: (v || 'Project') as CorrespondingCategory })}
+                      options={categoryOptions}
+                      placeholder={t('Select or add a category…')}
+                      clearable={false}
+                      listLabel={t('Categories')}
+                    />
                   </div>
                   <div>
                     <label className="input-label">{t('Department')}</label>
-                    <input
-                      className="input"
-                      list="editTaskDepartmentList"
-                      placeholder="Select or type department..."
-                      value={editingTask.department === 'None' ? '' : editingTask.department}
-                      onChange={e => setEditingTask({ ...editingTask, department: e.target.value || 'None' })}
+                    <ComboBox
+                      value={editingTask.department}
+                      onChange={v => setEditingTask({ ...editingTask, department: v || 'None' })}
+                      options={dynamicDepartments}
+                      placeholder={t('Select or add a department…')}
+                      emptyValue="None"
+                      listLabel={t('Departments')}
                     />
-                    <datalist id="editTaskDepartmentList">
-                      {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d} />)}
-                    </datalist>
                   </div>
                   <div style={{ gridColumn: 'span 2' }}>
                     <label className="input-label">{t('Sub-Category / Project')}</label>
-                    <input
-                      className="input"
-                      list="editSubCategoryList"
-                      placeholder="Search or type project..."
+                    <ComboBox
                       value={editingTask.subCategory}
-                      onChange={e => setEditingTask({ ...editingTask, subCategory: e.target.value })}
+                      onChange={v => setEditingTask({ ...editingTask, subCategory: v || 'None' })}
+                      options={editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories}
+                      placeholder={t('Select or add a project…')}
+                      emptyValue="None"
+                      listLabel={t('Projects')}
                     />
-                    <datalist id="editSubCategoryList">
-                      {(editingTask.category === 'Project' ? PROJECT_OPTIONS : dynamicSubCategories).map(s => (
-                        <option key={s} value={s} />
-                      ))}
-                    </datalist>
                   </div>
                 </div>
 
