@@ -31,6 +31,7 @@ pyinstaller ^
     --hidden-import win32com.client ^
     --hidden-import pythoncom ^
     --hidden-import pywintypes ^
+    --hidden-import win32timezone ^
     outlook_bridge.py
 
 if errorlevel 1 (

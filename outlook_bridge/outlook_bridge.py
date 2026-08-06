@@ -66,6 +66,10 @@ def _default_folder_id(name):
     return {"Inbox": 6, "Sent Items": 5, "Drafts": 16, "Deleted Items": 3}.get(name, 6)
 
 
+def _is_sent_folder(name):
+    return name in ("Sent Items", "Drafts")
+
+
 def _safe_get(item, attr, default=""):
     try:
         return getattr(item, attr) or default
@@ -73,15 +77,58 @@ def _safe_get(item, attr, default=""):
         return default
 
 
-def _email_to_dict(item, folder_name="Inbox"):
-    # ReceivedTime — pywintypes.datetime in frozen EXEs needs explicit str conversion
-    received_iso = ""
+def _recipients(item):
+    """Display names of every recipient (To + Cc). Falls back to the flat .To string."""
+    names = []
     try:
-        rt = item.ReceivedTime
-        if rt:
-            received_iso = str(rt)[:19].replace(" ", "T")
+        count = item.Recipients.Count
+        for i in range(1, count + 1):
+            try:
+                names.append(str(item.Recipients.Item(i).Name))
+            except Exception:
+                pass
     except Exception:
         pass
+    if not names:
+        flat = _safe_get(item, "To", "")
+        names = [p.strip() for p in str(flat).split(";") if p.strip()]
+    return names
+
+
+def _to_iso(value):
+    """pywintypes.datetime -> 'YYYY-MM-DDTHH:MM:SS'.
+
+    Built from the individual components: str()/strftime() on a tz-aware
+    pywintypes.datetime raises inside the frozen EXE, which silently blanked
+    every timestamp. Component access works in both frozen and plain Python.
+    """
+    if not value:
+        return ""
+    try:
+        return "%04d-%02d-%02dT%02d:%02d:%02d" % (
+            value.year, value.month, value.day,
+            value.hour, value.minute, value.second,
+        )
+    except Exception:
+        pass
+    try:
+        return str(value)[:19].replace(" ", "T")
+    except Exception:
+        return ""
+
+
+def _email_to_dict(item, folder_name="Inbox"):
+    sent_folder = _is_sent_folder(folder_name)
+
+    # Sent Items have no meaningful ReceivedTime, so read SentOn first there.
+    received_iso = ""
+    for attr in (("SentOn", "ReceivedTime") if sent_folder else ("ReceivedTime", "SentOn")):
+        try:
+            received_iso = _to_iso(getattr(item, attr))
+        except Exception:
+            continue
+        if received_iso:
+            break
 
     body_text = _safe_get(item, "Body", "")
     preview = body_text[:300].replace("\r\n", " ").replace("\n", " ").strip()
@@ -98,11 +145,16 @@ def _email_to_dict(item, folder_name="Inbox"):
     except Exception:
         pass
 
+    recipients = _recipients(item)
+
     return {
         "id": _safe_get(item, "EntryID"),
         "subject": _safe_get(item, "Subject", "(no subject)"),
         "sender": _safe_get(item, "SenderName"),
         "sender_email": _safe_get(item, "SenderEmailAddress"),
+        "recipients": recipients,
+        "to": "; ".join(recipients),
+        "direction": "sent" if sent_folder else "received",
         "received_at": received_iso,
         "body_preview": preview,
         "body": body_text[:3000],
@@ -122,11 +174,22 @@ def _email_to_dict(item, folder_name="Inbox"):
 def status():
     try:
         ns = _get_namespace()
-        inbox = ns.GetDefaultFolder(6)
-        count = inbox.Items.Count
-        return jsonify({"running": True, "outlook_connected": True, "email_count": count, "version": "1.0.0"})
+        count = ns.GetDefaultFolder(6).Items.Count
+        try:
+            sent_count = ns.GetDefaultFolder(5).Items.Count
+        except Exception:
+            sent_count = 0
+        return jsonify({
+            "running": True, "outlook_connected": True,
+            "email_count": count, "sent_count": sent_count,
+            "version": "1.1.0",
+        })
     except Exception as e:
-        return jsonify({"running": True, "outlook_connected": False, "email_count": 0, "version": "1.0.0", "error": str(e)})
+        return jsonify({
+            "running": True, "outlook_connected": False,
+            "email_count": 0, "sent_count": 0,
+            "version": "1.1.0", "error": str(e),
+        })
 
 
 @app.route("/diagnose")
@@ -157,6 +220,13 @@ def diagnose():
                 except Exception as e: row["unread_error"] = str(e)
                 try: row["sender"] = item.SenderName
                 except Exception as e: row["sender_error"] = str(e)
+                # Timestamps are the usual frozen-EXE casualty — report why they fail
+                for attr in ("ReceivedTime", "SentOn"):
+                    try:
+                        raw = getattr(item, attr)
+                        row[attr] = {"type": type(raw).__name__, "iso": _to_iso(raw)}
+                    except Exception as e:
+                        row[attr + "_error"] = f"{type(e).__name__}: {e}"
             except Exception as e:
                 row["item_error"] = str(e)
             results.append(row)
@@ -194,7 +264,11 @@ def get_emails():
         ns = _get_namespace()
         folder = ns.GetDefaultFolder(_default_folder_id(folder_name))
         items = folder.Items
-        items.Sort("[ReceivedTime]", True)
+        # Sent Items are ordered by SentOn — ReceivedTime is empty/meaningless there.
+        try:
+            items.Sort("[SentOn]" if _is_sent_folder(folder_name) else "[ReceivedTime]", True)
+        except Exception:
+            pass
 
         emails = []
         total = items.Count
@@ -206,7 +280,10 @@ def get_emails():
                 if item.Class != 43:   # 43 = olMail
                     continue
                 e = _email_to_dict(item, folder_name)
-                if search and search not in e["subject"].lower() and search not in e["sender"].lower() and search not in e["body_preview"].lower():
+                if search and not any(
+                    search in (e[field] or "").lower()
+                    for field in ("subject", "sender", "to", "body_preview")
+                ):
                     continue
                 emails.append(e)
             except Exception:
@@ -222,7 +299,12 @@ def get_email(entry_id):
     try:
         ns = _get_namespace()
         item = ns.GetItemFromID(entry_id)
-        return jsonify(_email_to_dict(item))
+        folder_name = "Inbox"
+        try:
+            folder_name = str(item.Parent.Name)
+        except Exception:
+            pass
+        return jsonify(_email_to_dict(item, folder_name))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -232,11 +314,17 @@ def get_email(entry_id):
 # ---------------------------------------------------------------------------
 
 def _get_email_count():
+    """(inbox, sent) counts, or None if Outlook is unreachable."""
     try:
         pythoncom.CoInitialize()
         outlook = win32com.client.dynamic.Dispatch("Outlook.Application")
         ns = outlook.GetNamespace("MAPI")
-        return ns.GetDefaultFolder(6).Items.Count
+        inbox = ns.GetDefaultFolder(6).Items.Count
+        try:
+            sent = ns.GetDefaultFolder(5).Items.Count
+        except Exception:
+            sent = 0
+        return inbox, sent
     except Exception:
         return None
 
@@ -324,7 +412,8 @@ def run_status_window():
     def fetch_count():
         count = _get_email_count()
         if count is not None:
-            count_lbl.config(text=f"Inbox: {count} emails available")
+            inbox_count, sent_count = count
+            count_lbl.config(text=f"Inbox: {inbox_count} · Sent: {sent_count} emails available")
         else:
             count_lbl.config(text="Outlook not reachable — is Outlook open?")
             dot.config(fg="#f97316")

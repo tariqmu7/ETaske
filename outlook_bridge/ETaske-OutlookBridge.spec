@@ -6,7 +6,9 @@ a = Analysis(
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['win32com', 'win32com.client', 'win32com.client.dynamic', 'pythoncom', 'pywintypes'],
+    # win32timezone is imported lazily by pywintypes when a COM datetime is read —
+    # without it every ReceivedTime/SentOn raises ModuleNotFoundError in the frozen EXE.
+    hiddenimports=['win32com', 'win32com.client', 'win32com.client.dynamic', 'pythoncom', 'pywintypes', 'win32timezone'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
