@@ -1,12 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from './lib/firebase';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User } from 'firebase/auth';
 import { AppUser, TaskPriority, CorrespondingCategory } from './types';
-import { getNextSerialNumber } from './lib/counters';
+import CreateTaskPanel from './components/CreateTaskPanel';
 import {
-  Mail, RefreshCw, Search, AlertCircle, Wifi, WifiOff, X,
-  Plus, ChevronRight, Clock, Paperclip, CheckCircle2, Inbox,
+  Mail, RefreshCw, Search, AlertCircle, Wifi, WifiOff,
+  Plus, Paperclip, Inbox,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -69,19 +67,6 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
   const [selectedEmail, setSelectedEmail] = useState<OutlookEmail | null>(null);
   const [showCreateTask, setShowCreateTask] = useState(false);
   const [creatingFrom, setCreatingFrom] = useState<OutlookEmail | null>(null);
-  const [taskSaving, setTaskSaving] = useState(false);
-  const [taskSaved, setTaskSaved] = useState(false);
-
-  const [newTask, setNewTask] = useState({
-    taskName: '',
-    description: '',
-    priority: 'Medium' as TaskPriority,
-    dueDate: '',
-    category: 'Internal' as CorrespondingCategory,
-    department: appUser.department || 'None',
-    assignedTo: appUser.displayName,
-    assignedToId: user.uid,
-  });
 
   // ── Bridge communication ──────────────────────────────────────────────────
 
@@ -128,60 +113,21 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
 
   const openCreateTask = (email: OutlookEmail) => {
     setCreatingFrom(email);
-    setNewTask({
-      taskName: email.subject,
-      description: `From: ${email.sender} <${email.sender_email}>\n\n${email.body_preview}`,
-      priority: email.importance === 'High' ? 'High' : 'Medium',
-      dueDate: '',
-      category: 'Internal',
-      department: appUser.department || 'None',
-      assignedTo: appUser.displayName,
-      assignedToId: user.uid,
-    });
-    setTaskSaved(false);
     setShowCreateTask(true);
   };
 
-  const handleSaveTask = async () => {
-    if (!newTask.taskName.trim() || !creatingFrom) return;
-    setTaskSaving(true);
-    try {
-      const serial = await getNextSerialNumber('tasks');
-      await addDoc(collection(db, 'tasks'), {
-        taskName: newTask.taskName.trim(),
-        description: newTask.description.trim(),
-        status: 'Pending',
-        priority: newTask.priority,
-        category: newTask.category,
-        department: newTask.department,
-        subCategory: 'None',
-        serialNumber: serial,
-        assignedTo: newTask.assignedTo,
-        assignedToId: newTask.assignedToId,
-        assignedBy: appUser.displayName,
-        assignedById: user.uid,
-        teamId: appUser.teamId || 'NONE',
-        dueDate: newTask.dueDate || null,
-        filePaths: [],
-        isPrivate: false,
-        // Traceability back to the email
-        correspondingSubject: creatingFrom.subject,
-        userId: user.uid,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-      setTaskSaved(true);
-      setTimeout(() => setShowCreateTask(false), 1200);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setTaskSaving(false);
-    }
-  };
+  // Seeds the shared create-task form. Everything else about that form — its
+  // fields, layout and the notifications it fires — is the Tasks dashboard's.
+  const taskPrefill = useMemo(() => creatingFrom ? {
+    taskName: creatingFrom.subject,
+    description: `From: ${creatingFrom.sender} <${creatingFrom.sender_email}>
 
-  const assignableUsers = projectUsers.filter(
-    u => u.status === 'Approved' && (appUser.role === 'Admin' || appUser.role === 'Manager' || u.id === user.uid)
-  );
+${creatingFrom.body_preview}`,
+    priority: (creatingFrom.importance === 'High' ? 'High' : 'Medium') as TaskPriority,
+    category: 'Internal' as CorrespondingCategory,
+    department: appUser.department || 'None',
+  } : undefined, [creatingFrom, appUser.department]);
+
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -438,227 +384,26 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
         </div>
       )}
 
-      {/* Create Task slide-over */}
-      <AnimatePresence>
-        {showCreateTask && creatingFrom && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              onClick={() => setShowCreateTask(false)}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 1000, backdropFilter: 'blur(2px)' }}
-            />
-            <motion.div
-              initial={{ x: '100%' }} animate={{ x: 0 }} exit={{ x: '100%' }}
-              transition={{ type: 'spring', damping: 28, stiffness: 280 }}
-              style={{
-                position: 'fixed', top: 0, right: 0, bottom: 0, width: 480,
-                background: 'var(--surface-2)', zIndex: 1001,
-                display: 'flex', flexDirection: 'column', boxShadow: '-8px 0 40px rgba(0,0,0,0.25)',
-              }}
-            >
-              {/* Panel header */}
-              <div style={{
-                padding: '20px 24px', borderBottom: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 9,
-                  background: 'linear-gradient(135deg,#0078d4,#005a9e)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                }}>
-                  <Mail size={17} color="#fff" />
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <p style={{ margin: 0, fontWeight: 700, fontSize: 15, color: 'var(--text-1)' }}>Create Task from Email</p>
-                  <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {creatingFrom.sender}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowCreateTask(false)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-3)', padding: 4 }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-
-              {/* Email source strip */}
-              <div style={{ padding: '12px 24px', background: 'var(--surface-1)', borderBottom: '1px solid var(--border)' }}>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>Source email</p>
-                <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--text-2)', fontWeight: 500 }}>{creatingFrom.subject}</p>
-              </div>
-
-              {/* Form */}
-              <div style={{ flex: 1, overflow: 'auto', padding: '20px 24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
-
-                {/* Task name */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>
-                    Task Name <span style={{ color: '#ef4444' }}>*</span>
-                  </label>
-                  <input
-                    autoFocus
-                    value={newTask.taskName}
-                    onChange={e => setNewTask(t => ({ ...t, taskName: e.target.value }))}
-                    placeholder="What needs to be done?"
-                    style={{
-                      width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-                      borderRadius: 9, border: '1px solid var(--border)',
-                      background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                    }}
-                  />
-                </div>
-
-                {/* Description */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Description</label>
-                  <textarea
-                    value={newTask.description}
-                    onChange={e => setNewTask(t => ({ ...t, description: e.target.value }))}
-                    rows={5}
-                    style={{
-                      width: '100%', boxSizing: 'border-box', padding: '10px 12px',
-                      borderRadius: 9, border: '1px solid var(--border)',
-                      background: 'var(--surface-1)', color: 'var(--text-1)', fontSize: 13,
-                      outline: 'none', resize: 'vertical',
-                    }}
-                  />
-                </div>
-
-                {/* Priority + Due date row */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Priority</label>
-                    <select
-                      value={newTask.priority}
-                      onChange={e => setNewTask(t => ({ ...t, priority: e.target.value as TaskPriority }))}
-                      style={{
-                        width: '100%', padding: '10px 12px', borderRadius: 9,
-                        border: '1px solid var(--border)', background: 'var(--surface-1)',
-                        color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                      }}
-                    >
-                      <option>Low</option>
-                      <option>Medium</option>
-                      <option>High</option>
-                      <option>Urgent</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Due Date</label>
-                    <input
-                      type="date"
-                      value={newTask.dueDate}
-                      onChange={e => setNewTask(t => ({ ...t, dueDate: e.target.value }))}
-                      style={{
-                        width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9,
-                        border: '1px solid var(--border)', background: 'var(--surface-1)',
-                        color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Assign to */}
-                <div>
-                  <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Assign To</label>
-                  <select
-                    value={newTask.assignedToId}
-                    onChange={e => {
-                      const u = assignableUsers.find(u => u.id === e.target.value);
-                      if (u) setNewTask(t => ({ ...t, assignedToId: u.id, assignedTo: u.displayName }));
-                    }}
-                    style={{
-                      width: '100%', padding: '10px 12px', borderRadius: 9,
-                      border: '1px solid var(--border)', background: 'var(--surface-1)',
-                      color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                    }}
-                  >
-                    {assignableUsers.map(u => (
-                      <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Category */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Category</label>
-                    <select
-                      value={newTask.category}
-                      onChange={e => setNewTask(t => ({ ...t, category: e.target.value }))}
-                      style={{
-                        width: '100%', padding: '10px 12px', borderRadius: 9,
-                        border: '1px solid var(--border)', background: 'var(--surface-1)',
-                        color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                      }}
-                    >
-                      <option>Internal</option>
-                      <option>External</option>
-                      <option>Project</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', display: 'block', marginBottom: 6 }}>Department</label>
-                    <input
-                      value={newTask.department}
-                      onChange={e => setNewTask(t => ({ ...t, department: e.target.value }))}
-                      placeholder="Department"
-                      style={{
-                        width: '100%', boxSizing: 'border-box', padding: '10px 12px', borderRadius: 9,
-                        border: '1px solid var(--border)', background: 'var(--surface-1)',
-                        color: 'var(--text-1)', fontSize: 14, outline: 'none',
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div style={{
-                padding: '16px 24px', borderTop: '1px solid var(--border)',
-                display: 'flex', gap: 10,
-              }}>
-                <button
-                  onClick={() => setShowCreateTask(false)}
-                  style={{
-                    flex: 1, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 600,
-                    border: '1px solid var(--border)', background: 'var(--surface-1)',
-                    color: 'var(--text-2)', cursor: 'pointer',
-                  }}
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSaveTask}
-                  disabled={!newTask.taskName.trim() || taskSaving || taskSaved}
-                  style={{
-                    flex: 2, padding: '11px', borderRadius: 9, fontSize: 14, fontWeight: 700,
-                    border: 'none',
-                    background: taskSaved
-                      ? '#22c55e'
-                      : (!newTask.taskName.trim() || taskSaving)
-                        ? 'var(--surface-3)'
-                        : 'var(--accent)',
-                    color: taskSaved || (!newTask.taskName.trim() || taskSaving) ? (taskSaved ? '#fff' : 'var(--text-3)') : '#fff',
-                    cursor: !newTask.taskName.trim() || taskSaving || taskSaved ? 'not-allowed' : 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'background 0.2s',
-                  }}
-                >
-                  {taskSaved
-                    ? <><CheckCircle2 size={16} /> Saved!</>
-                    : taskSaving
-                      ? 'Saving…'
-                      : <><Plus size={15} /> Create Task</>
-                  }
-                </button>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
+      {/* Create Task — the same panel the Tasks dashboard uses, prefilled from the email */}
+      <CreateTaskPanel
+        open={showCreateTask && !!creatingFrom}
+        onClose={() => setShowCreateTask(false)}
+        user={user}
+        appUser={appUser}
+        projectUsers={projectUsers}
+        prefill={taskPrefill}
+        extraFields={creatingFrom ? { correspondingSubject: creatingFrom.subject } : undefined}
+        headerIcon={<Mail size={16} color="#fff" />}
+        headerIconBackground="linear-gradient(135deg,#0078d4,#005a9e)"
+        headerTitle="Create Task from Email"
+        headerSubtitle={creatingFrom?.sender}
+        sourceStrip={creatingFrom ? (
+          <div style={{ padding: '12px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Source email</p>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{creatingFrom.subject}</p>
+          </div>
+        ) : undefined}
+      />
     </div>
   );
 }
