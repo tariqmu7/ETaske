@@ -10,6 +10,8 @@ const GO_MAP: Record<string, AppView> = {
   i: 'manager-inbox',
   o: 'overview',
   p: 'projects',
+  // "b" for bids — "o" is already Overview.
+  b: 'opportunities',
   a: 'archive',
   n: 'announcements',
   d: 'due-soon',

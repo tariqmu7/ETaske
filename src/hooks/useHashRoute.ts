@@ -6,6 +6,7 @@ import type { AppView } from '../App';
 const KNOWN_VIEWS: AppView[] = [
   'home', 'correspondences', 'manager-inbox', 'tasks', 'archive',
   'admin', 'overview', 'announcements', 'due-soon', 'outlook-feed', 'projects',
+  'opportunities', 'bid-analytics',
 ];
 
 const viewFromHash = (): AppView | null => {

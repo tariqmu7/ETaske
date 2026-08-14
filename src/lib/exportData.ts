@@ -21,6 +21,18 @@ const BACKUP_COLLECTIONS = [
   'announcements',
   'messages',
   'followUps',
+  // Projects — these were missing, so a "full" backup silently omitted the
+  // whole projects module.
+  'projects',
+  'projectFinancials',
+  'projectUpdates',
+  // Opportunities module — the bid pipeline plus the three child collections
+  // the analytics view is computed from. Losing the feedback records would lose
+  // the loss analysis, which cannot be reconstructed from the opportunity docs.
+  'opportunities',
+  'opportunityFollowUps',
+  'opportunityMilestones',
+  'opportunityFeedback',
 ] as const;
 
 // ── Firestore REST value encoding ─────────────────────────────────────────────
@@ -205,7 +217,85 @@ const TASK_COLUMNS: [string, string][] = [
   ['id', 'Doc ID'],
 ];
 
-const WIDE_KEYS = new Set(['subject', 'body', 'taskName', 'description', 'notes']);
+const OPPORTUNITY_COLUMNS: [string, string][] = [
+  ['serialNumber', 'Serial'],
+  ['title', 'Title'],
+  ['client', 'Client'],
+  ['sector', 'Sector'],
+  ['location', 'Location'],
+  ['tenderNumber', 'Tender / RFQ No.'],
+  ['source', 'Source'],
+  ['stage', 'Stage'],
+  ['probability', 'Win %'],
+  ['estimatedValue', 'Estimated Value'],
+  ['currency', 'Currency'],
+  ['weightedValue', 'Weighted Value'],
+  ['announcedDate', 'Announced'],
+  ['submissionDeadline', 'Submission Deadline'],
+  ['submittedDate', 'Submitted On'],
+  ['decisionDate', 'Decision Date'],
+  ['ownerName', 'Bid Owner'],
+  ['awardedTo', 'Awarded To'],
+  ['awardedValue', 'Awarded Value'],
+  ['scope', 'Scope'],
+  ['lastFollowUpText', 'Last Follow-up'],
+  ['nextActionDate', 'Next Action'],
+  ['createdAt', 'Created At'],
+  ['updatedAt', 'Updated At'],
+  ['id', 'Doc ID'],
+];
+
+// The child sheets lead with the parent's serial + title so a row still says
+// which bid it belongs to when the sheet is filtered or sorted on its own.
+const OPPORTUNITY_FEEDBACK_COLUMNS: [string, string][] = [
+  ['opportunitySerial', 'Bid Serial'],
+  ['opportunityTitle', 'Bid Title'],
+  ['outcome', 'Outcome'],
+  ['primaryReason', 'Primary Reason'],
+  ['reasons', 'All Reasons'],
+  ['competitorName', 'Competitor'],
+  ['ourPrice', 'Our Price'],
+  ['winningPrice', 'Winning Price'],
+  ['priceGapPercent', 'Price Gap %'],
+  ['clientFeedback', 'Client Feedback'],
+  ['lessonsLearned', 'Lessons Learned'],
+  ['notes', 'Notes'],
+  ['authorName', 'Recorded By'],
+  ['createdAt', 'Created At'],
+  ['updatedAt', 'Updated At'],
+  ['id', 'Doc ID'],
+];
+
+const OPPORTUNITY_MILESTONE_COLUMNS: [string, string][] = [
+  ['opportunitySerial', 'Bid Serial'],
+  ['opportunityTitle', 'Bid Title'],
+  ['title', 'Gate'],
+  ['status', 'Status'],
+  ['dueDate', 'Due Date'],
+  ['completedDate', 'Completed Date'],
+  ['slippageDays', 'Slippage (days)'],
+  ['notes', 'Notes'],
+  ['addedByName', 'Added By'],
+  ['createdAt', 'Created At'],
+  ['id', 'Doc ID'],
+];
+
+const OPPORTUNITY_FOLLOWUP_COLUMNS: [string, string][] = [
+  ['opportunitySerial', 'Bid Serial'],
+  ['opportunityTitle', 'Bid Title'],
+  ['createdAt', 'Logged At'],
+  ['authorName', 'Author'],
+  ['stage', 'Stage At The Time'],
+  ['text', 'Follow-up'],
+  ['nextActionDate', 'Next Action'],
+  ['id', 'Doc ID'],
+];
+
+const WIDE_KEYS = new Set([
+  'subject', 'body', 'taskName', 'description', 'notes',
+  'title', 'scope', 'text', 'lastFollowUpText', 'opportunityTitle',
+  'clientFeedback', 'lessonsLearned', 'reasons',
+]);
 
 function buildSheet(rows: any[], columns: [string, string][]) {
   const headers = columns.map(c => c[1]);
@@ -246,6 +336,11 @@ export async function exportToExcel(): Promise<ExcelResult> {
   XLSX.utils.book_append_sheet(wb, buildSheet(tasks, TASK_COLUMNS), 'Tasks');
 
   const fileName = `ETaske-export-${stamp()}.xlsx`;
+  writeWorkbook(fileName, wb);
+  return { fileName, correspondences: correspondences.length, tasks: tasks.length };
+}
+
+function writeWorkbook(fileName: string, wb: XLSX.WorkBook) {
   const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
   downloadBlob(
     fileName,
@@ -253,5 +348,106 @@ export async function exportToExcel(): Promise<ExcelResult> {
       type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     })
   );
-  return { fileName, correspondences: correspondences.length, tasks: tasks.length };
+}
+
+// ── Opportunities (bid pipeline) workbook ────────────────────────────────────
+
+export interface OpportunityExportResult {
+  fileName: string;
+  opportunities: number;
+  feedback: number;
+  milestones: number;
+  followUps: number;
+}
+
+const num = (v: any): number => {
+  if (typeof v === 'number') return isFinite(v) ? v : 0;
+  const n = parseFloat(String(v ?? '').replace(/,/g, ''));
+  return isFinite(n) ? n : 0;
+};
+
+// Days between a gate's due date and the day it was (or wasn't) completed —
+// the same rule the milestones tab shows on screen: a Done gate is measured
+// against its own completion date, an open one against today. Positive = late.
+const gateSlippage = (m: any): number | '' => {
+  if (!m.dueDate) return '';
+  const due = new Date(`${m.dueDate}T00:00:00`).getTime();
+  if (!isFinite(due)) return '';
+  let end: number;
+  if (m.status === 'Done') {
+    if (!m.completedDate) return '';
+    end = new Date(`${m.completedDate}T00:00:00`).getTime();
+    if (!isFinite(end)) return '';
+  } else {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    end = today.getTime();
+  }
+  return Math.round((end - due) / 86_400_000);
+};
+
+/**
+ * Export the whole bid pipeline as a four-sheet workbook: the opportunities
+ * themselves, the outcome/feedback records, the bid gates and the follow-up
+ * log. Everything the analytics view aggregates is in here as raw rows, so the
+ * numbers on screen can be re-derived (or re-cut) in Excel.
+ *
+ * Weighted value is computed here rather than stored — a missing probability
+ * reads as 0, matching the dashboard, so an unassessed bid never inflates it.
+ */
+export async function exportOpportunities(): Promise<OpportunityExportResult> {
+  const [oppSnap, fbSnap, msSnap, fuSnap] = await Promise.all([
+    getDocs(collection(db, 'opportunities')),
+    getDocs(collection(db, 'opportunityFeedback')),
+    getDocs(collection(db, 'opportunityMilestones')),
+    getDocs(collection(db, 'opportunityFollowUps')),
+  ]);
+
+  const opportunities = oppSnap.docs
+    .filter(d => d.id !== '--stats--')
+    .map(d => {
+      const data = d.data() as any;
+      return {
+        id: d.id,
+        ...data,
+        weightedValue: Math.round(num(data.estimatedValue) * ((data.probability ?? 0) / 100)),
+      };
+    });
+
+  const byId = new Map(opportunities.map(o => [o.id, o]));
+  // A child row whose parent has been deleted still exports, labelled as such,
+  // rather than silently vanishing from the record.
+  const withParent = (rows: any[]) => rows.map(r => {
+    const parent = byId.get(r.opportunityId);
+    return {
+      ...r,
+      opportunitySerial: parent?.serialNumber ?? '(deleted bid)',
+      opportunityTitle: parent?.title ?? r.opportunityId,
+    };
+  });
+
+  const read = (snap: any) => snap.docs
+    .filter((d: any) => d.id !== '--stats--')
+    .map((d: any) => ({ id: d.id, ...d.data() }));
+
+  const feedback = withParent(read(fbSnap));
+  const milestones = withParent(read(msSnap)).map(m => ({ ...m, slippageDays: gateSlippage(m) }));
+  const followUps = withParent(read(fuSnap))
+    .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, buildSheet(opportunities, OPPORTUNITY_COLUMNS), 'Opportunities');
+  XLSX.utils.book_append_sheet(wb, buildSheet(feedback, OPPORTUNITY_FEEDBACK_COLUMNS), 'Outcomes');
+  XLSX.utils.book_append_sheet(wb, buildSheet(milestones, OPPORTUNITY_MILESTONE_COLUMNS), 'Bid Gates');
+  XLSX.utils.book_append_sheet(wb, buildSheet(followUps, OPPORTUNITY_FOLLOWUP_COLUMNS), 'Follow-ups');
+
+  const fileName = `ETaske-bids-${stamp()}.xlsx`;
+  writeWorkbook(fileName, wb);
+  return {
+    fileName,
+    opportunities: opportunities.length,
+    feedback: feedback.length,
+    milestones: milestones.length,
+    followUps: followUps.length,
+  };
 }

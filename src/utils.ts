@@ -87,6 +87,19 @@ export const isDueSoon = (deadlineStr?: string, hours: number = 48): boolean => 
   return diff > 0 && diff <= hours * 60 * 60 * 1000;
 };
 
+// Whole days from today (local midnight) to a "YYYY-MM-DD" date: 0 = today,
+// negative = in the past. Null when the date is missing or unparseable.
+// Used wherever a countdown is shown in days rather than hours (bid submission
+// deadlines, bid gates) — re-exported by components/opportunities/opportunityUi.
+export const daysUntil = (isoDate?: string): number | null => {
+  if (!isoDate) return null;
+  const target = new Date(`${isoDate}T00:00:00`).getTime();
+  if (!isFinite(target)) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((target - today.getTime()) / 86_400_000);
+};
+
 // Short relative time, e.g. "just now", "5m ago", "3h ago", "2d ago".
 // Accepts a Firestore Timestamp, a Date, or a millis number.
 export const timeAgo = (when?: { toDate?: () => Date } | Date | number | null): string => {

@@ -15,6 +15,8 @@ const TRAILS: Partial<Record<AppView, Crumb[]>> = {
   'manager-inbox': [{ label: 'Correspondences', view: 'correspondences' }, { label: 'Manager Inbox' }],
   tasks: [{ label: 'Tasks' }],
   projects: [{ label: 'Projects' }],
+  opportunities: [{ label: 'Opportunities' }],
+  'bid-analytics': [{ label: 'Opportunities', view: 'opportunities' }, { label: 'Bid Analytics' }],
   archive: [{ label: 'Archive' }],
   'due-soon': [{ label: 'Due Soon' }],
   announcements: [{ label: 'News' }],

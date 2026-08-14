@@ -1,14 +1,15 @@
 // "Jump back in" — a tiny localStorage-backed ring of the most recently opened
-// tasks / correspondences / projects, surfaced on the Home dashboard so the
-// most common path (re-open the thing you were just on) is one click away.
+// tasks / correspondences / projects / opportunities, surfaced on the Home
+// dashboard so the most common path (re-open the thing you were just on) is one
+// click away.
 
-export type RecentKind = 'task' | 'corresponding' | 'project';
+export type RecentKind = 'task' | 'corresponding' | 'project' | 'opportunity';
 
 export interface RecentItem {
   kind: RecentKind;
   id: string;
-  label: string;      // taskName / subject / project name
-  serial?: string;    // TK000001 / CR000001 / PR000001
+  label: string;      // taskName / subject / project name / bid title
+  serial?: string;    // TK000001 / CR000001 / PR000001 / OP000001
   at: number;         // ms timestamp of last open
 }
 

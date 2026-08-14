@@ -1,0 +1,688 @@
+/// <reference types="vite/client" />
+import React, { useState, useEffect, useMemo } from 'react';
+import {
+  collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
+  doc, serverTimestamp, orderBy,
+} from 'firebase/firestore';
+import { db, auth } from './lib/firebase';
+import { User } from 'firebase/auth';
+import {
+  AppUser, Opportunity, OpportunityStage, OpportunitySource,
+  OPPORTUNITY_STAGE_OPTIONS, OPPORTUNITY_SOURCE_OPTIONS,
+  OPEN_OPPORTUNITY_STAGES, CURRENCY_OPTIONS, isOpportunityOpen,
+} from './types';
+import { getNextSerialNumber } from './lib/counters';
+import { globalSearch } from './utils';
+import { consumePending, subscribeOpen } from './lib/deepLink';
+import { recordRecent } from './lib/recents';
+import { exportOpportunities } from './lib/exportData';
+import {
+  Plus, Search, X, Target, Building2, Hash, CalendarClock,
+  Trash2, Edit2, AlertCircle, User as UserIcon, Percent, MessageSquare, BarChart3,
+  FileSpreadsheet, Loader2,
+} from 'lucide-react';
+import type { AppView } from './App';
+import { motion, AnimatePresence } from 'motion/react';
+import OpportunityDetail from './OpportunityDetail';
+import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
+
+interface Props {
+  user: User;
+  appUser: AppUser;
+  projectUsers: AppUser[];
+  onNavigate?: (v: AppView) => void;
+}
+
+const emptyForm = () => ({
+  title: '',
+  client: '',
+  sector: '',
+  location: '',
+  tenderNumber: '',
+  source: 'Public Tender' as OpportunitySource,
+  scope: '',
+  stage: 'Identified' as OpportunityStage,
+  probability: '',
+  estimatedValue: '',
+  currency: 'EGP',
+  announcedDate: '',
+  submissionDeadline: '',
+  submittedDate: '',
+  decisionDate: '',
+  ownerId: '',
+  awardedTo: '',
+  awardedValue: '',
+  nextActionDate: '',
+});
+
+export default function OpportunitiesDashboard({ user, appUser, projectUsers, onNavigate }: Props) {
+  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [stageFilter, setStageFilter] = useState<string>('All');
+  const [sortBy, setSortBy] = useState<'deadline' | 'value' | 'recent' | 'stage'>('deadline');
+
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editing, setEditing] = useState<Opportunity | null>(null);
+  const [formData, setFormData] = useState(emptyForm());
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Opportunity | null>(null);
+  // Detail page is keyed by id, not by the object, so the open page keeps
+  // following the live snapshot instead of freezing on a stale copy.
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [exportNote, setExportNote] = useState<string | null>(null);
+
+  const canDelete = appUser.role === 'Admin' || appUser.role === 'Manager';
+
+  useEffect(() => {
+    const q = query(collection(db, 'opportunities'), orderBy('createdAt', 'desc'));
+    const unsub = onSnapshot(q, (snap) => {
+      setOpportunities(
+        snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Opportunity))
+      );
+      setLoading(false);
+    }, err => {
+      console.error('Opportunities listener error:', err, { uid: auth.currentUser?.uid });
+      setError('Failed to load opportunities.');
+      setLoading(false);
+    });
+    return () => unsub();
+  }, []);
+
+  const stats = useMemo(() => {
+    const open = opportunities.filter(o => isOpportunityOpen(o.stage));
+    const won = opportunities.filter(o => o.stage === 'Won');
+    const lost = opportunities.filter(o => o.stage === 'Lost');
+    const decided = won.length + lost.length;
+    // Weighted pipeline: value x probability. A missing probability is read as
+    // 0 rather than 100 so an unassessed bid never inflates the forecast.
+    const weighted = open.reduce((sum, o) => sum + toNumber(o.estimatedValue) * ((o.probability ?? 0) / 100), 0);
+    const openValue = open.reduce((sum, o) => sum + toNumber(o.estimatedValue), 0);
+    const dueSoon = open.filter(o => {
+      const d = daysUntil(o.submissionDeadline);
+      return d !== null && d >= 0 && d <= 7;
+    }).length;
+    const overdue = open.filter(o => {
+      const d = daysUntil(o.submissionDeadline);
+      return d !== null && d < 0;
+    }).length;
+    return {
+      open: open.length,
+      openValue,
+      weighted,
+      winRate: decided ? Math.round((won.length / decided) * 100) : null,
+      won: won.length,
+      lost: lost.length,
+      dueSoon,
+      overdue,
+    };
+  }, [opportunities]);
+
+  // The dominant currency across the board — the KPI tiles sum mixed currencies
+  // naively, so label them with the one actually in use most.
+  const mainCurrency = useMemo(() => {
+    const counts: Record<string, number> = {};
+    opportunities.forEach(o => { if (o.currency) counts[o.currency] = (counts[o.currency] || 0) + 1; });
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'EGP';
+  }, [opportunities]);
+
+  const stageRank = useMemo(() => {
+    const rank: Record<string, number> = {};
+    OPPORTUNITY_STAGE_OPTIONS.forEach((s, i) => { rank[s] = i; });
+    return rank;
+  }, []);
+
+  const visible = useMemo(() => {
+    const rows = opportunities.filter(o => {
+      if (stageFilter === 'Open' && !isOpportunityOpen(o.stage)) return false;
+      if (stageFilter !== 'All' && stageFilter !== 'Open' && o.stage !== stageFilter) return false;
+      if (search && !globalSearch(o, search)) return false;
+      return true;
+    });
+    rows.sort((a, b) => {
+      if (sortBy === 'value') return toNumber(b.estimatedValue) - toNumber(a.estimatedValue);
+      if (sortBy === 'stage') return (stageRank[a.stage] ?? 99) - (stageRank[b.stage] ?? 99);
+      if (sortBy === 'deadline') {
+        // Opportunities without a deadline sink to the bottom instead of
+        // hijacking the top of the list.
+        const av = a.submissionDeadline || '9999-12-31';
+        const bv = b.submissionDeadline || '9999-12-31';
+        return av.localeCompare(bv);
+      }
+      return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
+    });
+    return rows;
+  }, [opportunities, search, stageFilter, sortBy, stageRank]);
+
+  const isFiltering = search.trim() !== '' || stageFilter !== 'All';
+
+  const openCreate = () => {
+    setEditing(null);
+    setFormData({ ...emptyForm(), ownerId: appUser.id, currency: mainCurrency });
+    setFormError(null);
+    setIsModalOpen(true);
+  };
+
+  const openEdit = (o: Opportunity) => {
+    setEditing(o);
+    setFormError(null);
+    setFormData({
+      title: o.title || '',
+      client: o.client || '',
+      sector: o.sector || '',
+      location: o.location || '',
+      tenderNumber: o.tenderNumber || '',
+      source: o.source || 'Public Tender',
+      scope: o.scope || '',
+      stage: o.stage || 'Identified',
+      probability: o.probability === undefined ? '' : String(o.probability),
+      estimatedValue: o.estimatedValue === undefined ? '' : String(o.estimatedValue),
+      currency: o.currency || mainCurrency,
+      announcedDate: o.announcedDate || '',
+      submissionDeadline: o.submissionDeadline || '',
+      submittedDate: o.submittedDate || '',
+      decisionDate: o.decisionDate || '',
+      ownerId: o.ownerId || '',
+      awardedTo: o.awardedTo || '',
+      awardedValue: o.awardedValue === undefined ? '' : String(o.awardedValue),
+      nextActionDate: o.nextActionDate || '',
+    });
+    setIsModalOpen(true);
+  };
+
+  const handleSave = async () => {
+    const title = formData.title.trim();
+    if (!title) { setFormError('Opportunity title is required.'); return; }
+    const probability = formData.probability === '' ? undefined : Number(formData.probability);
+    if (probability !== undefined && (!isFinite(probability) || probability < 0 || probability > 100)) {
+      setFormError('Probability must be between 0 and 100.');
+      return;
+    }
+    if (formData.announcedDate && formData.submissionDeadline &&
+        formData.submissionDeadline < formData.announcedDate) {
+      setFormError('Submission deadline cannot be before the announcement date.');
+      return;
+    }
+    const owner = projectUsers.find(u => u.id === formData.ownerId);
+    const payload = {
+      title,
+      client: formData.client.trim(),
+      sector: formData.sector.trim(),
+      location: formData.location.trim(),
+      tenderNumber: formData.tenderNumber.trim(),
+      source: formData.source,
+      scope: formData.scope.trim(),
+      stage: formData.stage,
+      probability: probability ?? null,
+      estimatedValue: formData.estimatedValue === '' ? null : Number(formData.estimatedValue),
+      currency: formData.currency,
+      announcedDate: formData.announcedDate,
+      submissionDeadline: formData.submissionDeadline,
+      submittedDate: formData.submittedDate,
+      decisionDate: formData.decisionDate,
+      ownerId: formData.ownerId,
+      ownerName: owner?.displayName || '',
+      awardedTo: formData.awardedTo.trim(),
+      awardedValue: formData.awardedValue === '' ? null : Number(formData.awardedValue),
+      nextActionDate: formData.nextActionDate,
+    };
+    setSaving(true);
+    setFormError(null);
+    setError(null);
+    try {
+      if (editing) {
+        await updateDoc(doc(db, 'opportunities', editing.id), {
+          ...payload,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        const serialNumber = await getNextSerialNumber('opportunities');
+        await addDoc(collection(db, 'opportunities'), {
+          ...payload,
+          serialNumber,
+          userId: user.uid,
+          teamId: appUser.teamId || '',
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+      setIsModalOpen(false);
+      setEditing(null);
+    } catch (e) {
+      console.error('Save opportunity failed:', e);
+      setFormError('Failed to save opportunity. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteDoc(doc(db, 'opportunities', deleteTarget.id));
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error('Delete opportunity failed:', e);
+      setError('Failed to delete opportunity. Only managers and admins can delete.');
+      setDeleteTarget(null);
+    }
+  };
+
+  const closedOutcome = formData.stage === 'Lost' || formData.stage === 'Won';
+
+  // Export is deliberately the WHOLE pipeline, not the filtered view: the
+  // workbook is a record of the bid book, and a sheet that silently reflected a
+  // search box would be misread as complete. Filtering belongs in Excel.
+  const handleExport = async () => {
+    setExporting(true);
+    setError(null);
+    try {
+      const r = await exportOpportunities();
+      setExportNote(`Saved ${r.fileName} — ${r.opportunities} opportunities, ${r.feedback} outcomes, ${r.milestones} bid gates, ${r.followUps} follow-ups.`);
+    } catch (e) {
+      console.error('Export opportunities failed:', e);
+      setError('Export failed. Please try again.');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  // Opening a bid also feeds Home's "Jump back in" list, exactly like a task or
+  // a correspondence.
+  const openOpportunity = (o: Opportunity) => {
+    setSelectedId(o.id);
+    recordRecent({ kind: 'opportunity', id: o.id, label: o.title, serial: o.serialNumber });
+  };
+
+  // Deep link — a bid-deadline notification ("#/opportunities?open=<id>") or a
+  // command-palette hit. Same two-step as TasksDashboard: the id is parked until
+  // the snapshot carrying it has arrived, so a cold load still lands on the bid.
+  useEffect(() => {
+    const initial = consumePending('opportunity');
+    if (initial) setPendingOpenId(initial);
+    return subscribeOpen(ref => {
+      if (ref.type === 'opportunity') setPendingOpenId(ref.id);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!pendingOpenId) return;
+    const match = opportunities.find(o => o.id === pendingOpenId);
+    if (!match) {
+      // Still loading — wait. Once loaded and still absent, the record is gone
+      // (deleted), so stop waiting rather than parking the id forever.
+      if (!loading) setPendingOpenId(null);
+      return;
+    }
+    setSelectedId(match.id);
+    recordRecent({ kind: 'opportunity', id: match.id, label: match.title, serial: match.serialNumber });
+    setPendingOpenId(null);
+  }, [pendingOpenId, opportunities, loading]);
+
+  const selected = selectedId ? opportunities.find(o => o.id === selectedId) || null : null;
+  // A deleted (or filtered-away) record must not leave the page on a ghost.
+  useEffect(() => {
+    if (selectedId && !loading && !opportunities.some(o => o.id === selectedId)) setSelectedId(null);
+  }, [selectedId, opportunities, loading]);
+
+  return (
+    <div style={selected ? { maxWidth: 'none', margin: 0, padding: 0 } : { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+      {selected ? (
+        <OpportunityDetail
+          opportunity={selected}
+          user={user}
+          appUser={appUser}
+          projectUsers={projectUsers}
+          onBack={() => setSelectedId(null)}
+          onEdit={() => openEdit(selected)}
+        />
+      ) : (
+      <>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ padding: 10, background: 'rgba(59,130,246,0.1)', color: 'var(--accent)' }}>
+            <Target className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Opportunities</h1>
+            <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+              {opportunities.length} {opportunities.length === 1 ? 'opportunity' : 'opportunities'} · {stats.open} open
+            </p>
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-ghost"
+            onClick={handleExport}
+            disabled={exporting}
+            title="Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook"
+          >
+            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+            {exporting ? 'Exporting…' : 'Export'}
+          </button>
+          {onNavigate && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
+            <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title="Win rate, loss reasons and pipeline analysis">
+              <BarChart3 className="w-4 h-4" /> Analytics
+            </button>
+          )}
+          <button className="btn btn-primary" onClick={openCreate}>
+            <Plus className="w-4 h-4" /> New Opportunity
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: '#fee2e2', color: '#991b1b', marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
+          <AlertCircle className="w-4 h-4" /> {error}
+        </div>
+      )}
+
+      {exportNote && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-secondary)', marginBottom: 16, fontSize: 13 }}>
+          <FileSpreadsheet className="w-4 h-4" style={{ flexShrink: 0, color: 'var(--accent)' }} />
+          <span style={{ flex: 1 }}>{exportNote}</span>
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setExportNote(null)} title="Dismiss">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* KPI strip */}
+      {opportunities.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+          {[
+            { label: 'Open', value: String(stats.open), sub: 'in pipeline', filter: 'Open', color: 'var(--text-primary)' },
+            { label: 'Pipeline value', value: money(stats.openValue, mainCurrency), sub: 'open bids', filter: 'Open', color: '#3b82f6' },
+            { label: 'Weighted', value: money(stats.weighted, mainCurrency), sub: 'value × probability', filter: 'Open', color: '#8b5cf6' },
+            { label: 'Win rate', value: stats.winRate === null ? '—' : `${stats.winRate}%`, sub: `${stats.won}W / ${stats.lost}L`, filter: 'Won', color: '#16a34a' },
+            { label: 'Due ≤ 7 days', value: String(stats.dueSoon), sub: `${stats.overdue} past deadline`, filter: 'Open', color: stats.overdue > 0 ? '#dc2626' : '#f59e0b' },
+          ].map(s => {
+            const active = stageFilter === s.filter;
+            return (
+              <button
+                key={s.label}
+                onClick={() => setStageFilter(active ? 'All' : s.filter)}
+                className="card"
+                style={{ padding: '12px 14px', textAlign: 'left', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
+              >
+                <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.sub}</div>
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Filters */}
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div style={{ position: 'relative', flex: '1 1 240px' }}>
+          <Search className="w-4 h-4" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <input
+            type="text"
+            placeholder="Search opportunities…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+          />
+        </div>
+        <select
+          value={stageFilter}
+          onChange={e => setStageFilter(e.target.value)}
+          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+        >
+          <option value="All">All stages</option>
+          <option value="Open">Open only</option>
+          {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+        </select>
+        <select
+          value={sortBy}
+          onChange={e => setSortBy(e.target.value as typeof sortBy)}
+          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+          title="Sort opportunities"
+        >
+          <option value="deadline">Submission deadline</option>
+          <option value="value">Value (high → low)</option>
+          <option value="stage">Stage</option>
+          <option value="recent">Most recent</option>
+        </select>
+      </div>
+
+      {/* Grid */}
+      {loading ? (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          {[0, 1, 2].map(i => <div key={i} className="card skeleton" style={{ height: 190 }} />)}
+        </div>
+      ) : visible.length === 0 ? (
+        <div className="empty-state">
+          <div className="empty-state-icon"><Target className="w-8 h-8" /></div>
+          <div className="empty-state-title">{isFiltering ? 'No matching opportunities' : 'No opportunities yet'}</div>
+          <div className="empty-state-sub">
+            {isFiltering
+              ? 'No opportunities match your search or filter. Try clearing them.'
+              : 'Add your first tender or bid to start tracking the pipeline, deadlines and win rate.'}
+          </div>
+          {isFiltering ? (
+            <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStageFilter('All'); }}>
+              Clear filters
+            </button>
+          ) : (
+            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
+              <Plus className="w-4 h-4" /> New Opportunity
+            </button>
+          )}
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+          <AnimatePresence>
+            {visible.map(o => {
+              const dLeft = daysUntil(o.submissionDeadline);
+              const showCountdown = isOpportunityOpen(o.stage) && dLeft !== null;
+              const late = showCountdown && (dLeft as number) < 0;
+              const soon = showCountdown && (dLeft as number) >= 0 && (dLeft as number) <= 7;
+              return (
+                <motion.div
+                  key={o.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="card card-interactive"
+                  style={{ padding: 18, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, borderLeft: `3px solid ${STAGE_COLORS[o.stage] || 'var(--border)'}` }}
+                  onClick={() => openOpportunity(o)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', color: '#fff', background: STAGE_COLORS[o.stage] || '#64748b' }}>
+                      {o.stage}
+                    </span>
+                    <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => openEdit(o)}>
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      {canDelete && (
+                        <button className="btn btn-ghost btn-icon btn-sm" title="Delete" onClick={() => setDeleteTarget(o)}>
+                          <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{o.title}</h3>
+                    {o.serialNumber && (
+                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{o.serialNumber}</span>
+                    )}
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    {o.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.client}{o.sector ? ` · ${o.sector}` : ''}</div>}
+                    {o.tenderNumber && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Hash className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.tenderNumber}</div>}
+                    {o.ownerName && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><UserIcon className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.ownerName}</div>}
+                    {showCountdown && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: late ? '#dc2626' : soon ? '#f59e0b' : 'var(--text-secondary)', fontWeight: late || soon ? 700 : 400 }}>
+                        <CalendarClock className="w-3.5 h-3.5" />
+                        {late ? `${Math.abs(dLeft as number)}d past deadline` : (dLeft === 0 ? 'Due today' : `${dLeft}d to deadline`)}
+                      </div>
+                    )}
+                  </div>
+
+                  {o.lastFollowUpText && (
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
+                      <MessageSquare className="w-3.5 h-3.5" style={{ flexShrink: 0, marginTop: 1 }} />
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                        {o.lastFollowUpText}
+                      </span>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 6 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
+                      {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
+                    </span>
+                    {o.probability !== undefined && o.probability !== null && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                        <Percent className="w-3.5 h-3.5" /> {o.probability}
+                      </span>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+
+      </>
+      )}
+
+      {/* Create / Edit modal — kept outside the list/detail switch so "Edit
+          opportunity" works from the detail page too. */}
+      {isModalOpen && (
+        <div className="modal-overlay" onClick={() => setIsModalOpen(false)}>
+          <div className="modal" style={{ maxWidth: 620, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
+                {editing ? 'Edit Opportunity' : 'New Opportunity'}
+              </h2>
+              <button className="btn btn-ghost btn-icon" onClick={() => setIsModalOpen(false)}><X className="w-5 h-5" /></button>
+            </div>
+
+            <div style={{ display: 'grid', gap: 14 }}>
+              <Field label="Title *">
+                <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="opp-input" placeholder="e.g. EGPC Turnaround Services Tender 2026" />
+              </Field>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Client"><input value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} className="opp-input" placeholder="EGPC" /></Field>
+                <Field label="Sector"><input value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} className="opp-input" placeholder="Refining" /></Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Tender / RFQ number"><input value={formData.tenderNumber} onChange={e => setFormData({ ...formData, tenderNumber: e.target.value })} className="opp-input" /></Field>
+                <Field label="Source">
+                  <select value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value as OpportunitySource })} className="opp-input">
+                    {OPPORTUNITY_SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Stage">
+                  <select value={formData.stage} onChange={e => setFormData({ ...formData, stage: e.target.value as OpportunityStage })} className="opp-input">
+                    {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </Field>
+                <Field label="Bid owner">
+                  <select value={formData.ownerId} onChange={e => setFormData({ ...formData, ownerId: e.target.value })} className="opp-input">
+                    <option value="">Unassigned</option>
+                    {projectUsers.filter(u => u.status === 'Approved').map(u => (
+                      <option key={u.id} value={u.id}>{u.displayName}</option>
+                    ))}
+                  </select>
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr', gap: 14 }}>
+                <Field label="Estimated value">
+                  <input type="number" min="0" value={formData.estimatedValue} onChange={e => setFormData({ ...formData, estimatedValue: e.target.value })} className="opp-input" />
+                </Field>
+                <Field label="Currency">
+                  <select value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })} className="opp-input">
+                    {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </Field>
+                <Field label="Win %">
+                  <input type="number" min="0" max="100" value={formData.probability} onChange={e => setFormData({ ...formData, probability: e.target.value })} className="opp-input" />
+                </Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                <Field label="Announced date"><input type="date" value={formData.announcedDate} onChange={e => setFormData({ ...formData, announcedDate: e.target.value })} className="opp-input" /></Field>
+                <Field label="Submission deadline"><input type="date" value={formData.submissionDeadline} onChange={e => setFormData({ ...formData, submissionDeadline: e.target.value })} className="opp-input" /></Field>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
+                <Field label="Submitted on"><input type="date" value={formData.submittedDate} onChange={e => setFormData({ ...formData, submittedDate: e.target.value })} className="opp-input" /></Field>
+                <Field label="Decision date"><input type="date" value={formData.decisionDate} onChange={e => setFormData({ ...formData, decisionDate: e.target.value })} className="opp-input" /></Field>
+                <Field label="Next action"><input type="date" value={formData.nextActionDate} onChange={e => setFormData({ ...formData, nextActionDate: e.target.value })} className="opp-input" /></Field>
+              </div>
+              <Field label="Location"><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
+              <Field label="Scope"><textarea value={formData.scope} onChange={e => setFormData({ ...formData, scope: e.target.value })} className="opp-input" rows={3} /></Field>
+
+              {closedOutcome && (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
+                  <Field label={formData.stage === 'Won' ? 'Awarded to us — competitor' : 'Awarded to (competitor)'}>
+                    <input value={formData.awardedTo} onChange={e => setFormData({ ...formData, awardedTo: e.target.value })} className="opp-input" />
+                  </Field>
+                  <Field label="Awarded value">
+                    <input type="number" min="0" value={formData.awardedValue} onChange={e => setFormData({ ...formData, awardedValue: e.target.value })} className="opp-input" />
+                  </Field>
+                </div>
+              )}
+            </div>
+
+            {formError && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: '#fee2e2', color: '#991b1b', marginTop: 16, fontSize: 13, fontWeight: 600 }}>
+                <AlertCircle className="w-4 h-4" style={{ flexShrink: 0 }} /> {formError}
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
+              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>Cancel</button>
+              <button className="btn btn-primary" disabled={saving || !formData.title.trim()} onClick={handleSave}>
+                {saving ? 'Saving…' : (editing ? 'Save changes' : 'Create opportunity')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete confirm */}
+      {deleteTarget && (
+        <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
+          <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete opportunity?</h2>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
+              "{deleteTarget.title}" will be removed, and it will no longer count towards win rate or loss analysis.
+              Its follow-ups, milestones and feedback are not auto-deleted.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
+              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`.opp-input { width:100%; padding:9px 11px; background:var(--surface); border:1px solid var(--border); color:var(--text-primary); font-size:14px; font-family:inherit; }`}</style>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'block' }}>
+      <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 5 }}>{label}</span>
+      {children}
+    </label>
+  );
+}
