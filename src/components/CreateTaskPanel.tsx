@@ -149,7 +149,12 @@ interface Props {
   headerSubtitle?: string;
   /** Rendered between the header and the form (e.g. the source email strip). */
   sourceStrip?: React.ReactNode;
-  onCreated?: (taskId: string) => void;
+  /**
+   * Fired after the task doc is written. The draft is handed back so a caller
+   * can mirror what was actually chosen in the form (ManagerInbox writes the
+   * assignee back onto the correspondence).
+   */
+  onCreated?: (taskId: string, draft: NewTaskDraft) => void;
 }
 
 function emptyDraft(user: User, appUser: AppUser): NewTaskDraft {
@@ -362,8 +367,9 @@ export default function CreateTaskPanel({
         }, projectUsers, { actorId: user.uid, excludeIds: [assigneeId] });
       }
 
+      const submitted = newTask;
       setNewTask(emptyDraft(user, appUser));
-      onCreated?.(taskRef.id);
+      onCreated?.(taskRef.id, submitted);
       onClose();
     } catch (err) {
       console.error('Firestore:', { err, op: 'CREATE', path: 'tasks' });
