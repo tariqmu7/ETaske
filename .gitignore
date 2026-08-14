@@ -9,3 +9,6 @@ coverage/
 
 # Local Firestore data dumps — real production data (PII). Never commit.
 backups/
+
+# Harness screenshots (scripts/harness/*.mjs --shot, and failure captures)
+scripts/harness/*.png
