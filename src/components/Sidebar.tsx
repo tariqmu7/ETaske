@@ -74,13 +74,13 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     try {
       const result = await connectTelegram(appUser.id);
       if (result === 'timeout') {
-        alert('Telegram not linked yet. Tap “Connect Telegram” again and press Start in the bot.');
+        alert(t('Telegram not linked yet.'));
       }
       // On success the users listener updates appUser.telegramChatId and the
       // button flips to “connected” automatically.
     } catch (e) {
       console.error(e);
-      alert('Could not connect Telegram. Please try again.');
+      alert(t('Could not connect Telegram. Please try again.'));
     } finally {
       setTgConnecting(false);
     }
@@ -119,6 +119,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
+  // `label` stays the English source text: it IS the i18next key (keySeparator
+  // is off), so the tables below double as the key list and t() runs at render.
   type NavItem = { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean };
 
   // High-frequency tabs stay visible; low-frequency ones (Archive, Outlook,
@@ -165,7 +167,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       <button
         className="topnav-logo"
         onClick={() => onNavigate('home')}
-        title="Home"
+        title={t('Home')}
         style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
       >
         <div className="topnav-logo-icon">
@@ -188,7 +190,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
             className={`nav-tab${isActive ? ' active' : ''}`}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span>{t(item.label)}</span>
             {item.badge !== undefined && item.badge > 0 && (
               <span className="tab-badge">
                 {item.badge > 99 ? '99+' : item.badge}
@@ -211,7 +213,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           aria-expanded={showMore}
         >
           <MoreHorizontal className="w-4 h-4" />
-          <span>More</span>
+          <span>{t('More')}</span>
           {/* A badge inside a closed menu is invisible, so the count is also
               carried on the button that hides it. */}
           {overflowBadge > 0 && (
@@ -237,7 +239,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   }}
                 >
                   {item.icon}
-                  <span style={{ flex: 1 }}>{item.label}</span>
+                  <span style={{ flex: 1 }}>{t(item.label)}</span>
                   {item.badge !== undefined && item.badge > 0 && (
                     <span className="tab-badge">{item.badge > 99 ? '99+' : item.badge}</span>
                   )}
@@ -253,7 +255,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         <button
           className="btn btn-ghost btn-icon"
           onClick={onOpenPalette}
-          title="Search everything (Ctrl/⌘ + K)"
+          title={t('Search everything (Ctrl/⌘ + K)')}
         >
           <Search className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
         </button>
@@ -262,7 +264,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         <button
           className="btn btn-ghost btn-icon"
           onClick={onToggleTheme}
-          title={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
+          title={isDark ? t('Switch to light mode') : t('Switch to dark mode')}
         >
           {isDark
             ? <Sun className="w-5 h-5" style={{ color: '#f59e0b' }} />
@@ -275,7 +277,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <button
             className="btn btn-ghost btn-icon"
             onClick={pwa.promptInstall}
-            title="Add to Home Screen"
+            title={t('Add to Home Screen')}
           >
             <Download className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
           </button>
@@ -286,13 +288,13 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <button
             className="btn btn-ghost btn-icon"
             onClick={pwa.enableNotifications}
-            title={pwa.isIOS && !pwa.isInstalled ? 'Install app first to enable notifications' : 'Enable push notifications'}
+            title={pwa.isIOS && !pwa.isInstalled ? t('Install app first to enable notifications') : t('Enable push notifications')}
           >
             <BellOff className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
           </button>
         )}
         {pwa.notificationPermission === 'granted' && (
-          <span title="Push notifications enabled">
+          <span title={t('Push notifications enabled')}>
             <BellRing className="w-5 h-5" style={{ color: '#22c55e' }} />
           </span>
         )}
@@ -301,7 +303,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         <button
           className="btn btn-ghost btn-icon"
           onClick={() => onNavigate('announcements')}
-          title="Announcements"
+          title={t('Announcements')}
           style={{ position: 'relative', color: activeView === 'announcements' ? 'var(--accent)' : undefined }}
         >
           <Megaphone className="w-5 h-5" style={{ color: activeView === 'announcements' ? 'var(--accent)' : 'var(--text-secondary)' }} />
@@ -317,7 +319,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <button
             className="btn btn-ghost btn-icon"
             onClick={() => onNavigate('due-soon')}
-            title={`${dueSoonCount} items due soon — view list`}
+            title={t('{{count}} items due soon — view list', { count: dueSoonCount })}
             style={{ position: 'relative' }}
           >
             <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
@@ -332,7 +334,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <button 
             className="btn btn-ghost btn-icon" 
             onClick={() => setShowNotifications(!showNotifications)}
-            title="Notifications"
+            title={t('Notifications')}
             style={{ position: 'relative' }}
           >
             <Bell className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
@@ -349,17 +351,17 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           {showNotifications && (
             <div className="notif-dropdown">
               <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-3)' }}>
-                <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Notifications</h3>
+                <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Notifications')}</h3>
                 {unreadCount > 0 && (
                   <button onClick={handleClearAll} style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', background: 'none', border: 'none', cursor: 'pointer' }}>
-                    Mark all read
+                    {t('Mark all read')}
                   </button>
                 )}
               </div>
               <div style={{ maxHeight: 300, overflowY: 'auto' }}>
                 {notifications.length === 0 ? (
                   <div style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-                    No notifications yet.
+                    {t('No notifications yet.')}
                   </div>
                 ) : (
                   notifications.slice(0, 20).map(n => (
@@ -381,7 +383,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                         {/* Bodies carry a multi-line detail block (notifyDetails.ts) */}
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, whiteSpace: 'pre-line' }}>{n.message}</div>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
-                          {n.createdAt ? new Date(n.createdAt.seconds * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Just now'}
+                          {/* The locale of the timestamp itself is task 6 (Intl sweep). */}
+                          {n.createdAt ? new Date(n.createdAt.seconds * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : t('Just now')}
                         </div>
                       </div>
                     </div>
@@ -466,12 +469,12 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                     style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    title="Stop receiving notifications on Telegram"
+                    title={t('Stop receiving notifications on Telegram')}
                   >
                     <Send className="w-4 h-4" style={{ color: '#22c55e' }} />
                     <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                      Telegram connected
-                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Tap to disconnect</span>
+                      {t('Telegram connected')}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>{t('Tap to disconnect')}</span>
                     </span>
                   </button>
                 ) : (
@@ -481,15 +484,15 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                     style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: tgConnecting ? 'default' : 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: tgConnecting ? 0.7 : 1, transition: 'background 0.15s' }}
                     onMouseEnter={e => { if (!tgConnecting) e.currentTarget.style.background = 'var(--surface-3)'; }}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
-                    title="Get your notifications on Telegram"
+                    title={t('Get your notifications on Telegram')}
                   >
                     <Send className="w-4 h-4" style={{ color: '#229ED9' }} />
                     {tgConnecting ? (
                       <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
-                        Waiting for Telegram…
-                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>Tap Start in the bot</span>
+                        {t('Waiting for Telegram…')}
+                        <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>{t('Tap Start in the bot')}</span>
                       </span>
-                    ) : 'Connect Telegram'}
+                    ) : t('Connect Telegram')}
                   </button>
                 )}
                 <button
@@ -498,7 +501,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                 >
-                  <LogOut className="w-4 h-4" /> Sign Out
+                  <LogOut className="w-4 h-4" /> {t('Sign Out')}
                 </button>
               </div>
             </div>

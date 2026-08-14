@@ -4,6 +4,7 @@ import {
   Search, CheckSquare, MailOpen, FolderKanban, CornerDownLeft,
   ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { getVisibleTasks } from '../lib/taskVisibility';
 import { globalSearch } from '../utils';
@@ -19,8 +20,10 @@ interface Props {
   appUser: AppUser;
 }
 
+// `alias` keeps the English section name on a nav command even when `label` is
+// rendered in Arabic, so typing "tasks" still finds المهام (and vice versa).
 type Hit =
-  | { kind: 'nav'; id: AppView; label: string; sub: string; icon: React.ReactNode }
+  | { kind: 'nav'; id: AppView; label: string; sub: string; alias: string; icon: React.ReactNode }
   | { kind: 'task'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
   | { kind: 'corresponding'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
   | { kind: 'project'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
@@ -29,6 +32,7 @@ type Hit =
 const stripStats = (docs: any[]) => docs.filter(d => d.id !== '--stats--');
 
 export default function CommandPalette({ open, onClose, onNavigate, appUser }: Props) {
+  const { t } = useTranslation();
   const [q, setQ] = useState('');
   const [active, setActive] = useState(0);
   const [tasks, setTasks] = useState<any[]>([]);
@@ -79,19 +83,19 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
   }, [open]);
 
   const navCommands: Hit[] = useMemo(() => ([
-    { kind: 'nav', id: 'home', label: 'Home', sub: 'Go to dashboard', icon: <Home className="w-4 h-4" /> },
-    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'overview', label: 'Overview', sub: 'Org analytics', icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
-    { kind: 'nav', id: 'correspondences', label: 'Correspondences', sub: 'Intake & review', icon: <MailOpen className="w-4 h-4" /> },
-    { kind: 'nav', id: 'tasks', label: 'Tasks', sub: 'Work & milestones', icon: <CheckSquare className="w-4 h-4" /> },
-    { kind: 'nav', id: 'projects', label: 'Projects', sub: 'Contracts & financials', icon: <FolderKanban className="w-4 h-4" /> },
-    { kind: 'nav', id: 'opportunities', label: 'Opportunities', sub: 'Tenders, bids & deadlines', icon: <Target className="w-4 h-4" /> },
-    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: 'Bid Analytics', sub: 'Win rate & loss reasons', icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
-    { kind: 'nav', id: 'due-soon', label: 'Due Soon', sub: 'Overdue & due in 48h', icon: <AlertCircle className="w-4 h-4" /> },
-    { kind: 'nav', id: 'announcements', label: 'News', sub: 'Department announcements', icon: <Megaphone className="w-4 h-4" /> },
-    { kind: 'nav', id: 'archive', label: 'Archive', sub: 'Closed records', icon: <Archive className="w-4 h-4" /> },
-    { kind: 'nav', id: 'outlook-feed', label: 'Outlook', sub: 'Synced email feed', icon: <Mail className="w-4 h-4" /> },
-    ...(appUser.role === 'Admin' ? [{ kind: 'nav', id: 'admin', label: 'Users', sub: 'Approve & manage roles', icon: <Users className="w-4 h-4" /> } as Hit] : []),
-  ]), [isManagerOrAdmin, appUser.role]);
+    { kind: 'nav', id: 'home', label: t('Home'), alias: 'Home', sub: t('Go to dashboard'), icon: <Home className="w-4 h-4" /> },
+    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'overview', label: t('Overview'), alias: 'Overview', sub: t('Org analytics'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
+    { kind: 'nav', id: 'correspondences', label: t('Correspondences'), alias: 'Correspondences', sub: t('Intake & review'), icon: <MailOpen className="w-4 h-4" /> },
+    { kind: 'nav', id: 'tasks', label: t('Tasks'), alias: 'Tasks', sub: t('Work & milestones'), icon: <CheckSquare className="w-4 h-4" /> },
+    { kind: 'nav', id: 'projects', label: t('Projects'), alias: 'Projects', sub: t('Contracts & financials'), icon: <FolderKanban className="w-4 h-4" /> },
+    { kind: 'nav', id: 'opportunities', label: t('Opportunities'), alias: 'Opportunities', sub: t('Tenders, bids & deadlines'), icon: <Target className="w-4 h-4" /> },
+    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: t('Bid Analytics'), alias: 'Bid Analytics', sub: t('Win rate & loss reasons'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
+    { kind: 'nav', id: 'due-soon', label: t('Due Soon'), alias: 'Due Soon', sub: t('Overdue & due in 48h'), icon: <AlertCircle className="w-4 h-4" /> },
+    { kind: 'nav', id: 'announcements', label: t('News'), alias: 'News', sub: t('Department announcements'), icon: <Megaphone className="w-4 h-4" /> },
+    { kind: 'nav', id: 'archive', label: t('Archive'), alias: 'Archive', sub: t('Closed records'), icon: <Archive className="w-4 h-4" /> },
+    { kind: 'nav', id: 'outlook-feed', label: t('Outlook'), alias: 'Outlook', sub: t('Synced email feed'), icon: <Mail className="w-4 h-4" /> },
+    ...(appUser.role === 'Admin' ? [{ kind: 'nav', id: 'admin', label: t('Users'), alias: 'Users', sub: t('Approve & manage roles'), icon: <Users className="w-4 h-4" /> } as Hit] : []),
+  ]), [isManagerOrAdmin, appUser.role, t]);
 
   const hits: Hit[] = useMemo(() => {
     const term = q.trim();
@@ -99,15 +103,18 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
       // Empty query -> show jump-to-section commands only.
       return navCommands;
     }
+    const needle = term.toLowerCase();
     const navHits = navCommands.filter(n =>
-      n.label.toLowerCase().includes(term.toLowerCase()));
+      n.label.toLowerCase().includes(needle)
+      || (n.kind === 'nav' && n.alias.toLowerCase().includes(needle)));
 
+    // `task`, not `t`: `t` is the translator in this scope.
     const taskHits: Hit[] = tasks
-      .filter(t => globalSearch(t, term))
+      .filter(task => globalSearch(task, term))
       .slice(0, 6)
-      .map(t => ({
-        kind: 'task', id: t.id, label: t.taskName || 'Untitled task', serial: t.serialNumber,
-        sub: [t.serialNumber, t.assignedTo, t.status].filter(Boolean).join(' · '),
+      .map(task => ({
+        kind: 'task', id: task.id, label: task.taskName || t('Untitled task'), serial: task.serialNumber,
+        sub: [task.serialNumber, task.assignedTo, task.status].filter(Boolean).join(' · '),
         icon: <CheckSquare className="w-4 h-4" />,
       }));
 
@@ -115,7 +122,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
       .filter(c => globalSearch(c, term))
       .slice(0, 6)
       .map(c => ({
-        kind: 'corresponding', id: c.id, label: c.subject || 'Untitled', serial: c.serialNumber,
+        kind: 'corresponding', id: c.id, label: c.subject || t('Untitled'), serial: c.serialNumber,
         sub: [c.serialNumber, c.sentFrom, c.status].filter(Boolean).join(' · '),
         icon: <MailOpen className="w-4 h-4" />,
       }));
@@ -124,7 +131,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
       .filter(p => globalSearch(p, term))
       .slice(0, 5)
       .map(p => ({
-        kind: 'project', id: p.id, label: p.name || 'Untitled project', serial: p.serialNumber,
+        kind: 'project', id: p.id, label: p.name || t('Untitled project'), serial: p.serialNumber,
         sub: [p.serialNumber, p.client, p.status].filter(Boolean).join(' · '),
         icon: <FolderKanban className="w-4 h-4" />,
       }));
@@ -133,13 +140,13 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
       .filter(o => globalSearch(o, term))
       .slice(0, 5)
       .map(o => ({
-        kind: 'opportunity', id: o.id, label: o.title || 'Untitled bid', serial: o.serialNumber,
+        kind: 'opportunity', id: o.id, label: o.title || t('Untitled bid'), serial: o.serialNumber,
         sub: [o.serialNumber, o.client, o.stage].filter(Boolean).join(' · '),
         icon: <Target className="w-4 h-4" />,
       }));
 
     return [...navHits, ...taskHits, ...corrHits, ...projHits, ...oppHits];
-  }, [q, tasks, corrs, projects, opportunities, navCommands]);
+  }, [q, tasks, corrs, projects, opportunities, navCommands, t]);
 
   useEffect(() => { setActive(0); }, [q]);
 
@@ -205,7 +212,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
             value={q}
             onChange={e => setQ(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search tasks, correspondences, projects, bids…"
+            placeholder={t('Search tasks, correspondences, projects, bids…')}
             style={{
               flex: 1, border: 'none', outline: 'none', background: 'transparent',
               fontSize: 16, color: 'var(--text-primary)', fontFamily: 'inherit',
@@ -217,11 +224,11 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
         {/* Results */}
         <div ref={listRef} style={{ overflowY: 'auto', flex: 1 }}>
           {!loaded && q && (
-            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>Loading…</div>
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>{t('Loading…')}</div>
           )}
           {hits.length === 0 && loaded && (
             <div style={{ padding: '28px 16px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-              No matches for “{q}”.
+              {t('No matches for “{{q}}”.', { q })}
             </div>
           )}
           {hits.map((hit, i) => (
@@ -244,10 +251,10 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
                 {hit.sub && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hit.sub}</span>}
               </span>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', flexShrink: 0 }}>
-                {hit.kind === 'nav' ? 'Go'
-                  : hit.kind === 'corresponding' ? 'Corr'
-                    : hit.kind === 'opportunity' ? 'Bid'
-                      : hit.kind}
+                {hit.kind === 'nav' ? t('Go')
+                  : hit.kind === 'corresponding' ? t('Corr')
+                    : hit.kind === 'opportunity' ? t('Bid')
+                      : hit.kind === 'task' ? t('Task') : t('Project')}
               </span>
             </button>
           ))}
@@ -255,9 +262,10 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
 
         {/* Footer hints */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', fontSize: 11, color: 'var(--text-muted)' }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> navigate</span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CornerDownLeft className="w-3 h-3" /> open</span>
-          <span style={{ marginInlineStart: 'auto' }}>Tip: press <kbd style={{ border: '1px solid var(--border)', padding: '1px 4px' }}>g</kbd> then a key to jump</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> {t('navigate')}</span>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CornerDownLeft className="w-3 h-3" /> {t('open')}</span>
+          {/* Split around the <kbd>: the key name itself never translates. */}
+          <span style={{ marginInlineStart: 'auto' }}>{t('Tip: press')}<kbd style={{ border: '1px solid var(--border)', padding: '1px 4px' }}>g</kbd>{t('then a key to jump')}</span>
         </div>
       </div>
     </div>

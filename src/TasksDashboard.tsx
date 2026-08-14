@@ -133,7 +133,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       setTasks(sorted);
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'tasks');
-      setError('Failed to load tasks. Check your connection.');
+      setError(t('Failed to load tasks. Check your connection.'));
     });
     return () => unsub();
   }, [appUser, user.uid]);
@@ -418,7 +418,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       setEditingTask(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${editingTask.id}`);
-      setError('Failed to update task.');
+      setError(t('Failed to update task.'));
     }
   };
 
@@ -469,17 +469,17 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
-      setError('Failed to update status.');
+      setError(t('Failed to update status.'));
     }
   };
 
   const handleDeleteTask = async (taskId: string) => {
-    if (!window.confirm('Are you sure you want to delete this task?')) return;
+    if (!window.confirm(t('Are you sure you want to delete this task?'))) return;
     try {
       await deleteDoc(doc(db, 'tasks', taskId));
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `tasks/${taskId}`);
-      setError('Failed to delete task.');
+      setError(t('Failed to delete task.'));
     }
   };
 
@@ -499,7 +499,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
-      setError('Failed to archive task.');
+      setError(t('Failed to archive task.'));
     }
   };
 
@@ -543,7 +543,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       const driveUrl = await uploadToGoogleDrive(file);
       setEditingTask({ ...editingTask, attachedFile: driveUrl, attachedFileName: file.name });
     } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+      alert(t('Upload failed: {{message}}', { message: err.message }));
     } finally {
       setIsUploading(false);
     }
@@ -613,7 +613,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       maybePromptDueDate(task, title);
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, 'milestones');
-      setError('Failed to add milestone.');
+      setError(t('Failed to add milestone.'));
     } finally {
       setIsAddingMilestone(false);
     }
@@ -648,7 +648,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       maybePromptDueDate(task, title);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `milestones/${editingMilestone.id}`);
-      setError('Failed to update milestone.');
+      setError(t('Failed to update milestone.'));
     } finally {
       setIsSavingMilestone(false);
     }
@@ -693,7 +693,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${task.id}`);
-      setError('Failed to update due date.');
+      setError(t('Failed to update due date.'));
     } finally {
       setDueDatePrompt(null);
     }
@@ -709,14 +709,14 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-            Tasks
+            {t('Tasks')}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-            Track your assigned tasks, organize your work, and add milestones to show progress.
+            {t('Track your assigned tasks')}
           </p>
         </div>
         <button className="btn btn-primary" onClick={() => setIsAddingTask(true)}>
-          <Plus className="w-4 h-4" /> Add Task
+          <Plus className="w-4 h-4" /> {t('Add Task')}
         </button>
       </div>
 
@@ -734,7 +734,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 transition: 'all 0.15s',
               }}
             >
-              {v === 'mine' ? 'My Tasks' : 'All Tasks'}
+              {v === 'mine' ? t('My Tasks') : t('All Tasks')}
             </button>
           ))}
         </div>
@@ -759,7 +759,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
           <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-          <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="input" style={{ paddingInlineStart: 36 }} placeholder={t('Search tasks…')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         <input 
@@ -768,11 +768,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           style={{ width: 'auto' }} 
           value={dateFilter} 
           onChange={e => setDateFilter(e.target.value)}
-          title="Filter by day"
+          title={t('Filter by day')}
         />
         {dateFilter && (
           <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-            Clear Date
+            {t('Clear Date')}
           </button>
         )}
 
@@ -838,7 +838,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
               <Users style={{ width: 28, height: 28 }} />
             </div>
             <p className="empty-state-title">{t('No tasks found')}</p>
-            <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
+            <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
             <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
           </div>
         ) : (
@@ -880,7 +880,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{emp.tasks.length}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{emp.tasks.length === 1 ? 'task' : 'tasks'}</span>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{emp.tasks.length === 1 ? t('task') : t('tasks')}</span>
                     {overdue > 0 && <span className="badge badge-urgent" style={{ marginInlineStart: 'auto' }}>{overdue} {t('OVERDUE')}</span>}
                   </div>
 
@@ -911,7 +911,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             <div key={cat}>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
                 <Layers className="w-4 h-4 text-accent" />
-                {cat} Tasks
+                {t('{{category}} Tasks', { category: cat })}
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -962,7 +962,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   handleUpdateTaskStatus(task.id, next as TaskStatus);
                                 }}
                                 style={{ marginTop: 2, background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: 0, flexShrink: 0 }}
-                                title={canEdit ? 'Click to advance status' : ''}
+                                title={canEdit ? t('Click to advance status') : ''}
                               >
                                 {task.status === 'Done'
                                   ? <CheckCircle2 style={{ width: 22, height: 22, color: '#4ade80' }} />
@@ -1007,7 +1007,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     <span
                                       className="badge"
                                       style={{ marginInlineStart: 8, background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                      title="Private — only you can see this task"
+                                      title={t('Private — only you can see this task')}
                                     >
                                       <Lock style={{ width: 11, height: 11 }} /> {t('Private')}
                                     </span>
@@ -1020,7 +1020,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       className="btn btn-ghost btn-icon"
                                       style={{ padding: '4px 8px', height: 'auto', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', lineHeight: 1 }}
                                       onClick={e => { e.stopPropagation(); setOpenActionMenu(openActionMenu === task.id ? null : task.id); }}
-                                      title="Task actions"
+                                      title={t('Task actions')}
                                     >
                                       ···
                                     </button>
@@ -1053,7 +1053,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                               onClick={() => { setOpenActionMenu(null); setShowAdvancedEdit(false); setEditingTask(task); }}
                                             >
                                               <Edit2 style={{ width: 14, height: 14, color: 'var(--text-muted)', flexShrink: 0 }} />
-                                              Edit Task
+                                              {t('Edit Task')}
                                             </button>
                                             {task.status === 'Done' && (
                                               <button
@@ -1063,7 +1063,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                 onClick={() => { setOpenActionMenu(null); handleArchiveTask(task.id); }}
                                               >
                                                 <Archive style={{ width: 14, height: 14, color: 'var(--text-muted)', flexShrink: 0 }} />
-                                                Archive
+                                                {t('Archive')}
                                               </button>
                                             )}
                                             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
@@ -1074,7 +1074,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                               onClick={() => { setOpenActionMenu(null); handleDeleteTask(task.id); }}
                                             >
                                               <Trash2 style={{ width: 14, height: 14, flexShrink: 0 }} />
-                                              Delete
+                                              {t('Delete')}
                                             </button>
                                           </motion.div>
                                         </>
@@ -1118,11 +1118,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                           <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(task.assignedById || task.assignedBy), opacity: 0.6 }} />
                                         );
                                       })()}
-                                      By {task.assignedBy}
+                                      {t('By')}{task.assignedBy}
                                     </span>
                                   )}
                                   {!!(task.collaboratorIds && task.collaboratorIds.length) && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={`Collaborators: ${(task.collaborators || []).filter(Boolean).join(', ')}`}>
+                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('Collaborators: {{names}}', { names: (task.collaborators || []).filter(Boolean).join(', ') })}>
                                       <Users style={{ width: 12, height: 12 }} />
                                       <span style={{ display: 'flex', alignItems: 'center' }}>
                                         {task.collaboratorIds.slice(0, 4).map((cid, i) => {
@@ -1137,15 +1137,21 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       {task.collaboratorIds.length > 4 && <span>+{task.collaboratorIds.length - 4}</span>}
                                     </span>
                                   )}
-                                  {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
-                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title="Creation date"><Clock className="w-3 h-3" /> {task.createdAt.toDate().toLocaleDateString('en-GB')}</span>}
+                                  {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> <span className="ltr-data">{task.dueDate}</span></span>}
+                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title={t('Creation date')}><Clock className="w-3 h-3" /> <span className="ltr-data">{task.createdAt.toDate().toLocaleDateString('en-GB')}</span></span>}
                                   {(task.correspondingSerialNumber || task.correspondingSubject) && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <Link2 className="w-3 h-3" /> 
                                       {(() => {
                                         const linkedCorr = correspondences.find(c => c.id === task.correspondingId);
-                                        return task.correspondingSerialNumber 
-                                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : task.correspondingSubject);
+                                        // A serial is Latin data and must not be
+                                        // reordered by bidi; a subject is prose
+                                        // and follows the paragraph direction.
+                                        const serial = task.correspondingSerialNumber
+                                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : '');
+                                        return serial
+                                          ? <span className="ltr-data">{serial}</span>
+                                          : task.correspondingSubject;
                                       })()}
                                     </span>
                                   )}
@@ -1156,7 +1162,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         setSubCategoryFilter(task.subCategory!);
                                       }}
                                       style={{ display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer', color: 'var(--accent)', fontWeight: 700 }}
-                                      title="Click to filter by this tag"
+                                      title={t('Click to filter by this tag')}
                                     >
                                       <Tag className="w-3 h-3" /> {task.subCategory}
                                     </span>
@@ -1165,7 +1171,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
                                 {isExpanded && task.attachedFile && (
                                   <div style={{ marginTop: 24 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>Attachment</div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Attachment')}</div>
                                     <div style={{ 
                                       borderRadius: 0,                                     overflow: 'hidden', 
                                       border: '1px solid var(--border)',
@@ -1196,7 +1202,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                 alignItems: 'center',
                                                 backdropFilter: 'blur(4px)'
                                               }}>
-                                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || 'Attached Image'}</span>
+                                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || t('Attached Image')}</span>
                                                 <a 
                                                   href={task.attachedFile} 
                                                   target="_blank" 
@@ -1204,7 +1210,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                   className="btn btn-sm"
                                                   style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
                                                 >
-                                                  <ExternalLink className="w-3.5 h-3.5" /> Full View
+                                                  <ExternalLink className="w-3.5 h-3.5" /> {t('Full View')}
                                                 </a>
                                               </div>
                                         </div>
@@ -1214,7 +1220,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             <Paperclip className="w-5 h-5" />
                                           </div>
                                           <div style={{ flex: 1 }}>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || 'Attachment'}</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{task.attachedFileName || t('Attachment')}</div>
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                                           </div>
                                           <a 
@@ -1248,8 +1254,9 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         }}>
                                           <ExternalLink className="w-4 h-4 text-muted" />
                                           <code
+                                            className="ltr-data"
                                             onClick={(e) => { e.stopPropagation(); openOrCopyPath(path); }}
-                                            title="Click to open (web link) or copy this path"
+                                            title={t('Click to open (web link) or copy this path')}
                                             style={{ fontSize: 13, flex: 1, wordBreak: 'break-all', color: 'var(--text-secondary)', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                                           >{path}</code>
                                           <button
@@ -1257,7 +1264,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             className="btn btn-ghost btn-sm"
                                             onClick={(e) => { e.stopPropagation(); openOrCopyPath(path); }}
                                           >
-                                            Open / Copy
+                                            {t('Open / Copy')}
                                           </button>
                                         </div>
                                       ))}
@@ -1268,7 +1275,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                 {taskMilestones.length > 0 && (
                                   <div style={{ marginTop: 12 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Target className="w-3 h-3" /> {doneMilestones}/{taskMilestones.length} milestones</span>
+                                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Target className="w-3 h-3" /> {t('{{done}}/{{total}} milestones', { done: doneMilestones, total: taskMilestones.length })}</span>
                                       <span>{progress}%</span>
                                     </div>
                                     <div className="progress-bar">
@@ -1294,7 +1301,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
                                           <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginInlineEnd: 6 }} />
-                                          Milestones
+                                          {t('Milestones')}
                                         </h4>
                                         <select 
                                           value={milestoneSort}
@@ -1311,8 +1318,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                           }}
                                           onClick={e => e.stopPropagation()}
                                         >
-                                          <option value="asc">Oldest First</option>
-                                          <option value="desc">Newest First</option>
+                                          <option value="asc">{t('Oldest First')}</option>
+                                          <option value="desc">{t('Newest First')}</option>
                                         </select>
                                       </div>
                                       {canEdit && (
@@ -1320,7 +1327,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                           className="btn btn-ghost btn-sm"
                                           onClick={() => setNewMilestone({ taskId: task.id, title: '', targetDate: '' })}
                                         >
-                                          <Plus className="w-3.5 h-3.5" /> Add Milestone
+                                          <Plus className="w-3.5 h-3.5" /> {t('Add Milestone')}
                                         </button>
                                       )}
                                     </div>
@@ -1330,7 +1337,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         <div className="ms-addform-row" style={{ display: 'flex', gap: 10, marginBottom: 10 }}>
                                           <input
                                             className="input"
-                                            placeholder="Milestone title…"
+                                            placeholder={t('Milestone title…')}
                                             value={newMilestone.title}
                                             onChange={e => setNewMilestone(p => p ? { ...p, title: e.target.value } : p)}
                                             autoFocus
@@ -1346,7 +1353,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                                           <button className="btn btn-ghost btn-sm" onClick={() => setNewMilestone(null)}>{t('Cancel')}</button>
                                           <button className="btn btn-primary btn-sm" onClick={handleAddMilestone} disabled={isAddingMilestone || !newMilestone.title.trim()}>
-                                            {isAddingMilestone ? 'Adding…' : 'Add'}
+                                            {isAddingMilestone ? t('Adding…') : t('Add')}
                                           </button>
                                         </div>
                                       </div>
@@ -1373,7 +1380,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                     style={{ flex: 1, minWidth: 160 }}
                                                     value={editingMilestone.title}
                                                     onChange={e => setEditingMilestone(p => p ? { ...p, title: e.target.value } : p)}
-                                                    placeholder="Milestone title…"
+                                                    placeholder={t('Milestone title…')}
                                                     autoFocus
                                                   />
                                                   <input
@@ -1385,7 +1392,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                   />
                                                   <button className="btn btn-ghost btn-sm" onClick={() => setEditingMilestone(null)}>{t('Cancel')}</button>
                                                   <button className="btn btn-primary btn-sm" onClick={handleUpdateMilestone} disabled={isSavingMilestone || !editingMilestone.title.trim()}>
-                                                    {isSavingMilestone ? 'Saving…' : 'Save'}
+                                                    {isSavingMilestone ? t('Saving…') : t('Save')}
                                                   </button>
                                                 </div>
                                               ) : (
@@ -1434,8 +1441,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                 </div>
                                               </div>
                                               <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
-                                                <span>By {ms.addedBy}</span>
-                                                {ms.targetDate && <span><Calendar className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 3 }} />{ms.targetDate}</span>}
+                                                <span>{t('By')}{ms.addedBy}</span>
+                                                {ms.targetDate && <span><Calendar className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 3 }} /><span className="ltr-data">{ms.targetDate}</span></span>}
                                               </div>
                                               </>
                                               )}
@@ -1453,7 +1460,9 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             className={`btn btn-sm ${s === 'Done' ? 'btn-success' : 'btn-ghost'}`}
                                             onClick={() => handleUpdateTaskStatus(task.id, s)}
                                           >
-                                            {s === 'Done' ? <><CheckCircle2 className="w-3.5 h-3.5" /> Mark Done</> : <><TrendingUp className="w-3.5 h-3.5" /> Mark In Progress</>}
+                                            {s === 'Done'
+                                              ? <><CheckCircle2 className="w-3.5 h-3.5" /> {t('Mark Done')}</>
+                                              : <><TrendingUp className="w-3.5 h-3.5" /> {t('Mark In Progress')}</>}
                                           </button>
                                         ))}
                                       </div>
@@ -1482,7 +1491,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
             style={{ borderRadius: 0 }}
           >
-            <ChevronLeft className="w-4 h-4" /> Previous
+            <ChevronLeft className="w-4 h-4" /> {t('Previous')}
           </button>
           
           <div style={{ display: 'flex', gap: 6 }}>
@@ -1504,7 +1513,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
             style={{ borderRadius: 0 }}
           >
-            Next <ChevronRight className="w-4 h-4" />
+            {t('Next')}<ChevronRight className="w-4 h-4" />
           </button>
         </div>
       )}
@@ -1515,7 +1524,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             <CheckCircle2 style={{ width: 28, height: 28 }} />
           </div>
           <p className="empty-state-title">{t('No tasks found')}</p>
-          <p className="empty-state-sub">No tasks match your current filters.<br />Try clearing them or create a new task.</p>
+          <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
           <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
         </div>
       )}
@@ -1588,7 +1597,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
                 <div style={{ marginBottom: 20 }}>
                   <label className="input-label">
-                    Task Name <span style={{ color: '#dc2626' }}>*</span>
+                    {t('Task Name')}<span style={{ color: '#dc2626' }}>*</span>
                   </label>
                   <input
                     className="input"
@@ -1601,7 +1610,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 </div>
 
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">{t('Description')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <label className="input-label">{t('Description')}<span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                   <textarea
                     className="input"
                     value={editingTask.description}
@@ -1612,7 +1621,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>When &amp; Urgency</span>
+                  <span>{t('When & Urgency')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
@@ -1623,13 +1632,13 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                     </select>
                   </div>
                   <div>
-                    <label className="input-label">{t('Due Date')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                    <label className="input-label">{t('Due Date')}<span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                     <input type="date" className="input" value={editingTask.dueDate || ''} onChange={e => setEditingTask({ ...editingTask, dueDate: e.target.value })} />
                   </div>
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Who</span>
+                  <span>{t('Who')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
@@ -1642,7 +1651,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                       if (u) setEditingTask({ ...editingTask, assignedToId: u.id, assignedTo: u.displayName });
                     }}
                   >
-                    <option value="">— Select Assignee —</option>
+                    <option value="">{t('— Select Assignee —')}</option>
                     {projectUsers
                       .filter(u =>
                         u.id === user.uid ||
@@ -1656,7 +1665,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   </select>
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                   <CollaboratorPicker
                     users={projectUsers.filter(u =>
                       appUser.role === 'Admin' ||
@@ -1669,7 +1678,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Visibility</span>
+                  <span>{t('Visibility')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
@@ -1680,7 +1689,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Classification</span>
+                  <span>{t('Classification')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
@@ -1720,7 +1729,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span>Attachment</span>
+                  <span>{t('Attachment')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
@@ -1732,7 +1741,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                         type="button"
                         onClick={() => setEditingTask({ ...editingTask, attachedFile: '', attachedFileName: '' })}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', padding: 2, flexShrink: 0 }}
-                        title="Remove attachment"
+                        title={t('Remove attachment')}
                       >
                         <X style={{ width: 14, height: 14 }} />
                       </button>
@@ -1755,13 +1764,13 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                     >
                       <input type="file" onChange={handleEditFileUpload} style={{ display: 'none' }} />
                       {isUploading ? (
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Uploading to Drive...')}</div>
                       ) : (
                         <>
                           <Paperclip style={{ width: 20, height: 20, color: 'var(--text-muted)' }} />
                           <div style={{ textAlign: 'center' }}>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Drop file or click to upload</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Uploads to Google Drive</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('Drop file or click to upload')}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('Uploads to Google Drive')}</div>
                           </div>
                         </>
                       )}
@@ -1780,7 +1789,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   }}
                 >
                   <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedEdit ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
-                  Advanced
+                  {t('Advanced')}
                   <div style={{ flex: 1, height: 1, background: 'var(--border)', marginInlineStart: 4 }} />
                 </button>
 
@@ -1825,7 +1834,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                             style={{ width: 'fit-content', gap: 6 }}
                             onClick={() => setEditingTask({ ...editingTask, filePaths: [...(editingTask.filePaths || []), ''] })}
                           >
-                            <Plus style={{ width: 14, height: 14 }} /> Add Path
+                            <Plus style={{ width: 14, height: 14 }} /> {t('Add Path')}
                           </button>
                         </div>
                       </div>
@@ -1849,7 +1858,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   disabled={!editingTask.taskName.trim()}
                   style={{ minWidth: 120 }}
                 >
-                  Save Changes
+                  {t('Save Changes')}
                 </button>
               </div>
             </motion.div>
@@ -1880,11 +1889,20 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
                   <h3 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', margin: 0 }}>{t('Update the due date?')}</h3>
                 </div>
+                {/* The task name is its own bold line rather than an inline
+                    <strong> inside the sentence: Arabic reorders the clause, so
+                    a mid-sentence emphasis span cannot be translated safely. */}
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+                  {dueDatePrompt.task.taskName}
+                </p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 20 }}>
-                  "<strong style={{ color: 'var(--text-secondary)' }}>{dueDatePrompt.task.taskName}</strong>" is{' '}
-                  {isOverdue(dueDatePrompt.task.dueDate) ? 'overdue' : 'due soon'} (currently{' '}
-                  <strong style={{ color: 'var(--text-secondary)' }}>{dueDatePrompt.task.dueDate || '—'}</strong>).
-                  You just updated the milestone "{dueDatePrompt.milestoneTitle}". Choose how to handle the due date:
+                  {t('This task is {{state}} (due {{due}}).', {
+                    state: isOverdue(dueDatePrompt.task.dueDate) ? t('overdue') : t('due soon'),
+                    due: dueDatePrompt.task.dueDate || '—',
+                  })}{' '}
+                  {t('You just updated the milestone “{{milestone}}”. Choose how to handle the due date:', {
+                    milestone: dueDatePrompt.milestoneTitle,
+                  })}
                 </p>
 
                 <div style={{ marginBottom: 20 }}>
@@ -1903,13 +1921,13 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                     onClick={() => resolveDueDatePrompt('custom')}
                     disabled={!promptDueDate || promptDueDate === dueDatePrompt.task.dueDate}
                   >
-                    <Calendar className="w-4 h-4" /> Change to selected date
+                    <Calendar className="w-4 h-4" /> {t('Change to selected date')}
                   </button>
                   <button className="btn btn-ghost" onClick={() => resolveDueDatePrompt('extend')}>
-                    <Clock className="w-4 h-4" /> Extend automatically — 3 days from today ({plusDaysISO(3)})
+                    <Clock className="w-4 h-4" /> {t('Extend automatically — 3 days from today ({{date}})', { date: plusDaysISO(3) })}
                   </button>
                   <button className="btn btn-ghost" onClick={() => resolveDueDatePrompt('keep')}>
-                    Keep current due date
+                    {t('Keep current due date')}
                   </button>
                 </div>
               </div>

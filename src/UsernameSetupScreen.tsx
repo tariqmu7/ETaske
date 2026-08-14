@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { User, Phone } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function UsernameSetupScreen({ onSave }: { onSave: (name: string, phoneNumber: string) => Promise<void> }) {
+  const { t } = useTranslation();
   const [name, setName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -47,15 +49,15 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
         </div>
 
         <h2 style={{ fontSize: 22, fontWeight: 800, color: '#0f172a', textAlign: 'center', marginBottom: 6 }}>
-          Welcome!
+          {t('Welcome!')}
         </h2>
         <p style={{ color: '#64748b', fontSize: 14, textAlign: 'center', marginBottom: 28 }}>
-          Please enter your details to continue.
+          {t('Please enter your details to continue.')}
         </p>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           <div>
-            <label className="input-label">Display Name</label>
+            <label className="input-label">{t('Display Name')}</label>
             <div style={{ position: 'relative' }}>
               <User style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
               <input
@@ -64,7 +66,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
                 style={{ paddingInlineStart: 40 }}
                 value={name}
                 onChange={e => setName(e.target.value)}
-                placeholder="e.g. Jane Doe"
+                placeholder={t('e.g. Jane Doe')}
                 disabled={submitting}
                 autoFocus
                 required
@@ -73,7 +75,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
           </div>
 
           <div>
-            <label className="input-label">WhatsApp Phone Number</label>
+            <label className="input-label">{t('WhatsApp Phone Number')}</label>
             <div style={{ position: 'relative' }}>
               <Phone style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
               <input
@@ -82,7 +84,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
                 style={{ paddingInlineStart: 40 }}
                 value={phoneNumber}
                 onChange={e => setPhoneNumber(e.target.value)}
-                placeholder="e.g. +201000000000"
+                placeholder={t('e.g. +201000000000')}
                 disabled={submitting}
                 required
               />
@@ -97,7 +99,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
           >
             {submitting
               ? <span className="spinner" style={{ width: 18, height: 18 }} />
-              : <>Continue <span className="dir-arrow">→</span></>}
+              : <>{t('Continue')} <span className="dir-arrow">→</span></>}
           </button>
         </form>
       </div>

@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertCircle, ArrowRight } from 'lucide-react';
 import { motion } from 'motion/react';
+import { useTranslation } from 'react-i18next';
 
 export interface DueSoonEntry {
   id: string;
@@ -16,6 +17,7 @@ export interface DueSoonEntry {
  * when there are no items, so callers can drop it in unconditionally.
  */
 export default function DueSoonBanner({ items }: { items: DueSoonEntry[] }) {
+  const { t } = useTranslation();
   if (items.length === 0) return null;
 
   return (
@@ -30,8 +32,8 @@ export default function DueSoonBanner({ items }: { items: DueSoonEntry[] }) {
           <AlertCircle className="w-4 h-4" style={{ color: '#fff' }} />
         </div>
         <div>
-          <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--surface-warn-text)', margin: 0 }}>Due Soon (Within 48h)</h2>
-          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>Items that require immediate attention.</p>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--surface-warn-text)', margin: 0 }}>{t('Due Soon (Within 48h)')}</h2>
+          <p style={{ fontSize: 12, color: 'var(--text-secondary)', margin: 0 }}>{t('Items that require immediate attention.')}</p>
         </div>
       </div>
 
@@ -47,16 +49,16 @@ export default function DueSoonBanner({ items }: { items: DueSoonEntry[] }) {
             onClick={item.onClick}
           >
             <div style={{ flex: 1, marginInlineEnd: 12 }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{t(item.type)}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.title}</div>
-              {item.due && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due: {item.due}</div>}
+              {item.due && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('Due:')}<span className="ltr-data">{item.due}</span></div>}
             </div>
             <ArrowRight className="w-4 h-4" style={{ color: '#94a3b8' }} />
           </div>
         ))}
         {items.length > 4 && (
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: 'var(--surface-warn-text)', background: 'rgba(249, 115, 22, 0.08)', padding: 12 }}>
-            + {items.length - 4} more items due soon
+            {t('+ {{count}} more items due soon', { count: items.length - 4 })}
           </div>
         )}
       </div>
