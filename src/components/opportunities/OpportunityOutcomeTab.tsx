@@ -195,7 +195,7 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
       )}
 
       {/* Header / current standing */}
-      <div className="card" style={{ padding: 22, borderLeft: `3px solid ${record ? STAGE_COLORS[record.outcome] : outcomeColor}` }}>
+      <div className="card" style={{ padding: 22, borderInlineStart: `3px solid ${record ? STAGE_COLORS[record.outcome] : outcomeColor}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <Trophy className="w-5 h-5" style={{ color: 'var(--accent)' }} />
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
@@ -207,7 +207,7 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
             </span>
           )}
           {record && canEdit && !editing && (
-            <span style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
+            <span style={{ marginInlineStart: 'auto', display: 'flex', gap: 8 }}>
               <button className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
                 <Edit2 className="w-3.5 h-3.5" /> Edit
               </button>
@@ -315,7 +315,7 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
                   {o}
                 </button>
               ))}
-              <label style={{ display: 'grid', gap: 4, marginLeft: 'auto' }}>
+              <label style={{ display: 'grid', gap: 4, marginInlineStart: 'auto' }}>
                 <span style={labelStyle}>Decision date</span>
                 <input type="date" value={decisionDate} onChange={e => setDecisionDate(e.target.value)} style={inputStyle} />
               </label>

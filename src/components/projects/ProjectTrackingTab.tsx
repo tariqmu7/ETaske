@@ -150,10 +150,10 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
           {visible.length === 0 ? (
             <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No updates match.</div>
           ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, borderLeft: '2px solid var(--border)', paddingLeft: 18, marginLeft: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 0, borderInlineStart: '2px solid var(--border)', paddingInlineStart: 18, marginInlineStart: 6 }}>
             {visible.map(u => (
               <div key={u.id} style={{ position: 'relative', paddingBottom: 18 }}>
-                <span style={{ position: 'absolute', left: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: u.authorColor || 'var(--accent)' }} />
+                <span style={{ position: 'absolute', insetInlineStart: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: u.authorColor || 'var(--accent)' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                   {u.status && <span className="badge badge-inprogress">{u.status}</span>}
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{u.authorName}</span>

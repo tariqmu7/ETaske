@@ -767,7 +767,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                         className="oa-bar"
                         style={{
                           width: `${widthPct}%`,
-                          marginLeft: late ? '50%' : `${50 - widthPct}%`,
+                          marginInlineStart: late ? '50%' : `${50 - widthPct}%`,
                           background: late ? 'var(--oa-late)' : 'var(--oa-early)',
                         }}
                       />
@@ -803,10 +803,10 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                   <th>Decided</th>
                   <th>Opportunity</th>
                   <th>Client</th>
-                  <th style={{ textAlign: 'right' }}>Value</th>
+                  <th style={{ textAlign: 'end' }}>Value</th>
                   <th>Outcome</th>
                   <th>Primary reason</th>
-                  <th style={{ textAlign: 'right' }}>Price gap</th>
+                  <th style={{ textAlign: 'end' }}>Price gap</th>
                 </tr>
               </thead>
               <tbody>
@@ -818,14 +818,14 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                       {o.serialNumber && <span className="oa-dim"> · {o.serialNumber}</span>}
                     </td>
                     <td>{o.client || '—'}</td>
-                    <td className="oa-num" style={{ textAlign: 'right' }}>
+                    <td className="oa-num" style={{ textAlign: 'end' }}>
                       {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
                     </td>
                     <td>
                       <span className="oa-chip" style={{ background: STAGE_COLORS[o.stage] }}>{o.stage}</span>
                     </td>
                     <td>{f?.primaryReason || (f ? '—' : <span className="oa-dim">no record</span>)}</td>
-                    <td className="oa-num" style={{ textAlign: 'right', color: (f?.priceGapPercent ?? 0) > 0 ? 'var(--oa-lost)' : undefined }}>
+                    <td className="oa-num" style={{ textAlign: 'end', color: (f?.priceGapPercent ?? 0) > 0 ? 'var(--oa-lost)' : undefined }}>
                       {typeof f?.priceGapPercent === 'number' ? `${f.priceGapPercent > 0 ? '+' : ''}${f.priceGapPercent}%` : '—'}
                     </td>
                   </tr>
@@ -979,7 +979,7 @@ const OA_STYLE = `
 
 .oa-tablewrap { overflow-x:auto; max-height:520px; overflow-y:auto; }
 .oa-table { width:100%; border-collapse:collapse; font-size:12.5px; }
-.oa-table th { position:sticky; top:0; z-index:1; background:var(--surface-2); text-align:left; font-weight:700;
+.oa-table th { position:sticky; top:0; z-index:1; background:var(--surface-2); text-align:start; font-weight:700;
   color:var(--text-secondary); padding:8px 10px; white-space:nowrap; border-bottom:1px solid var(--border); }
 .oa-table td { padding:9px 10px; border-bottom:1px solid var(--border); color:var(--text-secondary); vertical-align:top; }
 .oa-chip { display:inline-block; padding:2px 7px; font-size:11px; font-weight:800; color:#fff; white-space:nowrap; }

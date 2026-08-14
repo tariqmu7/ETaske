@@ -302,7 +302,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
             const isLate = m.status !== 'Done' && slip !== null && slip > 0;
             const dueIn = m.status !== 'Done' ? daysUntil(m.dueDate) : null;
             return (
-              <div key={m.id} className="card" style={{ padding: 14, borderLeft: `3px solid ${color}` }}>
+              <div key={m.id} className="card" style={{ padding: 14, borderInlineStart: `3px solid ${color}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <button
                     title={m.status === 'Done' ? 'Mark as planned' : 'Mark as done'}
@@ -355,7 +355,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
                     </label>
                   )}
 
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
                     {slip !== null && (
                       <span style={{
                         fontSize: 11.5, fontWeight: 800, padding: '3px 8px',
@@ -375,7 +375,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
                   </span>
                 </div>
 
-                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, marginLeft: 32, fontSize: 12, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, marginInlineStart: 32, fontSize: 12, color: 'var(--text-muted)' }}>
                   {m.notes && <span style={{ color: 'var(--text-secondary)' }}>{m.notes}</span>}
                   {m.addedByName && <span>Added by {m.addedByName}</span>}
                   {isLate && m.status === 'Blocked' && (

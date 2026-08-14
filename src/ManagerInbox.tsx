@@ -299,7 +299,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
-          <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
+          <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -309,8 +309,8 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       {/* Toolbar */}
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: 1 }}>
-          <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-          <input className="input" style={{ paddingLeft: 36 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
+          <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
         <select className="input" style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}>
           <option value="All">All</option>
@@ -340,7 +340,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 className="card"
                 style={{
                   padding: '18px 20px',
-                  borderLeft: `4px solid ${(() => {
+                  borderInlineStart: `4px solid ${(() => {
                     const u = projectUsers.find(pu => pu.id === task.assignedToId);
                     return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
                   })()}`
@@ -356,7 +356,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
                   {task.serialNumber && (
-                    <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>#{task.serialNumber}</span>
+                    <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }} className="ltr-data">#{task.serialNumber}</span>
                   )}
                   <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>{task.taskName}</h3>
                 </div>
@@ -381,7 +381,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                   style={{
                     padding: '18px 20px',
                     borderColor: isNew ? 'rgba(245,158,11,0.3)' : undefined,
-                    borderLeft: `4px solid ${(() => {
+                    borderInlineStart: `4px solid ${(() => {
                       const u = projectUsers.find(pu => pu.id === corr.assignedToId);
                       return u?.userColor || getUserColor(corr.assignedToId || corr.userId || '');
                     })()}`
@@ -401,7 +401,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                   </div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
                     {corr.serialNumber && (
-                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>#{corr.serialNumber}</span>
+                      <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }} className="ltr-data">#{corr.serialNumber}</span>
                     )}
                     <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>{corr.subject}</h3>
                   </div>

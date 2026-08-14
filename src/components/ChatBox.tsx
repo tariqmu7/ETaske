@@ -406,7 +406,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                 /* User List */
                 <div style={{ padding: 16, overflowY: 'auto', flex: 1, minHeight: 0 }}>
                   <div style={{ position: 'relative', marginBottom: 16 }}>
-                    <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
+                    <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
                     <input
                       type="text"
                       placeholder="Search users..."
@@ -441,7 +441,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               border: 'none',
                               background: userUnreadCount > 0 ? 'var(--blue-50)' : 'transparent',
                               cursor: 'pointer',
-                              textAlign: 'left',
+                              textAlign: 'start',
                               width: '100%',
                               transition: 'background 0.2s',
                               position: 'relative'
@@ -461,7 +461,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                 <div style={{
                                   position: 'absolute',
                                   top: -2,
-                                  right: -2,
+                                  insetInlineEnd: -2,
                                   width: 12,
                                   height: 12,
                                   background: '#ef4444',
@@ -473,7 +473,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                 <div style={{
                                   position: 'absolute',
                                   bottom: 0,
-                                  right: 0,
+                                  insetInlineEnd: 0,
                                   width: 11,
                                   height: 11,
                                   background: '#22c55e',
@@ -565,7 +565,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                     background: isMine ? 'rgba(255,255,255,0.15)' : 'var(--surface)',
                                     color: isMine ? '#ffffff' : 'var(--text-primary)',
                                     cursor: 'pointer',
-                                    textAlign: 'left',
+                                    textAlign: 'start',
                                     width: '100%'
                                   }}
                                 >
@@ -801,7 +801,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     ))}
                   </div>
                   <div style={{ position: 'relative', padding: '0 12px 12px' }}>
-                    <Search style={{ position: 'absolute', left: 24, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={16} />
+                    <Search style={{ position: 'absolute', insetInlineStart: 24, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} size={16} />
                     <input
                       type="text"
                       autoFocus
@@ -841,7 +841,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                             style={{
                               display: 'flex', alignItems: 'center', gap: 10, padding: 12,
                               borderRadius: 10, border: '1px solid #e2e8f0', background: '#ffffff',
-                              cursor: 'pointer', textAlign: 'left', width: '100%'
+                              cursor: 'pointer', textAlign: 'start', width: '100%'
                             }}
                             onMouseEnter={e => e.currentTarget.style.background = '#f8fafc'}
                             onMouseLeave={e => e.currentTarget.style.background = '#ffffff'}
@@ -885,10 +885,15 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
             style={{
               position: 'absolute',
               bottom: '110%',
-              right: 0,
+              insetInlineEnd: 0,
               background: '#ffffff',
               padding: '14px 18px',
-              borderRadius: '16px 16px 2px 16px',
+              // The 2px corner is the tail pointing back at the FAB, so it has
+              // to follow the FAB across in RTL — logical radii, not a shorthand.
+              borderStartStartRadius: 16,
+              borderStartEndRadius: 16,
+              borderEndEndRadius: 2,
+              borderEndStartRadius: 16,
               boxShadow: '0 10px 25px -3px rgba(0, 0, 0, 0.15), 0 4px 6px -2px rgba(0, 0, 0, 0.08)',
               border: '1px solid #e2e8f0',
               cursor: 'pointer',
@@ -955,7 +960,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
           <div style={{
             position: 'absolute',
             top: -4,
-            right: -4,
+            insetInlineEnd: -4,
             background: '#ef4444',
             color: '#ffffff',
             borderRadius: '50%',

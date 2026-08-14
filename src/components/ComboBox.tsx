@@ -191,7 +191,7 @@ export default function ComboBox({
     width: '100%', padding: '9px 12px',
     border: 'none', background: active ? 'var(--surface-3)' : 'transparent',
     color: 'var(--text-primary)', fontSize: 13, fontWeight: 500,
-    textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+    textAlign: 'start', cursor: 'pointer', fontFamily: 'inherit',
   });
 
   return (
@@ -210,7 +210,7 @@ export default function ComboBox({
           className="input"
           style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            textAlign: 'left', cursor: disabled ? 'not-allowed' : 'pointer',
+            textAlign: 'start', cursor: disabled ? 'not-allowed' : 'pointer',
             opacity: disabled ? 0.6 : 1,
             borderColor: open ? 'var(--blue-500)' : undefined,
             boxShadow: open ? '0 0 0 3px rgba(59,130,246,0.12)' : undefined,

@@ -26,7 +26,7 @@ function ExportBackupCard() {
       setResult(
         <span style={{ color: 'var(--text-secondary)' }}>
           ✓ Exported <strong>{r.correspondences}</strong> correspondences and{' '}
-          <strong>{r.tasks}</strong> tasks → <strong>{r.fileName}</strong>
+          <strong>{r.tasks}</strong> tasks <span className="dir-arrow">→</span> <strong>{r.fileName}</strong>
         </span>
       );
     } catch (e: any) {
@@ -187,7 +187,7 @@ export default function AdminDashboard({ users }: Props) {
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
               {['User', 'Status', 'Role', 'Team/Dept', 'Actions'].map(h => (
-                <th key={h} style={{ padding: '14px 20px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
+                <th key={h} style={{ padding: '14px 20px', textAlign: 'start', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -249,7 +249,7 @@ export default function AdminDashboard({ users }: Props) {
                     </span>
                   )}
                 </td>
-                <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                <td style={{ padding: '14px 20px', textAlign: 'end' }}>
                   {editingUserId === u.id ? (
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                       <button className="btn btn-primary btn-sm" onClick={() => saveUser(u.id)}>Save</button>

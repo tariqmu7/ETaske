@@ -169,7 +169,7 @@ ${creatingFrom.body_preview}`,
           <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Read local Outlook inbox &amp; sent mail · create tasks instantly</p>
         </div>
 
-        <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Connection badge */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 6,
@@ -228,7 +228,7 @@ ${creatingFrom.body_preview}`,
               <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 10px' }}>
                 To read your Outlook emails here, run the local bridge tool on this PC first.
               </p>
-              <ol style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
+              <ol style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, paddingInlineStart: 18, lineHeight: 1.8 }}>
                 <li>Download <strong>ETaske-OutlookBridge.exe</strong> with the button below</li>
                 <li>Double-click it — a small status window will appear. Keep it open.</li>
                 <li>Come back here and click <strong>Refresh</strong></li>
@@ -288,7 +288,7 @@ ${creatingFrom.body_preview}`,
       {/* Search bar */}
       {connected && (
         <div style={{ position: 'relative', marginBottom: 20 }}>
-          <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
+          <Search size={16} style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-3)' }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -351,7 +351,7 @@ ${creatingFrom.body_preview}`,
                 padding: '14px 16px', borderRadius: 10, cursor: 'pointer',
                 background: selectedEmail?.id === email.id ? 'var(--surface-3)' : 'var(--surface-2)',
                 border: `1px solid ${selectedEmail?.id === email.id ? 'var(--accent)' : 'var(--border)'}`,
-                borderLeft: isSent || email.is_read ? undefined : '3px solid var(--accent)',
+                borderInlineStart: isSent || email.is_read ? undefined : '3px solid var(--accent)',
                 transition: 'all 0.15s',
               }}
             >

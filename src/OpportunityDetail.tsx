@@ -52,7 +52,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
       </div>
 
       {/* Header card */}
-      <div className="card" style={{ padding: 20, marginBottom: 18, borderLeft: `3px solid ${stageColor}` }}>
+      <div className="card" style={{ padding: 20, marginBottom: 18, borderInlineStart: `3px solid ${stageColor}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 6 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{o.title}</h1>
           <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: '#fff', background: stageColor, padding: '4px 10px', whiteSpace: 'nowrap' }}>
@@ -143,7 +143,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
           </div>
 
           {!isOpportunityOpen(o.stage) && (
-            <div className="card" style={{ padding: 20, borderLeft: `3px solid ${stageColor}` }}>
+            <div className="card" style={{ padding: 20, borderInlineStart: `3px solid ${stageColor}` }}>
               <SectionTitle>
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                   <Trophy className="w-4 h-4" style={{ color: stageColor }} /> Outcome — {o.stage}

@@ -214,7 +214,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
             <thead style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border)' }}>
               <tr>
                 {['Type', 'Title', 'Amount', 'Date', 'Status', ''].map((h, i) => (
-                  <th key={i} style={{ padding: '11px 14px', textAlign: 'left', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
+                  <th key={i} style={{ padding: '11px 14px', textAlign: 'start', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -225,7 +225,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
                   <td style={{ padding: '10px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {r.title}
                     {r.relatedContractId && contractLabel(r.relatedContractId) && (
-                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginLeft: 8 }}>
+                      <div style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 11, fontWeight: 600, color: 'var(--accent)', marginInlineStart: 8 }}>
                         <Link2 className="w-3 h-3" /> {contractLabel(r.relatedContractId)}
                       </div>
                     )}

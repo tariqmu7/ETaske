@@ -75,7 +75,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
           <pre
             style={{
               fontSize: '12px',
-              textAlign: 'left',
+              textAlign: 'start',
               background: 'var(--surface-3, #f1f5f9)',
               color: 'var(--danger, #ef4444)',
               border: '1px solid var(--border, rgba(0,0,0,0.08))',

@@ -1,5 +1,8 @@
 /* stylelint-disable */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+/* Arabic: Inter has no Arabic glyphs, so an ar UI would fall back to a random
+   system face. Cairo is listed AFTER Inter so Latin text is unchanged. */
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&display=swap');
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -100,7 +103,7 @@
 html { scroll-behavior: smooth; }
 
 body {
-  font-family: 'Inter', system-ui, sans-serif;
+  font-family: 'Inter', 'Cairo', system-ui, sans-serif;
   background: var(--surface-2);
   color: var(--text-primary);
   min-height: 100vh;
@@ -239,7 +242,7 @@ body {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 
 .topnav-avatar {
@@ -294,7 +297,7 @@ body {
 .notif-dropdown {
   position: absolute;
   top: calc(100% + 12px);
-  right: 0;
+  inset-inline-end: 0;
   width: 320px;
   max-width: calc(100vw - 40px);
   background: var(--surface);
@@ -313,8 +316,7 @@ body {
   .notif-dropdown {
     position: fixed;
     top: var(--topnav-h);
-    left: 12px;
-    right: 12px;
+    inset-inline: 12px;
     width: auto;
     max-width: none;
     max-height: 80vh;
@@ -348,8 +350,7 @@ body {
 .bottom-nav {
   position: fixed;
   bottom: 0;
-  left: 0;
-  right: 0;
+  inset-inline: 0;
   height: calc(var(--bottomnav-h) + var(--safe-area-bottom));
   background: var(--surface);
   border-top: 1px solid var(--border);
@@ -613,15 +614,24 @@ h1, h2, h3, h4, p, span, div {
   animation: progressFillLoad 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-/* ─── Notification dot ──────────────────────────── */
-.notif-dot {
-  width: 8px; height: 8px;
-  background: var(--danger);
-  border-radius: 0;
-  border: 2px solid #fff;
+/* ─── Notification unread badge ─────────────────── */
+/* Replaces the never-used .notif-dot. Lives here rather than inline on the
+   <span> because the outward nudge is a translateX — a physical transform that
+   no logical property mirrors, so RTL needs the explicit override below. */
+.notif-badge {
   position: absolute;
-  top: 4px; right: 4px;
+  top: 0;
+  inset-inline-end: 0;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 0;
+  line-height: 1.4;
+  transform: translate(25%, -25%);
 }
+[dir="rtl"] .notif-badge { transform: translate(-25%, -25%); }
 
 /* ─── Avatar ─────────────────────────────────────── */
 .avatar {
@@ -665,7 +675,7 @@ h1, h2, h3, h4, p, span, div {
 .milestone-line::before {
   content: '';
   position: absolute;
-  left: 15px; top: 32px; bottom: 0;
+  inset-inline-start: 15px; top: 32px; bottom: 0;
   width: 2px;
   background: var(--blue-100);
 }
@@ -770,13 +780,14 @@ h1, h2, h3, h4, p, span, div {
   letter-spacing: 0.07em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding-left: 1px;
+  padding-inline-start: 1px;
 }
 
 .lc-select {
   appearance: none;
   -webkit-appearance: none;
-  padding: 8px 30px 8px 11px;
+  padding-block: 8px;
+  padding-inline: 11px 30px;
   background-color: var(--surface);
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
   background-repeat: no-repeat;
@@ -841,7 +852,7 @@ h1, h2, h3, h4, p, span, div {
 .lc-clear:hover { color: var(--blue-700); }
 
 .lc-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   align-self: center;
   font-size: 12px;
   font-weight: 700;
@@ -861,7 +872,7 @@ h1, h2, h3, h4, p, span, div {
   }
   .list-controls::-webkit-scrollbar { display: none; }
   .list-controls > * { flex-shrink: 0; }
-  .lc-count { margin-left: 4px; }
+  .lc-count { margin-inline-start: 4px; }
 }
 
 /* ─── Empty state ───────────────────────────────── */
@@ -903,7 +914,7 @@ h1, h2, h3, h4, p, span, div {
 .chat-fab-wrap {
   position: fixed;
   bottom: 24px;
-  right: 24px;
+  inset-inline-end: 24px;
   z-index: 1000;
 }
 
@@ -919,7 +930,7 @@ h1, h2, h3, h4, p, span, div {
 
   .topnav-user {
     gap: 2px !important;
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 
   .topnav-user .btn-icon {
@@ -1005,8 +1016,7 @@ h1, h2, h3, h4, p, span, div {
     content: '';
     position: absolute;
     top: 0;
-    left: 18%;
-    right: 18%;
+    inset-inline: 18%;
     height: 3px;
     background: var(--blue-600);
   }
@@ -1014,7 +1024,7 @@ h1, h2, h3, h4, p, span, div {
   /* ── Chat: lift clear of the bottom nav, fit screen ── */
   .chat-fab-wrap {
     bottom: calc(var(--bottomnav-h) + var(--safe-area-bottom) + 16px);
-    right: 16px;
+    inset-inline-end: 16px;
   }
   .chat-panel {
     width: min(360px, calc(100vw - 24px)) !important;
@@ -1104,4 +1114,55 @@ h1, h2, h3, h4, p, span, div {
   .inbox-workload {
     position: static !important;
   }
+}
+
+/* ════════════════════════════════════════════════════
+   RTL (Arabic)
+   `dir="rtl"` on <html> (stamped by src/i18n.ts before the
+   first paint) already mirrors flow, flex rows, text-align
+   and every logical property above. This block is only for
+   what the browser CANNOT infer.
+   ════════════════════════════════════════════════════ */
+
+/* Directional glyphs. A chevron/arrow encodes "forward", and forward is
+   leftwards in Arabic — mirroring it is correct, unlike a symbolic icon.
+   Scoped to the lucide class names so a Send/Search icon is never touched. */
+[dir="rtl"] .lucide-chevron-right,
+[dir="rtl"] .lucide-chevron-left,
+[dir="rtl"] .lucide-chevrons-right,
+[dir="rtl"] .lucide-chevrons-left,
+[dir="rtl"] .lucide-arrow-right,
+[dir="rtl"] .lucide-arrow-left,
+[dir="rtl"] .lucide-arrow-big-right,
+[dir="rtl"] .lucide-corner-down-right,
+[dir="rtl"] .lucide-log-out,
+[dir="rtl"] .lucide-external-link,
+[dir="rtl"] .lucide-reply,
+[dir="rtl"] .lucide-send,
+[dir="rtl"] .lucide-trending-up,
+[dir="rtl"] .lucide-undo-2,
+[dir="rtl"] .lucide-redo-2 {
+  transform: scaleX(-1);
+}
+
+/* A literal "→" written in the copy is a directional glyph exactly like the
+   lucide arrows above, but no [dir] rule can reach a bare text character — it
+   has to be wrapped: <span className="dir-arrow">→</span>. */
+.dir-arrow { display: inline-block; }
+[dir="rtl"] .dir-arrow { transform: scaleX(-1); }
+
+/* Latin-script data inside Arabic prose — serials (TK000123), emails, file
+   paths, tender numbers. Without isolation the bidi algorithm drags trailing
+   punctuation to the wrong end and "TK000123." renders as ".TK000123".
+   Apply with className="ltr-data" (or dir="ltr") on the element holding it. */
+.ltr-data {
+  direction: ltr;
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
+/* Arabic renders taller than Latin at the same px size; the app's dense
+   10-12px labels lose their diacritics without a touch more leading. */
+[dir="rtl"] body {
+  line-height: 1.65;
 }

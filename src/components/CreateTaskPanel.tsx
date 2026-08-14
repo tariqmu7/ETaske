@@ -404,10 +404,10 @@ export default function CreateTaskPanel({
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 28, stiffness: 280 }}
             style={{
-              position: 'fixed', top: 0, right: 0, bottom: 0,
+              position: 'fixed', top: 0, insetInlineEnd: 0, bottom: 0,
               width: '100%', maxWidth: 480,
               background: 'var(--surface)',
-              borderLeft: '1px solid var(--border-md)',
+              borderInlineStart: '1px solid var(--border-md)',
               boxShadow: '-8px 0 40px rgba(15,23,42,0.12)',
               zIndex: 1501,
               display: 'flex', flexDirection: 'column',
@@ -646,7 +646,7 @@ export default function CreateTaskPanel({
               >
                 <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedCreate ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
                 Advanced
-                <div style={{ flex: 1, height: 1, background: 'var(--border)', marginLeft: 4 }} />
+                <div style={{ flex: 1, height: 1, background: 'var(--border)', marginInlineStart: 4 }} />
               </button>
 
               <AnimatePresence>
