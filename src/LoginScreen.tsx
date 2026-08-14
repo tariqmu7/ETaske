@@ -129,16 +129,16 @@ export default function LoginScreen() {
             <div>
               <label className="input-label">Email Address</label>
               <div style={{ position: 'relative' }}>
-                <Mail style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
-                <input type="email" className="input" style={{ paddingLeft: 40 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
+                <Mail style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+                <input type="email" className="input" style={{ paddingInlineStart: 40 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
               </div>
             </div>
             <div>
               <label className="input-label">Password</label>
               <div style={{ position: 'relative' }}>
-                <Lock style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
-                <input type={showPassword ? 'text' : 'password'} className="input" style={{ paddingLeft: 40, paddingRight: 40 }} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
-                <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
+                <Lock style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+                <input type={showPassword ? 'text' : 'password'} className="input" style={{ paddingInlineStart: 40, paddingInlineEnd: 40 }} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
+                <button type="button" onClick={() => setShowPassword(p => !p)} style={{ position: 'absolute', insetInlineEnd: 12, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }}>
                   {showPassword ? <EyeOff style={{ width: 16, height: 16 }} /> : <Eye style={{ width: 16, height: 16 }} />}
                 </button>
               </div>

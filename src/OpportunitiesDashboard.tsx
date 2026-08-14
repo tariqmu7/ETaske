@@ -408,7 +408,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                 key={s.label}
                 onClick={() => setStageFilter(active ? 'All' : s.filter)}
                 className="card"
-                style={{ padding: '12px 14px', textAlign: 'left', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
+                style={{ padding: '12px 14px', textAlign: 'start', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
               >
                 <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
@@ -422,7 +422,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       {/* Filters */}
       <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ position: 'relative', flex: '1 1 240px' }}>
-          <Search className="w-4 h-4" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <Search className="w-4 h-4" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Search opportunities…"
@@ -493,7 +493,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   className="card card-interactive"
-                  style={{ padding: 18, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, borderLeft: `3px solid ${STAGE_COLORS[o.stage] || 'var(--border)'}` }}
+                  style={{ padding: 18, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, borderInlineStart: `3px solid ${STAGE_COLORS[o.stage] || 'var(--border)'}` }}
                   onClick={() => openOpportunity(o)}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>

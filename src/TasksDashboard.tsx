@@ -758,8 +758,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         </div>
 
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-          <input className="input" style={{ paddingLeft: 36 }} placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
+          <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
+          <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search tasks…" value={search} onChange={e => setSearch(e.target.value)} />
         </div>
 
         <input 
@@ -808,7 +808,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
-          <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
+          <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -856,7 +856,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   onClick={() => setEmployeeFilter(emp.name)}
                   className="card"
                   style={{
-                    textAlign: 'left', cursor: 'pointer', padding: 20, borderLeft: `4px solid ${color}`,
+                    textAlign: 'start', cursor: 'pointer', padding: 20, borderInlineStart: `4px solid ${color}`,
                     display: 'flex', flexDirection: 'column', gap: 16, fontFamily: 'inherit',
                     background: 'var(--surface)', transition: 'transform 0.15s, box-shadow 0.15s',
                   }}
@@ -881,7 +881,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
                     <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{emp.tasks.length}</span>
                     <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{emp.tasks.length === 1 ? 'task' : 'tasks'}</span>
-                    {overdue > 0 && <span className="badge badge-urgent" style={{ marginLeft: 'auto' }}>{overdue} {t('OVERDUE')}</span>}
+                    {overdue > 0 && <span className="badge badge-urgent" style={{ marginInlineStart: 'auto' }}>{overdue} {t('OVERDUE')}</span>}
                   </div>
 
                   <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700 }}>
@@ -909,10 +909,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         {(Object.entries(groupedTasks) as [string, Task[]][]).map(([cat, catTasks]) => {
           return (
             <div key={cat}>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingLeft: 4 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
                 <Layers className="w-4 h-4 text-accent" />
                 {cat} Tasks
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginLeft: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <AnimatePresence>
@@ -937,7 +937,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                         className="card"
                         style={{ 
                           overflow: 'hidden', 
-                          borderLeft: isEditing ? '4px solid var(--accent)' : (isTaskDueSoon ? '4px solid #f97316' : `4px solid ${(() => {
+                          borderInlineStart: isEditing ? '4px solid var(--accent)' : (isTaskDueSoon ? '4px solid #f97316' : `4px solid ${(() => {
                             const u = projectUsers.find(pu => pu.id === task.assignedToId);
                             return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
                           })()}`),
@@ -1006,16 +1006,16 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   {task.isPrivate && (
                                     <span
                                       className="badge"
-                                      style={{ marginLeft: 8, background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                      style={{ marginInlineStart: 8, background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
                                       title="Private — only you can see this task"
                                     >
                                       <Lock style={{ width: 11, height: 11 }} /> {t('Private')}
                                     </span>
                                   )}
-                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginLeft: 8 }}>{t('OVERDUE')}</span>}
-                                  {isTaskDueSoon && <span className="badge" style={{ marginLeft: 8, background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>}
+                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginInlineStart: 8 }}>{t('OVERDUE')}</span>}
+                                  {isTaskDueSoon && <span className="badge" style={{ marginInlineStart: 8, background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>}
                                   
-                                  <div style={{ marginLeft: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                                  <div style={{ marginInlineStart: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
                                     <button
                                       className="btn btn-ghost btn-icon"
                                       style={{ padding: '4px 8px', height: 'auto', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', lineHeight: 1 }}
@@ -1037,7 +1037,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             exit={{ opacity: 0, y: -6, scale: 0.96 }}
                                             transition={{ duration: 0.12 }}
                                             style={{
-                                              position: 'absolute', top: '100%', right: 0, marginTop: 4,
+                                              position: 'absolute', top: '100%', insetInlineEnd: 0, marginTop: 4,
                                               background: 'var(--surface)',
                                               border: '1px solid var(--border-md)',
                                               boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
@@ -1047,7 +1047,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             }}
                                           >
                                             <button
-                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'left' }}
+                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'start' }}
                                               onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
                                               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                                               onClick={() => { setOpenActionMenu(null); setShowAdvancedEdit(false); setEditingTask(task); }}
@@ -1057,7 +1057,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             </button>
                                             {task.status === 'Done' && (
                                               <button
-                                                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'left' }}
+                                                style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: 'var(--text-primary)', textAlign: 'start' }}
                                                 onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
                                                 onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                                                 onClick={() => { setOpenActionMenu(null); handleArchiveTask(task.id); }}
@@ -1068,7 +1068,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             )}
                                             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }} />
                                             <button
-                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#dc2626', textAlign: 'left' }}
+                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: 500, color: '#dc2626', textAlign: 'start' }}
                                               onMouseEnter={e => (e.currentTarget.style.background = '#fef2f2')}
                                               onMouseLeave={e => (e.currentTarget.style.background = 'none')}
                                               onClick={() => { setOpenActionMenu(null); handleDeleteTask(task.id); }}
@@ -1084,7 +1084,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                 </div>
                                 {task.serialNumber && (
                                   <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                    #{task.serialNumber}
+                                    <span className="ltr-data">#{task.serialNumber}</span>
                                   </div>
                                 )}
                                 <h3 style={{ fontWeight: 700, fontSize: 15, color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4 }}>
@@ -1128,9 +1128,9 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         {task.collaboratorIds.slice(0, 4).map((cid, i) => {
                                           const cu = projectUsers.find(pu => pu.id === cid);
                                           return cu?.photoURL ? (
-                                            <img key={cid} src={cu.photoURL} className="avatar" style={{ width: 16, height: 16, objectFit: 'cover', marginLeft: i ? -5 : 0, border: '1.5px solid var(--surface-1)' }} alt="" />
+                                            <img key={cid} src={cu.photoURL} className="avatar" style={{ width: 16, height: 16, objectFit: 'cover', marginInlineStart: i ? -5 : 0, border: '1.5px solid var(--surface-1)' }} alt="" />
                                           ) : (
-                                            <span key={cid} style={{ width: 12, height: 12, borderRadius: 0, background: cu?.userColor || getUserColor(cid), marginLeft: i ? -3 : 0 }} />
+                                            <span key={cid} style={{ width: 12, height: 12, borderRadius: 0, background: cu?.userColor || getUserColor(cid), marginInlineStart: i ? -3 : 0 }} />
                                           );
                                         })}
                                       </span>
@@ -1289,11 +1289,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   exit={{ height: 0, opacity: 0 }}
                                   style={{ overflow: 'hidden' }}
                                 >
-                                  <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingLeft: 62 }}>
+                                  <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingInlineStart: 62 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
-                                          <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginRight: 6 }} />
+                                          <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginInlineEnd: 6 }} />
                                           Milestones
                                         </h4>
                                         <select 
@@ -1357,9 +1357,9 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     ) : (
                                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, position: 'relative' }} className="milestone-line">
                                         {taskMilestones.map((ms, i) => (
-                                          <div key={ms.id} className="ms-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', position: 'relative', paddingLeft: 28 }}>
+                                          <div key={ms.id} className="ms-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', position: 'relative', paddingInlineStart: 28 }}>
                                             <div style={{
-                                              position: 'absolute', left: 8, top: 6,
+                                              position: 'absolute', insetInlineStart: 8, top: 6,
                                               width: 10, height: 10, borderRadius: 0,
                                               background: ms.status === 'Done' ? '#4ade80' : ms.status === 'In Progress' ? '#818cf8' : ms.status === 'Blocked' ? '#f87171' : 'var(--surface-3)',
                                               border: '2px solid var(--surface)',
@@ -1435,7 +1435,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                               </div>
                                               <div style={{ display: 'flex', gap: 12, marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
                                                 <span>By {ms.addedBy}</span>
-                                                {ms.targetDate && <span><Calendar className="w-3 h-3" style={{ display: 'inline', marginRight: 3 }} />{ms.targetDate}</span>}
+                                                {ms.targetDate && <span><Calendar className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 3 }} />{ms.targetDate}</span>}
                                               </div>
                                               </>
                                               )}
@@ -1545,10 +1545,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
               exit={{ x: '100%' }}
               transition={{ type: 'spring', damping: 28, stiffness: 280 }}
               style={{
-                position: 'fixed', top: 0, right: 0, bottom: 0,
+                position: 'fixed', top: 0, insetInlineEnd: 0, bottom: 0,
                 width: '100%', maxWidth: 480,
                 background: 'var(--surface)',
-                borderLeft: '1px solid var(--border-md)',
+                borderInlineStart: '1px solid var(--border-md)',
                 boxShadow: '-8px 0 40px rgba(15,23,42,0.12)',
                 zIndex: 1501,
                 display: 'flex', flexDirection: 'column',
@@ -1574,7 +1574,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{t('Edit Task')}</div>
                     {editingTask.serialNumber && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>#{editingTask.serialNumber}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}><span className="ltr-data">#{editingTask.serialNumber}</span></div>
                     )}
                   </div>
                 </div>
@@ -1781,7 +1781,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 >
                   <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedEdit ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
                   Advanced
-                  <div style={{ flex: 1, height: 1, background: 'var(--border)', marginLeft: 4 }} />
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)', marginInlineStart: 4 }} />
                 </button>
 
                 <AnimatePresence>

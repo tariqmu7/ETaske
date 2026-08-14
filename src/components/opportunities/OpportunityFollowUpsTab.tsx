@@ -189,10 +189,10 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         {followUps.length === 0 ? (
           <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No follow-ups yet.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', borderLeft: '2px solid var(--border)', paddingLeft: 18, marginLeft: 6 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', borderInlineStart: '2px solid var(--border)', paddingInlineStart: 18, marginInlineStart: 6 }}>
             {followUps.map(f => (
               <div key={f.id} style={{ position: 'relative', paddingBottom: 18 }}>
-                <span style={{ position: 'absolute', left: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: f.authorColor || 'var(--accent)' }} />
+                <span style={{ position: 'absolute', insetInlineStart: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: f.authorColor || 'var(--accent)' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
                   {f.stage && <span className="badge badge-inprogress">{f.stage}</span>}
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{f.authorName}</span>

@@ -231,11 +231,11 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
               onMouseEnter={() => setActive(i)}
               onClick={() => choose(hit)}
               style={{
-                width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 12,
+                width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '11px 16px', border: 'none', cursor: 'pointer', fontFamily: 'inherit',
                 background: i === active ? 'var(--blue-50)' : 'transparent',
                 color: 'var(--text-primary)',
-                borderLeft: `3px solid ${i === active ? 'var(--blue-600)' : 'transparent'}`,
+                borderInlineStart: `3px solid ${i === active ? 'var(--blue-600)' : 'transparent'}`,
               }}
             >
               <span style={{ color: i === active ? 'var(--blue-600)' : 'var(--text-muted)', flexShrink: 0, display: 'flex' }}>{hit.icon}</span>
@@ -257,7 +257,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, padding: '8px 16px', borderTop: '1px solid var(--border)', background: 'var(--surface-2)', fontSize: 11, color: 'var(--text-muted)' }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><ArrowUp className="w-3 h-3" /><ArrowDown className="w-3 h-3" /> navigate</span>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}><CornerDownLeft className="w-3 h-3" /> open</span>
-          <span style={{ marginLeft: 'auto' }}>Tip: press <kbd style={{ border: '1px solid var(--border)', padding: '1px 4px' }}>g</kbd> then a key to jump</span>
+          <span style={{ marginInlineStart: 'auto' }}>Tip: press <kbd style={{ border: '1px solid var(--border)', padding: '1px 4px' }}>g</kbd> then a key to jump</span>
         </div>
       </div>
     </div>

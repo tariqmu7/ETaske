@@ -621,7 +621,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               className={`card ${s.cls} card-interactive`}
               aria-pressed={active}
               style={{
-                padding: '20px 24px', textAlign: 'left', cursor: 'pointer',
+                padding: '20px 24px', textAlign: 'start', cursor: 'pointer',
                 fontFamily: 'inherit',
                 borderColor: active ? 'var(--accent)' : undefined,
                 boxShadow: active ? '0 0 0 1px var(--accent) inset' : undefined,
@@ -639,7 +639,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         <div style={{ background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#dc2626', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" />
           {error}
-          <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
+          <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -659,10 +659,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       {/* Toolbar */}
       <div className="filter-bar">
         <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
+          <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
           <input
             className="input"
-            style={{ paddingLeft: 40 }}
+            style={{ paddingInlineStart: 40 }}
             placeholder="Search subject or sender…"
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -717,7 +717,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                  display: 'flex',
                  alignItems: isUnassignedCard ? 'flex-start' : 'center',
                  gap: 16,
-                 borderLeft: isDueSoon(item.deadline) && item.status !== 'Closed'
+                 borderInlineStart: isDueSoon(item.deadline) && item.status !== 'Closed'
                    ? '4px solid #f97316'
                    : `4px solid ${(() => {
                      const u = projectUsers.find(pu => pu.id === item.assignedToId);
@@ -732,7 +732,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 {/* Title row: serial + subject + badges */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
                   {item.serialNumber && (
-                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', flexShrink: 0 }}>
+                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', flexShrink: 0 }} className="ltr-data">
                       #{item.serialNumber}
                     </span>
                   )}
@@ -811,7 +811,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
                         );
                       })()}
-                      → {item.assignedTo}
+                      <span className="dir-arrow">→</span> {item.assignedTo}
                     </span>
                   )}
                 </div>
@@ -888,10 +888,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             ))}
                           </select>
                           <div style={{ position: 'relative', flex: '2 1 220px', minWidth: 180 }}>
-                            <MessageSquare style={{ position: 'absolute', left: 10, top: 12, width: 14, height: 14, color: 'var(--text-muted)' }} />
+                            <MessageSquare style={{ position: 'absolute', insetInlineStart: 10, top: 12, width: 14, height: 14, color: 'var(--text-muted)' }} />
                             <textarea
                               className="input"
-                              style={{ paddingLeft: 32, minHeight: 38, resize: 'vertical' }}
+                              style={{ paddingInlineStart: 32, minHeight: 38, resize: 'vertical' }}
                               rows={1}
                               placeholder={t('Add a comment for them…')}
                               value={draft.comment}
@@ -1075,7 +1075,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         {isViewing ? 'View' : editing ? 'Editing' : 'New'}
                       </span>
                       {(editing || isViewing) && formData.serialNumber && (
-                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+                        <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }} className="ltr-data">
                           #{formData.serialNumber}
                         </span>
                       )}
@@ -1665,7 +1665,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 </div>
                 <button
                   onClick={() => setSelectedCorrForDetails(null)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16, minWidth: 44, minHeight: 44 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 10, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginInlineStart: 16, minWidth: 44, minHeight: 44 }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
@@ -1693,7 +1693,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <span>{selectedCorrForDetails.sentFrom || '—'}</span>
                     </div>
                     {selectedCorrForDetails.department && (
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, marginLeft: 24 }}>{selectedCorrForDetails.department}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 4, marginInlineStart: 24 }}>{selectedCorrForDetails.department}</div>
                     )}
                   </div>
 

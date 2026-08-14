@@ -2,7 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target
+  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target,
+  Languages
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView, NavCounts } from '../App';
@@ -11,6 +12,9 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
 import { usePWA } from '../hooks/usePWA';
 import { connectTelegram, disconnectTelegram } from '../lib/telegram';
+import { useTranslation } from 'react-i18next';
+import { useLanguage } from '../hooks/useLanguage';
+import { LANGUAGES } from '../i18n';
 
 interface Props {
   appUser: AppUser;
@@ -34,6 +38,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   const [tgConnecting, setTgConnecting] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
+  const { lang, setLanguage } = useLanguage();
   const unreadCount = notifications.filter(n => !n.read).length;
 
   useEffect(() => {
@@ -214,7 +220,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         </button>
         {showMore && (
             <div role="menu" style={{
-              position: 'absolute', top: 'calc(100% + 6px)', right: 0, minWidth: 180,
+              position: 'absolute', top: 'calc(100% + 6px)', insetInlineEnd: 0, minWidth: 180,
               background: 'var(--surface)', border: '1px solid var(--border)',
               boxShadow: '0 12px 32px rgba(0,0,0,0.16)', zIndex: 1000, padding: '6px 0',
             }}>
@@ -224,7 +230,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   role="menuitem"
                   onClick={() => { onNavigate(item.id); setShowMore(false); }}
                   style={{
-                    width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 10,
+                    width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 10,
                     padding: '9px 14px', background: activeView === item.id ? 'var(--blue-50)' : 'transparent',
                     border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
                     color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
@@ -300,11 +306,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         >
           <Megaphone className="w-5 h-5" style={{ color: activeView === 'announcements' ? 'var(--accent)' : 'var(--text-secondary)' }} />
           {announcementCount > 0 && (
-            <span style={{
-              position: 'absolute', top: 0, right: 0, background: 'var(--accent)', color: 'white',
-              fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
-              transform: 'translate(25%, -25%)'
-            }}>
+            <span className="notif-badge" style={{ background: 'var(--accent)' }}>
               {announcementCount > 9 ? '9+' : announcementCount}
             </span>
           )}
@@ -319,11 +321,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
             style={{ position: 'relative' }}
           >
             <AlertCircle className="w-5 h-5" style={{ color: '#f97316' }} />
-            <span style={{
-              position: 'absolute', top: 0, right: 0, background: '#f97316', color: 'white',
-              fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
-              transform: 'translate(25%, -25%)'
-            }}>
+            <span className="notif-badge" style={{ background: '#f97316' }}>
               {dueSoonCount}
             </span>
           </button>
@@ -338,12 +336,11 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
             style={{ position: 'relative' }}
           >
             <Bell className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+            {/* Position + the outward nudge live in .notif-badge, not inline: the
+                nudge is a translateX, which no logical property can mirror, so
+                RTL needs a real [dir="rtl"] override in the stylesheet. */}
             {unreadCount > 0 && (
-              <span style={{
-                position: 'absolute', top: 0, right: 0, background: '#ef4444', color: 'white',
-                fontSize: 10, fontWeight: 800, padding: '2px 5px', borderRadius: 0,
-                transform: 'translate(25%, -25%)'
-              }}>
+              <span className="notif-badge">
                 {unreadCount > 9 ? '9+' : unreadCount}
               </span>
             )}
@@ -419,7 +416,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
 
           {showUserMenu && (
             <div style={{
-              position: 'absolute', top: 'calc(100% + 10px)', right: 0,
+              position: 'absolute', top: 'calc(100% + 10px)', insetInlineEnd: 0,
               background: 'var(--surface)', border: '1px solid var(--border)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
               minWidth: 220, zIndex: 2000,
@@ -431,11 +428,42 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   {appUser.role}
                 </div>
               </div>
+              {/* Language — a segmented pair, not a toggle: the label of a toggle
+                  has to be written in one language and reads as broken in the other. */}
+              <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                  <Languages className="w-3.5 h-3.5" /> {t('Language')}
+                </div>
+                <div style={{ display: 'flex', border: '1px solid var(--border-md)' }}>
+                  {LANGUAGES.map(l => {
+                    const active = l.code === lang;
+                    return (
+                      <button
+                        key={l.code}
+                        onClick={() => setLanguage(l.code)}
+                        lang={l.code}
+                        dir={l.dir}
+                        aria-pressed={active}
+                        style={{
+                          flex: 1, padding: '7px 10px', border: 'none', cursor: 'pointer',
+                          fontFamily: 'inherit', fontSize: 13, fontWeight: 700,
+                          background: active ? 'var(--blue-600)' : 'var(--surface)',
+                          color: active ? '#fff' : 'var(--text-secondary)',
+                          transition: 'background 0.15s',
+                        }}
+                      >
+                        {l.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
               <div style={{ padding: '6px 8px' }}>
                 {appUser.telegramChatId ? (
                   <button
                     onClick={() => { disconnectTelegram(appUser.id).catch(console.error); }}
-                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                    style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
                     onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     title="Stop receiving notifications on Telegram"
@@ -450,7 +478,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                   <button
                     onClick={handleConnectTelegram}
                     disabled={tgConnecting}
-                    style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: tgConnecting ? 'default' : 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: tgConnecting ? 0.7 : 1, transition: 'background 0.15s' }}
+                    style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: tgConnecting ? 'default' : 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', opacity: tgConnecting ? 0.7 : 1, transition: 'background 0.15s' }}
                     onMouseEnter={e => { if (!tgConnecting) e.currentTarget.style.background = 'var(--surface-3)'; }}
                     onMouseLeave={e => e.currentTarget.style.background = 'none'}
                     title="Get your notifications on Telegram"
@@ -466,7 +494,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                 )}
                 <button
                   onClick={() => { setShowUserMenu(false); onLogout(); }}
-                  style={{ width: '100%', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                  style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
                   onMouseEnter={e => e.currentTarget.style.background = '#fee2e2'}
                   onMouseLeave={e => e.currentTarget.style.background = 'none'}
                 >

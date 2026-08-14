@@ -265,7 +265,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                     type="button"
                     onClick={() => setRecipientIds([])}
                     style={{
-                      marginLeft: 4, fontSize: 11, fontWeight: 600, padding: 0,
+                      marginInlineStart: 4, fontSize: 11, fontWeight: 600, padding: 0,
                       background: 'none', border: 'none', cursor: 'pointer',
                       color: 'var(--accent)', textTransform: 'none', letterSpacing: 0,
                     }}

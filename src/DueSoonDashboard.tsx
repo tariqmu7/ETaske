@@ -118,7 +118,7 @@ export default function DueSoonDashboard({ user, onNavigate }: Props) {
       onClick={() => open(r)}
       style={{
         padding: '14px 18px', background: 'var(--surface)', cursor: 'pointer',
-        borderLeft: `4px solid ${r.overdue ? '#ef4444' : '#f97316'}`,
+        borderInlineStart: `4px solid ${r.overdue ? '#ef4444' : '#f97316'}`,
         display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12,
       }}
     >

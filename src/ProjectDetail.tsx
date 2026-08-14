@@ -71,7 +71,7 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
           {(project.client || project.operator) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Building2 className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{[project.client, project.operator].filter(Boolean).join(' · ')}</span>}
           {project.code && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Hash className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.code}</span>}
           {project.location && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.location}</span>}
-          {(project.startDate || project.endDate) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><CalendarRange className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{[project.startDate, project.endDate].filter(Boolean).join(' → ')}</span>}
+          {(project.startDate || project.endDate) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><CalendarRange className="w-4 h-4" style={{ color: 'var(--text-muted)' }} /><span className="ltr-data">{[project.startDate, project.endDate].filter(Boolean).join(' → ')}</span></span>}
         </div>
         {project.description && <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '12px 0 0', lineHeight: 1.5 }}>{project.description}</p>}
       </div>

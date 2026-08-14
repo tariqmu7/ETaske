@@ -41,12 +41,12 @@ export default function DueSoonBanner({ items }: { items: DueSoonEntry[] }) {
             key={`${item.type}-${item.id}`}
             className="card"
             style={{
-              padding: '12px 16px', background: 'var(--surface)', borderLeft: '4px solid #f97316',
+              padding: '12px 16px', background: 'var(--surface)', borderInlineStart: '4px solid #f97316',
               display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer'
             }}
             onClick={item.onClick}
           >
-            <div style={{ flex: 1, marginRight: 12 }}>
+            <div style={{ flex: 1, marginInlineEnd: 12 }}>
               <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
               <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.title}</div>
               {item.due && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Due: {item.due}</div>}

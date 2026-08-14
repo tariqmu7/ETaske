@@ -188,7 +188,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
                   {parseAmount(s.price) != null && <span>{formatMoney(s.price, s.currency)}</span>}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  {(s.startDate || s.expiryDate) && <span>📅 {[s.startDate, s.expiryDate].filter(Boolean).join(' → ')}</span>}
+                  {(s.startDate || s.expiryDate) && <span>📅 <span className="ltr-data">{[s.startDate, s.expiryDate].filter(Boolean).join(' → ')}</span></span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 4, flexWrap: 'wrap' }}>
                   {(s.currentStatus || s.status) && <span className="badge badge-inprogress">{s.currentStatus || s.status}</span>}
@@ -209,7 +209,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
               <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? 'Edit subcontract' : 'Add subcontract'}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
             </div>
-            <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingRight: 4 }}>
+            <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingInlineEnd: 4 }}>
               <L label="Subcontractor / supplier *"><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inp} /></L>
               <L label="Type of service"><textarea value={form.typeOfService} onChange={e => setForm({ ...form, typeOfService: e.target.value })} style={inp} rows={2} /></L>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>

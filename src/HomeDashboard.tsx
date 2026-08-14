@@ -212,7 +212,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
                 key={`${r.kind}-${r.id}`}
                 onClick={() => openRecent(r)}
                 className="card card-interactive"
-                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, maxWidth: 260, textAlign: 'left' }}
+                style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', flexShrink: 0, maxWidth: 260, textAlign: 'start' }}
               >
                 <span style={{ color: 'var(--blue-600)', flexShrink: 0, display: 'flex' }}>{recentIcon(r.kind)}</span>
                 <span style={{ minWidth: 0 }}>
@@ -237,7 +237,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
             onClick={() => onNavigate(tile.id)}
             className="card card-interactive"
             style={{
-              textAlign: 'left',
+              textAlign: 'start',
               padding: 20,
               display: 'flex',
               flexDirection: 'column',

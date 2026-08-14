@@ -102,14 +102,14 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
       {/* Search */}
       <div style={{ position: 'relative', marginBottom: 24, maxWidth: 400 }}>
-        <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-        <input className="input" style={{ paddingLeft: 36 }} placeholder="Search archived tasks…" value={search} onChange={e => setSearch(e.target.value)} />
+        <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
+        <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search archived tasks…" value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
-          <button onClick={() => setError(null)} style={{ marginLeft: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
+          <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
       )}
 
@@ -167,7 +167,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {taskMilestones.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      <span><Target className="w-3 h-3" style={{ display: 'inline', marginRight: 4 }} />{done}/{taskMilestones.length} milestones</span>
+                      <span><Target className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 4 }} />{done}/{taskMilestones.length} milestones</span>
                       <span>{Math.round((done / taskMilestones.length) * 100)}%</span>
                     </div>
                     <div className="progress-bar">

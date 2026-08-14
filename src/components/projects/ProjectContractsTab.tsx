@@ -186,7 +186,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
       <div>
         <div
           className="card"
-          style={{ padding: '12px 14px', marginBottom: 8, marginLeft: depth * 22, display: 'flex', gap: 10, alignItems: 'flex-start', borderLeft: `3px solid ${typeColor(item.type)}` }}
+          style={{ padding: '12px 14px', marginBottom: 8, marginInlineStart: depth * 22, display: 'flex', gap: 10, alignItems: 'flex-start', borderInlineStart: `3px solid ${typeColor(item.type)}` }}
         >
           <button
             onClick={() => setCollapsed(c => ({ ...c, [item.id]: !c[item.id] }))}
@@ -208,7 +208,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
               {item.companyName && <span>🏢 {item.companyName}</span>}
               {parseAmount(item.contractValue) != null && <span>💰 {formatMoney(item.contractValue, item.currency)}</span>}
               {parseAmount(item.valueAfterIncrease) != null && <span style={{ color: '#16a34a', fontWeight: 600 }}>⬆ {formatMoney(item.valueAfterIncrease, item.currency)}</span>}
-              {(item.startDate || item.endDate) && <span>📅 {[item.startDate, item.endDate].filter(Boolean).join(' → ')}</span>}
+              {(item.startDate || item.endDate) && <span>📅 <span className="ltr-data">{[item.startDate, item.endDate].filter(Boolean).join(' → ')}</span></span>}
               {item.contractingMethod && <span>📝 {item.contractingMethod}</span>}
               {item.inCharge && <span>👤 {item.inCharge}</span>}
             </div>
@@ -292,7 +292,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
               </h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
             </div>
-            <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingRight: 4 }}>
+            <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingInlineEnd: 4 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <L label="Type"><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectContractType })} style={inp}>{PROJECT_CONTRACT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></L>
                 <L label="Contract #"><input value={form.contractNumber} onChange={e => setForm({ ...form, contractNumber: e.target.value })} style={inp} /></L>

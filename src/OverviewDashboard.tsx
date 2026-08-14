@@ -92,7 +92,7 @@ function StatCard({ label, value, sub, color, onClick }: { label: string; value:
       role={onClick ? 'button' : undefined}
       tabIndex={onClick ? 0 : undefined}
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick(); } } : undefined}
-      style={{ padding: '16px 20px', borderLeft: `4px solid ${color}`, cursor: onClick ? 'pointer' : undefined, transition: 'transform 0.15s, box-shadow 0.15s' }}
+      style={{ padding: '16px 20px', borderInlineStart: `4px solid ${color}`, cursor: onClick ? 'pointer' : undefined, transition: 'transform 0.15s, box-shadow 0.15s' }}
       onMouseEnter={onClick ? (e) => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 6px 16px rgba(0,0,0,0.12)'; } : undefined}
       onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } : undefined}
     >
@@ -126,7 +126,7 @@ const CorrCard: React.FC<{
         position: 'relative', 
         cursor: 'pointer',
         transition: 'transform 0.2s, box-shadow 0.2s',
-        borderLeft: `4px solid ${(() => {
+        borderInlineStart: `4px solid ${(() => {
           const u = projectUsers.find(pu => pu.id === item.assignedToId);
           return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
         })()}` 
@@ -143,7 +143,7 @@ const CorrCard: React.FC<{
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8, gap: 8 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
           {item.serialNumber && (
-            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }} className="ltr-data">
               #{item.serialNumber}
             </span>
           )}
@@ -521,7 +521,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
           padding: '16px 18px', 
           cursor: 'pointer', 
           transition: 'transform 0.2s, box-shadow 0.2s', 
-          borderLeft: `4px solid ${(() => {
+          borderInlineStart: `4px solid ${(() => {
             const u = projectUsers.find(pu => pu.id === task.assignedToId);
             return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
           })()}` 
@@ -537,9 +537,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         onClick={() => setSelectedTask(task)}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginRight: 8 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, marginInlineEnd: 8 }}>
             {task.serialNumber && (
-              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>
+              <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }} className="ltr-data">
                 #{task.serialNumber}
               </span>
             )}
@@ -568,7 +568,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
             })()}
           </span>
           &nbsp;·&nbsp; Due: {task.dueDate || '—'}
-          {ov && <span style={{ color: '#dc2626', marginLeft: 6 }}>⚠ Overdue</span>}
+          {ov && <span style={{ color: '#dc2626', marginInlineStart: 6 }}>⚠ Overdue</span>}
         </div>
         {taskMilestones.length > 0 && (
           <div style={{ marginTop: 12 }}>
@@ -634,7 +634,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         <div className="card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
           <button
             onClick={() => setNewCollapsed(v => !v)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'start' }}
           >
             <div style={{ padding: 10, background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
               <MailOpen className="w-5 h-5" />
@@ -722,12 +722,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {c.serialNumber && <span style={{ color: 'var(--text-muted)', fontWeight: 800, marginRight: 6 }}>#{c.serialNumber}</span>}
+                          {c.serialNumber && <span style={{ color: 'var(--text-muted)', fontWeight: 800, marginInlineEnd: 6 }} className="ltr-data">#{c.serialNumber}</span>}
                           {isTask ? c.taskName : c.subject}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
                           {isTask ? `Due ${c.dueDate || '—'}` : `From ${c.sentFrom || '—'}`}
-                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginLeft: 8 }}>⚠ Overdue</span>}
+                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginInlineStart: 8 }}>⚠ Overdue</span>}
                         </div>
                       </div>
                       <div style={{ flexShrink: 0 }}>
@@ -778,7 +778,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 style={{ 
                   padding: '12px 16px', 
                   background: 'var(--surface)',
-                  borderLeft: `4px solid #f97316`,
+                  borderInlineStart: `4px solid #f97316`,
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
@@ -792,7 +792,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   }
                 }}
               >
-                <div style={{ flex: 1, marginRight: 12 }}>
+                <div style={{ flex: 1, marginInlineEnd: 12 }}>
                   <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t("Due:")} {item.deadline || item.dueDate}</div>
@@ -895,16 +895,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
               <button 
                 onClick={() => setSelectedCategory(null)}
                 className="btn btn-ghost"
-                style={{ gap: 8, paddingLeft: 8 }}
+                style={{ gap: 8, paddingInlineStart: 8 }}
               >
                 <ArrowRight className="w-4 h-4" style={{ transform: 'rotate(180deg)' }} /> Back to Statuses
               </button>
               
               <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
-                <Search style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
+                <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
                 <input
                   className="input"
-                  style={{ paddingLeft: 36, fontSize: 13 }}
+                  style={{ paddingInlineStart: 36, fontSize: 13 }}
                   placeholder="Search…"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
@@ -993,7 +993,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         <div className="card" style={{ marginTop: 40, marginBottom: 24, padding: 0, overflow: 'hidden' }}>
           <button
             onClick={() => setKpisExpanded(v => !v)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left' }}
+            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'start' }}
           >
             <div style={{ padding: 10, background: 'rgba(59, 130, 246, 0.1)', color: '#3b82f6' }}>
               <Users className="w-5 h-5" />
@@ -1256,7 +1256,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 </div>
                 <button 
                   onClick={() => setSelectedCorr(null)} 
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginLeft: 16 }}
+                  style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 6, borderRadius: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginInlineStart: 16 }}
                   onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
                   onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                 >
@@ -1284,7 +1284,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       {selectedCorr.sentFrom || '—'}
                     </div>
                     {selectedCorr.department && (
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginLeft: 24 }}>{selectedCorr.department}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, marginInlineStart: 24 }}>{selectedCorr.department}</div>
                     )}
                   </div>
 

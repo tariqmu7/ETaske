@@ -57,11 +57,11 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
           <div>
             <label className="input-label">Display Name</label>
             <div style={{ position: 'relative' }}>
-              <User style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+              <User style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
               <input
                 type="text"
                 className="input"
-                style={{ paddingLeft: 40 }}
+                style={{ paddingInlineStart: 40 }}
                 value={name}
                 onChange={e => setName(e.target.value)}
                 placeholder="e.g. Jane Doe"
@@ -75,11 +75,11 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
           <div>
             <label className="input-label">WhatsApp Phone Number</label>
             <div style={{ position: 'relative' }}>
-              <Phone style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
+              <Phone style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
               <input
                 type="tel"
                 className="input"
-                style={{ paddingLeft: 40 }}
+                style={{ paddingInlineStart: 40 }}
                 value={phoneNumber}
                 onChange={e => setPhoneNumber(e.target.value)}
                 placeholder="e.g. +201000000000"
@@ -97,7 +97,7 @@ export default function UsernameSetupScreen({ onSave }: { onSave: (name: string,
           >
             {submitting
               ? <span className="spinner" style={{ width: 18, height: 18 }} />
-              : 'Continue →'}
+              : <>Continue <span className="dir-arrow">→</span></>}
           </button>
         </form>
       </div>
