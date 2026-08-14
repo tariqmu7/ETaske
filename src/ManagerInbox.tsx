@@ -49,7 +49,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     
     const q = query(collection(db, 'correspondences'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, snap => {
-      setCorrespondences(snap.docs.map(d => ({ id: d.id, ...d.data() } as Corresponding)));
+      // `--stats--` is the serial counter kept in this same collection, not a
+      // correspondence — every other listener in the app drops it too.
+      setCorrespondences(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'correspondences');
       setError('Connection to correspondences failed. Please refresh.');
@@ -359,7 +361,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                   <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>{task.taskName}</h3>
                 </div>
                 <p style={{ fontSize: 12, color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 10 }}>{task.description}</p>
-                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: 6, gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
                   {task.assignedTo && <span style={{ color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 4 }}><UserCheck className="w-3 h-3" /> {task.assignedTo}</span>}
                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Calendar className="w-3 h-3" /> {task.dueDate}</span>}
                 </div>
@@ -404,7 +406,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     <h3 style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', margin: 0 }}>{corr.subject}</h3>
                   </div>
                   <p style={{ fontSize: 12, color: 'var(--text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', marginBottom: 10 }}>{corr.body}</p>
-                  <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
+                  {/* wrap: without it the row squeezes on a phone and `.card`'s
+                      `word-break: break-word` splits values mid-word ("EGP/C"). */}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', rowGap: 6, gap: 16, fontSize: 11, color: 'var(--text-muted)' }}>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Building2 className="w-3 h-3" /> {corr.department}</span>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Tag className="w-3 h-3" /> {corr.sentFrom}</span>
                     {corr.assignedTo && <span style={{ color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 4 }}><UserCheck className="w-3 h-3" /> {corr.assignedTo}</span>}
