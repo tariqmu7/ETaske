@@ -1,15 +1,15 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  collection, query, onSnapshot, addDoc, updateDoc,
-  doc, serverTimestamp, orderBy, Timestamp
+  collection, query, onSnapshot, updateDoc,
+  doc, serverTimestamp, orderBy
 } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { createNotification, notifyManagers } from './lib/pushNotification';
 import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
-import { AppUser, Corresponding, Task, PRIORITY_OPTIONS, OperationType } from './types';
-import { getNextSerialNumber } from './lib/counters';
+import { AppUser, Corresponding, Task, OperationType } from './types';
+import CreateTaskPanel, { NewTaskDraft } from './components/CreateTaskPanel';
 import {
   Inbox, UserCheck, Calendar, Building2,
   AlertCircle, X, Users, Search, Tag, FileText, Paperclip, Hash, Clock
@@ -37,6 +37,8 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
   const [dueDate, setDueDate] = useState('');
   const [managerNote, setManagerNote] = useState('');
   const [isAssigning, setIsAssigning] = useState(false);
+  // Open state of the full create-task form used for the first conversion.
+  const [isConverting, setIsConverting] = useState(false);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<string>('Unread');
   const [error, setError] = useState<string | null>(null);
@@ -114,16 +116,18 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     tasksDone: tasks.filter(t => t.status === 'Done').length,
   }), [visibleCorrespondences, tasks]);
 
-  const handleAssign = async () => {
+  // Re-point an ALREADY converted correspondence at a different employee. The
+  // first conversion goes through the shared create-task form instead (see
+  // `handleConverted`), so this path only ever edits an existing task.
+  const handleReassign = async () => {
     if (!selectedCorr || !assigneeId) return;
+    const taskId = selectedCorr.convertedToTaskId;
+    if (!taskId) return;
     setIsAssigning(true);
     const employee = projectUsers.find(u => u.id === assigneeId);
     if (!employee) { setIsAssigning(false); return; }
 
     try {
-      const isReassignment = selectedCorr.status === 'Assigned';
-
-      // 1. Update corresponding
       await updateDoc(doc(db, 'correspondences', selectedCorr.id), {
         status: 'Assigned',
         assignedTo: employee.displayName,
@@ -133,55 +137,13 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         updatedAt: serverTimestamp(),
       });
 
-      let taskId = selectedCorr.convertedToTaskId;
+      await updateDoc(doc(db, 'tasks', taskId), {
+        assignedTo: employee.displayName,
+        assignedToId: assigneeId,
+        dueDate: dueDate || null,
+        updatedAt: serverTimestamp(),
+      });
 
-      if (isReassignment && taskId) {
-        // 2. Update existing task
-        await updateDoc(doc(db, 'tasks', taskId), {
-          assignedTo: employee.displayName,
-          assignedToId: assigneeId,
-          dueDate: dueDate || null,
-          updatedAt: serverTimestamp(),
-        });
-      } else if (!isReassignment) {
-        // 2. Create new task
-        const serial = await getNextSerialNumber('tasks');
-        const taskRef = await addDoc(collection(db, 'tasks'), {
-          taskName: selectedCorr.subject,
-          description: selectedCorr.body,
-          priority: selectedCorr.priority,
-          status: 'Pending',
-          category: selectedCorr.category,
-          subCategory: selectedCorr.subCategory || 'None',
-          department: selectedCorr.department || 'None',
-          serialNumber: serial,
-          assignedTo: employee.displayName,
-          assignedToId: assigneeId,
-          assignedBy: appUser.displayName,
-          assignedById: user.uid,
-          dueDate: dueDate || selectedCorr.deadline || null,
-          correspondingId: selectedCorr.id,
-          correspondingSubject: selectedCorr.subject,
-          correspondingSerialNumber: selectedCorr.serialNumber,
-          attachedFile: selectedCorr.attachedFile || null,
-          attachedFileName: selectedCorr.attachedFileName || null,
-          filePaths: selectedCorr.filePaths || [],
-          statusUpdate: 'Not Started',
-          notes: [],
-          isPrivate: false,
-          userId: user.uid,
-          teamId: appUser.teamId || employee.teamId || 'NONE',
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        });
-        taskId = taskRef.id;
-        
-        await updateDoc(doc(db, 'correspondences', selectedCorr.id), {
-          convertedToTaskId: taskId,
-        });
-      }
-
-      // 3. Notify the employee, then the rest of the management team.
       const taskSnapshot = {
         taskName: selectedCorr.subject,
         description: managerNote
@@ -193,13 +155,12 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         dueDate: dueDate || selectedCorr.deadline,
         assignedTo: employee.displayName,
       };
-      const verb = isReassignment ? 'reassigned' : 'assigned';
 
       await createNotification({
         type: 'task_assigned',
-        title: isReassignment ? 'Task Reassigned' : 'New Task Assigned',
+        title: 'Task Reassigned',
         message: taskDetails(
-          `"${selectedCorr.subject}" has been ${verb} to you by ${appUser.displayName}`,
+          `"${selectedCorr.subject}" has been reassigned to you by ${appUser.displayName}`,
           taskSnapshot,
         ),
         forUserId: assigneeId,
@@ -210,9 +171,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
       await notifyManagers({
         type: 'task_assigned',
-        title: isReassignment ? 'Task Reassigned' : 'Task Assigned',
+        title: 'Task Reassigned',
         message: taskDetails(
-          `${appUser.displayName} ${verb} "${selectedCorr.subject}" to ${employee.displayName}.`,
+          `${appUser.displayName} reassigned "${selectedCorr.subject}" to ${employee.displayName}.`,
           taskSnapshot,
         ),
         read: false,
@@ -220,12 +181,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         createdAt: serverTimestamp(),
       }, projectUsers, { actorId: user.uid, excludeIds: [assigneeId] });
 
-      setSelectedCorr(null);
-      setAssigneeId('');
-      setDueDate('');
-      setManagerNote('');
+      closeModal();
     } catch (err) {
-      handleFirestoreError(err, OperationType.CREATE, 'tasks');
+      handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
       setError('Failed to update assignment. Check permissions.');
       setIsAssigning(false); // re-enable so the manager can retry
       return;
@@ -233,6 +191,30 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     // Success: keep the button briefly disabled so the live snapshot
     // refreshes the inbox before it becomes interactive again.
     setTimeout(() => setIsAssigning(false), 800);
+  };
+
+  // The create panel has written the task (and sent the assignee / collaborator /
+  // manager notifications). All that is left is to mark the correspondence
+  // assigned and link it to the task it became.
+  const handleConverted = async (taskId: string, draft: NewTaskDraft) => {
+    const corr = selectedCorr;
+    if (!corr) return;
+    try {
+      await updateDoc(doc(db, 'correspondences', corr.id), {
+        status: 'Assigned',
+        assignedTo: draft.assignedTo,
+        assignedToId: draft.assignedToId,
+        assignedAt: serverTimestamp(),
+        notes: managerNote,
+        convertedToTaskId: taskId,
+        updatedAt: serverTimestamp(),
+      });
+      closeModal();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.UPDATE, `correspondences/${corr.id}`);
+      // The task exists; only the link back failed, so say exactly that.
+      setError('Task created, but the correspondence could not be marked assigned. Reopen it and try again.');
+    }
   };
 
   const openCorr = (corr: Corresponding) => {
@@ -244,10 +226,41 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
   const closeModal = () => {
     setSelectedCorr(null);
+    setIsConverting(false);
     setAssigneeId('');
     setDueDate('');
     setManagerNote('');
   };
+
+  // A correspondence that already became a task is reassigned in place; one
+  // that has not is converted through the full create-task form.
+  const hasTask = !!selectedCorr?.convertedToTaskId;
+
+  // Seed of the create-task form: everything the correspondence already knows,
+  // with the manager note carried into the description so it reaches the
+  // assignee (the panel builds its notifications from the description).
+  const conversionPrefill: Partial<NewTaskDraft> = useMemo(() => {
+    if (!selectedCorr) return {};
+    // Only seed an assignee the panel's own select can show — `targetUsers` is
+    // the same department/role filter it applies — otherwise the form would
+    // display one name and save another.
+    const assignee = targetUsers.find(u => u.id === selectedCorr.assignedToId);
+    return {
+      taskName: selectedCorr.subject,
+      description: managerNote
+        ? `${selectedCorr.body}\n\nManager note: ${managerNote}`
+        : selectedCorr.body,
+      priority: selectedCorr.priority,
+      dueDate: dueDate || selectedCorr.deadline || '',
+      category: selectedCorr.category || 'Project',
+      subCategory: selectedCorr.subCategory || 'None',
+      department: selectedCorr.department || 'None',
+      filePaths: selectedCorr.filePaths || [],
+      attachedFile: selectedCorr.attachedFile,
+      attachedFileName: selectedCorr.attachedFileName,
+      ...(assignee ? { assignedToId: assignee.id, assignedTo: assignee.displayName } : {}),
+    };
+  }, [selectedCorr, managerNote, dueDate, targetUsers]);
 
   return (
     <div style={{ padding: '4px 0', minHeight: '60vh' }}>
@@ -594,51 +607,102 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
               {/* Assignment form */}
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
-                  {selectedCorr.status === 'Assigned' ? 'Reassign Task' : 'Assign as Task'}
+                  {hasTask ? 'Reassign Task' : 'Assign as Task'}
                 </div>
 
-                <div style={{ marginBottom: 14 }}>
-                  <label className="input-label">Assign to Employee *</label>
-                  <select className="input" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} required>
-                    <option value="">— Select Recipient —</option>
-                    {targetUsers.map(e => (
-                      <option key={e.id} value={e.id}>{e.displayName} ({e.role})</option>
-                    ))}
-                  </select>
-                </div>
+                {hasTask && (
+                  <>
+                    <div style={{ marginBottom: 14 }}>
+                      <label className="input-label">Assign to Employee *</label>
+                      <select className="input" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} required>
+                        <option value="">— Select Recipient —</option>
+                        {targetUsers.map(e => (
+                          <option key={e.id} value={e.id}>{e.displayName} ({e.role})</option>
+                        ))}
+                      </select>
+                    </div>
 
-                <div style={{ marginBottom: 14 }}>
-                  <label className="input-label">Due Date</label>
-                  <input className="input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
-                </div>
+                    <div style={{ marginBottom: 14 }}>
+                      <label className="input-label">Due Date</label>
+                      <input className="input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+                    </div>
+                  </>
+                )}
 
-                <div style={{ marginBottom: 20 }}>
+                <div style={{ marginBottom: hasTask ? 20 : 14 }}>
                   <label className="input-label">Manager Note (optional)</label>
                   <textarea className="input" rows={3} value={managerNote} onChange={e => setManagerNote(e.target.value)} placeholder="Instructions or context for the employee…" />
                 </div>
 
+                {!hasTask && (
+                  <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>
+                    Continue to the full task form — assignee, collaborators, due date, classification,
+                    visibility and attachments — prefilled from this correspondence. The note above is
+                    saved on the correspondence and carried into the task description.
+                  </div>
+                )}
+
                 <div style={{ display: 'flex', gap: 10 }}>
                   <button className="btn" style={{ flex: 1 }} onClick={closeModal}>Cancel</button>
-                  <button
-                    className="btn btn-primary"
-                    style={{ flex: 2 }}
-                    onClick={handleAssign}
-                    disabled={!assigneeId || isAssigning}
-                  >
-                    {isAssigning ? (
-                      <><span className="spinner" style={{ width: 16, height: 16 }} /> Processing…</>
-                    ) : selectedCorr.status === 'Assigned' ? (
-                      <><UserCheck className="w-4 h-4" /> Reassign Task</>
-                    ) : (
-                      <><UserCheck className="w-4 h-4" /> Assign as Task</>
-                    )}
-                  </button>
+                  {hasTask ? (
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 2 }}
+                      onClick={handleReassign}
+                      disabled={!assigneeId || isAssigning}
+                    >
+                      {isAssigning ? (
+                        <><span className="spinner" style={{ width: 16, height: 16 }} /> Processing…</>
+                      ) : (
+                        <><UserCheck className="w-4 h-4" /> Reassign Task</>
+                      )}
+                    </button>
+                  ) : (
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 2 }}
+                      onClick={() => setIsConverting(true)}
+                    >
+                      <UserCheck className="w-4 h-4" /> Assign as Task…
+                    </button>
+                  )}
                 </div>
               </div>
             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Conversion uses the same create-task form as the Tasks dashboard and the
+          Outlook feed, so a task born from a correspondence carries the same
+          fields as any other. */}
+      <CreateTaskPanel
+        open={isConverting && !!selectedCorr && !hasTask}
+        onClose={() => setIsConverting(false)}
+        user={user}
+        appUser={appUser}
+        projectUsers={projectUsers}
+        tasks={tasks}
+        prefill={conversionPrefill}
+        extraFields={selectedCorr ? {
+          correspondingId: selectedCorr.id,
+          correspondingSubject: selectedCorr.subject,
+          correspondingSerialNumber: selectedCorr.serialNumber || null,
+          statusUpdate: 'Not Started',
+          notes: [],
+          userId: user.uid,
+        } : undefined}
+        headerIcon={<Inbox style={{ width: 16, height: 16, color: '#fff' }} />}
+        headerTitle="Assign as Task"
+        headerSubtitle={selectedCorr?.serialNumber ? `From ${selectedCorr.serialNumber}` : 'From correspondence'}
+        sourceStrip={selectedCorr ? (
+          <div style={{ padding: '12px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Source correspondence</p>
+            <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{selectedCorr.subject}</p>
+          </div>
+        ) : undefined}
+        onCreated={handleConverted}
+      />
     </div>
   );
 }
