@@ -1,11 +1,14 @@
 import React from 'react';
 import { ChevronRight, Home } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { AppView } from '../App';
 
 // A lightweight location indicator under the top nav. Its main job is to make
 // the shared Correspondences ↔ Manager Inbox tab unambiguous (they live on one
 // nav tab) and to give a one-click path back Home from any deep view.
 
+// `label` is the English source text, which is also the i18next key — the trail
+// is translated at render, not here.
 interface Crumb { label: string; view?: AppView }
 
 const TRAILS: Partial<Record<AppView, Crumb[]>> = {
@@ -25,17 +28,18 @@ const TRAILS: Partial<Record<AppView, Crumb[]>> = {
 };
 
 export default function Breadcrumbs({ view, onNavigate }: { view: AppView; onNavigate: (v: AppView) => void }) {
+  const { t } = useTranslation();
   const trail = TRAILS[view] ?? [];
   if (view === 'home' || trail.length === 0) return null;
 
   return (
-    <nav aria-label="Breadcrumb" style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16, fontSize: 13, flexWrap: 'wrap' }}>
+    <nav aria-label={t('Breadcrumb')} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 16, fontSize: 13, flexWrap: 'wrap' }}>
       <button
         onClick={() => onNavigate('home')}
         style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
-        title="Home"
+        title={t('Home')}
       >
-        <Home className="w-4 h-4" /> Home
+        <Home className="w-4 h-4" /> {t('Home')}
       </button>
       {trail.map((crumb, i) => {
         const isLast = i === trail.length - 1;
@@ -47,10 +51,10 @@ export default function Breadcrumbs({ view, onNavigate }: { view: AppView; onNav
                 onClick={() => onNavigate(crumb.view!)}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontFamily: 'inherit', fontSize: 13, padding: 0 }}
               >
-                {crumb.label}
+                {t(crumb.label)}
               </button>
             ) : (
-              <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{crumb.label}</span>
+              <span style={{ color: 'var(--text-primary)', fontWeight: 700 }}>{t(crumb.label)}</span>
             )}
           </span>
         );

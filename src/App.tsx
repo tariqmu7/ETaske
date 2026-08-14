@@ -38,6 +38,7 @@ import { useKeyboardNav } from './hooks/useKeyboardNav';
 import CommandPalette from './components/CommandPalette';
 import Breadcrumbs from './components/Breadcrumbs';
 import KeyboardHelp from './components/KeyboardHelp';
+import { useTranslation } from 'react-i18next';
 
 export interface NavCounts {
   corrNeedsReview: number;  // correspondences Unread/Reviewing (manager triage queue)
@@ -50,6 +51,7 @@ export interface NavCounts {
 export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics';
 
 export default function App() {
+  const { t } = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
@@ -384,7 +386,7 @@ export default function App() {
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="spinner" style={{ width: 32, height: 32 }} />
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{'Loading ETaske…'}</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('Loading ETaske…')}</p>
         </div>
       </div>
     );
@@ -520,7 +522,8 @@ export default function App() {
               onClick={() => { setActiveView(item.id); setShowMoreMenu(false); }}
             >
               {item.icon}
-              <span>{item.label}</span>
+              {/* `label` is the English source text = the i18next key. */}
+              <span>{t(item.label)}</span>
             </button>
           ))}
           <button
@@ -528,7 +531,7 @@ export default function App() {
             onClick={() => setShowMoreMenu(!showMoreMenu)}
           >
             <MoreHorizontal />
-            <span>{'More'}</span>
+            <span>{t('More')}</span>
           </button>
       </nav>
 
@@ -545,7 +548,7 @@ export default function App() {
             padding: 16, zIndex: 95, boxShadow: '0 -4px 20px rgba(0,0,0,0.12)'
           }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{'More Options'}</h3>
+              <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{t('More Options')}</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowMoreMenu(false)}>
                 <X className="w-5 h-5" />
               </button>
@@ -575,7 +578,7 @@ export default function App() {
                     }}
                   >
                     {item.icon}
-                    {item.label}
+                    {t(item.label)}
                   </button>
                 ))}
             </div>

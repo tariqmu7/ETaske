@@ -8,6 +8,7 @@ import { pushAnnouncement } from '../lib/pushNotification';
 import { AppUser, Announcement } from '../types';
 import { timeAgo } from '../utils';
 import { Megaphone, Send, Trash2, Users } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   appUser: AppUser;
@@ -22,6 +23,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
   readByIds: string[];
   userById: Map<string, AppUser>;
 }) {
+  const { t } = useTranslation();
   const [show, setShow] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const seenUsers = readByIds.map(id => userById.get(id)).filter(Boolean) as AppUser[];
@@ -35,7 +37,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
     >
       <Users className="w-3 h-3" style={{ color: 'var(--text-muted)' }} />
       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-        Seen by {seenCount} of {reach}
+        {t('Seen by {{count}} of {{total}}', { count: seenCount, total: reach })}
       </span>
       {show && seenUsers.length > 0 && (
         <div style={{
@@ -53,7 +55,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
           zIndex: 9999,
         }}>
           <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginBottom: 6 }}>
-            Seen by
+            {t('Seen by')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
             {seenUsers.map(u => (
@@ -88,6 +90,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
 }
 
 export default function Announcements({ appUser, announcements, projectUsers }: Props) {
+  const { t } = useTranslation();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -188,19 +191,19 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
       setRecipientIds([]);
     } catch (err: any) {
       console.error('Send announcement failed:', err);
-      setError('Could not send. Check your connection and permissions.');
+      setError(t('Could not send. Check your connection and permissions.'));
     } finally {
       setSending(false);
     }
   };
 
   const handleDelete = async (a: Announcement) => {
-    if (!window.confirm('Delete this announcement for everyone?')) return;
+    if (!window.confirm(t('Delete this announcement for everyone?'))) return;
     try {
       await deleteDoc(doc(db, 'announcements', a.id));
     } catch (err) {
       console.error('Delete announcement failed:', err);
-      alert('Could not delete.');
+      alert(t('Could not delete.'));
     }
   };
 
@@ -218,17 +221,17 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
         </div>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-            Announcements
+            {t('Announcements')}
           </h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, display: 'flex', alignItems: 'center', gap: 6 }}>
             {hasDept ? (
               <>
                 <Users className="w-3.5 h-3.5" />
-                Broadcast to <strong style={{ color: 'var(--text-secondary)' }}>{department}</strong>
-                {teammates.length > 0 && ` · ${teammates.length} member${teammates.length === 1 ? '' : 's'}`}
+                {t('Broadcast to')} <strong style={{ color: 'var(--text-secondary)' }}>{department}</strong>
+                {teammates.length > 0 && ` · ${t(teammates.length === 1 ? '{{count}} member' : '{{count}} members', { count: teammates.length })}`}
               </>
             ) : (
-              'You are not assigned to a department yet.'
+              t('You are not assigned to a department yet.')
             )}
           </p>
         </div>
@@ -240,7 +243,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
           <textarea
             value={text}
             onChange={e => setText(e.target.value)}
-            placeholder={`Share something with the ${department} team…`}
+            placeholder={t('Share something with the {{department}} team…', { department })}
             rows={3}
             className="input"
             style={{ width: '100%', resize: 'vertical', fontSize: 14, lineHeight: 1.5 }}
@@ -258,8 +261,8 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
               }}>
                 <Users className="w-3.5 h-3.5" />
                 {targeted
-                  ? `Sending to ${recipientIds.length} selected`
-                  : `Everyone in ${department}`}
+                  ? t('Sending to {{count}} selected', { count: recipientIds.length })
+                  : t('Everyone in {{department}}', { department })}
                 {targeted && (
                   <button
                     type="button"
@@ -270,7 +273,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                       color: 'var(--accent)', textTransform: 'none', letterSpacing: 0,
                     }}
                   >
-                    Clear
+                    {t('Clear')}
                   </button>
                 )}
               </div>
@@ -311,21 +314,21 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
               {error
                 ? <span style={{ color: '#dc2626', fontWeight: 600 }}>{error}</span>
                 : targeted
-                  ? 'Ctrl/⌘ + Enter to send · only selected members are notified'
-                  : 'Ctrl/⌘ + Enter to send · everyone in your department is notified'}
+                  ? t('Ctrl/⌘ + Enter to send · only selected members are notified')
+                  : t('Ctrl/⌘ + Enter to send · everyone in your department is notified')}
             </span>
             <button
               type="submit"
               className="btn btn-primary btn-sm"
               disabled={!text.trim() || sending}
             >
-              <Send className="w-3.5 h-3.5" /> {sending ? 'Sending…' : 'Send'}
+              <Send className="w-3.5 h-3.5" /> {sending ? t('Sending…') : t('Send')}
             </button>
           </div>
         </form>
       ) : (
         <div className="card" style={{ padding: 20, marginBottom: 24, textAlign: 'center', color: 'var(--text-muted)', fontSize: 13 }}>
-          Ask an admin to set your department before you can post or receive announcements.
+          {t('Ask an admin to set your department before you can post or receive announcements.')}
         </div>
       )}
 
@@ -334,8 +337,8 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
         {visible.length === 0 ? (
           <div className="card" style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             <Megaphone className="w-8 h-8" style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-            <p style={{ fontSize: 14 }}>No announcements yet.</p>
-            {hasDept && <p style={{ fontSize: 12, marginTop: 4 }}>Be the first to post to {department}.</p>}
+            <p style={{ fontSize: 14 }}>{t('No announcements yet.')}</p>
+            {hasDept && <p style={{ fontSize: 12, marginTop: 4 }}>{t('Be the first to post to {{department}}.', { department })}</p>}
           </div>
         ) : (
           visible.map(a => {
@@ -370,10 +373,11 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
                       <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>
-                        {mine ? 'You' : a.authorName}
+                        {mine ? t('You') : a.authorName}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {a.createdAt ? timeAgo(a.createdAt) : 'just now'}
+                        {/* timeAgo() itself is still English — utils, task 6. */}
+                        {a.createdAt ? timeAgo(a.createdAt) : t('just now')}
                       </span>
                     </div>
                     <p style={{
@@ -403,7 +407,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                           marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
                         }}>
                           <Users className="w-3 h-3" />
-                          {mine ? 'Sent to' : 'Sent to you'}
+                          {mine ? t('Sent to') : t('Sent to you')}
                         </div>
                         {recipientUsers.length > 0 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
@@ -446,7 +450,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                   {canManage(a) && (
                     <button
                       className="btn btn-ghost btn-sm btn-icon"
-                      title="Delete announcement"
+                      title={t('Delete announcement')}
                       onClick={() => handleDelete(a)}
                     >
                       <Trash2 className="w-3.5 h-3.5" style={{ color: '#dc2626' }} />

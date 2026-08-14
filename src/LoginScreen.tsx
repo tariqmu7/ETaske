@@ -2,8 +2,10 @@ import React, { useState } from 'react';
 import { signInWithPopup, GoogleAuthProvider, signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { auth } from './lib/firebase';
 import { Briefcase, Lock, Mail, AlertCircle, EyeOff, Eye } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLogin, setIsLogin] = useState(true);
@@ -16,14 +18,16 @@ export default function LoginScreen() {
       setLoading(true); setError(null);
       await signInWithPopup(auth, new GoogleAuthProvider());
     } catch (err: any) {
-      setError(err.message || 'Google login failed');
+      // Firebase's own err.message stays English — it is a provider string, not
+      // app copy; only our fallbacks are translated.
+      setError(err.message || t('Google login failed'));
       setLoading(false);
     }
   };
 
   const handleEmailAuth = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email || !password) { setError('Email and password are required.'); return; }
+    if (!email || !password) { setError(t('Email and password are required.')); return; }
     try {
       setLoading(true); setError(null);
       if (isLogin) {
@@ -33,8 +37,8 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       setError(err.code === 'auth/operation-not-allowed'
-        ? 'Email/Password login is not enabled in Firebase Console.'
-        : err.message || 'Authentication failed');
+        ? t('Email/Password login is not enabled in Firebase Console.')
+        : err.message || t('Authentication failed'));
       setLoading(false);
     }
   };
@@ -81,9 +85,9 @@ export default function LoginScreen() {
             <Briefcase style={{ width: 26, height: 26, color: '#fff' }} />
           </div>
           <h1 style={{ fontSize: 26, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em', marginBottom: 6 }}>
-            Welcome to ETaske
+            {t('Welcome to ETaske')}
           </h1>
-          <p style={{ color: '#64748b', fontSize: 14 }}>Sign in to access your workflow dashboard</p>
+          <p style={{ color: '#64748b', fontSize: 14 }}>{t('Sign in to access your workflow dashboard')}</p>
         </div>
 
         <div style={{ padding: '28px 36px 36px' }}>
@@ -116,25 +120,25 @@ export default function LoginScreen() {
               <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
-            Continue with Google
+            {t('Continue with Google')}
           </button>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
             <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
-            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Or</span>
+            <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>{t('Or')}</span>
             <div style={{ flex: 1, height: 1, background: '#e2e8f0' }} />
           </div>
 
           <form onSubmit={handleEmailAuth} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <div>
-              <label className="input-label">Email Address</label>
+              <label className="input-label">{t('Email Address')}</label>
               <div style={{ position: 'relative' }}>
                 <Mail style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
                 <input type="email" className="input" style={{ paddingInlineStart: 40 }} value={email} onChange={e => setEmail(e.target.value)} placeholder="you@company.com" required />
               </div>
             </div>
             <div>
-              <label className="input-label">Password</label>
+              <label className="input-label">{t('Password')}</label>
               <div style={{ position: 'relative' }}>
                 <Lock style={{ position: 'absolute', insetInlineStart: 13, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: '#94a3b8' }} />
                 <input type={showPassword ? 'text' : 'password'} className="input" style={{ paddingInlineStart: 40, paddingInlineEnd: 40 }} value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required minLength={6} />
@@ -144,13 +148,13 @@ export default function LoginScreen() {
               </div>
             </div>
             <button type="submit" disabled={loading} className="btn btn-primary" style={{ width: '100%', padding: '12px', marginTop: 4 }}>
-              {loading ? <span className="spinner" style={{ width: 18, height: 18 }} /> : isLogin ? 'Sign In' : 'Create Account'}
+              {loading ? <span className="spinner" style={{ width: 18, height: 18 }} /> : isLogin ? t('Sign In') : t('Create Account')}
             </button>
           </form>
 
           <div style={{ marginTop: 20, textAlign: 'center' }}>
             <button onClick={() => setIsLogin(p => !p)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#2563eb', fontWeight: 600, fontFamily: 'inherit' }}>
-              {isLogin ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+              {isLogin ? t("Don't have an account? Sign up") : t('Already have an account? Sign in')}
             </button>
           </div>
         </div>

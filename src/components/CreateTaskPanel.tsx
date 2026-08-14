@@ -19,9 +19,10 @@ import ComboBox from './ComboBox';
 // Public / Private segmented control. Private tasks are visible & editable only
 // to their owner (the assignee) — enforced in firestore.rules.
 export function PrivacyToggle({ isPrivate, onChange }: { isPrivate: boolean; onChange: (v: boolean) => void }) {
+  const { t } = useTranslation();
   const opts: { value: boolean; label: string; icon: React.ReactNode; hint: string }[] = [
-    { value: false, label: 'Public', icon: <Globe style={{ width: 14, height: 14 }} />, hint: 'Everyone on the board can see it' },
-    { value: true, label: 'Private', icon: <Lock style={{ width: 14, height: 14 }} />, hint: 'Only you can see it' },
+    { value: false, label: t('Public'), icon: <Globe style={{ width: 14, height: 14 }} />, hint: t('Everyone on the board can see it') },
+    { value: true, label: t('Private'), icon: <Lock style={{ width: 14, height: 14 }} />, hint: t('Only you can see it') },
   ];
   return (
     <div>
@@ -30,7 +31,7 @@ export function PrivacyToggle({ isPrivate, onChange }: { isPrivate: boolean; onC
           const active = o.value === isPrivate;
           return (
             <button
-              key={o.label}
+              key={String(o.value)}
               type="button"
               onClick={() => onChange(o.value)}
               style={{
@@ -49,7 +50,9 @@ export function PrivacyToggle({ isPrivate, onChange }: { isPrivate: boolean; onC
       </div>
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
         {isPrivate ? <Lock style={{ width: 12, height: 12 }} /> : <Globe style={{ width: 12, height: 12 }} />}
-        {isPrivate ? 'Only you can view or edit this task — not managers or admins.' : 'Visible to everyone on the shared board.'}
+        {isPrivate
+          ? t('Only you can view or edit this task — not managers or admins.')
+          : t('Visible to everyone on the shared board.')}
       </div>
     </div>
   );
@@ -66,12 +69,13 @@ export function CollaboratorPicker({
   ownerId?: string;
   onChange: (ids: string[]) => void;
 }) {
+  const { t } = useTranslation();
   const available = users.filter(u => u.id !== ownerId);
   const toggle = (id: string) => {
     onChange(selectedIds.includes(id) ? selectedIds.filter(x => x !== id) : [...selectedIds, id]);
   };
   if (available.length === 0) {
-    return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>No other team members available.</div>;
+    return <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('No other team members available.')}</div>;
   }
   return (
     <div>
@@ -102,8 +106,13 @@ export function CollaboratorPicker({
       <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
         <Users style={{ width: 12, height: 12 }} />
         {selectedIds.length
-          ? `${selectedIds.length} collaborator${selectedIds.length > 1 ? 's' : ''} — they can view and edit this task.`
-          : 'Add co-workers so this task is shared with and editable by them.'}
+          ? t(
+              selectedIds.length === 1
+                ? '{{count}} collaborator — they can view and edit this task.'
+                : '{{count}} collaborators — they can view and edit this task.',
+              { count: selectedIds.length },
+            )
+          : t('Add co-workers so this task is shared with and editable by them.')}
       </div>
     </div>
   );
@@ -270,7 +279,7 @@ export default function CreateTaskPanel({
       const driveUrl = await uploadToGoogleDrive(file);
       setNewTask(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
     } catch (err: any) {
-      alert('Upload failed: ' + err.message);
+      alert(t('Upload failed: {{message}}', { message: err.message }));
     } finally {
       setIsUploading(false);
     }
@@ -373,7 +382,7 @@ export default function CreateTaskPanel({
       onClose();
     } catch (err) {
       console.error('Firestore:', { err, op: 'CREATE', path: 'tasks' });
-      setError('Failed to create task.');
+      setError(t('Failed to create task.'));
     } finally {
       setIsSaving(false);
     }
@@ -454,7 +463,7 @@ export default function CreateTaskPanel({
               {/* Hero: Task Name */}
               <div style={{ marginBottom: 20 }}>
                 <label className="input-label">
-                  Task Name <span style={{ color: '#dc2626' }}>*</span>
+                  {t('Task Name')}<span style={{ color: '#dc2626' }}>*</span>
                 </label>
                 <input
                   className="input"
@@ -462,7 +471,7 @@ export default function CreateTaskPanel({
                   style={{ fontSize: 16, fontWeight: 500, padding: '12px 14px' }}
                   value={newTask.taskName}
                   onChange={e => setNewTask({ ...newTask, taskName: e.target.value })}
-                  placeholder="What needs to be done?"
+                  placeholder={t('What needs to be done?')}
                   autoFocus
                   onKeyDown={e => e.key === 'Enter' && newTask.taskName.trim() && handleCreateTask()}
                 />
@@ -470,20 +479,20 @@ export default function CreateTaskPanel({
 
               {/* Description */}
               <div style={{ marginBottom: 20 }}>
-                <label className="input-label">{t('Description')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                <label className="input-label">{t('Description')}<span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                 <textarea
                   className="input"
                   value={newTask.description}
                   onChange={e => setNewTask({ ...newTask, description: e.target.value })}
                   rows={3}
-                  placeholder="Add context, links, or notes..."
+                  placeholder={t('Add context, links, or notes…')}
                   style={{ resize: 'vertical', minHeight: 72 }}
                 />
               </div>
 
               {/* Divider: When & Urgency */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>When &amp; Urgency</span>
+                <span>{t('When & Urgency')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
@@ -494,14 +503,14 @@ export default function CreateTaskPanel({
                   </select>
                 </div>
                 <div>
-                  <label className="input-label">{t('Due Date')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                  <label className="input-label">{t('Due Date')}<span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                   <input type="date" className="input" value={newTask.dueDate} onChange={e => setNewTask({ ...newTask, dueDate: e.target.value })} />
                 </div>
               </div>
 
               {/* Divider: Who */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>Who</span>
+                <span>{t('Who')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
               <div style={{ marginBottom: 20 }}>
@@ -527,7 +536,7 @@ export default function CreateTaskPanel({
                 </select>
               </div>
               <div style={{ marginBottom: 20 }}>
-                <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>(optional)</span></label>
+                <label className="input-label">{t('Collaborators')} <span style={{ color: 'var(--text-muted)', fontWeight: 400, textTransform: 'none', letterSpacing: 0 }}>{t('(optional)')}</span></label>
                 <CollaboratorPicker
                   users={projectUsers.filter(u =>
                     appUser.role === 'Admin' ||
@@ -541,7 +550,7 @@ export default function CreateTaskPanel({
 
               {/* Divider: Visibility */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>Visibility</span>
+                <span>{t('Visibility')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
               <div style={{ marginBottom: 20 }}>
@@ -553,7 +562,7 @@ export default function CreateTaskPanel({
 
               {/* Divider: Classification */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>Classification</span>
+                <span>{t('Classification')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
@@ -594,7 +603,7 @@ export default function CreateTaskPanel({
 
               {/* Divider: Attachment */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span>Attachment</span>
+                <span>{t('Attachment')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
               <div style={{ marginBottom: 20 }}>
@@ -616,7 +625,7 @@ export default function CreateTaskPanel({
                 >
                   <input type="file" onChange={handleNewFileUpload} style={{ display: 'none' }} />
                   {isUploading ? (
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Uploading to Drive…</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Uploading to Drive...')}</div>
                   ) : newTask.attachedFileName ? (
                     <div style={{ fontSize: 12, color: 'var(--blue-600)', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
                       <Paperclip style={{ width: 14, height: 14 }} /> {newTask.attachedFileName}
@@ -625,8 +634,8 @@ export default function CreateTaskPanel({
                     <>
                       <Paperclip style={{ width: 20, height: 20, color: 'var(--text-muted)' }} />
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>Drop file or click to upload</div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Uploads to Google Drive</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)' }}>{t('Drop file or click to upload')}</div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('Uploads to Google Drive')}</div>
                       </div>
                     </>
                   )}
@@ -645,7 +654,7 @@ export default function CreateTaskPanel({
                 }}
               >
                 <ChevronRight style={{ width: 12, height: 12, transform: showAdvancedCreate ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }} />
-                Advanced
+                {t('Advanced')}
                 <div style={{ flex: 1, height: 1, background: 'var(--border)', marginInlineStart: 4 }} />
               </button>
 
@@ -690,7 +699,7 @@ export default function CreateTaskPanel({
                           style={{ width: 'fit-content', gap: 6 }}
                           onClick={() => setNewTask({ ...newTask, filePaths: [...newTask.filePaths, ''] })}
                         >
-                          <Plus style={{ width: 14, height: 14 }} /> Add Path
+                          <Plus style={{ width: 14, height: 14 }} /> {t('Add Path')}
                         </button>
                       </div>
                     </div>
@@ -718,7 +727,7 @@ export default function CreateTaskPanel({
                 disabled={!newTask.taskName.trim() || isSaving}
                 style={{ minWidth: 120 }}
               >
-                <Plus style={{ width: 16, height: 16 }} /> Create Task
+                <Plus style={{ width: 16, height: 16 }} /> {t('Create Task')}
               </button>
             </div>
           </motion.div>

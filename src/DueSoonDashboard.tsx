@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
@@ -35,6 +36,7 @@ const CLOSED = ['Done', 'Closed', 'Archived'];
  * (src/lib/deepLink.ts). Reached from the orange alert icon in the top nav.
  */
 export default function DueSoonDashboard({ user, onNavigate }: Props) {
+  const { t } = useTranslation();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [corrs, setCorrs] = useState<Corresponding[]>([]);
 
@@ -127,11 +129,11 @@ export default function DueSoonDashboard({ user, onNavigate }: Props) {
           <span style={{
             fontSize: 10, fontWeight: 800, textTransform: 'uppercase',
             color: r.kind === 'Task' ? '#6366f1' : '#0ea5e9',
-          }}>{r.kind}</span>
+          }}>{t(r.kind)}</span>
         </div>
         <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{r.title}</div>
         <div style={{ fontSize: 12, color: r.overdue ? '#f87171' : 'var(--text-muted)', marginTop: 3 }}>
-          Due: {fmt(r.due)}{r.assignedTo ? ` · ${r.assignedTo}` : ''}
+          {t('Due:')}<span className="ltr-data">{fmt(r.due)}</span>{r.assignedTo ? ` · ${r.assignedTo}` : ''}
         </div>
       </div>
       <ArrowRight className="w-4 h-4" style={{ color: '#94a3b8', flexShrink: 0 }} />
@@ -144,23 +146,23 @@ export default function DueSoonDashboard({ user, onNavigate }: Props) {
         <div style={{ background: '#f97316', padding: 8, borderRadius: 0 }}>
           <AlertCircle className="w-5 h-5" style={{ color: '#fff' }} />
         </div>
-        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Due Soon & Overdue</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Due Soon & Overdue')}</h1>
       </div>
       <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: '0 0 28px' }}>
-        All tasks and correspondences that are overdue or due within 48 hours. Click any item to open it.
+        {t('All tasks and correspondences that are overdue or due within 48 hours.')}
       </p>
 
       {rows.length === 0 ? (
         <div style={{ textAlign: 'center', padding: '64px 16px', color: 'var(--text-muted)' }}>
           <Clock className="w-8 h-8" style={{ margin: '0 auto 12px', opacity: 0.4 }} />
-          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>Nothing due soon</div>
-          <div style={{ fontSize: 13, marginTop: 4 }}>You're all caught up.</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Nothing due soon')}</div>
+          <div style={{ fontSize: 13, marginTop: 4 }}>{t("You're all caught up.")}</div>
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 32 }}>
           {overdueRows.length > 0 && (
             <div>
-              <SectionLabel label="Overdue" count={overdueRows.length} color="#ef4444" />
+              <SectionLabel label={t('Overdue')} count={overdueRows.length} color="#ef4444" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {overdueRows.map(r => <RowCard key={`${r.kind}-${r.id}`} r={r} />)}
               </div>
@@ -168,7 +170,7 @@ export default function DueSoonDashboard({ user, onNavigate }: Props) {
           )}
           {dueSoonRows.length > 0 && (
             <div>
-              <SectionLabel label="Due Soon" count={dueSoonRows.length} color="#f97316" />
+              <SectionLabel label={t('Due Soon')} count={dueSoonRows.length} color="#f97316" />
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {dueSoonRows.map(r => <RowCard key={`${r.kind}-${r.id}`} r={r} />)}
               </div>

@@ -190,6 +190,98 @@ const insetDrift = Object.keys({ ...insetCounts, ...INSET_ALLOW })
 check('the surviving physical left:/right: are exactly the documented ones',
   insetDrift.length === 0, insetDrift.join(' | '));
 
+// ═══ [A5] The shell/nav/auth files are actually wired to t() ═════════════════
+// Task 3 translated these twelve files. The browser half below only mounts the
+// header, so this is the cheap total guard: a file reverted to hard-coded
+// English (or a new screen added without a translator) fails here. The counts
+// are floors, not exact numbers — adding strings is fine, losing them is not.
+console.log('\n[A5] shell / nav / auth files use the translator');
+
+// Floors only count t('literal') — the table-driven screens (nav items,
+// breadcrumb trail, shortcut rows) call t(variable) and score lower than they
+// look. src/i18n.ts's LANGUAGES table is the switcher and is covered by [A3].
+const SHELL_FILES = {
+  'src/App.tsx': 3,
+  'src/components/Sidebar.tsx': 25,
+  'src/components/Breadcrumbs.tsx': 3,
+  'src/HomeDashboard.tsx': 35,
+  'src/components/CommandPalette.tsx': 38,
+  'src/components/KeyboardHelp.tsx': 1,
+  'src/components/DueSoonBanner.tsx': 4,
+  'src/components/Announcements.tsx': 22,
+  'src/LoginScreen.tsx': 12,
+  'src/PendingScreen.tsx': 3,
+  'src/RejectedScreen.tsx': 3,
+  'src/UsernameSetupScreen.tsx': 7,
+};
+// Task 4 added the tasks flow. Same contract, same floors — listed separately
+// only so a failure names which pass regressed.
+const TASK_FILES = {
+  'src/TasksDashboard.tsx': 100,
+  'src/components/CreateTaskPanel.tsx': 40,
+  'src/components/ComboBox.tsx': 6,
+  'src/DueSoonDashboard.tsx': 7,
+};
+const T_FILES = { ...SHELL_FILES, ...TASK_FILES };
+
+for (const [rel, min] of Object.entries(T_FILES)) {
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const calls = [...src.matchAll(/\bt\(\s*['"`]/g)].length;
+  check(`${rel}: useTranslation + ≥${min} t() calls`,
+    /useTranslation/.test(src) && calls >= min, `${calls} t() calls`);
+}
+
+// Every literal passed to t() in those files must exist in en.ts, or it renders
+// the key text in English under ar and looks merely "not translated yet".
+// Both quote styles: a key containing an apostrophe ("You're all caught up.")
+// is written with double quotes, and the single-quote-only regex missed it.
+const missingKeys = [];
+for (const rel of Object.keys(T_FILES)) {
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  for (const m of src.matchAll(/\bt\(\s*'((?:[^'\\]|\\.)*)'/g)) {
+    const key = m[1].replace(/\\'/g, "'");
+    if (!(key in en)) missingKeys.push(`${rel}: ${key}`);
+  }
+  for (const m of src.matchAll(/\bt\(\s*"((?:[^"\\]|\\.)*)"/g)) {
+    const key = m[1].replace(/\\"/g, '"');
+    if (!(key in en)) missingKeys.push(`${rel}: ${key}`);
+  }
+}
+check('★ every t(\'…\') literal in the translated files is a real key in en.ts',
+  missingKeys.length === 0, missingKeys.slice(0, 8).join(' | '));
+
+// ── [A6] the tasks flow keeps no hard-coded English left in its JSX ──────────
+// A floor can be met while a whole panel is still English. These are the exact
+// strings task 4 replaced; any one of them reappearing as a bare JSX literal
+// (not inside a t(...) call) is a revert.
+console.log('\n[A6] no reverted literals in the tasks flow');
+const REVERT_CANARIES = [
+  ['src/TasksDashboard.tsx', [
+    /\/>\s*Add Task\s*<\/button>/,
+    /placeholder="Search tasks/,
+    /\? 'My Tasks' : 'All Tasks'/,
+    /^\s*Milestones\s*$/m,
+    /\/>\s*Add Path\s*$/m,
+    /^\s*Save Changes\s*$/m,
+  ]],
+  ['src/components/CreateTaskPanel.tsx', [
+    /\/>\s*Create Task\s*$/m,
+    /placeholder="What needs to be done/,
+    /^\s*Advanced\s*$/m,
+    /label: 'Public'/,
+  ]],
+  ['src/DueSoonDashboard.tsx', [
+    />Due Soon & Overdue</,
+    />Nothing due soon</,
+    /^\s*Due: \{fmt/m,
+  ]],
+];
+for (const [rel, patterns] of REVERT_CANARIES) {
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const hit = patterns.filter(p => p.test(src)).map(String);
+  check(`${rel}: no bare English literal came back`, hit.length === 0, hit.join(' | '));
+}
+
 // ═══ [B] The real TopNav in a real browser ═══════════════════════════════════
 console.log('\n[B] real TopNav, real index.css, real clicks');
 
@@ -475,6 +567,22 @@ check('العربية is now the pressed option',
 check('the Language label itself is translated', await evalJS(`!!window.__one('div','اللغة')`));
 check('the English button keeps its own script (not "الإنجليزية")',
   await evalJS(`window.__one('button','English').textContent.trim()`) === 'English');
+
+// ★ Task 3: the nav labels themselves. Until this task they were hard-coded
+// English strings inside the component, so the bar stayed English while the
+// page around it flipped — the most visible possible miss.
+const navTabsAr = await evalJS(`JSON.stringify([...document.querySelectorAll('.nav-tab')].map(b => b.textContent.trim()))`);
+check('★ nav tabs are translated (المهام / المراسلات / الرئيسية)',
+  /المهام/.test(navTabsAr) && /المراسلات/.test(navTabsAr) && /الرئيسية/.test(navTabsAr), navTabsAr);
+const navStillEnglish = await evalJS(`(() => {
+  const left = [...document.querySelectorAll('.nav-tab')]
+    .map(b => b.textContent.replace(/[0-9+]/g, '').trim())
+    .filter(txt => /^[A-Za-z ]+$/.test(txt) && txt.length);
+  return JSON.stringify(left);
+})()`);
+check('★ no nav tab is still English in ar', navStillEnglish === '[]', navStillEnglish);
+check('★ Sign Out in the open menu is translated',
+  await evalJS(`!!window.__one('button','تسجيل الخروج')`));
 await shot('menu-ar');
 
 // The whole header must mirror, not just the menu. The avatar is the last item
@@ -560,6 +668,9 @@ await clickEl(`window.__one('button','English')`, 'English');
 check('<html dir> returns to ltr', await evalJS(`document.documentElement.getAttribute('dir')`) === 'ltr');
 check('the en choice is persisted', await evalJS(`localStorage.getItem('etaske-lang')`) === 'en');
 check('the Language label is English again', await evalJS(`!!window.__one('div','Language')`));
+const navTabsEn = await evalJS(`JSON.stringify([...document.querySelectorAll('.nav-tab')].map(b => b.textContent.trim()))`);
+check('non-vacuous: the same nav tabs read English again',
+  /Tasks/.test(navTabsEn) && /Correspondences/.test(navTabsEn) && !/المهام/.test(navTabsEn), navTabsEn);
 check('no errors across the whole run', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,
   pageErrors.join(' || ').slice(0, 400));
 
@@ -593,7 +704,7 @@ const dashPlugin = {
 const DASH_ENTRY = /* tsx */ `
 import React from 'react';
 import { createRoot } from 'react-dom/client';
-import './src/i18n';
+import i18n from './src/i18n';
 import TasksDashboard from './src/TasksDashboard';
 import CorrespondingsDashboard from './src/CorrespondingsDashboard';
 import OverviewDashboard from './src/OverviewDashboard';
@@ -677,6 +788,9 @@ window.__mount = (name, opts) => root.render(
   ),
 );
 window.__mount('tasks');
+// Lets [C4] read the SAME mounted DOM in both languages — the non-vacuous half
+// of "this screen is translated" needs the English render to compare against.
+window.__setLang = l => i18n.changeLanguage(l);
 
 window.__errors = [];
 window.addEventListener('error', e => window.__errors.push(String(e.message)));
@@ -835,6 +949,67 @@ await sleep(200);
 const arrowLtr = await evalJS(arrow);
 check('non-vacuous: the same "→" is not mirrored in LTR', arrowLtr === 'none', arrowLtr);
 await evalJS(`document.documentElement.setAttribute('dir','rtl')`);
+
+// ── [C4] the tasks flow really renders Arabic (task 4) ──────────────────────
+// [A5]/[A6] only read source. This mounts the real TasksDashboard and the real
+// CreateTaskPanel and reads the painted text, then flips the SAME DOM back to
+// English so a hard-coded Arabic string could not pass either.
+console.log('\n[C4] the tasks flow renders Arabic (task 4)');
+await evalJS(`window.__mount('tasks', { initialView: 'mine' })`);
+await sleep(500);
+
+const tasksText = `(() => {
+  const h1 = document.querySelector('#root h1');
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', btns });
+})()`;
+const arText = JSON.parse(await evalJS(tasksText));
+check('the Tasks heading reads المهام', arText.h1 === 'المهام', arText.h1);
+check('the create button reads إضافة مهمة', arText.btns.some(b => b === 'إضافة مهمة'),
+  arText.btns.slice(0, 12).join(' | '));
+check('the view toggle reads مهامي / كل المهام',
+  arText.btns.includes('مهامي') && arText.btns.includes('كل المهام'), arText.btns.slice(0, 12).join(' | '));
+
+// The create panel is a separate component (CreateTaskPanel) reached by a real
+// click — the same path a user takes from this screen.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'إضافة مهمة')`, 'Add Task');
+await sleep(500);
+const panel = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.input-label')].map(l => (l.textContent || '').trim());
+  const ph = [...document.querySelectorAll('input, textarea')].map(i => i.placeholder).filter(Boolean);
+  const btns = [...document.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ labels, ph, btns });
+})()`).then(JSON.parse);
+check('the create panel labels are Arabic (اسم المهمة / الوصف)',
+  panel.labels.some(l => l.startsWith('اسم المهمة')) && panel.labels.some(l => l.startsWith('الوصف')),
+  panel.labels.slice(0, 10).join(' | '));
+check('the task-name placeholder is Arabic', panel.ph.includes('ما المطلوب إنجازه؟'), panel.ph.join(' | '));
+check('the submit button reads إنشاء المهمة', panel.btns.some(b => b === 'إنشاء المهمة'),
+  panel.btns.slice(-6).join(' | '));
+check('the privacy toggle reads عامة / خاصة',
+  panel.btns.some(b => b === 'عامة') && panel.btns.some(b => b === 'خاصة'), panel.btns.slice(0, 10).join(' | '));
+// No label in the panel is still Latin — a floor of t() calls can be met with a
+// whole section left in English.
+const latinLabels = panel.labels.filter(l => /[A-Za-z]{3}/.test(l));
+check('★ no create-panel label is still English', latinLabels.length === 0, latinLabels.join(' | '));
+
+// Non-vacuous: the same nodes must read English again.
+await evalJS(`window.__setLang('en')`);
+await sleep(400);
+const enPanel = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.input-label')].map(l => (l.textContent || '').trim());
+  const btns = [...document.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ labels, btns });
+})()`).then(JSON.parse);
+check('non-vacuous: the same panel reads English under en',
+  enPanel.labels.some(l => l.startsWith('Task Name')) && enPanel.btns.some(b => b === 'Create Task'),
+  enPanel.labels.slice(0, 8).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await shot('tasks-panel-ar');
+await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
+await sleep(300);
+check('no errors across the tasks-flow checks', (await evalJS(`window.__errors.length`)) === 0);
 
 if (fail) {
   try {

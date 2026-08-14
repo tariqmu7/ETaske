@@ -3,6 +3,7 @@ import {
   BarChart3, MailOpen, CheckSquare, FolderKanban, Archive,
   Megaphone, Mail, Users, AlertCircle, ArrowRight, Clock, Plus, Target
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import { AppUser } from './types';
 import { AppView, NavCounts } from './App';
 import { getRecents, RecentItem } from './lib/recents';
@@ -35,9 +36,10 @@ const recentIcon = (kind: RecentItem['kind']) =>
         : <FolderKanban className="w-4 h-4" />;
 
 export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications, navCounts }: Props) {
+  const { t } = useTranslation();
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
   const hour = new Date().getHours();
-  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const greeting = t(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
   const firstName = (appUser.displayName || '').split(' ')[0] || appUser.displayName;
 
   // "Jump back in" — recently opened records, kept fresh via the recents bus.
@@ -62,70 +64,73 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
   const tiles: Tile[] = [
     {
       id: 'overview',
-      title: 'Overview',
-      description: 'Org analytics, workload and progress at a glance.',
+      title: t('Overview'),
+      description: t('Org analytics, workload and progress at a glance.'),
       icon: <BarChart3 className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #2563eb, #14b8a6)',
       show: isManagerOrAdmin,
     },
     {
       id: 'correspondences',
-      title: 'Correspondences',
+      title: t('Correspondences'),
       description: isManagerOrAdmin
-        ? 'Triage incoming letters, then review and assign them as tasks.'
-        : 'Incoming letters and requests waiting to be triaged.',
+        ? t('Triage incoming letters, then review and assign them as tasks.')
+        : t('Incoming letters and requests waiting to be triaged.'),
       icon: <MailOpen className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #6366f1, #2563eb)',
       stat: isManagerOrAdmin
-        ? (navCounts.corrNeedsReview > 0 ? `${navCounts.corrNeedsReview} awaiting review` : 'Inbox clear')
-        : (navCounts.corrUnread > 0 ? `${navCounts.corrUnread} new` : 'Nothing new'),
+        ? (navCounts.corrNeedsReview > 0 ? t('{{count}} awaiting review', { count: navCounts.corrNeedsReview }) : t('Inbox clear'))
+        : (navCounts.corrUnread > 0 ? t('{{count}} new', { count: navCounts.corrUnread }) : t('Nothing new')),
       show: true,
     },
     {
       id: 'tasks',
-      title: 'Tasks',
-      description: 'Your active work, milestones and deadlines.',
+      title: t('Tasks'),
+      description: t('Your active work, milestones and deadlines.'),
       icon: <CheckSquare className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #16a34a, #14b8a6)',
-      stat: navCounts.myActiveTasks > 0 ? `${navCounts.myActiveTasks} active` : 'None assigned',
+      stat: navCounts.myActiveTasks > 0 ? t('{{count}} active', { count: navCounts.myActiveTasks }) : t('None assigned'),
       show: true,
     },
     {
       id: 'projects',
-      title: 'Projects',
-      description: 'Contracts, financials and tracking by project.',
+      title: t('Projects'),
+      description: t('Contracts, financials and tracking by project.'),
       icon: <FolderKanban className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
       show: true,
     },
     {
       id: 'opportunities',
-      title: 'Opportunities',
-      description: 'Tenders and bids — pipeline, deadlines and win rate.',
+      title: t('Opportunities'),
+      description: t('Tenders and bids — pipeline, deadlines and win rate.'),
       icon: <Target className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #7c3aed, #db2777)',
       // The badge counts bids at their submission deadline, not the whole
       // pipeline — a deadline is the only thing here that can be missed.
       badge: navCounts.bidsDueSoon,
+      // Singular/plural is two explicit keys, not an i18next plural suffix:
+      // Arabic has six plural forms and the ar file is typed key-for-key
+      // against en, so a suffix set would break that parity guarantee.
       stat: navCounts.bidsDueSoon > 0
-        ? `${navCounts.bidsDueSoon} deadline${navCounts.bidsDueSoon > 1 ? 's' : ''} within 7 days`
-        : navCounts.openBids > 0 ? `${navCounts.openBids} open` : 'No open bids',
+        ? t(navCounts.bidsDueSoon > 1 ? '{{count}} deadlines within 7 days' : '{{count}} deadline within 7 days', { count: navCounts.bidsDueSoon })
+        : navCounts.openBids > 0 ? t('{{count}} open', { count: navCounts.openBids }) : t('No open bids'),
       show: true,
     },
     {
       id: 'due-soon',
-      title: 'Due Soon',
-      description: 'Items due within 48 hours or already overdue.',
+      title: t('Due Soon'),
+      description: t('Items due within 48 hours or already overdue.'),
       icon: <AlertCircle className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #f97316, #ef4444)',
       badge: dueSoonCount,
-      stat: dueSoonCount > 0 ? `${dueSoonCount} need attention` : 'All on track',
+      stat: dueSoonCount > 0 ? t('{{count}} need attention', { count: dueSoonCount }) : t('All on track'),
       show: true,
     },
     {
       id: 'announcements',
-      title: 'News',
-      description: 'Department announcements and updates.',
+      title: t('News'),
+      description: t('Department announcements and updates.'),
       icon: <Megaphone className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #f59e0b, #f97316)',
       badge: announcementCount,
@@ -133,24 +138,24 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
     },
     {
       id: 'archive',
-      title: 'Archive',
-      description: 'Closed and completed records.',
+      title: t('Archive'),
+      description: t('Closed and completed records.'),
       icon: <Archive className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #64748b, #334155)',
       show: true,
     },
     {
       id: 'outlook-feed',
-      title: 'Outlook',
-      description: 'Synced email feed for the team.',
+      title: t('Outlook'),
+      description: t('Synced email feed for the team.'),
       icon: <Mail className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #0891b2, #0ea5e9)',
       show: true,
     },
     {
       id: 'admin',
-      title: 'Users',
-      description: 'Approve members and manage roles.',
+      title: t('Users'),
+      description: t('Approve members and manage roles.'),
       icon: <Users className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #db2777, #8b5cf6)',
       show: appUser.role === 'Admin',
@@ -164,13 +169,15 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       {/* Greeting header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
-          {greeting}, {firstName}
+          {/* One key, not "greeting + comma + name": the comma itself differs
+              (Arabic uses ، and it must sit on the correct side of the name). */}
+          {t('{{greeting}}, {{name}}', { greeting, name: firstName })}
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 6 }}>
           {dueSoonCount > 0
-            ? `You have ${dueSoonCount} item${dueSoonCount > 1 ? 's' : ''} due soon`
-            : 'You’re all caught up. Pick a section to get started.'}
-          {unreadNotifications > 0 && ` · ${unreadNotifications} unread notification${unreadNotifications > 1 ? 's' : ''}`}
+            ? t(dueSoonCount > 1 ? 'You have {{count}} items due soon' : 'You have {{count}} item due soon', { count: dueSoonCount })
+            : t('You’re all caught up. Pick a section to get started.')}
+          {unreadNotifications > 0 && ` · ${t(unreadNotifications > 1 ? '{{count}} unread notifications' : '{{count}} unread notification', { count: unreadNotifications })}`}
         </p>
       </div>
 
@@ -181,20 +188,20 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
           className="btn"
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'var(--blue-600)', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
         >
-          <Plus className="w-4 h-4" /> New correspondence
+          <Plus className="w-4 h-4" /> {t('New correspondence')}
         </button>
         <button
           onClick={() => onNavigate('tasks')}
           style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'var(--surface)', color: 'var(--text-primary)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
         >
-          <CheckSquare className="w-4 h-4" /> View my tasks
+          <CheckSquare className="w-4 h-4" /> {t('View my tasks')}
         </button>
         {dueSoonCount > 0 && (
           <button
             onClick={() => onNavigate('due-soon')}
             style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '9px 16px', background: 'rgba(249,115,22,0.1)', color: '#ea580c', border: '1px solid rgba(249,115,22,0.3)', cursor: 'pointer', fontFamily: 'inherit', fontWeight: 600, fontSize: 13 }}
           >
-            <AlertCircle className="w-4 h-4" /> Review {dueSoonCount} due soon
+            <AlertCircle className="w-4 h-4" /> {t('Review {{count}} due soon', { count: dueSoonCount })}
           </button>
         )}
       </div>
@@ -204,7 +211,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
         <div style={{ marginBottom: 24 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
             <Clock className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-            <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>Jump back in</h2>
+            <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>{t('Jump back in')}</h2>
           </div>
           <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 4 }}>
             {recents.map(r => (
