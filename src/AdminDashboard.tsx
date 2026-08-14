@@ -69,7 +69,9 @@ function ExportBackupCard() {
       </div>
       <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 16 }}>
         Download all correspondences and tasks as an Excel workbook, or take a full JSON
-        backup of the database for safekeeping.
+        backup of the database for safekeeping (the backup now also covers projects and the
+        whole bid pipeline). The bid pipeline has its own Excel export on the Opportunities
+        page.
       </p>
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <button className="btn btn-primary btn-sm" disabled={busy !== null} onClick={runExcel}>

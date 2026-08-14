@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   BarChart3, MailOpen, CheckSquare, FolderKanban, Archive,
-  Megaphone, Mail, Users, AlertCircle, ArrowRight, Clock, Plus
+  Megaphone, Mail, Users, AlertCircle, ArrowRight, Clock, Plus, Target
 } from 'lucide-react';
 import { AppUser } from './types';
 import { AppView, NavCounts } from './App';
@@ -31,7 +31,8 @@ interface Tile {
 const recentIcon = (kind: RecentItem['kind']) =>
   kind === 'task' ? <CheckSquare className="w-4 h-4" />
     : kind === 'corresponding' ? <MailOpen className="w-4 h-4" />
-      : <FolderKanban className="w-4 h-4" />;
+      : kind === 'opportunity' ? <Target className="w-4 h-4" />
+        : <FolderKanban className="w-4 h-4" />;
 
 export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications, navCounts }: Props) {
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
@@ -54,6 +55,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
   const openRecent = (r: RecentItem) => {
     if (r.kind === 'task') { requestOpen({ type: 'task', id: r.id, label: r.label, serial: r.serial }); onNavigate('tasks'); }
     else if (r.kind === 'corresponding') { requestOpen({ type: 'corresponding', id: r.id, label: r.label, serial: r.serial }); onNavigate('correspondences'); }
+    else if (r.kind === 'opportunity') { requestOpen({ type: 'opportunity', id: r.id, label: r.label, serial: r.serial }); onNavigate('opportunities'); }
     else onNavigate('projects');
   };
 
@@ -94,6 +96,20 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       description: 'Contracts, financials and tracking by project.',
       icon: <FolderKanban className="w-6 h-6" style={{ color: '#fff' }} />,
       gradient: 'linear-gradient(135deg, #0ea5e9, #2563eb)',
+      show: true,
+    },
+    {
+      id: 'opportunities',
+      title: 'Opportunities',
+      description: 'Tenders and bids — pipeline, deadlines and win rate.',
+      icon: <Target className="w-6 h-6" style={{ color: '#fff' }} />,
+      gradient: 'linear-gradient(135deg, #7c3aed, #db2777)',
+      // The badge counts bids at their submission deadline, not the whole
+      // pipeline — a deadline is the only thing here that can be missed.
+      badge: navCounts.bidsDueSoon,
+      stat: navCounts.bidsDueSoon > 0
+        ? `${navCounts.bidsDueSoon} deadline${navCounts.bidsDueSoon > 1 ? 's' : ''} within 7 days`
+        : navCounts.openBids > 0 ? `${navCounts.openBids} open` : 'No open bids',
       show: true,
     },
     {

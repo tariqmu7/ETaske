@@ -9,7 +9,7 @@
 // the body and preserves newlines (google-apps-script.js -> sendTelegramMessage),
 // and the in-app list renders it with `white-space: pre-line`.
 
-import { Task, Corresponding } from '../types';
+import { Task, Corresponding, Opportunity } from '../types';
 
 // Telegram caps a message at 4096 chars and a wall of text defeats the purpose
 // of a glanceable alert. Long descriptions get an ellipsis.
@@ -38,6 +38,31 @@ export function taskDetails(headline: string, task: Partial<Task>): string {
     ['Priority', task.priority],
     ['Status', task.status],
     ['Due', task.dueDate],
+  ]);
+  return details ? `${headline}\n\n${details}` : headline;
+}
+
+/**
+ * Detail block for an opportunity (tender / bid).
+ *
+ * A bid alert is read away from the app more often than any other — the value
+ * and the client are what make it worth opening, so they lead. `value` is
+ * pre-formatted by the caller (it owns the currency).
+ */
+export function opportunityDetails(
+  headline: string,
+  opp: Partial<Opportunity>,
+  value?: string,
+): string {
+  const details = block([
+    ['Ref', opp.serialNumber],
+    ['Client', [opp.client, opp.sector].filter(Boolean).join(' · ')],
+    ['Tender no.', opp.tenderNumber],
+    ['Value', value],
+    ['Stage', opp.stage],
+    ['Bid owner', opp.ownerName],
+    ['Submission deadline', opp.submissionDeadline],
+    ['Scope', truncate(opp.scope)],
   ]);
   return details ? `${headline}\n\n${details}` : headline;
 }

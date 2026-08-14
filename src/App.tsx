@@ -3,7 +3,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, serverTimestamp, updateDoc, query, where, orderBy } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
-import { AppUser, AppNotification, Announcement } from './types';
+import { AppUser, AppNotification, Announcement, Opportunity, isOpportunityOpen } from './types';
 import LoginScreen from './LoginScreen';
 import PendingScreen from './PendingScreen';
 import RejectedScreen from './RejectedScreen';
@@ -18,18 +18,21 @@ import OverviewDashboard from './OverviewDashboard';
 import DueSoonDashboard from './DueSoonDashboard';
 import OutlookFeed from './OutlookFeed';
 import ProjectsDashboard from './ProjectsDashboard';
+import OpportunitiesDashboard from './OpportunitiesDashboard';
+import OpportunitiesAnalytics from './OpportunitiesAnalytics';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home
+  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home, Target
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
-import { isOverdue, isDueSoon } from './utils';
+import { isOverdue, isDueSoon, daysUntil } from './utils';
+import { fullMoney } from './components/opportunities/opportunityUi';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 import { useHashRoute } from './hooks/useHashRoute';
-import { runDueAlerts, DueCandidate } from './lib/dueAlerts';
+import { runDueAlerts, DueCandidate, runBidDeadlineAlerts } from './lib/dueAlerts';
 import { readHashOpenRef, requestOpen } from './lib/deepLink';
 import { useKeyboardNav } from './hooks/useKeyboardNav';
 import CommandPalette from './components/CommandPalette';
@@ -40,9 +43,11 @@ export interface NavCounts {
   corrNeedsReview: number;  // correspondences Unread/Reviewing (manager triage queue)
   corrUnread: number;       // brand-new intake (status Unread)
   myActiveTasks: number;    // tasks assigned to me, not Done/Archived
+  openBids: number;         // opportunities still in the pipeline (open stages)
+  bidsDueSoon: number;      // open bids due within 7 days or already past deadline
 }
 
-export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects';
+export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -55,7 +60,7 @@ export default function App() {
   const [showMoreMenu, setShowMoreMenu] = useState(false);
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [dueSoonCount, setDueSoonCount] = useState(0);
-  const [navCounts, setNavCounts] = useState<NavCounts>({ corrNeedsReview: 0, corrUnread: 0, myActiveTasks: 0 });
+  const [navCounts, setNavCounts] = useState<NavCounts>({ corrNeedsReview: 0, corrUnread: 0, myActiveTasks: 0, openBids: 0, bidsDueSoon: 0 });
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
@@ -262,9 +267,38 @@ export default function App() {
       }));
     });
 
+    // Bid submission deadlines. A separate listener (and a separate alert
+    // engine) because a tender deadline is externally imposed and counts down
+    // in days, not in the 48-hour window tasks use — see lib/dueAlerts.ts.
+    const unsubO = onSnapshot(collection(db, 'opportunities'), snap => {
+      const rows = snap.docs
+        .filter(d => d.id !== '--stats--')
+        .map(d => ({ id: d.id, ...d.data() } as Opportunity))
+        .filter(o => isOpportunityOpen(o.stage));
+
+      const near = rows.filter(o => {
+        const d = daysUntil(o.submissionDeadline);
+        return d !== null && d <= 7;
+      });
+
+      setNavCounts(prev => ({ ...prev, openBids: rows.length, bidsDueSoon: near.length }));
+
+      // Same ownership rule as tasks: the bid owner and its collaborators are on
+      // the hook, managers/admins watch the whole board.
+      const mineBids = isManagerRef.current
+        ? near
+        : near.filter(o => o.ownerId === uid || (o.collaboratorIds || []).includes(uid));
+
+      void runBidDeadlineAlerts(uid, projectUsersRef.current, mineBids.map(o => ({
+        opportunity: o,
+        value: o.estimatedValue ? fullMoney(o.estimatedValue, o.currency) : undefined,
+      })));
+    }, err => console.warn('Opportunities listener error:', err.code));
+
     return () => {
       unsubT();
       unsubC();
+      unsubO();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.uid, appUser?.status]);
@@ -443,6 +477,13 @@ export default function App() {
         {activeView === 'projects' && (
           <ProjectsDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
+        {activeView === 'opportunities' && (
+          <OpportunitiesDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {/* Management read of the bid pipeline — gated like Overview. */}
+        {activeView === 'bid-analytics' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
+          <OpportunitiesAnalytics appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
         {activeView === 'archive' && (
           <ArchiveDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
         )}
@@ -513,6 +554,8 @@ export default function App() {
               {([
                 { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'projects',        label: 'Projects',        icon: <FolderKanban />,show: true },
+                { id: 'opportunities',   label: 'Opportunities',   icon: <Target />,      show: true },
+                { id: 'bid-analytics',   label: 'Bid Analytics',   icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
                 { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
                 { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },

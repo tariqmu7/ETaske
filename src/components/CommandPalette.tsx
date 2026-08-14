@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import {
   Search, CheckSquare, MailOpen, FolderKanban, CornerDownLeft,
-  ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle,
+  ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target,
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { getVisibleTasks } from '../lib/taskVisibility';
@@ -23,7 +23,8 @@ type Hit =
   | { kind: 'nav'; id: AppView; label: string; sub: string; icon: React.ReactNode }
   | { kind: 'task'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
   | { kind: 'corresponding'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
-  | { kind: 'project'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode };
+  | { kind: 'project'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode }
+  | { kind: 'opportunity'; id: string; label: string; sub: string; serial?: string; icon: React.ReactNode };
 
 const stripStats = (docs: any[]) => docs.filter(d => d.id !== '--stats--');
 
@@ -33,6 +34,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
   const [tasks, setTasks] = useState<any[]>([]);
   const [corrs, setCorrs] = useState<any[]>([]);
   const [projects, setProjects] = useState<any[]>([]);
+  const [opportunities, setOpportunities] = useState<any[]>([]);
   const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -47,15 +49,17 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     let cancelled = false;
     (async () => {
       try {
-        const [t, c, p] = await Promise.all([
+        const [t, c, p, o] = await Promise.all([
           getVisibleTasks(appUser.id),
           getDocs(collection(db, 'correspondences')),
           getDocs(collection(db, 'projects')),
+          getDocs(collection(db, 'opportunities')),
         ]);
         if (cancelled) return;
         setTasks(t);
         setCorrs(stripStats(c.docs).map(d => ({ id: d.id, ...d.data() })));
         setProjects(stripStats(p.docs).map(d => ({ id: d.id, ...d.data() })));
+        setOpportunities(stripStats(o.docs).map(d => ({ id: d.id, ...d.data() })));
         setLoaded(true);
       } catch (err) {
         console.warn('Command palette load error:', err);
@@ -80,6 +84,8 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'correspondences', label: 'Correspondences', sub: 'Intake & review', icon: <MailOpen className="w-4 h-4" /> },
     { kind: 'nav', id: 'tasks', label: 'Tasks', sub: 'Work & milestones', icon: <CheckSquare className="w-4 h-4" /> },
     { kind: 'nav', id: 'projects', label: 'Projects', sub: 'Contracts & financials', icon: <FolderKanban className="w-4 h-4" /> },
+    { kind: 'nav', id: 'opportunities', label: 'Opportunities', sub: 'Tenders, bids & deadlines', icon: <Target className="w-4 h-4" /> },
+    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: 'Bid Analytics', sub: 'Win rate & loss reasons', icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
     { kind: 'nav', id: 'due-soon', label: 'Due Soon', sub: 'Overdue & due in 48h', icon: <AlertCircle className="w-4 h-4" /> },
     { kind: 'nav', id: 'announcements', label: 'News', sub: 'Department announcements', icon: <Megaphone className="w-4 h-4" /> },
     { kind: 'nav', id: 'archive', label: 'Archive', sub: 'Closed records', icon: <Archive className="w-4 h-4" /> },
@@ -123,8 +129,17 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
         icon: <FolderKanban className="w-4 h-4" />,
       }));
 
-    return [...navHits, ...taskHits, ...corrHits, ...projHits];
-  }, [q, tasks, corrs, projects, navCommands]);
+    const oppHits: Hit[] = opportunities
+      .filter(o => globalSearch(o, term))
+      .slice(0, 5)
+      .map(o => ({
+        kind: 'opportunity', id: o.id, label: o.title || 'Untitled bid', serial: o.serialNumber,
+        sub: [o.serialNumber, o.client, o.stage].filter(Boolean).join(' · '),
+        icon: <Target className="w-4 h-4" />,
+      }));
+
+    return [...navHits, ...taskHits, ...corrHits, ...projHits, ...oppHits];
+  }, [q, tasks, corrs, projects, opportunities, navCommands]);
 
   useEffect(() => { setActive(0); }, [q]);
 
@@ -138,6 +153,9 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     } else if (hit.kind === 'corresponding') {
       requestOpen({ type: 'corresponding', id: hit.id, label: hit.label, serial: hit.serial });
       onNavigate('correspondences');
+    } else if (hit.kind === 'opportunity') {
+      requestOpen({ type: 'opportunity', id: hit.id, label: hit.label, serial: hit.serial });
+      onNavigate('opportunities');
     } else {
       recordRecent({ kind: 'project', id: hit.id, label: hit.label, serial: hit.serial });
       onNavigate('projects');
@@ -187,7 +205,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
             value={q}
             onChange={e => setQ(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Search tasks, correspondences, projects…"
+            placeholder="Search tasks, correspondences, projects, bids…"
             style={{
               flex: 1, border: 'none', outline: 'none', background: 'transparent',
               fontSize: 16, color: 'var(--text-primary)', fontFamily: 'inherit',
@@ -226,7 +244,10 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
                 {hit.sub && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hit.sub}</span>}
               </span>
               <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', flexShrink: 0 }}>
-                {hit.kind === 'nav' ? 'Go' : hit.kind === 'corresponding' ? 'Corr' : hit.kind}
+                {hit.kind === 'nav' ? 'Go'
+                  : hit.kind === 'corresponding' ? 'Corr'
+                    : hit.kind === 'opportunity' ? 'Bid'
+                      : hit.kind}
               </span>
             </button>
           ))}

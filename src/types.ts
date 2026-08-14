@@ -275,6 +275,142 @@ export interface ProjectUpdate {
   createdAt: Timestamp;
 }
 
+// ─── Opportunities (tenders / bids pipeline) ─────────────────────────────────
+
+// The pipeline is linear up to 'Under Evaluation', then splits into the three
+// closed outcomes. Anything in CLOSED_OPPORTUNITY_STAGES is out of the pipeline
+// and is what the win-rate / loss-analysis views are computed from.
+export type OpportunityStage =
+  | 'Identified'
+  | 'Prequalification'
+  | 'Bid Preparation'
+  | 'Submitted'
+  | 'Under Evaluation'
+  | 'Won'
+  | 'Lost'
+  | 'No Bid'
+  | 'Cancelled';
+
+export const OPPORTUNITY_STAGE_OPTIONS: OpportunityStage[] = [
+  'Identified', 'Prequalification', 'Bid Preparation', 'Submitted',
+  'Under Evaluation', 'Won', 'Lost', 'No Bid', 'Cancelled',
+];
+
+export const OPEN_OPPORTUNITY_STAGES: OpportunityStage[] = [
+  'Identified', 'Prequalification', 'Bid Preparation', 'Submitted', 'Under Evaluation',
+];
+
+export const CLOSED_OPPORTUNITY_STAGES: OpportunityStage[] = ['Won', 'Lost', 'No Bid', 'Cancelled'];
+
+export const isOpportunityOpen = (stage?: OpportunityStage) =>
+  !!stage && OPEN_OPPORTUNITY_STAGES.includes(stage);
+
+export type OpportunitySource = 'Public Tender' | 'Limited Tender' | 'Direct Order' | 'Framework' | 'Referral' | 'Other';
+
+export const OPPORTUNITY_SOURCE_OPTIONS: OpportunitySource[] = [
+  'Public Tender', 'Limited Tender', 'Direct Order', 'Framework', 'Referral', 'Other',
+];
+
+export interface Opportunity {
+  id: string;
+  serialNumber?: string;          // OP000001
+  title: string;
+  client?: string;                // e.g. EGPC, AGIBA
+  sector?: string;                // e.g. Refining, Petrochemical, Terminals
+  location?: string;
+  tenderNumber?: string;          // client's tender / RFQ reference
+  source?: OpportunitySource;
+  scope?: string;                 // short scope description
+  stage: OpportunityStage;
+  probability?: number;           // 0–100, manual judgement (weighted pipeline)
+  estimatedValue?: number | string;
+  currency?: string;              // from CURRENCY_OPTIONS
+  // Dates (ISO yyyy-mm-dd strings, same convention as Project)
+  announcedDate?: string;
+  submissionDeadline?: string;
+  submittedDate?: string;
+  decisionDate?: string;          // award / rejection date
+  // Ownership — bid owner plus optional co-owners (mirrors Task collaborators)
+  ownerId?: string;
+  ownerName?: string;
+  collaboratorIds?: string[];
+  // Outcome (set when the stage becomes closed; full detail lives in
+  // opportunityFeedback — see OpportunityFeedback)
+  awardedTo?: string;             // winning competitor, when lost
+  awardedValue?: number | string;
+  // Follow-up summary (mirror of the latest opportunityFollowUps entry)
+  lastFollowUpText?: string;
+  lastFollowUpAt?: Timestamp;
+  nextActionDate?: string;
+  userId: string;
+  teamId?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+// Structured loss/win reasons — kept as a fixed list so the analysis view can
+// aggregate them. Free text goes in OpportunityFeedback.notes.
+export const OPPORTUNITY_REASON_OPTIONS: string[] = [
+  'Price too high',
+  'Technical evaluation',
+  'Missing qualification / prequal',
+  'Delivery / schedule',
+  'Local content',
+  'Client relationship',
+  'Incomplete or late submission',
+  'Commercial terms',
+  'Competitor incumbency',
+  'Scope mismatch',
+  'Other',
+];
+
+export interface OpportunityFollowUp {
+  id: string;
+  opportunityId: string;
+  text: string;
+  stage?: OpportunityStage;       // stage snapshot at time of the follow-up
+  nextActionDate?: string;
+  authorId: string;
+  authorName: string;
+  authorColor?: string;
+  createdAt: Timestamp;
+}
+
+export type OpportunityMilestoneStatus = MilestoneStatus;
+
+export interface OpportunityMilestone {
+  id: string;
+  opportunityId: string;
+  title: string;
+  status: OpportunityMilestoneStatus;
+  dueDate?: string;
+  completedDate?: string;
+  notes?: string;
+  addedById: string;
+  addedByName?: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+export interface OpportunityFeedback {
+  id: string;
+  opportunityId: string;
+  outcome: Extract<OpportunityStage, 'Won' | 'Lost' | 'No Bid' | 'Cancelled'>;
+  reasons: string[];              // from OPPORTUNITY_REASON_OPTIONS
+  primaryReason?: string;
+  competitorName?: string;
+  ourPrice?: number | string;
+  winningPrice?: number | string;
+  priceGapPercent?: number;       // (ours - winner) / winner * 100
+  clientFeedback?: string;        // what the client told us
+  lessonsLearned?: string;
+  notes?: string;
+  authorId: string;
+  authorName: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
 // ─── Notifications (in-app) ───────────────────────────────────────────────────
 
 export type NotificationType =
@@ -288,7 +424,10 @@ export type NotificationType =
   | 'milestone_added'
   | 'task_done'
   | 'task_overdue'
-  | 'corresponding_overdue';
+  | 'corresponding_overdue'
+  // Bid submission deadline approaching / passed. The 'opportunit' stem is what
+  // refTypeForNotification keys the deep link on — keep it in any new type here.
+  | 'opportunity_deadline';
 
 export interface AppNotification {
   id: string;

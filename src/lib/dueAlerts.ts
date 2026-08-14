@@ -14,9 +14,9 @@
 import { serverTimestamp } from 'firebase/firestore';
 import { createNotification } from './pushNotification';
 import { DeepLinkRef } from './deepLink';
-import { taskDetails, corrDetails } from './notifyDetails';
-import { AppUser } from '../types';
-import { isOverdue, isDueSoon } from '../utils';
+import { taskDetails, corrDetails, opportunityDetails } from './notifyDetails';
+import { AppUser, Opportunity } from '../types';
+import { isOverdue, isDueSoon, daysUntil } from '../utils';
 
 type Bucket = 'overdue' | 'soon';
 
@@ -44,6 +44,14 @@ const MAX_PER_DAY = 25;
 const LEDGER_PREFIX = 'etaske:duealert:';
 // Reserved ledger key holding "<YYYY-MM-DD>:<count>" for today's alert budget.
 const DAILY_COUNT_KEY = '__count';
+
+// Bid deadlines get their own budget and their own counter key. Sharing the
+// task/correspondence budget would let a big overdue backlog silently eat the
+// day's allowance before a tender deadline — the one alert nobody can afford to
+// miss, since a missed submission cannot be recovered the next day.
+const MAX_BIDS_PER_RUN = 4;
+const MAX_BIDS_PER_DAY = 12;
+const BID_COUNT_KEY = '__bidcount';
 
 const today = () => new Date().toISOString().slice(0, 10);
 
@@ -153,6 +161,122 @@ export async function runDueAlerts(
       forUserId: recipientId,
       read: false,
       relatedId: item.id,
+      createdAt: serverTimestamp(),
+    }, projectUsers);
+  }
+}
+
+// ── Bid submission deadlines ─────────────────────────────────────────────────
+//
+// A tender deadline is not a task due date: it is externally imposed, it cannot
+// slip, and a bid that misses it is simply lost. So it gets its own countdown
+// rather than the 48-hour window used above — a week's notice, then a reminder
+// at three days, one at the last day, and one after it has passed.
+
+// Narrowest window first, so the tightest matching threshold wins and each
+// opportunity sits in exactly one bucket on any given day (3 days out reports
+// as "in 3 days", never also as "in a week").
+const BID_BUCKETS: Array<{ key: string; maxDays: number; title: string }> = [
+  { key: 'd0', maxDays: 0, title: '🔴 Bid due today' },
+  { key: 'd1', maxDays: 1, title: '⏰ Bid deadline tomorrow' },
+  { key: 'd3', maxDays: 3, title: '🟠 Bid deadline in 3 days' },
+  { key: 'd7', maxDays: 7, title: '🗓️ Bid deadline in a week' },
+];
+
+// How long a passed deadline keeps nagging. The "still open after the deadline"
+// alert repeats daily because it asks for an action (submit or close as No Bid),
+// but a bid nobody has touched two weeks on is stale data, not an emergency —
+// past this it stops rather than becoming permanent noise in the bell.
+const BID_PAST_DUE_GRACE_DAYS = 14;
+
+function bidBucketFor(days: number): { key: string; title: string } | null {
+  if (days < 0) {
+    return days >= -BID_PAST_DUE_GRACE_DAYS
+      ? { key: 'past', title: '🔴 Bid deadline passed' }
+      : null;
+  }
+  return BID_BUCKETS.find(b => days <= b.maxDays) ?? null;
+}
+
+/** One opportunity to consider, plus its value pre-formatted by the caller
+ *  (which owns the currency rendering). */
+export interface BidCandidate {
+  opportunity: Opportunity;
+  value?: string;
+}
+
+function bidHeadline(o: Opportunity, days: number, forSelf: boolean): string {
+  // An unowned bid reaches managers as oversight, so it must not be worded as
+  // theirs — "Your bid" is reserved for the person actually on the hook.
+  const who = forSelf ? 'Your bid'
+    : o.ownerName ? `${o.ownerName}'s bid`
+      : o.ownerId ? 'A team bid'
+        : 'The unassigned bid';
+  const subject = `${who} "${o.title}"`;
+  if (days < 0) {
+    const late = Math.abs(days);
+    return `${subject} passed its submission deadline ${late} day${late === 1 ? '' : 's'} ago and is still open — submit it, or close it as No Bid.`;
+  }
+  if (days === 0) return `${subject} must be submitted today.`;
+  if (days === 1) return `${subject} must be submitted tomorrow.`;
+  return `${subject} must be submitted in ${days} days.`;
+}
+
+/**
+ * Raise submission-deadline alerts for `recipientId`.
+ *
+ * Same ledger, same "claim the batch before awaiting" rule and same
+ * in-app + Telegram + FCM delivery as runDueAlerts — only the countdown and the
+ * daily budget differ. Callers pass only opportunities that are still OPEN;
+ * a Won/Lost/No Bid record has no deadline left to miss.
+ */
+export async function runBidDeadlineAlerts(
+  recipientId: string,
+  projectUsers: AppUser[],
+  candidates: BidCandidate[],
+): Promise<void> {
+  const ledger = readLedger(recipientId);
+  const stamp = today();
+
+  const batch: Array<{ candidate: BidCandidate; days: number; title: string }> = [];
+  const [countDate, countValue] = (ledger[BID_COUNT_KEY] ?? '').split(':');
+  let dailyTotal = countDate === stamp ? Number(countValue) || 0 : 0;
+
+  for (const candidate of candidates) {
+    if (batch.length >= MAX_BIDS_PER_RUN || dailyTotal >= MAX_BIDS_PER_DAY) break;
+
+    const days = daysUntil(candidate.opportunity.submissionDeadline);
+    if (days === null || days > 7) continue;
+
+    const bucket = bidBucketFor(days);
+    if (!bucket) continue;
+
+    // 'bid' in the key so an opportunity id can never collide with a task or
+    // correspondence id sharing the same ledger blob.
+    const key = `${candidate.opportunity.id}:bid:${bucket.key}`;
+    if (ledger[key] === stamp) continue;
+
+    ledger[key] = stamp;
+    dailyTotal += 1;
+    batch.push({ candidate, days, title: bucket.title });
+  }
+
+  if (!batch.length) return;
+
+  ledger[BID_COUNT_KEY] = `${stamp}:${dailyTotal}`;
+  writeLedger(recipientId, ledger);
+
+  for (const { candidate, days, title } of batch) {
+    const o = candidate.opportunity;
+    const forSelf = !!o.ownerId && o.ownerId === recipientId;
+
+    await createNotification({
+      type: 'opportunity_deadline',
+      title,
+      message: opportunityDetails(bidHeadline(o, days, forSelf), o, candidate.value),
+      forUserId: recipientId,
+      read: false,
+      relatedId: o.id,
       createdAt: serverTimestamp(),
     }, projectUsers);
   }

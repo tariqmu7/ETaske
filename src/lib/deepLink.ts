@@ -9,7 +9,7 @@
 import { recordRecent } from './recents';
 
 export type DeepLinkRef = {
-  type: 'task' | 'corresponding';
+  type: 'task' | 'corresponding' | 'opportunity';
   id: string;
   // Optional display metadata. When present it feeds the "Jump back in"
   // recents list (src/lib/recents.ts); callers without it (e.g. a bare
@@ -50,13 +50,19 @@ export function subscribeOpen(fn: (ref: DeepLinkRef) => void): () => void {
 
 /** Which dashboard a notification type points at (mirrors Sidebar's routing). */
 export function refTypeForNotification(type: string): DeepLinkRef['type'] | null {
+  // Tested first: an opportunity notification must never be routed by the
+  // generic 'milestone' test below — bid gates live on the opportunity page,
+  // not in the tasks dashboard.
+  if (type.includes('opportunit')) return 'opportunity';
   if (type.includes('task') || type.includes('milestone')) return 'task';
   if (type.includes('correspond')) return 'corresponding';
   return null;
 }
 
 const viewForType = (type: DeepLinkRef['type']) =>
-  type === 'task' ? 'tasks' : 'correspondences';
+  type === 'task' ? 'tasks'
+    : type === 'opportunity' ? 'opportunities'
+      : 'correspondences';
 
 /**
  * Absolute URL that opens one record. Shared out of the app (Telegram DMs,
@@ -76,5 +82,6 @@ export function readHashOpenRef(): DeepLinkRef | null {
   if (!id) return null;
   if (view === 'tasks' || view === 'archive') return { type: 'task', id };
   if (view === 'correspondences' || view === 'manager-inbox') return { type: 'corresponding', id };
+  if (view === 'opportunities') return { type: 'opportunity', id };
   return null;
 }

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
-  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send
+  Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView, NavCounts } from '../App';
@@ -139,12 +139,19 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   ];
 
   const overflowItems: NavItem[] = [
+    // Badge counts bids at their submission deadline (≤7 days or already past),
+    // not the whole pipeline — the deadline is the part that can be missed.
+    { id: 'opportunities', label: 'Opportunities', icon: <Target className="w-4 h-4" />, badge: navCounts.bidsDueSoon, show: true },
+    { id: 'bid-analytics', label: 'Bid Analytics', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
     { id: 'archive', label: 'Archive', icon: <Archive className="w-4 h-4" />, show: true },
     { id: 'outlook-feed', label: 'Outlook', icon: <Mail className="w-4 h-4" />, show: true },
     { id: 'admin', label: 'Users', icon: <Users className="w-4 h-4" />, show: appUser.role === 'Admin' },
   ];
 
   const moreActive = overflowItems.some(i => i.show && i.id === activeView);
+  const overflowBadge = overflowItems
+    .filter(i => i.show)
+    .reduce((sum, i) => sum + (i.badge ?? 0), 0);
 
   return (
     <header className="topnav">
@@ -199,6 +206,11 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         >
           <MoreHorizontal className="w-4 h-4" />
           <span>More</span>
+          {/* A badge inside a closed menu is invisible, so the count is also
+              carried on the button that hides it. */}
+          {overflowBadge > 0 && (
+            <span className="tab-badge">{overflowBadge > 99 ? '99+' : overflowBadge}</span>
+          )}
         </button>
         {showMore && (
             <div role="menu" style={{
@@ -218,7 +230,11 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                     color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
                   }}
                 >
-                  {item.icon}{item.label}
+                  {item.icon}
+                  <span style={{ flex: 1 }}>{item.label}</span>
+                  {item.badge !== undefined && item.badge > 0 && (
+                    <span className="tab-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+                  )}
                 </button>
               ))}
             </div>

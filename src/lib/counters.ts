@@ -5,9 +5,14 @@ import { doc, runTransaction, getDoc, setDoc } from 'firebase/firestore';
  * Safely generates the next sequential serial number for tasks or correspondences.
  * Uses a transaction to ensure no two items get the same number.
  */
-export async function getNextSerialNumber(type: 'tasks' | 'correspondences' | 'projects'): Promise<string> {
+export async function getNextSerialNumber(
+  type: 'tasks' | 'correspondences' | 'projects' | 'opportunities'
+): Promise<string> {
   const counterRef = doc(db, type, '--stats--');
-  const prefix = type === 'tasks' ? 'TK' : type === 'projects' ? 'PR' : 'CR';
+  const prefix = type === 'tasks' ? 'TK'
+    : type === 'projects' ? 'PR'
+    : type === 'opportunities' ? 'OP'
+    : 'CR';
 
   try {
     const nextVal = await runTransaction(db, async (transaction) => {
