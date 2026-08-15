@@ -1,4 +1,5 @@
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { ArrowDown, ArrowUp, ListFilter, X } from 'lucide-react';
 
 export type SortDir = 'asc' | 'desc';
@@ -34,12 +35,23 @@ const isActive = (f: FilterDef) => f.options.length > 0 && f.value !== f.options
 export default function ListControls({
   filters = [], sortOptions, sortValue, onSortChange, sortDir, onSortDirToggle, trailing,
 }: Props) {
+  const { t } = useTranslation();
   const activeCount = filters.filter(isActive).length;
   const clearAll = () => filters.forEach(f => { if (isActive(f)) f.onChange(f.options[0].value); });
 
+  // Filter labels and option labels arrive already translated from the tab that
+  // owns them — they name that tab's data ("Validity", "All types"), not this
+  // toolbar. Only the toolbar's own chrome is translated here.
   return (
     <div className="list-controls">
-      <div className="lc-rail" title={activeCount ? `${activeCount} filter${activeCount > 1 ? 's' : ''} active` : 'Filter & sort'}>
+      <div
+        className="lc-rail"
+        title={activeCount
+          ? (activeCount === 1
+              ? t('{{count}} filter active', { count: 1 })
+              : t('{{count}} filters active', { count: activeCount }))
+          : t('Filter & sort')}
+      >
         <ListFilter className="w-4 h-4" />
       </div>
 
@@ -57,7 +69,7 @@ export default function ListControls({
       ))}
 
       <label className="lc-field">
-        <span className="lc-label">Sort by</span>
+        <span className="lc-label">{t('Sort by')}</span>
         <div className="lc-sortgroup">
           <select value={sortValue} onChange={e => onSortChange(e.target.value)} className="lc-select">
             {sortOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -66,8 +78,10 @@ export default function ListControls({
             type="button"
             className="lc-sortdir"
             onClick={onSortDirToggle}
-            aria-label={sortDir === 'asc' ? 'Sorted ascending — switch to descending' : 'Sorted descending — switch to ascending'}
-            title={sortDir === 'asc' ? 'Ascending' : 'Descending'}
+            aria-label={sortDir === 'asc'
+              ? t('Sorted ascending — switch to descending')
+              : t('Sorted descending — switch to ascending')}
+            title={sortDir === 'asc' ? t('Ascending') : t('Descending')}
           >
             {sortDir === 'asc' ? <ArrowUp className="w-4 h-4" /> : <ArrowDown className="w-4 h-4" />}
           </button>
@@ -75,8 +89,8 @@ export default function ListControls({
       </label>
 
       {activeCount > 0 && (
-        <button type="button" className="lc-clear" onClick={clearAll} title="Reset filters">
-          <X className="w-3.5 h-3.5" /> Clear
+        <button type="button" className="lc-clear" onClick={clearAll} title={t('Reset filters')}>
+          <X className="w-3.5 h-3.5" /> {t('Clear')}
         </button>
       )}
 

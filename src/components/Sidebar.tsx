@@ -15,6 +15,8 @@ import { connectTelegram, disconnectTelegram } from '../lib/telegram';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../hooks/useLanguage';
 import { LANGUAGES } from '../i18n';
+import { useDisplayLabel } from '../lib/displayLabel';
+import { useFormat } from '../lib/format';
 
 interface Props {
   appUser: AppUser;
@@ -39,6 +41,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
+  const label = useDisplayLabel();
+  const fmt = useFormat();
   const { lang, setLanguage } = useLanguage();
   const unreadCount = notifications.filter(n => !n.read).length;
 
@@ -384,7 +388,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', lineHeight: 1.4, whiteSpace: 'pre-line' }}>{n.message}</div>
                         <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 4 }}>
                           {/* The locale of the timestamp itself is task 6 (Intl sweep). */}
-                          {n.createdAt ? new Date(n.createdAt.seconds * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : t('Just now')}
+                          {n.createdAt ? fmt.dateTime(n.createdAt.seconds * 1000) : t('Just now')}
                         </div>
                       </div>
                     </div>
@@ -428,7 +432,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)' }}>{appUser.displayName}</div>
                 <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{appUser.email}</div>
                 <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', padding: '2px 8px', background: 'var(--blue-600)', color: '#fff', fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                  {appUser.role}
+                  {label(appUser.role)}
                 </div>
               </div>
               {/* Language — a segmented pair, not a toggle: the label of a toggle

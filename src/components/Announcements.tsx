@@ -6,7 +6,7 @@ import {
 import { db } from '../lib/firebase';
 import { pushAnnouncement } from '../lib/pushNotification';
 import { AppUser, Announcement } from '../types';
-import { timeAgo } from '../utils';
+import { useFormat } from '../lib/format';
 import { Megaphone, Send, Trash2, Users } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -91,6 +91,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
 
 export default function Announcements({ appUser, announcements, projectUsers }: Props) {
   const { t } = useTranslation();
+  const fmt = useFormat();
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
@@ -376,8 +377,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                         {mine ? t('You') : a.authorName}
                       </span>
                       <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                        {/* timeAgo() itself is still English — utils, task 6. */}
-                        {a.createdAt ? timeAgo(a.createdAt) : t('just now')}
+                        {a.createdAt ? fmt.ago(a.createdAt) : t('just now')}
                       </span>
                     </div>
                     <p style={{
@@ -416,7 +416,10 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
                                 key={u.id}
                                 style={{
                                   display: 'inline-flex', alignItems: 'center', gap: 8,
-                                  padding: '5px 12px 5px 5px', fontSize: 12, fontWeight: 600,
+                                  // Logical: the tight 5px hugs the avatar, which
+                                  // leads the chip and swaps sides under RTL.
+                                  paddingBlock: 5, paddingInlineStart: 5, paddingInlineEnd: 12,
+                                  fontSize: 12, fontWeight: 600,
                                   background: 'var(--surface-2)',
                                   color: 'var(--text-secondary)',
                                   border: '1px solid var(--border)',

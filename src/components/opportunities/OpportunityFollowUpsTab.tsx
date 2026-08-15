@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
@@ -10,6 +11,8 @@ import {
   OPPORTUNITY_STAGE_OPTIONS,
 } from '../../types';
 import { getUserColor } from '../../utils';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat } from '../../lib/format';
 import { Send, Clock, CalendarClock, Trash2, MessageSquare } from 'lucide-react';
 
 interface Props {
@@ -18,12 +21,18 @@ interface Props {
   appUser: AppUser;
 }
 
-const fmt = (ts?: { seconds: number }) =>
-  ts ? new Date(ts.seconds * 1000).toLocaleString('en-GB', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  }) : 'Just now';
+// A Firestore Timestamp reaches this file typed as `{ seconds }` only, so the
+// millis are handed to the formatter rather than the object — `toDate()` in
+// lib/format accepts a Date/millis/`.toDate()` shape, not a bare `{ seconds }`.
+const STAMP: Intl.DateTimeFormatOptions = {
+  day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+};
 
 export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const f = useFormat();
+  const fmt = (ts?: { seconds: number }) => (ts ? f.dateTime(ts.seconds * 1000, STAMP) : t('Just now'));
   const [followUps, setFollowUps] = useState<OpportunityFollowUp[]>([]);
   const [text, setText] = useState('');
   const [stage, setStage] = useState<OpportunityStage>(opportunity.stage || 'Identified');
@@ -45,7 +54,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       setFollowUps(rows);
     }, err => {
       console.error('opportunityFollowUps listener:', err);
-      setError('Failed to load follow-ups.');
+      setError(t('Failed to load follow-ups.'));
     });
     return () => unsub();
   }, [opportunity.id]);
@@ -86,7 +95,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       setText('');
     } catch (e) {
       console.error('post follow-up failed:', e);
-      setError('Failed to post the follow-up. Please try again.');
+      setError(t('Failed to post the follow-up. Please try again.'));
     } finally {
       setPosting(false);
     }
@@ -99,7 +108,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       setDeleteTarget(null);
     } catch (e) {
       console.error('delete follow-up failed:', e);
-      setError('Failed to delete. You can only delete your own follow-ups.');
+      setError(t('Failed to delete. You can only delete your own follow-ups.'));
       setDeleteTarget(null);
     }
   };
@@ -120,7 +129,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent)' }} />
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-            Latest follow-up
+            {t('Latest follow-up')}
           </span>
         </div>
         {opportunity.lastFollowUpText ? (
@@ -128,7 +137,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
             {opportunity.lastFollowUpText}
           </p>
         ) : (
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>No follow-up recorded yet.</p>
+          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>{t('No follow-up recorded yet.')}</p>
         )}
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
           {opportunity.lastFollowUpAt && (
@@ -143,8 +152,9 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
                 : nextDue !== null && nextDue <= 3 ? '#f59e0b' : 'var(--text-secondary)',
             }}>
               <CalendarClock className="w-3.5 h-3.5" />
-              Next action {opportunity.nextActionDate}
-              {nextDue !== null && (nextDue < 0 ? ` · ${Math.abs(nextDue)}d overdue` : nextDue === 0 ? ' · today' : ` · in ${nextDue}d`)}
+              {t('Next action {{date}}', { date: f.date(opportunity.nextActionDate) })}
+              {nextDue !== null && ` · ${nextDue < 0 ? t('{{count}}d overdue', { count: Math.abs(nextDue) })
+                : nextDue === 0 ? t('today') : t('in {{count}}d', { count: nextDue })}`}
             </span>
           )}
         </div>
@@ -154,29 +164,29 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       <div className="card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
           <label style={{ display: 'grid', gap: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Stage now</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Stage now')}</span>
             <select value={stage} onChange={e => setStage(e.target.value as OpportunityStage)} style={inputStyle}>
-              {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>Next action date</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Next action date')}</span>
             <input type="date" value={nextActionDate} onChange={e => setNextActionDate(e.target.value)} style={inputStyle} />
           </label>
         </div>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="What happened? e.g. clarification issued, site visit booked, client called…"
+          placeholder={t('What happened? e.g. clarification issued, site visit booked, client called…')}
           rows={3}
           style={{ ...inputStyle, width: '100%', resize: 'vertical' }}
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-            Posting also updates the opportunity's stage and next action date.
+            {t("Posting also updates the opportunity's stage and next action date.")}
           </span>
           <button className="btn btn-primary" disabled={posting || !text.trim()} onClick={post}>
-            <Send className="w-4 h-4" /> {posting ? 'Posting…' : 'Post follow-up'}
+            <Send className="w-4 h-4" /> {posting ? t('Posting…') : t('Post follow-up')}
           </button>
         </div>
       </div>
@@ -184,31 +194,31 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       {/* Timeline */}
       <div>
         <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px' }}>
-          History {followUps.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>({followUps.length})</span>}
+          {t('History')} {followUps.length > 0 && <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>({followUps.length})</span>}
         </h3>
         {followUps.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No follow-ups yet.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>{t('No follow-ups yet.')}</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', borderInlineStart: '2px solid var(--border)', paddingInlineStart: 18, marginInlineStart: 6 }}>
-            {followUps.map(f => (
-              <div key={f.id} style={{ position: 'relative', paddingBottom: 18 }}>
-                <span style={{ position: 'absolute', insetInlineStart: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: f.authorColor || 'var(--accent)' }} />
+            {followUps.map(fu => (
+              <div key={fu.id} style={{ position: 'relative', paddingBottom: 18 }}>
+                <span style={{ position: 'absolute', insetInlineStart: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: fu.authorColor || 'var(--accent)' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                  {f.stage && <span className="badge badge-inprogress">{f.stage}</span>}
-                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{f.authorName}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(f.createdAt)}</span>
-                  {f.nextActionDate && (
+                  {fu.stage && <span className="badge badge-inprogress">{dl(fu.stage)}</span>}
+                  <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{fu.authorName}</span>
+                  <span className={f.bidi(STAMP)} style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(fu.createdAt)}</span>
+                  {fu.nextActionDate && (
                     <span style={{ fontSize: 11, color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                      <CalendarClock className="w-3 h-3" /> next {f.nextActionDate}
+                      <CalendarClock className="w-3 h-3" /> {t('next {{date}}', { date: f.date(fu.nextActionDate) })}
                     </span>
                   )}
-                  {canRemove(f) && (
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Delete follow-up" onClick={() => setDeleteTarget(f)}>
+                  {canRemove(fu) && (
+                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete follow-up')} onClick={() => setDeleteTarget(fu)}>
                       <Trash2 className="w-3.5 h-3.5" style={{ color: '#dc2626' }} />
                     </button>
                   )}
                 </div>
-                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{f.text}</p>
+                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fu.text}</p>
               </div>
             ))}
           </div>
@@ -218,13 +228,13 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete follow-up?</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>{t('Delete follow-up?')}</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              This entry is removed from the timeline. The opportunity's own "latest follow-up" summary is not rewritten.
+              {t("This entry is removed from the timeline. The opportunity's own “latest follow-up” summary is not rewritten.")}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={remove}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
             </div>
           </div>
         </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
@@ -9,7 +10,9 @@ import {
   Project, ProjectContractItem, ProjectContractType, PROJECT_CONTRACT_TYPE_OPTIONS,
   CURRENCY_OPTIONS,
 } from '../../types';
-import { parseAmount, formatMoney } from '../../utils';
+import { parseAmount } from '../../utils';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat } from '../../lib/format';
 import {
   Plus, X, Edit2, Trash2, FileText, ChevronRight, ChevronDown,
   CornerDownRight,
@@ -18,8 +21,9 @@ import ListControls, { SortDir } from './ListControls';
 
 interface Props { project: Project; user: User; }
 
-const typeLabel = (t: ProjectContractType) =>
-  PROJECT_CONTRACT_TYPE_OPTIONS.find(o => o.value === t)?.label || t;
+/** The English label for a stored contract type — and the display layer's key. */
+const typeLabel = (type: ProjectContractType) =>
+  PROJECT_CONTRACT_TYPE_OPTIONS.find(o => o.value === type)?.label || type;
 
 function typeColor(t: ProjectContractType): string {
   switch (t) {
@@ -54,6 +58,11 @@ const emptyForm = (type: ProjectContractType = 'contract') => ({
 });
 
 export default function ProjectContractsTab({ project, user }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
+  // The tree paints the contract TYPE, whose English label is the locale key.
+  const typeText = (type: ProjectContractType) => dl(typeLabel(type));
   const [items, setItems] = useState<ProjectContractItem[]>([]);
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   const [isOpen, setIsOpen] = useState(false);
@@ -191,34 +200,34 @@ export default function ProjectContractsTab({ project, user }: Props) {
           <button
             onClick={() => setCollapsed(c => ({ ...c, [item.id]: !c[item.id] }))}
             style={{ background: 'none', border: 'none', cursor: kids.length ? 'pointer' : 'default', color: 'var(--text-muted)', padding: 2, marginTop: 2, visibility: kids.length ? 'visible' : 'hidden' }}
-            title={isCollapsed ? 'Expand' : 'Collapse'}
+            title={isCollapsed ? t('Expand') : t('Collapse')}
           >
             {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
           </button>
 
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 3 }}>
-              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#fff', background: typeColor(item.type), padding: '2px 7px' }}>{typeLabel(item.type)}</span>
-              {item.contractNumber && <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{item.contractNumber}</span>}
-              {item.amendmentNumber && <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.amendmentNumber}</span>}
-              {item.status && <span className="badge badge-inprogress">{item.status}</span>}
+              <span style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: '#fff', background: typeColor(item.type), padding: '2px 7px' }}>{typeText(item.type)}</span>
+              {item.contractNumber && <span className="ltr-data" style={{ fontSize: 13, fontWeight: 800, color: 'var(--text-primary)' }}>{item.contractNumber}</span>}
+              {item.amendmentNumber && <span className="ltr-data" style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.amendmentNumber}</span>}
+              {item.status && <span className="badge badge-inprogress">{dl(item.status)}</span>}
             </div>
-            {item.subject && <div style={{ fontSize: 13.5, color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.4 }}>{item.subject}</div>}
+            {item.subject && <div className={fmt.bidiFor(item.subject)} style={{ fontSize: 13.5, color: 'var(--text-primary)', fontWeight: 600, lineHeight: 1.4 }}>{item.subject}</div>}
             <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', fontSize: 12, color: 'var(--text-secondary)', marginTop: 4 }}>
               {item.companyName && <span>🏢 {item.companyName}</span>}
-              {parseAmount(item.contractValue) != null && <span>💰 {formatMoney(item.contractValue, item.currency)}</span>}
-              {parseAmount(item.valueAfterIncrease) != null && <span style={{ color: '#16a34a', fontWeight: 600 }}>⬆ {formatMoney(item.valueAfterIncrease, item.currency)}</span>}
-              {(item.startDate || item.endDate) && <span>📅 <span className="ltr-data">{[item.startDate, item.endDate].filter(Boolean).join(' → ')}</span></span>}
+              {parseAmount(item.contractValue) != null && <span>💰 <span className={fmt.bidiFor(fmt.money(item.contractValue, item.currency))}>{fmt.money(item.contractValue, item.currency)}</span></span>}
+              {parseAmount(item.valueAfterIncrease) != null && <span style={{ color: '#16a34a', fontWeight: 600 }}>⬆ <span className={fmt.bidiFor(fmt.money(item.valueAfterIncrease, item.currency))}>{fmt.money(item.valueAfterIncrease, item.currency)}</span></span>}
+              {(item.startDate || item.endDate) && <span>📅 <span className="ltr-data">{[item.startDate, item.endDate].filter(Boolean).map(d => fmt.date(d)).join(' → ')}</span></span>}
               {item.contractingMethod && <span>📝 {item.contractingMethod}</span>}
               {item.inCharge && <span>👤 {item.inCharge}</span>}
             </div>
-            {item.remarks && <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>{item.remarks}</div>}
+            {item.remarks && <div className={fmt.bidiFor(item.remarks)} style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4, fontStyle: 'italic' }}>{item.remarks}</div>}
           </div>
 
           <div style={{ display: 'flex', gap: 2, flexShrink: 0 }}>
-            <button className="btn btn-ghost btn-icon btn-sm" title="Add sub-item" onClick={() => openCreate(item)}><CornerDownRight className="w-4 h-4" /></button>
-            <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => openEdit(item)}><Edit2 className="w-4 h-4" /></button>
-            <button className="btn btn-ghost btn-icon btn-sm" title="Delete" onClick={() => setDeleteTarget(item)}><Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} /></button>
+            <button className="btn btn-ghost btn-icon btn-sm" title={t('Add sub-item')} onClick={() => openCreate(item)}><CornerDownRight className="w-4 h-4" /></button>
+            <button className="btn btn-ghost btn-icon btn-sm" title={t('Edit')} onClick={() => openEdit(item)}><Edit2 className="w-4 h-4" /></button>
+            <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete')} onClick={() => setDeleteTarget(item)}><Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} /></button>
           </div>
         </div>
         {!isCollapsed && kids.map(k => <Node key={k.id} item={k} depth={depth + 1} />)}
@@ -229,16 +238,16 @@ export default function ProjectContractsTab({ project, user }: Props) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Contracts</h3>
-        <button className="btn btn-primary btn-sm" onClick={() => openCreate(null)}><Plus className="w-4 h-4" /> Add contract</button>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Contracts')}</h3>
+        <button className="btn btn-primary btn-sm" onClick={() => openCreate(null)}><Plus className="w-4 h-4" /> {t('Add contract')}</button>
       </div>
 
       {Object.keys(valueByCurrency).length > 0 && (
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           {Object.entries(valueByCurrency).map(([cur, total]) => (
             <div key={cur} className="card" style={{ padding: '10px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Total value · {cur}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>{total.toLocaleString('en-US')}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Total value · {{currency}}', { currency: cur })}</div>
+              <div className="ltr-data" style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>{fmt.number(total)}</div>
             </div>
           ))}
         </div>
@@ -247,35 +256,37 @@ export default function ProjectContractsTab({ project, user }: Props) {
       {items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><FileText className="w-8 h-8" /></div>
-          <div className="empty-state-title">No contracts yet</div>
-          <div className="empty-state-sub">Add a contract, then attach amendments, agreements, work authorizations or sub-contracts under it.</div>
+          <div className="empty-state-title">{t('No contracts yet')}</div>
+          <div className="empty-state-sub">{t('Add a contract, then attach amendments, agreements, work authorizations or sub-contracts under it.')}</div>
         </div>
       ) : (
         <>
           <ListControls
             filters={[
-              { key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [
-                { value: 'all', label: 'All types' },
-                ...PROJECT_CONTRACT_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label })),
+              { key: 'type', label: t('Type'), value: typeFilter, onChange: setTypeFilter, options: [
+                { value: 'all', label: t('All types') },
+                // The machine value ('sub_contract') is what gets stored and
+                // filtered on; only its English label is translated.
+                ...PROJECT_CONTRACT_TYPE_OPTIONS.map(o => ({ value: o.value, label: dl(o.label) })),
               ] },
             ]}
             sortOptions={[
-              { value: 'created', label: 'Date added' },
-              { value: 'contractNumber', label: 'Contract #' },
-              { value: 'value', label: 'Value' },
-              { value: 'companyName', label: 'Company' },
-              { value: 'startDate', label: 'Start date' },
-              { value: 'type', label: 'Type' },
+              { value: 'created', label: t('Date added') },
+              { value: 'contractNumber', label: t('Contract #') },
+              { value: 'value', label: t('Value') },
+              { value: 'companyName', label: t('Company') },
+              { value: 'startDate', label: t('Start date') },
+              { value: 'type', label: t('Type') },
             ]}
             sortValue={sortKey}
             onSortChange={setSortKey}
             sortDir={sortDir}
             onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            trailing={filteredFlat ? `${filteredFlat.length} of ${items.length}` : undefined}
+            trailing={filteredFlat ? t('{{shown}} of {{total}}', { shown: filteredFlat.length, total: items.length }) : undefined}
           />
           {filteredFlat ? (
             filteredFlat.length === 0
-              ? <div className="empty-state"><div className="empty-state-title">No items match</div></div>
+              ? <div className="empty-state"><div className="empty-state-title">{t('No items match')}</div></div>
               : <div>{filteredFlat.map(r => <Node key={r.id} item={r} depth={0} flat />)}</div>
           ) : (
             <div>{roots.map(r => <Node key={r.id} item={r} depth={0} />)}</div>
@@ -288,56 +299,63 @@ export default function ProjectContractsTab({ project, user }: Props) {
           <div className="modal" style={{ maxWidth: 640, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'Edit item' : parentFor ? `Add under ${parentFor.contractNumber || typeLabel(parentFor.type)}` : 'Add contract'}
+                {editing
+                  ? t('Edit item')
+                  : parentFor
+                    ? t('Add under {{parent}}', { parent: parentFor.contractNumber || typeText(parentFor.type) })
+                    : t('Add contract')}
               </h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
             </div>
             <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingInlineEnd: 4 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Type"><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectContractType })} style={inp}>{PROJECT_CONTRACT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></L>
-                <L label="Contract #"><input value={form.contractNumber} onChange={e => setForm({ ...form, contractNumber: e.target.value })} style={inp} /></L>
+                <L label={t('Type')}><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectContractType })} style={inp}>{PROJECT_CONTRACT_TYPE_OPTIONS.map(o => <option key={o.value} value={o.value}>{dl(o.label)}</option>)}</select></L>
+                <L label={t('Contract #')}><input value={form.contractNumber} onChange={e => setForm({ ...form, contractNumber: e.target.value })} style={inp} /></L>
               </div>
-              <L label="Subject"><textarea value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} style={inp} rows={2} /></L>
+              <L label={t('Subject')}><textarea value={form.subject} onChange={e => setForm({ ...form, subject: e.target.value })} style={inp} rows={2} /></L>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Company"><input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} style={inp} /></L>
-                <L label="Department"><input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} style={inp} /></L>
+                <L label={t('Company')}><input value={form.companyName} onChange={e => setForm({ ...form, companyName: e.target.value })} style={inp} /></L>
+                <L label={t('Department')}><input value={form.department} onChange={e => setForm({ ...form, department: e.target.value })} style={inp} /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Contract value"><input value={form.contractValue} inputMode="decimal" onChange={e => setForm({ ...form, contractValue: e.target.value })} style={inp} placeholder="0" /></L>
-                <L label="Currency">
+                <L label={t('Contract value')}><input value={form.contractValue} inputMode="decimal" onChange={e => setForm({ ...form, contractValue: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label={t('Currency')}>
                   <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
                     {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="SR date"><input type="date" value={form.srDate} onChange={e => setForm({ ...form, srDate: e.target.value })} style={inp} /></L>
-                <L label="SR value"><input value={form.srValue} inputMode="decimal" onChange={e => setForm({ ...form, srValue: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label={t('SR date')}><input type="date" value={form.srDate} onChange={e => setForm({ ...form, srDate: e.target.value })} style={inp} /></L>
+                <L label={t('SR value')}><input value={form.srValue} inputMode="decimal" onChange={e => setForm({ ...form, srValue: e.target.value })} style={inp} placeholder="0" /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="LOA date"><input type="date" value={form.loaDate} onChange={e => setForm({ ...form, loaDate: e.target.value })} style={inp} /></L>
-                <L label="Value after increase"><input value={form.valueAfterIncrease} inputMode="decimal" onChange={e => setForm({ ...form, valueAfterIncrease: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label={t('LOA date')}><input type="date" value={form.loaDate} onChange={e => setForm({ ...form, loaDate: e.target.value })} style={inp} /></L>
+                <L label={t('Value after increase')}><input value={form.valueAfterIncrease} inputMode="decimal" onChange={e => setForm({ ...form, valueAfterIncrease: e.target.value })} style={inp} placeholder="0" /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Start date"><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
-                <L label="End date"><input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} style={inp} /></L>
+                <L label={t('Start date')}><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
+                <L label={t('End date')}><input type="date" value={form.endDate} onChange={e => setForm({ ...form, endDate: e.target.value })} style={inp} /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Status"><input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inp} placeholder="Active / Expired…" /></L>
-                <L label="Contracting method"><input value={form.contractingMethod} onChange={e => setForm({ ...form, contractingMethod: e.target.value })} style={inp} placeholder="أمر مباشر / ممارسة" /></L>
+                <L label={t('Status')}><input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inp} placeholder={t('Active / Expired…')} /></L>
+                {/* ⚠ This placeholder is deliberately NOT a locale key: it is
+                    already Arabic in the English UI (the two Egyptian
+                    procurement routes), so a key would make ar identical to en. */}
+                <L label={t('Contracting method')}><input value={form.contractingMethod} onChange={e => setForm({ ...form, contractingMethod: e.target.value })} style={inp} placeholder="أمر مباشر / ممارسة" /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Amendment #"><input value={form.amendmentNumber} onChange={e => setForm({ ...form, amendmentNumber: e.target.value })} style={inp} /></L>
-                <L label="In charge"><input value={form.inCharge} onChange={e => setForm({ ...form, inCharge: e.target.value })} style={inp} /></L>
+                <L label={t('Amendment #')}><input value={form.amendmentNumber} onChange={e => setForm({ ...form, amendmentNumber: e.target.value })} style={inp} /></L>
+                <L label={t('In charge')}><input value={form.inCharge} onChange={e => setForm({ ...form, inCharge: e.target.value })} style={inp} /></L>
               </div>
-              <L label="Remarks"><textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} style={inp} rows={2} /></L>
+              <L label={t('Remarks')}><textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} style={inp} rows={2} /></L>
             </div>
             {!form.subject.trim() && !form.contractNumber.trim() && !form.companyName.trim() && (
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 0' }}>Enter at least a contract #, subject or company to save.</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '12px 0 0' }}>{t('Enter at least a contract #, subject or company to save.')}</p>
             )}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
-              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" disabled={!form.subject.trim() && !form.contractNumber.trim() && !form.companyName.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>{t('Cancel')}</button>
+              <button className="btn btn-primary" disabled={!form.subject.trim() && !form.contractNumber.trim() && !form.companyName.trim()} onClick={save}>{editing ? t('Save') : t('Add')}</button>
             </div>
           </div>
         </div>
@@ -346,11 +364,11 @@ export default function ProjectContractsTab({ project, user }: Props) {
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 400, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete this item?</h2>
-            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '0 0 18px' }}>Any sub-items under it will also be deleted.</p>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>{t('Delete this item?')}</h2>
+            <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '0 0 18px' }}>{t('Any sub-items under it will also be deleted.')}</p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={remove}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
             </div>
           </div>
         </div>

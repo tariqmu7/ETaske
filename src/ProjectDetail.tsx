@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { User } from 'firebase/auth';
 import { AppUser, Project } from './types';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 import {
   ArrowLeft, Activity, DollarSign, FileText, Truck, Edit2,
   Building2, Hash, MapPin, CalendarRange,
@@ -31,25 +34,31 @@ interface Props {
   onEdit: () => void;
 }
 
-const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
-  { id: 'tracking', label: 'Tracking', icon: <Activity className="w-4 h-4" /> },
-  { id: 'financials', label: 'Financials', icon: <DollarSign className="w-4 h-4" /> },
-  { id: 'contracts', label: 'Contracts', icon: <FileText className="w-4 h-4" /> },
-  { id: 'subcontracts', label: 'Subcontracts', icon: <Truck className="w-4 h-4" /> },
-];
-
 export default function ProjectDetail({ project, user, appUser, projectUsers, onBack, onEdit }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [tab, setTab] = useState<Tab>('tracking');
+
+  // The tab table lives inside the component so each label is a literal t()
+  // call — a module-level table would only ever call t(variable), which the
+  // harness's key audit cannot see.
+  const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
+    { id: 'tracking', label: t('Tracking'), icon: <Activity className="w-4 h-4" /> },
+    { id: 'financials', label: t('Financials'), icon: <DollarSign className="w-4 h-4" /> },
+    { id: 'contracts', label: t('Contracts'), icon: <FileText className="w-4 h-4" /> },
+    { id: 'subcontracts', label: t('Subcontracts'), icon: <Truck className="w-4 h-4" /> },
+  ];
 
   return (
     <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }}>
       {/* Back + edit */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <button className="btn btn-ghost" onClick={onBack}>
-          <ArrowLeft className="w-4 h-4" /> All projects
+          <ArrowLeft className="w-4 h-4" /> {t('All projects')}
         </button>
         <button className="btn btn-ghost" onClick={onEdit}>
-          <Edit2 className="w-4 h-4" /> Edit project
+          <Edit2 className="w-4 h-4" /> {t('Edit project')}
         </button>
       </div>
 
@@ -61,19 +70,23 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
             const c = statusColors(project.status);
             return (
               <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: c.fg, background: c.bg, padding: '4px 10px', whiteSpace: 'nowrap' }}>
-                {project.status}
+                {dl(project.status)}
               </span>
             );
           })()}
-          {project.serialNumber && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{project.serialNumber}</span>}
+          {project.serialNumber && <span className="ltr-data" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{project.serialNumber}</span>}
         </div>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>
           {(project.client || project.operator) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Building2 className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{[project.client, project.operator].filter(Boolean).join(' · ')}</span>}
           {project.code && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Hash className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.code}</span>}
           {project.location && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.location}</span>}
-          {(project.startDate || project.endDate) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><CalendarRange className="w-4 h-4" style={{ color: 'var(--text-muted)' }} /><span className="ltr-data">{[project.startDate, project.endDate].filter(Boolean).join(' → ')}</span></span>}
+          {(project.startDate || project.endDate) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><CalendarRange className="w-4 h-4" style={{ color: 'var(--text-muted)' }} /><span className="ltr-data">{[project.startDate, project.endDate].filter(Boolean).map(d => fmt.date(d)).join(' → ')}</span></span>}
         </div>
-        {project.description && <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '12px 0 0', lineHeight: 1.5 }}>{project.description}</p>}
+        {/* ★ Free-text prose is whatever language the user typed. An English
+            paragraph inside an RTL page has its trailing full stop dragged to
+            the front (the "Other..." trap, at paragraph scale), so the run is
+            isolated — and `bidiFor` picks LTR only when the text is Latin. */}
+        {project.description && <p className={fmt.bidiFor(project.description)} style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '12px 0 0', lineHeight: 1.5 }}>{project.description}</p>}
       </div>
 
       {/* Tab bar */}

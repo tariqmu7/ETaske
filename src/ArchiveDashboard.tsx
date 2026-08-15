@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, updateDoc,
   doc, serverTimestamp, orderBy
@@ -13,6 +14,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getGoogleDrivePreviewUrl } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 
 interface Props {
   user: User;
@@ -21,6 +24,9 @@ interface Props {
 }
 
 export default function ArchiveDashboard({ user, appUser, projectUsers }: Props) {
+  const { t } = useTranslation();
+  const label = useDisplayLabel();
+  const fmt = useFormat();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -36,7 +42,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
         .filter(t => t.status === 'Done' || t.status === 'Archived')
         .sort((a, b) => (b.updatedAt?.toMillis?.() ?? 0) - (a.updatedAt?.toMillis?.() ?? 0));
       setTasks(archived);
-    }, err => { console.error(err); setError('Failed to load archive.'); });
+    }, err => { console.error(err); setError(t('Failed to load archive.')); });
     return () => unsub();
   }, [user.uid]);
 
@@ -70,7 +76,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       setViewingTask(null);
     } catch (err) {
       console.error(err);
-      setError('Failed to archive.');
+      setError(t('Failed to archive.'));
     }
   };
 
@@ -79,10 +85,10 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          Archive
+          {t('Archive')}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          Completed tasks with full corresponding history and milestone records.
+          {t('Completed tasks with full corresponding history and milestone records.')}
         </p>
       </div>
 
@@ -95,7 +101,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
         ].map(s => (
           <div key={s.label} className={`card ${s.cls}`} style={{ padding: '20px 24px' }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
           </div>
         ))}
       </div>
@@ -103,7 +109,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       {/* Search */}
       <div style={{ position: 'relative', marginBottom: 24, maxWidth: 400 }}>
         <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-        <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search archived tasks…" value={search} onChange={e => setSearch(e.target.value)} />
+        <input className="input" style={{ paddingInlineStart: 36 }} placeholder={t('Search archived tasks…')} value={search} onChange={e => setSearch(e.target.value)} />
       </div>
 
       {error && (
@@ -132,9 +138,9 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {/* Status badge */}
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
                   <span className={`badge ${task.status === 'Archived' ? 'badge-archived' : 'badge-done'}`}>
-                    {task.status === 'Archived' ? <Archive className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />} {task.status}
+                    {task.status === 'Archived' ? <Archive className="w-3 h-3" /> : <CheckCircle2 className="w-3 h-3" />} {label(task.status)}
                   </span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{task.updatedAt?.toDate?.()?.toLocaleDateString?.('en-GB') || ''}</span>
+                  <span className="ltr-data" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt.date(task.updatedAt)}</span>
                 </div>
 
                 <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', marginBottom: 6 }}>{task.taskName}</h3>
@@ -142,14 +148,14 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 5, fontSize: 12, color: 'var(--text-muted)', marginBottom: 14 }}>
                   {task.assignedTo && <span>👤 {task.assignedTo}</span>}
-                  {task.assignedBy && <span>📋 Assigned by {task.assignedBy}</span>}
+                  {task.assignedBy && <span>📋 {t('Assigned by {{name}}', { name: task.assignedBy })}</span>}
                   {(task.correspondingSerialNumber || task.correspondingSubject) && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                       <Link2 className="w-3 h-3" /> 
                       {(() => {
                         const linkedCorr = correspondences.find(c => c.id === task.correspondingId);
-                        return task.correspondingSerialNumber 
-                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : task.correspondingSubject);
+                        return task.correspondingSerialNumber
+                          || (linkedCorr ? `${t('REF:')}${linkedCorr.serialNumber}` : task.correspondingSubject);
                       })()}
                     </span>
                   )}
@@ -157,7 +163,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
                       <Paperclip className="w-3 h-3" />
                       <a href={task.attachedFile} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600 }}>
-                        {task.attachedFileName || 'Attachment'}
+                        {task.attachedFileName || t('Attachment')}
                       </a>
                     </div>
                   )}
@@ -167,7 +173,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {taskMilestones.length > 0 && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                      <span><Target className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 4 }} />{done}/{taskMilestones.length} milestones</span>
+                      <span><Target className="w-3 h-3" style={{ display: 'inline', marginInlineEnd: 4 }} />{t('{{done}}/{{total}} milestones', { done, total: taskMilestones.length })}</span>
                       <span>{Math.round((done / taskMilestones.length) * 100)}%</span>
                     </div>
                     <div className="progress-bar">
@@ -178,10 +184,10 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
                 <div style={{ display: 'flex', gap: 8 }}>
                   <button className="btn btn-ghost btn-sm" style={{ flex: 1 }} onClick={() => setViewingTask(task)}>
-                    <Eye className="w-3.5 h-3.5" /> View Details
+                    <Eye className="w-3.5 h-3.5" /> {t('View Details')}
                   </button>
                   {task.status === 'Done' && (
-                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: 'var(--text-muted)', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)} title="Archive Task">
+                    <button className="btn btn-sm" style={{ background: 'rgba(100,116,139,0.15)', color: 'var(--text-muted)', border: '1px solid rgba(100,116,139,0.2)' }} onClick={() => handleArchive(task.id)} title={t('Archive Task')}>
                       <Archive className="w-3.5 h-3.5" />
                     </button>
                   )}
@@ -197,8 +203,8 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
           <div className="empty-state-icon">
             <Archive style={{ width: 28, height: 28 }} />
           </div>
-          <p className="empty-state-title">Archive is empty</p>
-          <p className="empty-state-sub">Completed and archived tasks will appear here.<br />Mark a task as Done to archive it.</p>
+          <p className="empty-state-title">{t('Archive is empty')}</p>
+          <p className="empty-state-sub">{t('Completed and archived tasks will appear here.')}<br />{t('Mark a task as Done to archive it.')}</p>
         </div>
       )}
 
@@ -208,7 +214,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
           <motion.div className="modal-overlay" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setViewingTask(null)}>
             <motion.div className="modal" style={{ maxWidth: 600 }} initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: '24px 28px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)' }}>Task Details</h2>
+                <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)' }}>{t('Task Details')}</h2>
                 <button className="btn btn-ghost btn-icon" onClick={() => setViewingTask(null)}><X className="w-4 h-4" /></button>
               </div>
               <div style={{ padding: '20px 28px 28px' }}>
@@ -217,13 +223,13 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
                 {(viewingTask.correspondingSerialNumber || viewingTask.correspondingSubject) && (
                   <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 0, padding: 14, marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>Source Corresponding</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Source Corresponding')}</div>
                     <div style={{ fontSize: 14, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Link2 className="w-4 h-4" /> 
                       {(() => {
                         const linkedCorr = correspondences.find(c => c.id === viewingTask.correspondingId);
-                        return viewingTask.correspondingSerialNumber 
-                          || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : viewingTask.correspondingSubject);
+                        return viewingTask.correspondingSerialNumber
+                          || (linkedCorr ? `${t('REF:')}${linkedCorr.serialNumber}` : viewingTask.correspondingSubject);
                       })()}
                     </div>
                   </div>
@@ -231,13 +237,15 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
                   {[
+                    // The label IS the i18next key; the value is stored data and
+                    // stays as written (enums are task 6).
                     { label: 'Assigned To', value: viewingTask.assignedTo },
                     { label: 'Assigned By', value: viewingTask.assignedBy },
                     { label: 'Priority', value: viewingTask.priority },
                     { label: 'Due Date', value: viewingTask.dueDate },
                   ].filter(i => i.value).map(i => (
                     <div key={i.label} style={{ background: 'var(--surface-2)', borderRadius: 0, padding: '12px 14px', border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{i.label}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t(i.label)}</div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{i.value}</div>
                     </div>
                   ))}
@@ -256,7 +264,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                       <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                         <img 
                           src={getGoogleDrivePreviewUrl(viewingTask.attachedFile)} 
-                          alt="Attachment" 
+                          alt={t('Attachment')} 
                           style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                           onError={(e) => {
                             (e.target as HTMLImageElement).style.display = 'none';
@@ -275,7 +283,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                           alignItems: 'center',
                           backdropFilter: 'blur(4px)'
                         }}>
-                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{viewingTask.attachedFileName || 'Attached Image'}</span>
+                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{viewingTask.attachedFileName || t('Attached Image')}</span>
                           <a 
                             href={viewingTask.attachedFile} 
                             target="_blank" 
@@ -283,7 +291,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                             className="btn btn-sm"
                             style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
                           >
-                            <Download className="w-3.5 h-3.5" /> Download
+                            <Download className="w-3.5 h-3.5" /> {t('Download')}
                           </a>
                         </div>
                       </div>
@@ -293,8 +301,8 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                           <Paperclip className="w-5 h-5" />
                         </div>
                         <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{viewingTask.attachedFileName || 'Attachment'}</div>
-                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>Click to view or download</div>
+                          <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{viewingTask.attachedFileName || t('Attachment')}</div>
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                         </div>
                         <a 
                           href={viewingTask.attachedFile} 
@@ -312,15 +320,15 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {/* Milestone history */}
                 {getTaskMilestones(viewingTask.id).length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12 }}>Milestone History</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Milestone History')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {getTaskMilestones(viewingTask.id).map(ms => (
                         <div key={ms.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 600, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</div>
-                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>By {ms.addedBy}{ms.targetDate ? ` · ${ms.targetDate}` : ''}</div>
+                            <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t('By')}{ms.addedBy}{ms.targetDate ? <> · <span className="ltr-data">{ms.targetDate}</span></> : ''}</div>
                           </div>
-                          <span className={`badge ${ms.status === 'Done' ? 'badge-done' : ms.status === 'In Progress' ? 'badge-inprogress' : ms.status === 'Blocked' ? 'badge-urgent' : 'badge-pending'}`}>{ms.status}</span>
+                          <span className={`badge ${ms.status === 'Done' ? 'badge-done' : ms.status === 'In Progress' ? 'badge-inprogress' : ms.status === 'Blocked' ? 'badge-urgent' : 'badge-pending'}`}>{label(ms.status)}</span>
                         </div>
                       ))}
                     </div>

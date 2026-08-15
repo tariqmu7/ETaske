@@ -13,12 +13,14 @@ import { AppView } from './App';
 import {
   BarChart3, MailOpen, CheckSquare, Clock, AlertCircle,
   ChevronDown, ChevronRight, Building2, Tag, Calendar,
-  TrendingUp, Users, Layers, Search, Filter, ArrowRight,
+  TrendingUp, Users, Layers, Search, Filter, ArrowRight, ArrowLeft,
   FolderOpen, Globe, Server, X, Flag, Target, Link2,
   Paperclip, ExternalLink, FileText, Briefcase
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-const t = (s: string) => s;
+import { useTranslation } from 'react-i18next';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat, DATE_NUMERIC } from './lib/format';
 import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
@@ -72,12 +74,9 @@ const corrStatusBucket = (s: CorrespondingStatus): StatusBucket | null => {
 const taskStatusBucket = (s: TaskStatus): StatusBucket | null =>
   s === 'Pending' || s === 'In Progress' || s === 'Done' ? s : null;
 
-function formatDate(d: Timestamp | string | undefined): string {
-  if (!d) return '—';
-  if (typeof d === 'string') return d;
-  return d.toDate().toLocaleDateString('en-GB');
-}
-
+// Dates are rendered through `useFormat()` (task 6a) — a numeric date stays
+// en-GB in both languages, so this is the same output the old local
+// `formatDate` produced, minus the hand-rolled Timestamp branch.
 
 const priorityColor = new Map<string, string>([
   ['Urgent', '#dc2626'], ['High', '#ea580c'], ['Medium', '#d97706'], ['Low', '#16a34a']
@@ -103,15 +102,18 @@ function StatCard({ label, value, sub, color, onClick }: { label: string; value:
   );
 }
 
-const CorrCard: React.FC<{ 
-  item: Corresponding; 
-  tasks: Task[]; 
-  milestones: Milestone[]; 
-  onTaskClick: (t: Task) => void; 
+const CorrCard: React.FC<{
+  item: Corresponding;
+  tasks: Task[];
+  milestones: Milestone[];
+  onTaskClick: (task: Task) => void;
   onCorrClick: (c: Corresponding) => void;
-  projectUsers: AppUser[] 
-}> = ({ item, tasks, milestones, onTaskClick, onCorrClick, projectUsers }) => {
-  const linkedTask = tasks.find(t => t.correspondingId === item.id || t.id === item.convertedToTaskId);
+  projectUsers: AppUser[]
+}> = ({ item, tasks, onTaskClick, onCorrClick, projectUsers }) => {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
+  const linkedTask = tasks.find(tk => tk.correspondingId === item.id || tk.id === item.convertedToTaskId);
   const overdue = isOverdue(item.deadline);
 
   return (
@@ -147,24 +149,28 @@ const CorrCard: React.FC<{
               #{item.serialNumber}
             </span>
           )}
-          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.subject}</div>
+          <div className={fmt.bidiFor(item.subject)} style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.4 }}>{item.subject}</div>
         </div>
         <span style={{ padding: '3px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: 'var(--surface-3)', color: 'var(--text-secondary)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-          {item.status}
+          {dl(item.status)}
         </span>
       </div>
       <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12, flex: 1 }}>
         <p style={{ marginBottom: 4 }}><strong>{t("From:")}</strong> {item.sentFrom}</p>
-        <p style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
+        {/* ★ Free-text prose, not a label: an English paragraph inside the RTL
+            page otherwise has its trailing full stop dragged to the front
+            (".Finance needs the asset list…"). Same trap as `Other...`, at
+            paragraph scale — found by LOOKING at the screenshot. */}
+        <p className={fmt.bidiFor(item.body)} style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{item.body}</p>
       </div>
       
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
         <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, color: priorityColor.get(item.priority) || '#64748b', background: 'var(--surface-3)', border: '1px solid var(--border)' }}>
-          {item.priority} Priority
+          {t('Priority: {{priority}}', { priority: dl(item.priority) })}
         </span>
         {overdue && item.status !== 'Closed' && (
           <span style={{ padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}>
-            Overdue
+            {t('Overdue')}
           </span>
         )}
       </div>
@@ -179,13 +185,15 @@ const CorrCard: React.FC<{
               <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
             );
           })()}
-          Assigned: {item.assignedTo}
+          {t('Assigned to {{name}}', { name: item.assignedTo })}
         </div>
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto', paddingTop: 10, borderTop: '1px solid var(--border)' }}>
         <div style={{ fontSize: 10, fontWeight: 600, color: overdue ? '#dc2626' : '#94a3b8' }}>
-          {item.deadline ? `Due ${item.deadline}` : 'No deadline'}
+          {item.deadline
+            ? <>{t('Due:')}<span className="ltr-data">{item.deadline}</span></>
+            : t('No deadline')}
         </div>
         <div style={{ display: 'flex', gap: 6 }}>
           {linkedTask && (
@@ -197,7 +205,7 @@ const CorrCard: React.FC<{
               className="btn btn-ghost btn-sm"
               style={{ padding: '2px 6px', height: 'auto', fontSize: 9, fontWeight: 800, color: '#16a34a' }}
             >
-              LINKED TASK
+              {t('LINKED TASK')}
             </button>
           )}
           <button 
@@ -205,7 +213,7 @@ const CorrCard: React.FC<{
             style={{ padding: '2px 8px', height: 'auto', fontSize: 10, fontWeight: 800 }}
             onClick={(e) => { e.stopPropagation(); onCorrClick(item); }}
           >
-            FULL DETAILS
+            {t('FULL DETAILS')}
           </button>
         </div>
       </div>
@@ -215,6 +223,9 @@ const CorrCard: React.FC<{
 
 // ─── Main component ────────────────────────────────────────────────────────────
 export default function OverviewDashboard({ user, appUser, projectUsers, onNavigateCorrespondences, onNavigateTasks }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -276,11 +287,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         if (isOverdue(c.deadline) && c.status !== 'Closed') stats.get(bucket)!.overdue++;
       }
     });
-    tasks.forEach(t => {
-      if (t.id === '--stats--') return;
-      const createdDate = t.createdAt?.toDate?.()?.toISOString()?.split('T')[0];
+    tasks.forEach(tk => {
+      if (tk.id === '--stats--') return;
+      const createdDate = tk.createdAt?.toDate?.()?.toISOString()?.split('T')[0];
       if (dateFilter && createdDate !== dateFilter) return;
-      const bucket = taskStatusBucket(t.status);
+      const bucket = taskStatusBucket(tk.status);
       if (bucket && stats.has(bucket)) stats.get(bucket)!.tasks++;
     });
     return stats;
@@ -290,12 +301,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
   const summaryStats = useMemo(() => {
     const totalCorrs = correspondences.filter(c => c.id !== '--stats--').length;
     const openCorrs = correspondences.filter(c => c.status !== 'Closed' && c.id !== '--stats--').length;
-    const activeTasks = tasks.filter(t => t.status !== 'Archived' && t.status !== 'Done').length;
-    const doneTasks = tasks.filter(t => t.status === 'Done').length;
-    const totalTasks = tasks.filter(t => t.status !== 'Archived').length;
+    const activeTasks = tasks.filter(tk => tk.status !== 'Archived' && tk.status !== 'Done').length;
+    const doneTasks = tasks.filter(tk => tk.status === 'Done').length;
+    const totalTasks = tasks.filter(tk => tk.status !== 'Archived').length;
     const overdue = [
       ...correspondences.filter(c => c.status !== 'Closed' && isOverdue(c.deadline)),
-      ...tasks.filter(t => t.status !== 'Done' && t.status !== 'Archived' && isOverdue(t.dueDate)),
+      ...tasks.filter(tk => tk.status !== 'Done' && tk.status !== 'Archived' && isOverdue(tk.dueDate)),
     ].length;
     const rate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
     return { totalCorrs, openCorrs, activeTasks, doneTasks, overdue, rate };
@@ -308,8 +319,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       .map(c => ({ ...c, type: 'Correspondence' as const }));
     
     const tks = tasks
-      .filter(t => t.status !== 'Done' && t.status !== 'Archived' && isDueSoon(t.dueDate))
-      .map(t => ({ ...t, type: 'Task' as const }));
+      .filter(tk => tk.status !== 'Done' && tk.status !== 'Archived' && isDueSoon(tk.dueDate))
+      .map(tk => ({ ...tk, type: 'Task' as const }));
 
     return [...corrs, ...tks].sort((a, b) => {
       const dateA = new Date((a as any).deadline || (a as any).dueDate || 0);
@@ -350,8 +361,8 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       .filter(c => c.id !== '--stats--' && inRange(dayOf(c)))
       .map(c => ({ kind: 'Correspondence' as const, item: c, ts: c.createdAt?.toDate?.()?.getTime() || 0 }));
     const tks = tasks
-      .filter(t => t.id !== '--stats--' && inRange(dayOf(t)))
-      .map(t => ({ kind: 'Task' as const, item: t, ts: t.createdAt?.toDate?.()?.getTime() || 0 }));
+      .filter(tk => tk.id !== '--stats--' && inRange(dayOf(tk)))
+      .map(tk => ({ kind: 'Task' as const, item: tk, ts: tk.createdAt?.toDate?.()?.getTime() || 0 }));
 
     return [...corrs, ...tks].sort((a, b) => b.ts - a.ts);
   }, [correspondences, tasks, dateFilter, newRange, todayStr, yesterdayStr, weekStartStr]);
@@ -370,7 +381,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
   const employeeKPIs = useMemo(() => {
     return projectUsers.map(u => {
       const uCorrs = correspondences.filter(c => c.assignedToId === u.id && c.status !== 'Closed');
-      const uTasks = tasks.filter(t => t.assignedToId === u.id && t.status !== 'Archived');
+      const uTasks = tasks.filter(tk => tk.assignedToId === u.id && tk.status !== 'Archived');
       
       const activeCorrsPts = uCorrs.reduce((acc, c) => acc + getWeight(c.priority), 0);
       
@@ -379,19 +390,19 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       let inProgressTasksPts = 0;
       let overdueTasksPts = 0;
       
-      uTasks.forEach(t => {
-        const baseWeight = getWeight(t.priority);
-        const tMilestones = milestones.filter(m => m.taskId === t.id);
+      uTasks.forEach(tk => {
+        const baseWeight = getWeight(tk.priority);
+        const tMilestones = milestones.filter(m => m.taskId === tk.id);
         
         // Each milestone inherits the weight of its parent task
         const milestoneWeight = baseWeight;
         
         totalTasksPts += baseWeight + (tMilestones.length * milestoneWeight);
         
-        if (t.status === 'Done') completedTasksPts += baseWeight;
-        else if (t.status === 'In Progress') inProgressTasksPts += baseWeight;
-        
-        if (isOverdue(t.dueDate) && t.status !== 'Done') overdueTasksPts += baseWeight;
+        if (tk.status === 'Done') completedTasksPts += baseWeight;
+        else if (tk.status === 'In Progress') inProgressTasksPts += baseWeight;
+
+        if (isOverdue(tk.dueDate) && tk.status !== 'Done') overdueTasksPts += baseWeight;
         
         tMilestones.forEach(m => {
           if (m.status === 'Done') completedTasksPts += milestoneWeight;
@@ -437,18 +448,18 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
       map.get(who)!.corrs.push(c);
     });
 
-    tasks.forEach(t => {
-      if (t.id === '--stats--') return;
+    tasks.forEach(tk => {
+      if (tk.id === '--stats--') return;
       // Archived has no bucket of its own; surface it in the drill-in under Done
       // so completed/archived task cards stay visible instead of disappearing.
-      const drillBucket = t.status === 'Archived' ? 'Done' : taskStatusBucket(t.status);
+      const drillBucket = tk.status === 'Archived' ? 'Done' : taskStatusBucket(tk.status);
       if (drillBucket !== selectedCategory) return;
-      if (search && !globalSearch(t, search)) return;
+      if (search && !globalSearch(tk, search)) return;
 
-      const who = t.assignedTo || 'Unassigned';
+      const who = tk.assignedTo || 'Unassigned';
       if (!map.has(who)) map.set(who, { corrs: [], tasks: [] });
-      if (!map.get(who)!.tasks.find(ex => ex.id === t.id)) {
-        map.get(who)!.tasks.push(t);
+      if (!map.get(who)!.tasks.find(ex => ex.id === tk.id)) {
+        map.get(who)!.tasks.push(tk);
       }
     });
 
@@ -480,7 +491,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
     if (!id && !name) {
       return (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 0, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', background: '#fee2e2', color: '#dc2626' }}>
-          Unassigned
+          {t('Unassigned')}
         </span>
       );
     }
@@ -543,16 +554,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 #{task.serialNumber}
               </span>
             )}
-            <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{task.taskName}</div>
+            <div className={fmt.bidiFor(task.taskName)} style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.4 }}>{task.taskName}</div>
           </div>
           <span style={{ padding: '3px 9px', borderRadius: 0, fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
             background: task.status === 'Done' ? 'var(--green-100)' : task.status === 'In Progress' ? 'var(--blue-100)' : 'var(--surface-3)',
             color: task.status === 'Done' ? 'var(--green-400)' : task.status === 'In Progress' ? 'var(--blue-400)' : 'var(--text-secondary)',
-          }}>{task.status}</span>
+          }}>{dl(task.status)}</span>
         </div>
-        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            Assigned to: 
+            {t('Assigned to:')}
             {(() => {
               const u = projectUsers.find(pu => pu.id === task.assignedToId);
               return (
@@ -567,14 +578,14 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
               );
             })()}
           </span>
-          &nbsp;·&nbsp; Due: {task.dueDate || '—'}
-          {ov && <span style={{ color: '#dc2626', marginInlineStart: 6 }}>⚠ Overdue</span>}
+          &nbsp;·&nbsp; {t('Due:')}<span className="ltr-data">{task.dueDate || '—'}</span>
+          {ov && <span style={{ color: '#dc2626', marginInlineStart: 6 }}>⚠ {t('Overdue')}</span>}
         </div>
         {taskMilestones.length > 0 && (
           <div style={{ marginTop: 12 }}>
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4, display: 'flex', justifyContent: 'space-between' }}>
-              <span>{t("Milestones:")} {done}/{taskMilestones.length}</span>
-              <span>{progress}%</span>
+              <span>{t("Milestones:")}<span className="ltr-data">{done}/{taskMilestones.length}</span></span>
+              <span className="ltr-data">{fmt.percent(progress)}</span>
             </div>
             <div style={{ height: 5, background: 'var(--surface-3)', borderRadius: 0, overflow: 'hidden' }}>
               <div style={{ height: '100%', width: `${progress}%`, background: '#3b82f6', borderRadius: 0, transition: 'width 0.4s' }} />
@@ -588,7 +599,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
             style={{ padding: '2px 8px', height: 'auto', fontSize: 10, fontWeight: 800 }}
             onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
           >
-            FULL DETAILS
+            {t('FULL DETAILS')}
           </button>
         </div>
       </div>
@@ -611,11 +622,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
             style={{ width: 'auto' }} 
             value={dateFilter} 
             onChange={e => setDateFilter(e.target.value)}
-            title="Filter by day"
+            title={t('Filter by day')}
           />
           {dateFilter && (
             <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-              Clear Date
+              {t('Clear Date')}
             </button>
           )}
         </div>
@@ -623,10 +634,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
 
       {/* ── Summary Stat Cards ── */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 28 }}>
-        <StatCard label="Correspondences" value={summaryStats.totalCorrs} sub={`${summaryStats.openCorrs} open`} color="var(--blue-600)" onClick={onNavigateCorrespondences ? () => onNavigateCorrespondences('Open') : undefined} />
-        <StatCard label="Active Tasks" value={summaryStats.activeTasks} sub={`${summaryStats.doneTasks} done`} color="var(--green-600)" onClick={onNavigateTasks ? () => onNavigateTasks('Active') : undefined} />
-        <StatCard label="Overdue" value={summaryStats.overdue} sub="need attention" color="#ef4444" onClick={onNavigateTasks ? () => onNavigateTasks('Overdue') : undefined} />
-        <StatCard label="Completion" value={`${summaryStats.rate}%`} sub="tasks done" color="var(--teal-500)" onClick={onNavigateTasks ? () => onNavigateTasks('Done') : undefined} />
+        <StatCard label={t('Correspondences')} value={summaryStats.totalCorrs} sub={t('{{count}} open', { count: summaryStats.openCorrs })} color="var(--blue-600)" onClick={onNavigateCorrespondences ? () => onNavigateCorrespondences('Open') : undefined} />
+        <StatCard label={t('Active Tasks')} value={summaryStats.activeTasks} sub={t('{{count}} done', { count: summaryStats.doneTasks })} color="var(--green-600)" onClick={onNavigateTasks ? () => onNavigateTasks('Active') : undefined} />
+        <StatCard label={t('Overdue')} value={summaryStats.overdue} sub={t('need attention')} color="#ef4444" onClick={onNavigateTasks ? () => onNavigateTasks('Overdue') : undefined} />
+        <StatCard label={t('Completion')} value={fmt.percent(summaryStats.rate)} sub={t('tasks done')} color="var(--teal-500)" onClick={onNavigateTasks ? () => onNavigateTasks('Done') : undefined} />
       </div>
 
       {/* ── New Today (recency feed) ── */}
@@ -642,7 +653,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
             <div style={{ flex: 1 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
                 {dateFilter
-                  ? `New on ${formatDate(dateFilter)}`
+                  ? t('New on {{date}}', { date: fmt.date(dateFilter, DATE_NUMERIC) })
                   : newRange === 'today'
                     ? t('New Today')
                     : newRange === 'yesterday'
@@ -718,7 +729,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     >
                       <span style={{ flexShrink: 0, width: 96, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: isTask ? '#16a34a' : '#3b82f6' }}>
                         {isTask ? <CheckSquare className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
-                        {isTask ? 'Task' : 'Corr'}
+                        {isTask ? t('Task') : t('Corr')}
                       </span>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -726,8 +737,10 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                           {isTask ? c.taskName : c.subject}
                         </div>
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {isTask ? `Due ${c.dueDate || '—'}` : `From ${c.sentFrom || '—'}`}
-                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginInlineStart: 8 }}>⚠ Overdue</span>}
+                          {isTask
+                            ? <>{t('Due:')}<span className="ltr-data">{c.dueDate || '—'}</span></>
+                            : <>{t('From:')}<span className={fmt.bidiFor(c.sentFrom)}>{c.sentFrom || '—'}</span></>}
+                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginInlineStart: 8 }}>⚠ {t('Overdue')}</span>}
                         </div>
                       </div>
                       <div style={{ flexShrink: 0 }}>
@@ -743,7 +756,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     style={{ marginTop: 12, alignSelf: 'center', fontWeight: 700 }}
                     onClick={() => setShowAllNew(v => !v)}
                   >
-                    {showAllNew ? t('Show less') : `Show all ${newTodayItems.length}`}
+                    {showAllNew ? t('Show less') : t('Show all {{count}}', { count: newTodayItems.length })}
                   </button>
                 )}
               </div>
@@ -793,16 +806,16 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 }}
               >
                 <div style={{ flex: 1, marginInlineEnd: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type}</div>
+                  <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type === 'Task' ? t('Task') : t('Correspondence')}</div>
                   <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t("Due:")} {item.deadline || item.dueDate}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t("Due:")}<span className="ltr-data">{item.deadline || item.dueDate}</span></div>
                 </div>
                 <ArrowRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               </div>
             ))}
             {dueSoonItems.length > 4 && (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#9a3412', background: 'rgba(249, 115, 22, 0.05)', padding: 12 }}>
-                + {dueSoonItems.length - 4} more items due soon
+                {t('+ {{count}} more items due soon', { count: dueSoonItems.length - 4 })}
               </div>
             )}
           </div>
@@ -830,7 +843,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     {catStyle.icon}
                   </div>
                   <div>
-                    <h2 style={{ fontSize: 20, fontWeight: 800, color: catStyle.text, margin: 0 }}>{cat}</h2>
+                    <h2 style={{ fontSize: 20, fontWeight: 800, color: catStyle.text, margin: 0 }}>{dl(cat)}</h2>
                     <span style={{ fontSize: 13, color: catStyle.text, opacity: 0.8, fontWeight: 600 }}>{t("Status")}</span>
                   </div>
                 </div>
@@ -846,7 +859,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <span style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <MailOpen className="w-4 h-4" /> Correspondences
+                      <MailOpen className="w-4 h-4" /> {t('Correspondences')}
                     </span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{s.total}</span>
                   </div>
@@ -861,7 +874,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
                   >
                     <span style={{ color: 'var(--text-muted)', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <CheckSquare className="w-4 h-4" /> Related Tasks
+                      <CheckSquare className="w-4 h-4" /> {t('Related Tasks')}
                     </span>
                     <span style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)' }}>{s.tasks}</span>
                   </div>
@@ -879,7 +892,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     </div>
                   )}
                   <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', color: catStyle.text, fontSize: 14, fontWeight: 700, gap: 4 }}>
-                    View Full Details <ArrowRight className="w-4 h-4" />
+                    {t('View Full Details')} <ArrowRight className="w-4 h-4" />
                   </div>
                 </div>
               </div>
@@ -897,7 +910,11 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 className="btn btn-ghost"
                 style={{ gap: 8, paddingInlineStart: 8 }}
               >
-                <ArrowRight className="w-4 h-4" style={{ transform: 'rotate(180deg)' }} /> Back to Statuses
+                {/* A real ArrowLeft, not a rotated ArrowRight: an inline
+                    transform beats the `[dir="rtl"] .lucide-arrow-*` mirror
+                    rule, so the rotated version stayed pointing the wrong way
+                    in Arabic. */}
+                <ArrowLeft className="w-4 h-4" /> {t('Back to Statuses')}
               </button>
               
               <div style={{ position: 'relative', flex: 1, minWidth: 200, maxWidth: 300 }}>
@@ -905,7 +922,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 <input
                   className="input"
                   style={{ paddingInlineStart: 36, fontSize: 13 }}
-                  placeholder="Search…"
+                  placeholder={t('Search…')}
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                 />
@@ -923,7 +940,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  Correspondences ({Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.corrs.length, 0)})
+                  {t('Correspondences ({{count}})', { count: Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.corrs.length, 0) })}
                 </button>
                 <button 
                   onClick={() => setViewTab('Tasks')}
@@ -936,7 +953,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     whiteSpace: 'nowrap'
                   }}
                 >
-                  Tasks ({Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.tasks.length, 0)})
+                  {t('Tasks ({{count}})', { count: Array.from(subCategoryGroups.values()).reduce((acc, curr: any) => acc + curr.tasks.length, 0) })}
                 </button>
               </div>
             </div>
@@ -950,7 +967,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 <div key={subCat} style={{ marginBottom: 32 }}>
                   <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-secondary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 8, padding: '0 4px' }}>
                     <Users className="w-4 h-4 text-primary" style={{ opacity: 0.7 }} />
-                    {subCat}
+                    {/* An assignee name, or the literal 'Unassigned' bucket —
+                        dl() translates the bucket and echoes a real name back. */}
+                    <span className={fmt.bidiFor(dl(subCat))}>{dl(subCat)}</span>
                   </h3>
                   
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
@@ -1020,7 +1039,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   )}
                   <div>
                     <div style={{ fontWeight: 800, fontSize: 15, color: 'var(--text-primary)' }}>{kpi.user.displayName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{kpi.user.department || 'Staff'}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{dl(kpi.user.department) || t('Staff')}</div>
                   </div>
                 </div>
 
@@ -1028,26 +1047,26 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--surface-2)', padding: 16, borderRadius: 8 }}>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Active Corrs")}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-secondary)' }}>{kpi.activeCorrs} pts</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('{{count}} pts', { count: kpi.activeCorrs })}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Total Workload")}</div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{kpi.totalTasks} pts</div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{t('{{count}} pts', { count: kpi.totalTasks })}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Completed")}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a' }}>{kpi.completedTasks} pts</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a' }}>{t('{{count}} pts', { count: kpi.completedTasks })}</div>
                   </div>
                   <div>
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("In Progress")}</div>
-                    <div style={{ fontSize: 16, fontWeight: 700, color: '#d97706' }}>{kpi.inProgressTasks} pts</div>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#d97706' }}>{t('{{count}} pts', { count: kpi.inProgressTasks })}</div>
                   </div>
                   {kpi.overdueTasks > 0 && (
                     <div style={{ gridColumn: '1 / -1', background: '#fee2e2', padding: '8px 12px', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                       <span style={{ fontSize: 12, fontWeight: 700, color: '#dc2626', display: 'flex', alignItems: 'center', gap: 6 }}>
                         <AlertCircle className="w-4 h-4" /> {t("Overdue Work")}
                       </span>
-                      <span style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>{kpi.overdueTasks} pts</span>
+                      <span style={{ fontSize: 15, fontWeight: 800, color: '#dc2626' }}>{t('{{count}} pts', { count: kpi.overdueTasks })}</span>
                     </div>
                   )}
                 </div>
@@ -1056,7 +1075,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginBottom: 8 }}>
                     <span>{t("Completion Rate")}</span>
-                    <span>{kpi.completionRate}%</span>
+                    <span className="ltr-data">{fmt.percent(kpi.completionRate)}</span>
                   </div>
                   <div style={{ width: '100%', height: 6, background: 'var(--border)', borderRadius: 3, overflow: 'hidden' }}>
                     <div style={{ width: `${kpi.completionRate}%`, height: '100%', background: kpi.completionRate === 100 ? '#16a34a' : '#3b82f6', transition: 'width 0.5s' }} />
@@ -1094,13 +1113,13 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: selectedTask.status === 'Done' ? 'rgba(21,128,61,0.15)' : selectedTask.status === 'In Progress' ? 'rgba(29,78,216,0.15)' : 'var(--surface-3)',
                       color: selectedTask.status === 'Done' ? '#15803d' : selectedTask.status === 'In Progress' ? '#1d4ed8' : 'var(--text-secondary)',
-                    }}>{selectedTask.status}</span>
+                    }}>{dl(selectedTask.status)}</span>
                     <span style={{ padding: '3px 10px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: priorityColor.get(selectedTask.priority) ? `${priorityColor.get(selectedTask.priority)}20` : 'var(--surface-3)',
                       color: priorityColor.get(selectedTask.priority) || 'var(--text-secondary)'
-                    }}>{selectedTask.priority} Priority</span>
+                    }}>{t('Priority: {{priority}}', { priority: dl(selectedTask.priority) })}</span>
                   </div>
-                  <h2 style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedTask.taskName}</h2>
+                  <h2 className={fmt.bidiFor(selectedTask.taskName)} style={{ fontSize: 20, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{selectedTask.taskName}</h2>
                 </div>
                   <button 
                    onClick={() => setSelectedTask(null)} 
@@ -1114,7 +1133,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
               
               {/* Modal Body */}
               <div style={{ padding: '24px', flex: 1 }}>
-                <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24, whiteSpace: 'pre-wrap' }}>
+                <p className={fmt.bidiFor(selectedTask.description)} style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6, marginBottom: 24, whiteSpace: 'pre-wrap' }}>
                   {selectedTask.description || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No description provided.")}</span>}
                 </p>
 
@@ -1130,7 +1149,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                           <span style={{ width: 10, height: 10, borderRadius: 0, flexShrink: 0, background: u?.userColor || getUserColor(selectedTask.assignedToId || selectedTask.assignedTo) }} />
                         );
                       })()}
-                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedTask.assignedTo || 'Unassigned'}>{selectedTask.assignedTo || 'Unassigned'}</span>
+                      <span style={{ color: 'var(--text-primary)', fontWeight: 600, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={selectedTask.assignedTo || t('Unassigned')}>{selectedTask.assignedTo || t('Unassigned')}</span>
                     </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
@@ -1149,7 +1168,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   </div>
                   <div style={{ minWidth: 0 }}>
                     <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Due Date")}</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> {selectedTask.dueDate || 'No deadline'}</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> <span className="ltr-data">{selectedTask.dueDate || t('No deadline')}</span></span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div style={{ minWidth: 0 }}>
@@ -1159,7 +1178,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                         {(() => {
                           const linkedCorr = correspondences.find(c => c.id === selectedTask.correspondingId);
                           return selectedTask.correspondingSerialNumber 
-                            || (linkedCorr ? `REF: ${linkedCorr.serialNumber}` : selectedTask.correspondingSubject);
+                            || (linkedCorr ? t('REF:') + linkedCorr.serialNumber : selectedTask.correspondingSubject);
                         })()}
                       </span>
                     </div>
@@ -1169,12 +1188,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 {/* Milestones inside Modal */}
                 <div>
                   <h4 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Target className="w-4 h-4 text-primary" /> Milestones
+                    <Target className="w-4 h-4 text-primary" /> {t('Milestones')}
                   </h4>
                   
                   {milestones.filter(m => m.taskId === selectedTask.id).length === 0 ? (
                     <div style={{ padding: '20px', textAlign: 'center', background: 'var(--surface-3)', borderRadius: 0, border: '1px dashed var(--border)', color: 'var(--text-muted)', fontSize: 13 }}>
-                      No milestones for this task.
+                      {t('No milestones for this task.')}
                     </div>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1187,15 +1206,15 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                           </div>
                           <div style={{ flex: 1, padding: '12px 16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
                             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4 }}>
-                              <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }}>{ms.title}</span>
+                              <span style={{ fontWeight: 600, fontSize: 14, color: ms.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', textDecoration: ms.status === 'Done' ? 'line-through' : 'none' }} className={fmt.bidiFor(ms.title)}>{ms.title}</span>
                               <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 8px', borderRadius: 0,
                                 background: ms.status === 'Done' ? 'rgba(21,128,61,0.15)' : ms.status === 'In Progress' ? 'rgba(29,78,216,0.15)' : 'var(--surface-2)',
                                 color: ms.status === 'Done' ? '#15803d' : ms.status === 'In Progress' ? '#1d4ed8' : 'var(--text-muted)'
-                              }}>{ms.status}</span>
+                              }}>{dl(ms.status)}</span>
                             </div>
                             <div style={{ fontSize: 12, color: 'var(--text-muted)', display: 'flex', gap: 12 }}>
-                              <span>{t("Added by")} {ms.addedBy}</span>
-                              {ms.targetDate && <span>{t("Target:")} {ms.targetDate}</span>}
+                              <span>{t('Added by')}{ms.addedBy}</span>
+                              {ms.targetDate && <span>{t('Target:')}<span className="ltr-data">{ms.targetDate}</span></span>}
                             </div>
                           </div>
                         </div>
@@ -1234,23 +1253,23 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: 'var(--surface-3)',
                       color: 'var(--text-secondary)',
-                    }}>{selectedCorr.status}</span>
+                    }}>{dl(selectedCorr.status)}</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: priorityColor.get(selectedCorr.priority) ? `${priorityColor.get(selectedCorr.priority)}20` : '#f1f5f9',
                       color: priorityColor.get(selectedCorr.priority) || '#475569'
-                    }}>{selectedCorr.priority} Priority</span>
+                    }}>{t('Priority: {{priority}}', { priority: dl(selectedCorr.priority) })}</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: CATEGORY_COLORS.get(selectedCorr.category)?.bg || '#f1f5f9',
                       color: CATEGORY_COLORS.get(selectedCorr.category)?.text || '#475569',
                       display: 'flex', alignItems: 'center', gap: 4
                     }}>
-                      {CATEGORY_COLORS.get(selectedCorr.category)?.icon} {selectedCorr.category}
+                      {CATEGORY_COLORS.get(selectedCorr.category)?.icon} {dl(selectedCorr.category)}
                     </span>
                   </div>
-                  <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
+                  <h2 className={fmt.bidiFor(selectedCorr.subject)} style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{selectedCorr.subject}</h2>
                   {selectedCorr.serialNumber && (
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>
-                      REF: {selectedCorr.serialNumber}
+                      {t('REF:')}<span className="ltr-data">{selectedCorr.serialNumber}</span>
                     </div>
                   )}
                 </div>
@@ -1271,7 +1290,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                      <FileText className="w-4 h-4 text-primary" />
                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Correspondence Body")}</h3>
                    </div>
-                   <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
+                   <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }} className={fmt.bidiFor(selectedCorr.body)}>
                     {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No content provided.")}</span>}
                   </div>
                 </div>
@@ -1293,12 +1312,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
-                        Received: {selectedCorr.dateReceived}
+                        {t('Received:')}<span className="ltr-data">{selectedCorr.dateReceived}</span>
                       </div>
                       {selectedCorr.deadline && (
                         <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorr.deadline) && selectedCorr.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Flag className="w-4 h-4 text-muted" />
-                          Deadline: {selectedCorr.deadline}
+                          {t('Deadline:')}<span className="ltr-data">{selectedCorr.deadline}</span>
                         </div>
                       )}
                     </div>
@@ -1319,9 +1338,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                               </div>
                             )}
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorr.assignedTo || 'Unassigned'}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorr.assignedTo || t('Unassigned')}</div>
                               {selectedCorr.assignedAt && (
-                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t("Assigned")} {formatDate(selectedCorr.assignedAt)}</div>
+                                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{t('Assigned on {{date}}', { date: fmt.date(selectedCorr.assignedAt, DATE_NUMERIC) })}</div>
                               )}
                             </div>
                           </>
@@ -1342,12 +1361,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                         <div key={idx} style={{ padding: '10px 14px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span
                             onClick={() => openOrCopyPath(path)}
-                            title="Click to open (web link) or copy this path"
+                            title={t('Click to open (web link) or copy this path')}
                             style={{ fontSize: 13, color: 'var(--text-secondary)', fontFamily: 'monospace', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationStyle: 'dotted' }}
                           >{path}</span>
                           <button
                             onClick={() => openOrCopyPath(path)}
-                            title="Open (web link) or copy this path"
+                            title={t('Open (web link) or copy this path')}
                             className="btn btn-ghost btn-sm"
                             style={{ padding: '4px 8px', height: 'auto' }}
                           >
@@ -1381,7 +1400,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                         <FileText className="w-5 h-5" />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorr.attachedFileName || 'View Attachment'}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorr.attachedFileName || t('View Attachment')}</div>
                         <div style={{ fontSize: 11, opacity: 0.8 }}>{t("Click to open in new tab")}</div>
                       </div>
                       <ExternalLink className="w-4 h-4" />
@@ -1395,25 +1414,25 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       <Briefcase className="w-4 h-4 text-primary" />
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Internal Notes")}</h3>
                     </div>
-                    <div style={{ padding: '16px', background: 'var(--surface-warn-strong)', border: '1px solid var(--surface-warn-border)', borderRadius: 0, color: 'var(--surface-warn-text)', fontSize: 14, fontStyle: 'italic' }}>
+                    <div style={{ padding: '16px', background: 'var(--surface-warn-strong)', border: '1px solid var(--surface-warn-border)', borderRadius: 0, color: 'var(--surface-warn-text)', fontSize: 14, fontStyle: 'italic' }} className={fmt.bidiFor(selectedCorr.notes)}>
                       "{selectedCorr.notes}"
                     </div>
                   </div>
                 )}
                 
-                {tasks.find(t => t.correspondingId === selectedCorr.id || t.id === selectedCorr.convertedToTaskId) && (
+                {tasks.find(tk => tk.correspondingId === selectedCorr.id || tk.id === selectedCorr.convertedToTaskId) && (
                    <button 
                     className="btn btn-primary w-full" 
                     style={{ marginTop: 8, gap: 10, height: 48 }}
                     onClick={() => {
-                      const t = tasks.find(t => t.correspondingId === selectedCorr.id || t.id === selectedCorr.convertedToTaskId);
-                      if (t) {
+                      const linked = tasks.find(tk => tk.correspondingId === selectedCorr.id || tk.id === selectedCorr.convertedToTaskId);
+                      if (linked) {
                         setSelectedCorr(null);
-                        setSelectedTask(t);
+                        setSelectedTask(linked);
                       }
                     }}
                    >
-                     <Target className="w-4 h-4" /> View Linked Task
+                     <Target className="w-4 h-4" /> {t('View Linked Task')}
                    </button>
                 )}
               </div>

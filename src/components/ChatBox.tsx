@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import type { TFunction } from 'i18next';
 import {
   collection, query, where, orderBy, onSnapshot,
   addDoc, serverTimestamp, Timestamp, limit,
@@ -7,7 +9,11 @@ import {
 import { db } from '../lib/firebase';
 import { subscribeVisibleTasks } from '../lib/taskVisibility';
 import { AppUser, ChatMessage, Task, Corresponding } from '../types';
-import { timeAgo, globalSearch } from '../utils';
+import { globalSearch } from '../utils';
+import { useDisplayLabel } from '../lib/displayLabel';
+import { fmtAgo, fmtTime } from '../lib/format';
+import { useLanguage } from '../hooks/useLanguage';
+import type { Language } from '../i18n';
 import { requestOpen } from '../lib/deepLink';
 import { AppView } from '../App';
 import {
@@ -18,11 +24,12 @@ import {
 
 // Online if the user's lastSeen heartbeat is within the last 2 minutes.
 const ONLINE_WINDOW_MS = 2 * 60 * 1000;
-const presenceOf = (u?: AppUser | null) => {
+// Takes the translator: it is a module-level helper, so it cannot call a hook.
+const presenceOf = (u: AppUser | null | undefined, t: TFunction, lang: Language) => {
   const ms = u?.lastSeen?.toDate?.()?.getTime?.();
-  if (!ms) return { online: false, label: 'Offline' };
-  if (Date.now() - ms < ONLINE_WINDOW_MS) return { online: true, label: 'Active now' };
-  return { online: false, label: `Last seen ${timeAgo(ms)}` };
+  if (!ms) return { online: false, label: t('Offline') };
+  if (Date.now() - ms < ONLINE_WINDOW_MS) return { online: true, label: t('Active now') };
+  return { online: false, label: t('Last seen {{time}}', { time: fmtAgo(ms, lang, t) }) };
 };
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -45,6 +52,9 @@ interface ChatBoxProps {
 }
 
 export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxProps) {
+  const { t } = useTranslation();
+  const label = useDisplayLabel();
+  const { lang } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState<AppUser | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -98,7 +108,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
   const liveSelectedUser = selectedUser
     ? allUsers.find(u => u.id === selectedUser.id) || selectedUser
     : null;
-  const presence = presenceOf(liveSelectedUser);
+  const presence = presenceOf(liveSelectedUser, t, lang);
   // Index of my most recent message — only it carries the seen/sent receipt.
   let lastMineIdx = -1;
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -307,9 +317,9 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
     m.text?.trim()
       ? m.text
       : m.refType === 'task'
-        ? `📎 Shared task ${m.refSerial || ''}`.trim()
+        ? t('📎 Shared task {{serial}}', { serial: m.refSerial || '' }).trim()
         : m.refType === 'corresponding'
-          ? `📎 Shared correspondence ${m.refSerial || ''}`.trim()
+          ? t('📎 Shared correspondence {{serial}}', { serial: m.refSerial || '' }).trim()
           : '';
 
   const shareList = shareTab === 'task'
@@ -386,7 +396,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                 ) : (
                   <>
                     <MessageSquare size={20} />
-                    <span style={{ fontWeight: 700 }}>Messages</span>
+                    <span style={{ fontWeight: 700 }}>{t('Messages')}</span>
                   </>
                 )}
               </div>
@@ -409,12 +419,13 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} size={16} />
                     <input
                       type="text"
-                      placeholder="Search users..."
+                      placeholder={t('Search users…')}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       style={{
                         width: '100%',
-                        padding: '10px 12px 10px 40px',
+                        // Logical — the search icon is at `insetInlineStart`.
+                        paddingBlock: 10, paddingInlineStart: 40, paddingInlineEnd: 12,
                         borderRadius: 12,
                         border: '1px solid var(--border)',
                         background: 'var(--surface)',
@@ -469,7 +480,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                   border: '2px solid #ffffff'
                                 }} />
                               )}
-                              {presenceOf(u).online && (
+                              {presenceOf(u, t, lang).online && (
                                 <div style={{
                                   position: 'absolute',
                                   bottom: 0,
@@ -499,7 +510,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                 )}
                               </div>
                               <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                                {u.role} · {presenceOf(u).label}
+                                {label(u.role)} · {presenceOf(u, t, lang).label}
                               </div>
                             </div>
                           </button>
@@ -507,7 +518,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                       })
                     ) : (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: '#94a3b8', fontSize: 14 }}>
-                        No users found
+                        {t('No users found')}
                       </div>
                     )}
                   </div>
@@ -521,8 +532,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--surface-3)', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
                           <MessageSquare size={32} />
                         </div>
-                        <p style={{ fontSize: 14 }}>No messages yet.<br/>Start the conversation!</p>
-                        <p style={{ fontSize: 11, marginTop: 8 }}>Messages are kept for 7 days.</p>
+                        <p style={{ fontSize: 14 }}>{t('No messages yet.')}<br/>{t('Start the conversation!')}</p>
+                        <p style={{ fontSize: 11, marginTop: 8 }}>{t('Messages are kept for 7 days.')}</p>
                       </div>
                     ) : (
                       messages.map((msg, idx) => {
@@ -574,27 +585,27 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                                     : <FileText size={16} style={{ flexShrink: 0 }} />}
                                   <span style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
                                     <span style={{ fontSize: 10, fontWeight: 700, opacity: 0.8, textTransform: 'uppercase', letterSpacing: 0.4 }}>
-                                      {msg.refType === 'task' ? 'Task' : 'Correspondence'}{msg.refSerial ? ` · ${msg.refSerial}` : ''}
+                                      {msg.refType === 'task' ? t('Task') : t('Correspondence')}{msg.refSerial ? <> · <span className="ltr-data">{msg.refSerial}</span></> : ''}
                                     </span>
                                     <span style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                      {msg.refLabel || 'Open'}
+                                      {msg.refLabel || t('Open')}
                                     </span>
                                   </span>
                                 </button>
                               )}
                             </div>
                             <span style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 4, display: 'flex', alignItems: 'center', gap: 4 }}>
-                              {msg.createdAt?.toDate()?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              <span className="ltr-data">{fmtTime(msg.createdAt, lang)}</span>
                               {isMine && idx === lastMineIdx && (
                                 msg.read ? (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 2, color: 'var(--blue-600)', fontWeight: 600 }}>
                                     <CheckCheck size={13} />
-                                    Seen{msg.readAt ? ` ${msg.readAt.toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}
+                                    {t('Seen')}{msg.readAt ? <> <span className="ltr-data">{fmtTime(msg.readAt, lang)}</span></> : ''}
                                   </span>
                                 ) : (
                                   <span style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                                     <Check size={13} />
-                                    Sent
+                                    {t('Message sent')}
                                   </span>
                                 )
                               )}
@@ -618,12 +629,12 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                         ? <CheckSquare size={14} style={{ flexShrink: 0 }} />
                         : <FileText size={14} style={{ flexShrink: 0 }} />}
                       <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {pendingAttach.refSerial ? `${pendingAttach.refSerial} · ` : ''}{pendingAttach.refLabel}
+                        {pendingAttach.refSerial ? <><span className="ltr-data">{pendingAttach.refSerial}</span> · </> : ''}{pendingAttach.refLabel}
                       </span>
                       <button
                         onClick={() => setPendingAttach(null)}
                         style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
-                        aria-label="Remove attachment"
+                        aria-label={t('Remove attachment')}
                       >
                         <X size={14} />
                       </button>
@@ -670,7 +681,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <button
                       type="button"
                       onClick={() => { setShowEmoji(s => !s); setSharePickerOpen(false); }}
-                      title="Emoji"
+                      title={t('Emoji')}
                       style={{
                         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
                         background: showEmoji ? 'var(--blue-50)' : 'var(--surface-3)',
@@ -683,7 +694,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <button
                       type="button"
                       onClick={() => { setSharePickerOpen(true); setShowEmoji(false); }}
-                      title="Share a task or correspondence"
+                      title={t('Share a task or correspondence')}
                       style={{
                         width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
                         background: sharePickerOpen ? 'var(--blue-50)' : 'var(--surface-3)',
@@ -696,7 +707,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <textarea
                       ref={inputRef as any}
                       dir="auto"
-                      placeholder="Type a message..."
+                      placeholder={t('Type a message…')}
                       value={newMessage}
                       onChange={(e) => {
                         setNewMessage(e.target.value);
@@ -776,7 +787,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     padding: '14px 16px', background: 'var(--blue-600)', color: '#ffffff',
                     display: 'flex', alignItems: 'center', justifyContent: 'space-between'
                   }}>
-                    <span style={{ fontWeight: 700, fontSize: 14 }}>Share a reference</span>
+                    <span style={{ fontWeight: 700, fontSize: 14 }}>{t('Share a reference')}</span>
                     <button
                       onClick={() => { setSharePickerOpen(false); setShareSearch(''); }}
                       style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: 4 }}
@@ -796,7 +807,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                           color: shareTab === tab ? '#ffffff' : 'var(--text-secondary)'
                         }}
                       >
-                        {tab === 'task' ? 'Tasks' : 'Correspondences'}
+                        {tab === 'task' ? t('Tasks') : t('Correspondences')}
                       </button>
                     ))}
                   </div>
@@ -805,11 +816,12 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                     <input
                       type="text"
                       autoFocus
-                      placeholder={`Search ${shareTab === 'task' ? 'tasks' : 'correspondences'}...`}
+                      placeholder={shareTab === 'task' ? t('Search tasks…') : t('Search correspondences…')}
                       value={shareSearch}
                       onChange={e => setShareSearch(e.target.value)}
                       style={{
-                        width: '100%', padding: '10px 12px 10px 40px', borderRadius: 12,
+                        // Logical — the search icon is at `insetInlineStart`.
+                        width: '100%', paddingBlock: 10, paddingInlineStart: 40, paddingInlineEnd: 12, borderRadius: 12,
                         border: '1px solid var(--border)', fontSize: 14, outline: 'none',
                         background: 'var(--surface)', color: 'var(--text-primary)'
                       }}
@@ -818,7 +830,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                   <div style={{ flex: 1, overflowY: 'auto', padding: '0 12px 12px', display: 'flex', flexDirection: 'column', gap: 4 }}>
                     {shareList.length === 0 ? (
                       <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--text-muted)', fontSize: 14 }}>
-                        Nothing to show
+                        {t('Nothing to show')}
                       </div>
                     ) : (
                       shareList.map((it: Task | Corresponding) => {
@@ -832,7 +844,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               setPendingAttach({
                                 refType: isTask ? 'task' : 'corresponding',
                                 refId: it.id,
-                                refLabel: label || '(untitled)',
+                                refLabel: label || t('(untitled)'),
                                 refSerial: serial,
                               });
                               setSharePickerOpen(false);
@@ -850,9 +862,9 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
                               ? <CheckSquare size={16} style={{ flexShrink: 0, color: 'var(--blue-600)' }} />
                               : <FileText size={16} style={{ flexShrink: 0, color: 'var(--blue-600)' }} />}
                             <div style={{ minWidth: 0 }}>
-                              {serial && <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{serial}</div>}
+                              {serial && <div className="ltr-data" style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{serial}</div>}
                               <div style={{ fontSize: 13, fontWeight: 600, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {label || '(untitled)'}
+                                {label || t('(untitled)')}
                               </div>
                             </div>
                           </button>
@@ -906,7 +918,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--blue-600)' }}>New Message</span>
+              <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--blue-600)' }}>{t('New Message')}</span>
               <button
                 onClick={(e) => { e.stopPropagation(); setShowNotification(false); }}
                 style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 2 }}
@@ -915,7 +927,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
               </button>
             </div>
             <div style={{ fontSize: 14, color: '#1e293b', fontWeight: 600 }}>
-              {allUsers.find(u => u.id === unreadMessages[0].senderId)?.displayName || 'Someone'}
+              {allUsers.find(u => u.id === unreadMessages[0].senderId)?.displayName || t('Someone')}
             </div>
             <div style={{
               fontSize: 13,

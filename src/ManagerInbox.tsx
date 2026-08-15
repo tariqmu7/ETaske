@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, updateDoc,
   doc, serverTimestamp, orderBy
@@ -17,6 +18,8 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { AppView } from './App';
 import { globalSearch, getUserColor } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -30,6 +33,9 @@ interface Props {
 }
 
 export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const label = useDisplayLabel();
+  const fmt = useFormat();
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [selectedCorr, setSelectedCorr] = useState<Corresponding | null>(null);
@@ -54,7 +60,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       setCorrespondences(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'correspondences');
-      setError('Connection to correspondences failed. Please refresh.');
+      setError(t('Connection to correspondences failed. Please refresh.'));
     });
     return () => unsub();
   }, [appUser.status]);
@@ -186,7 +192,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       closeModal();
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
-      setError('Failed to update assignment. Check permissions.');
+      setError(t('Failed to update assignment. Check permissions.'));
       setIsAssigning(false); // re-enable so the manager can retry
       return;
     }
@@ -215,7 +221,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `correspondences/${corr.id}`);
       // The task exists; only the link back failed, so say exactly that.
-      setError('Task created, but the correspondence could not be marked assigned. Reopen it and try again.');
+      setError(t('Task created, but the correspondence could not be marked assigned.'));
     }
   };
 
@@ -269,10 +275,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       {/* Header */}
       <div style={{ marginBottom: 32 }}>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          Inbox
+          {t('Inbox')}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          Review incoming correspondences and assign them to employees as tasks.
+          {t('Review incoming correspondences and assign them to employees as tasks.')}
         </p>
       </div>
 
@@ -291,7 +297,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
             onClick={() => setFilter(s.label)}
           >
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
           </div>
         ))}
       </div>
@@ -310,14 +316,16 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       <div style={{ display: 'flex', gap: 10, marginBottom: 16 }}>
         <div style={{ position: 'relative', flex: 1 }}>
           <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-          <input className="input" style={{ paddingInlineStart: 36 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+          <input className="input" style={{ paddingInlineStart: 36 }} placeholder={t('Search…')} value={search} onChange={e => setSearch(e.target.value)} />
         </div>
+        {/* The value attribute is the stored status and stays English — only the
+            label is translated. */}
         <select className="input" style={{ width: 'auto' }} value={filter} onChange={e => setFilter(e.target.value)}>
-          <option value="All">All</option>
-          <option value="Unread">Unread</option>
-          <option value="Reviewing">Reviewing</option>
-          <option value="Assigned">Assigned</option>
-          <option value="Closed">Closed</option>
+          <option value="All">{t('All')}</option>
+          <option value="Unread">{t('Unread')}</option>
+          <option value="Reviewing">{t('Reviewing')}</option>
+          <option value="Assigned">{t('Assigned')}</option>
+          <option value="Closed">{t('Closed')}</option>
         </select>
       </div>
 
@@ -348,10 +356,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
               >
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                   <span className={`badge ${task.status === 'Done' ? 'badge-done' : task.status === 'In Progress' ? 'badge-inprogress' : 'badge-pending'}`}>
-                    {task.status}
+                    {label(task.status)}
                   </span>
                   <span className={`badge ${task.priority === 'Urgent' ? 'badge-urgent' : task.priority === 'High' ? 'badge-high' : task.priority === 'Medium' ? 'badge-medium' : 'badge-low'}`}>
-                    {task.priority}
+                    {label(task.priority)}
                   </span>
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 2, marginBottom: 8 }}>
@@ -391,10 +399,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                   <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
                     <div style={{ display: 'flex', gap: 8 }}>
                       <span className={`badge ${corr.status === 'Unread' ? 'badge-pending' : corr.status === 'Reviewing' ? 'badge-review' : corr.status === 'Assigned' ? 'badge-assigned' : 'badge-closed'}`}>
-                        {corr.status}
+                        {label(corr.status)}
                       </span>
                       <span className={`badge ${corr.priority === 'Urgent' ? 'badge-urgent' : corr.priority === 'High' ? 'badge-high' : corr.priority === 'Medium' ? 'badge-medium' : 'badge-low'}`}>
-                        {corr.priority}
+                        {label(corr.priority)}
                       </span>
                     </div>
                     <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{corr.dateReceived}</span>
@@ -421,7 +429,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
         {((filter === 'Active Tasks' || filter === 'Tasks Done') ? tasks.filter(t => (filter === 'Active Tasks' ? (t.status === 'In Progress' || t.status === 'Pending') : t.status === 'Done')).length : filtered.length) === 0 && (
           <div style={{ textAlign: 'center', padding: '60px 20px', color: 'var(--text-muted)' }}>
             <Inbox style={{ width: 40, height: 40, margin: '0 auto 12px', opacity: 0.3 }} />
-            <p style={{ fontSize: 14, fontWeight: 600 }}>All caught up!</p>
+            <p style={{ fontSize: 14, fontWeight: 600 }}>{t('All caught up!')}</p>
           </div>
         )}
       </div>
@@ -431,10 +439,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="card" style={{ padding: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
-            Team Workload
+            {t('Team Workload')}
           </div>
           {targetUsers.length === 0 ? (
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No team members</p>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>{t('No team members')}</p>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {[...targetUsers].sort((a, b) => {
@@ -469,11 +477,11 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                       <div style={{ flex: 1, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: inProgress > 0 ? '#fbbf24' : 'var(--text-muted)', lineHeight: 1 }}>{inProgress}</div>
-                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Active</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>{t('Active')}</div>
                       </div>
                       <div style={{ flex: 1, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: done > 0 ? '#4ade80' : 'var(--text-muted)', lineHeight: 1 }}>{done}</div>
-                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Done</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>{t('Done')}</div>
                       </div>
                     </div>
                     {total > 0 && (
@@ -483,8 +491,8 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     )}
                     {oldestActive && (
                       <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ opacity: 0.6 }}>Since</span>
-                        <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{oldestActive.toLocaleDateString('en-GB')}</span>
+                        <span style={{ opacity: 0.6 }}>{t('Since')}</span>
+                        <span className="ltr-data" style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{fmt.date(oldestActive)}</span>
                       </div>
                     )}
                   </div>
@@ -529,10 +537,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap' }}>
                     <span className={`badge ${selectedCorr.status === 'Unread' ? 'badge-pending' : selectedCorr.status === 'Reviewing' ? 'badge-review' : selectedCorr.status === 'Assigned' ? 'badge-assigned' : 'badge-closed'}`}>
-                      {selectedCorr.status}
+                      {label(selectedCorr.status)}
                     </span>
                     <span className={`badge ${selectedCorr.priority === 'Urgent' ? 'badge-urgent' : selectedCorr.priority === 'High' ? 'badge-high' : selectedCorr.priority === 'Medium' ? 'badge-medium' : 'badge-low'}`}>
-                      {selectedCorr.priority}
+                      {label(selectedCorr.priority)}
                     </span>
                     {selectedCorr.serialNumber && (
                       <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -574,14 +582,14 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                 )}
                 {selectedCorr.deadline && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Calendar className="w-3.5 h-3.5" /> Deadline: {selectedCorr.deadline}
+                    <Calendar className="w-3.5 h-3.5" /> {t('Deadline:')}<span className="ltr-data">{selectedCorr.deadline}</span>
                   </span>
                 )}
               </div>
 
               {/* Body */}
               <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 10 }}>Content</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 10 }}>{t('Content')}</div>
                 <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{selectedCorr.body}</p>
               </div>
 
@@ -595,7 +603,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}
                   >
                     <Paperclip className="w-4 h-4" />
-                    {selectedCorr.attachedFileName || 'View Attachment'}
+                    {selectedCorr.attachedFileName || t('View attachment')}
                   </a>
                 </div>
               )}
@@ -604,50 +612,50 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
               {selectedCorr.status === 'Assigned' && selectedCorr.assignedTo && (
                 <div style={{ margin: '0 24px 0', marginTop: 20, background: 'rgba(59,130,246,0.08)', border: '1px solid rgba(59,130,246,0.2)', padding: '10px 14px', fontSize: 12, color: 'var(--accent)', display: 'flex', gap: 8, alignItems: 'center' }}>
                   <Users className="w-4 h-4" style={{ flexShrink: 0 }} />
-                  Currently assigned to <strong>{selectedCorr.assignedTo}</strong>. Changing this will update the linked task.
+                  {/* The name was a mid-sentence <strong>; Arabic reorders that
+                      clause, so it is interpolated into one whole sentence. */}
+                  {t('Currently assigned to {{name}}. Changing this will update the linked task.', { name: selectedCorr.assignedTo })}
                 </div>
               )}
 
               {/* Assignment form */}
               <div style={{ padding: '20px 24px' }}>
                 <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
-                  {hasTask ? 'Reassign Task' : 'Assign as Task'}
+                  {hasTask ? t('Reassign Task') : t('Assign as Task')}
                 </div>
 
                 {hasTask && (
                   <>
                     <div style={{ marginBottom: 14 }}>
-                      <label className="input-label">Assign to Employee *</label>
+                      <label className="input-label">{t('Assign to Employee')}<span style={{ color: '#ef4444' }}>*</span></label>
                       <select className="input" value={assigneeId} onChange={e => setAssigneeId(e.target.value)} required>
-                        <option value="">— Select Recipient —</option>
+                        <option value="">{t('— Select Recipient —')}</option>
                         {targetUsers.map(e => (
-                          <option key={e.id} value={e.id}>{e.displayName} ({e.role})</option>
+                          <option key={e.id} value={e.id}>{e.displayName} ({label(e.role)})</option>
                         ))}
                       </select>
                     </div>
 
                     <div style={{ marginBottom: 14 }}>
-                      <label className="input-label">Due Date</label>
+                      <label className="input-label">{t('Due Date')}</label>
                       <input className="input" type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} />
                     </div>
                   </>
                 )}
 
                 <div style={{ marginBottom: hasTask ? 20 : 14 }}>
-                  <label className="input-label">Manager Note (optional)</label>
-                  <textarea className="input" rows={3} value={managerNote} onChange={e => setManagerNote(e.target.value)} placeholder="Instructions or context for the employee…" />
+                  <label className="input-label">{t('Manager Note (optional)')}</label>
+                  <textarea className="input" rows={3} value={managerNote} onChange={e => setManagerNote(e.target.value)} placeholder={t('Instructions or context for the employee…')} />
                 </div>
 
                 {!hasTask && (
                   <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.6 }}>
-                    Continue to the full task form — assignee, collaborators, due date, classification,
-                    visibility and attachments — prefilled from this correspondence. The note above is
-                    saved on the correspondence and carried into the task description.
+                    {t('Continue to the full task form')}
                   </div>
                 )}
 
                 <div style={{ display: 'flex', gap: 10 }}>
-                  <button className="btn" style={{ flex: 1 }} onClick={closeModal}>Cancel</button>
+                  <button className="btn" style={{ flex: 1 }} onClick={closeModal}>{t('Cancel')}</button>
                   {hasTask ? (
                     <button
                       className="btn btn-primary"
@@ -656,9 +664,9 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                       disabled={!assigneeId || isAssigning}
                     >
                       {isAssigning ? (
-                        <><span className="spinner" style={{ width: 16, height: 16 }} /> Processing…</>
+                        <><span className="spinner" style={{ width: 16, height: 16 }} /> {t('Processing…')}</>
                       ) : (
-                        <><UserCheck className="w-4 h-4" /> Reassign Task</>
+                        <><UserCheck className="w-4 h-4" /> {t('Reassign Task')}</>
                       )}
                     </button>
                   ) : (
@@ -667,7 +675,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                       style={{ flex: 2 }}
                       onClick={() => setIsConverting(true)}
                     >
-                      <UserCheck className="w-4 h-4" /> Assign as Task…
+                      <UserCheck className="w-4 h-4" /> {t('Assign as Task…')}
                     </button>
                   )}
                 </div>
@@ -697,11 +705,11 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           userId: user.uid,
         } : undefined}
         headerIcon={<Inbox style={{ width: 16, height: 16, color: '#fff' }} />}
-        headerTitle="Assign as Task"
-        headerSubtitle={selectedCorr?.serialNumber ? `From ${selectedCorr.serialNumber}` : 'From correspondence'}
+        headerTitle={t('Assign as Task')}
+        headerSubtitle={selectedCorr?.serialNumber ? t('From {{serial}}', { serial: selectedCorr.serialNumber }) : t('From correspondence')}
         sourceStrip={selectedCorr ? (
           <div style={{ padding: '12px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Source correspondence</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{t('Source correspondence')}</p>
             <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{selectedCorr.subject}</p>
           </div>
         ) : undefined}
