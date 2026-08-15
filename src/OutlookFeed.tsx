@@ -1,4 +1,8 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useFormat, fmtAgo, DATETIME_SHORT } from './lib/format';
+import type { Language } from './i18n';
+import type { TFunction } from 'i18next';
 import { User } from 'firebase/auth';
 import { AppUser, TaskPriority, CorrespondingCategory } from './types';
 import CreateTaskPanel from './components/CreateTaskPanel';
@@ -55,26 +59,22 @@ function importanceBadgeClass(imp: string) {
   return 'badge badge-medium';
 }
 
-function formatRelativeTime(isoString: string): string {
+// Both helpers take the translator rather than calling a hook: they run outside
+// the component (and inside a useMemo), so `t` has to be handed to them.
+function formatRelativeTime(isoString: string, t: TFunction, lang: Language): string {
   if (!isoString) return '';
-  const date = new Date(isoString);
-  const diff = Date.now() - date.getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
+  return fmtAgo(isoString, lang, t);
 }
 
 // Who the email is "with": the sender for incoming mail, the recipients for sent mail.
-function counterparty(email: OutlookEmail): string {
-  if (email.direction === 'sent') return email.to || (email.recipients || []).join('; ') || '(no recipient)';
-  return email.sender || '(unknown sender)';
+function counterparty(email: OutlookEmail, t: TFunction): string {
+  if (email.direction === 'sent') return email.to || (email.recipients || []).join('; ') || t('(no recipient)');
+  return email.sender || t('(unknown sender)');
 }
 
 export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
+  const { t } = useTranslation();
+  const fmt = useFormat();
   const [status, setStatus] = useState<BridgeStatus | null>(null);
   const [folder, setFolder] = useState<MailFolder>('Inbox');
   const [emails, setEmails] = useState<OutlookEmail[]>([]);
@@ -107,12 +107,12 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
       if (!res.ok) throw new Error(`Bridge returned ${res.status}`);
       setEmails(await res.json());
     } catch (e: any) {
-      setError(e.message || 'Failed to fetch emails');
+      setError(e.message || t('Failed to fetch emails'));
       setEmails([]);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     checkStatus();
@@ -138,14 +138,14 @@ export default function OutlookFeed({ user, appUser, projectUsers }: Props) {
   const taskPrefill = useMemo(() => creatingFrom ? {
     taskName: creatingFrom.subject,
     description: `${creatingFrom.direction === 'sent'
-      ? `To: ${counterparty(creatingFrom)}`
-      : `From: ${creatingFrom.sender} <${creatingFrom.sender_email}>`}
+      ? `${t('To:')}${counterparty(creatingFrom, t)}`
+      : `${t('From:')}${creatingFrom.sender} <${creatingFrom.sender_email}>`}
 
 ${creatingFrom.body_preview}`,
     priority: (creatingFrom.importance === 'High' ? 'High' : 'Medium') as TaskPriority,
     category: 'Internal' as CorrespondingCategory,
     department: appUser.department || 'None',
-  } : undefined, [creatingFrom, appUser.department]);
+  } : undefined, [creatingFrom, appUser.department, t]);
 
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -165,8 +165,8 @@ ${creatingFrom.body_preview}`,
           <Mail size={20} color="#fff" />
         </div>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>Outlook Feed</h1>
-          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>Read local Outlook inbox &amp; sent mail · create tasks instantly</p>
+          <h1 style={{ fontSize: 22, fontWeight: 700, color: 'var(--text-1)', margin: 0 }}>{t('Outlook Feed')}</h1>
+          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>{t('Read local Outlook inbox & sent mail · create tasks instantly')}</p>
         </div>
 
         <div style={{ marginInlineStart: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -178,15 +178,15 @@ ${creatingFrom.body_preview}`,
             border: `1px solid ${connected ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`,
           }}>
             {connected
-              ? <><Wifi size={13} color="#22c55e" /><span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>Bridge connected</span></>
-              : <><WifiOff size={13} color="#ef4444" /><span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>Bridge offline</span></>
+              ? <><Wifi size={13} color="#22c55e" /><span style={{ fontSize: 12, color: '#22c55e', fontWeight: 600 }}>{t('Bridge connected')}</span></>
+              : <><WifiOff size={13} color="#ef4444" /><span style={{ fontSize: 12, color: '#ef4444', fontWeight: 600 }}>{t('Bridge offline')}</span></>
             }
           </div>
 
           <a
             href={BRIDGE_DOWNLOAD_URL}
             download="ETaske-OutlookBridge.exe"
-            title="Download the ETaske Outlook Bridge for Windows"
+            title={t('Download the ETaske Outlook Bridge for Windows')}
             style={{
               display: 'flex', alignItems: 'center', gap: 6,
               padding: '7px 14px', borderRadius: 8, border: '1px solid var(--border)',
@@ -195,7 +195,7 @@ ${creatingFrom.body_preview}`,
             }}
           >
             <Download size={14} />
-            Bridge for Windows
+            {t('Bridge for Windows')}
           </a>
 
           <button
@@ -207,7 +207,7 @@ ${creatingFrom.body_preview}`,
             }}
           >
             <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
-            Refresh
+            {t('Refresh')}
           </button>
         </div>
       </div>
@@ -223,15 +223,17 @@ ${creatingFrom.body_preview}`,
             <AlertCircle size={20} color="#ef4444" style={{ flexShrink: 0, marginTop: 2 }} />
             <div>
               <p style={{ fontWeight: 600, color: 'var(--text-1)', margin: '0 0 6px' }}>
-                ETaske Outlook Bridge is not running
+                {t('ETaske Outlook Bridge is not running')}
               </p>
               <p style={{ fontSize: 13, color: 'var(--text-3)', margin: '0 0 10px' }}>
-                To read your Outlook emails here, run the local bridge tool on this PC first.
+                {t('To read your Outlook emails here, run the local bridge tool on this PC first.')}
               </p>
+              {/* The <strong> spans were mid-sentence emphasis, which Arabic
+                  reorders — each step is now one whole translatable line. */}
               <ol style={{ fontSize: 13, color: 'var(--text-2)', margin: 0, paddingInlineStart: 18, lineHeight: 1.8 }}>
-                <li>Download <strong>ETaske-OutlookBridge.exe</strong> with the button below</li>
-                <li>Double-click it — a small status window will appear. Keep it open.</li>
-                <li>Come back here and click <strong>Refresh</strong></li>
+                <li>{t('Download ETaske-OutlookBridge.exe with the button below')}</li>
+                <li>{t('Double-click it — a small status window will appear. Keep it open.')}</li>
+                <li>{t('Come back here and click Refresh')}</li>
               </ol>
               <a
                 href={BRIDGE_DOWNLOAD_URL}
@@ -242,11 +244,10 @@ ${creatingFrom.body_preview}`,
                   background: 'var(--accent)', color: '#fff', textDecoration: 'none',
                 }}
               >
-                <Download size={15} /> Download Bridge for Windows
+                <Download size={15} /> {t('Download Bridge for Windows')}
               </a>
               <p style={{ fontSize: 12, color: 'var(--text-3)', margin: '8px 0 0' }}>
-                Windows only · requires Outlook installed · ~22 MB. Windows SmartScreen may warn on
-                first run — choose “More info → Run anyway”.
+                {t('Windows only · requires Outlook installed · ~22 MB.')}
               </p>
             </div>
           </div>
@@ -257,6 +258,8 @@ ${creatingFrom.body_preview}`,
       {connected && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
           {([
+            // `id` is the Outlook folder name the bridge expects; `label` is the
+            // i18next key.
             { id: 'Inbox' as MailFolder, label: 'Inbox', icon: <Inbox size={14} />, count: status?.email_count },
             { id: 'Sent Items' as MailFolder, label: 'Sent', icon: <Send size={14} />, count: status?.sent_count },
           ]).map(tab => {
@@ -275,7 +278,7 @@ ${creatingFrom.body_preview}`,
                 }}
               >
                 {tab.icon}
-                {tab.label}
+                {t(tab.label)}
                 {typeof tab.count === 'number' && (
                   <span style={{ fontSize: 11, opacity: 0.75, fontWeight: 500 }}>{tab.count}</span>
                 )}
@@ -292,10 +295,11 @@ ${creatingFrom.body_preview}`,
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder={folder === 'Sent Items' ? 'Search subject, recipient…' : 'Search subject, sender…'}
+            placeholder={folder === 'Sent Items' ? t('Search subject, recipient…') : t('Search subject, sender…')}
             style={{
               width: '100%', boxSizing: 'border-box',
-              padding: '10px 12px 10px 38px', borderRadius: 10,
+              // Logical padding — the icon is at `insetInlineStart`.
+              paddingBlock: 10, paddingInlineStart: 38, paddingInlineEnd: 12, borderRadius: 10,
               border: '1px solid var(--border)', background: 'var(--surface-2)',
               color: 'var(--text-1)', fontSize: 14, outline: 'none',
             }}
@@ -309,8 +313,8 @@ ${creatingFrom.body_preview}`,
           {folder === 'Sent Items' ? <Send size={14} color="var(--text-3)" /> : <Inbox size={14} color="var(--text-3)" />}
           <span style={{ fontSize: 13, color: 'var(--text-3)' }}>
             {folder === 'Sent Items'
-              ? `${status.sent_count ?? 0} emails in sent items`
-              : `${status.email_count} emails in inbox`} · showing {emails.length}
+              ? t('{{count}} emails in sent items · showing {{shown}}', { count: status.sent_count ?? 0, shown: emails.length })
+              : t('{{count}} emails in inbox · showing {{shown}}', { count: status.email_count, shown: emails.length })}
           </span>
         </div>
       )}
@@ -319,14 +323,14 @@ ${creatingFrom.body_preview}`,
       {loading && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-3)' }}>
           <RefreshCw size={24} style={{ animation: 'spin 1s linear infinite', marginBottom: 12 }} />
-          <p style={{ margin: 0 }}>Loading emails…</p>
+          <p style={{ margin: 0 }}>{t('Loading emails…')}</p>
         </div>
       )}
 
       {!loading && error && (
         <div style={{ textAlign: 'center', padding: 48, color: '#ef4444' }}>
           <AlertCircle size={32} style={{ marginBottom: 12 }} />
-          <p style={{ margin: 0, fontWeight: 600 }}>Could not load emails</p>
+          <p style={{ margin: 0, fontWeight: 600 }}>{t('Could not load emails')}</p>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--text-3)' }}>{error}</p>
         </div>
       )}
@@ -334,7 +338,7 @@ ${creatingFrom.body_preview}`,
       {!loading && !error && connected && emails.length === 0 && (
         <div style={{ textAlign: 'center', padding: 60, color: 'var(--text-3)' }}>
           <Mail size={40} style={{ marginBottom: 12, opacity: 0.3 }} />
-          <p style={{ margin: 0 }}>No emails found</p>
+          <p style={{ margin: 0 }}>{t('No emails found')}</p>
         </div>
       )}
 
@@ -342,7 +346,7 @@ ${creatingFrom.body_preview}`,
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {emails.map(email => {
             const isSent = email.direction === 'sent';
-            const party = counterparty(email);
+            const party = counterparty(email, t);
             return (
             <div
               key={email.id}
@@ -376,7 +380,7 @@ ${creatingFrom.body_preview}`,
                       {email.subject}
                     </span>
                     <span style={{ fontSize: 12, color: 'var(--text-3)', flexShrink: 0 }}>
-                      {formatRelativeTime(email.received_at)}
+                      {formatRelativeTime(email.received_at, t, fmt.lang)}
                     </span>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -384,7 +388,7 @@ ${creatingFrom.body_preview}`,
                       fontSize: 13, color: 'var(--text-3)',
                       whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 420,
                     }}>
-                      {isSent ? `To: ${party}` : party}
+                      {isSent ? `${t('To:')}${party}` : party}
                     </span>
                     {email.importance !== 'Normal' && (
                       <span className={importanceBadgeClass(email.importance)} style={{ fontSize: 10 }}>
@@ -397,7 +401,7 @@ ${creatingFrom.body_preview}`,
 
                 <button
                   onClick={e => { e.stopPropagation(); openCreateTask(email); }}
-                  title="Create task from this email"
+                  title={t('Create task from this email')}
                   style={{
                     flexShrink: 0, display: 'flex', alignItems: 'center', gap: 5,
                     padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600,
@@ -413,7 +417,7 @@ ${creatingFrom.body_preview}`,
                     (e.currentTarget as HTMLButtonElement).style.color = 'var(--accent)';
                   }}
                 >
-                  <Plus size={12} /> Task
+                  <Plus size={12} /> {t('Task')}
                 </button>
               </div>
 
@@ -433,13 +437,13 @@ ${creatingFrom.body_preview}`,
                     }}>
                       <div style={{ display: 'flex', gap: 24, marginBottom: 10, fontSize: 13, color: 'var(--text-3)', flexWrap: 'wrap' }}>
                         {isSent ? (
-                          <span><strong style={{ color: 'var(--text-2)' }}>To:</strong> {party}</span>
+                          <span><strong style={{ color: 'var(--text-2)' }}>{t('To:')}</strong> {party}</span>
                         ) : (
-                          <span><strong style={{ color: 'var(--text-2)' }}>From:</strong> {email.sender} {email.sender_email ? `<${email.sender_email}>` : ''}</span>
+                          <span><strong style={{ color: 'var(--text-2)' }}>{t('From:')}</strong> {email.sender} {email.sender_email ? `<${email.sender_email}>` : ''}</span>
                         )}
                         <span>
-                          <strong style={{ color: 'var(--text-2)' }}>{isSent ? 'Sent:' : 'Received:'}</strong>{' '}
-                          {email.received_at ? new Date(email.received_at).toLocaleString() : '—'}
+                          <strong style={{ color: 'var(--text-2)' }}>{isSent ? t('Sent:') : t('Received:')}</strong>{' '}
+                          <span className={fmt.bidi(DATETIME_SHORT)}>{email.received_at ? fmt.dateTime(email.received_at) : '—'}</span>
                         </span>
                       </div>
                       <p style={{
@@ -471,7 +475,7 @@ ${creatingFrom.body_preview}`,
                           background: 'var(--accent)', color: '#fff', border: 'none', cursor: 'pointer',
                         }}
                       >
-                        <Plus size={14} /> Create Task from this Email
+                        <Plus size={14} /> {t('Create Task from this Email')}
                       </button>
                     </div>
                   </motion.div>
@@ -494,11 +498,11 @@ ${creatingFrom.body_preview}`,
         extraFields={creatingFrom ? { correspondingSubject: creatingFrom.subject } : undefined}
         headerIcon={<Mail size={16} color="#fff" />}
         headerIconBackground="linear-gradient(135deg,#0078d4,#005a9e)"
-        headerTitle="Create Task from Email"
-        headerSubtitle={creatingFrom ? counterparty(creatingFrom) : undefined}
+        headerTitle={t('Create Task from Email')}
+        headerSubtitle={creatingFrom ? counterparty(creatingFrom, t) : undefined}
         sourceStrip={creatingFrom ? (
           <div style={{ padding: '12px 24px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>Source email</p>
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--text-muted)' }}>{t('Source email')}</p>
             <p style={{ margin: '3px 0 0', fontSize: 13, color: 'var(--text-secondary)', fontWeight: 500 }}>{creatingFrom.subject}</p>
           </div>
         ) : undefined}

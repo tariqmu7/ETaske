@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc,
   doc, serverTimestamp,
@@ -7,6 +8,8 @@ import { db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
 import { AppUser, Project, ProjectUpdate, PROJECT_STATUS_OPTIONS, ProjectStatus } from '../../types';
 import { getUserColor } from '../../utils';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat, DATE_MEDIUM } from '../../lib/format';
 import { Activity, Send, Clock } from 'lucide-react';
 import ListControls, { SortDir } from './ListControls';
 
@@ -17,6 +20,9 @@ interface Props {
 }
 
 export default function ProjectTrackingTab({ project, user, appUser }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [updates, setUpdates] = useState<ProjectUpdate[]>([]);
   const [text, setText] = useState('');
   const [status, setStatus] = useState<ProjectStatus>(project.status || 'Active');
@@ -35,11 +41,13 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
     return () => unsub();
   }, [project.id]);
 
+  // The filter is built from the statuses actually posted. The VALUE stays the
+  // stored English word — only its label goes through the display layer.
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
     updates.forEach(u => { if (u.status) set.add(u.status); });
-    return [{ value: 'all', label: 'All statuses' }, ...Array.from(set).sort().map(v => ({ value: v, label: v }))];
-  }, [updates]);
+    return [{ value: 'all', label: t('All statuses') }, ...Array.from(set).sort().map(v => ({ value: v, label: dl(v) }))];
+  }, [updates, t, dl]);
 
   const visible = useMemo(() => {
     let rows = updates.slice();
@@ -83,8 +91,10 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
     }
   };
 
-  const fmt = (ts?: ProjectUpdate['createdAt']) =>
-    ts ? new Date(ts.seconds * 1000).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'Just now';
+  // A named-month timestamp, so it is Arabic under `ar` — hence no `.ltr-data`
+  // on the spans that carry it.
+  const when = (ts?: ProjectUpdate['createdAt']) =>
+    ts ? fmt.dateTime(ts, { ...DATE_MEDIUM, hour: '2-digit', minute: '2-digit' }) : t('Just now');
 
   return (
     <div style={{ display: 'grid', gap: 20 }}>
@@ -92,15 +102,15 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
       <div className="card stat-indigo" style={{ padding: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Activity className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>Current Status</span>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>{t('Current Status')}</span>
         </div>
-        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{project.currentStatus || project.status}</div>
+        <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{dl(project.currentStatus || project.status)}</div>
         {project.lastUpdateText && (
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '10px 0 0', lineHeight: 1.5 }}>{project.lastUpdateText}</p>
+          <p className={fmt.bidiFor(project.lastUpdateText)} style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '10px 0 0', lineHeight: 1.5 }}>{project.lastUpdateText}</p>
         )}
         {project.lastUpdateAt && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)', marginTop: 10 }}>
-            <Clock className="w-3.5 h-3.5" /> Last updated {fmt(project.lastUpdateAt)}
+            <Clock className="w-3.5 h-3.5" /> {t('Last updated {{date}}', { date: when(project.lastUpdateAt) })}
           </div>
         )}
       </div>
@@ -109,57 +119,57 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
       <div className="card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 10, marginBottom: 10, flexWrap: 'wrap' }}>
           <select value={status} onChange={e => setStatus(e.target.value as ProjectStatus)} style={inputStyle}>
-            {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+            {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
           </select>
         </div>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
-          placeholder="Post a status update…"
+          placeholder={t('Post a status update…')}
           rows={2}
           style={{ ...inputStyle, width: '100%', resize: 'vertical' }}
         />
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 10 }}>
           <button className="btn btn-primary" disabled={posting || !text.trim()} onClick={post}>
-            <Send className="w-4 h-4" /> {posting ? 'Posting…' : 'Post update'}
+            <Send className="w-4 h-4" /> {posting ? t('Posting…') : t('Post update')}
           </button>
         </div>
       </div>
 
       {/* History */}
       <div>
-        <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px' }}>History</h3>
+        <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px' }}>{t('History')}</h3>
         {updates.length === 0 ? (
-          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No updates yet.</div>
+          <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>{t('No updates yet.')}</div>
         ) : (
           <>
           <ListControls
             filters={[
-              { key: 'status', label: 'Status', value: statusFilter, options: statusOptions, onChange: setStatusFilter },
+              { key: 'status', label: t('Status'), value: statusFilter, options: statusOptions, onChange: setStatusFilter },
             ]}
             sortOptions={[
-              { value: 'date', label: 'Date posted' },
-              { value: 'status', label: 'Status' },
+              { value: 'date', label: t('Date posted') },
+              { value: 'status', label: t('Status') },
             ]}
             sortValue={sortKey}
             onSortChange={setSortKey}
             sortDir={sortDir}
             onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            trailing={`${visible.length} of ${updates.length}`}
+            trailing={t('{{shown}} of {{total}}', { shown: visible.length, total: updates.length })}
           />
           {visible.length === 0 ? (
-            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>No updates match.</div>
+            <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>{t('No updates match.')}</div>
           ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 0, borderInlineStart: '2px solid var(--border)', paddingInlineStart: 18, marginInlineStart: 6 }}>
             {visible.map(u => (
               <div key={u.id} style={{ position: 'relative', paddingBottom: 18 }}>
                 <span style={{ position: 'absolute', insetInlineStart: -25, top: 4, width: 10, height: 10, borderRadius: '50%', background: u.authorColor || 'var(--accent)' }} />
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                  {u.status && <span className="badge badge-inprogress">{u.status}</span>}
+                  {u.status && <span className="badge badge-inprogress">{dl(u.status)}</span>}
                   <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-primary)' }}>{u.authorName}</span>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{fmt(u.createdAt)}</span>
+                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>{when(u.createdAt)}</span>
                 </div>
-                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{u.text}</p>
+                <p className={fmt.bidiFor(u.text)} style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{u.text}</p>
               </div>
             ))}
           </div>

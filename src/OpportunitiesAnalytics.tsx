@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { collection, query, onSnapshot } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import {
@@ -8,6 +9,9 @@ import {
 } from './types';
 import type { AppView } from './App';
 import { STAGE_COLORS, toNumber, money } from './components/opportunities/opportunityUi';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat, intlLocale, bidiClassFor } from './lib/format';
+import type { Language } from './i18n';
 import {
   BarChart3, Target, AlertTriangle, ArrowUpRight, ArrowDownRight,
   Minus, RefreshCw, Info, FileSpreadsheet, Loader2,
@@ -35,6 +39,8 @@ interface Props {
 
 type Period = '6m' | '12m' | 'ytd' | '24m' | 'all';
 
+// The English label is the i18next key, exactly like every other string in the
+// app — `t(PERIOD_LABELS[p])` is what paints it.
 const PERIOD_LABELS: Record<Period, string> = {
   '6m': 'Last 6 months',
   '12m': 'Last 12 months',
@@ -68,13 +74,29 @@ const dayDiff = (a: string, b: string) =>
 const pct = (part: number, whole: number) => (whole > 0 ? Math.round((part / whole) * 100) : null);
 
 const monthKey = (iso: string) => iso.slice(0, 7);
-const monthLabel = (key: string) => {
+/**
+ * The trend chart's x-axis label.
+ *
+ * ★ Arabic gets a NUMERIC month, English the short name — and that is a layout
+ * decision, not a translation shortcut. Arabic has no three-letter month
+ * abbreviation: `ar-EG` renders "أغسطس", 5–7 glyphs wide, and this axis packs up
+ * to 14 columns of `min-width:34px` with `white-space:nowrap`, so the names
+ * overlapped each other into an unreadable smear (found by LOOKING at
+ * i18nrtl-bid-analytics-ar.png — every assertion on the page was green).
+ * A purely numeric date carries no language, which is the same rule lib/format
+ * already applies to every other date in the app.
+ */
+const monthLabel = (key: string, lang: Language) => {
   const d = new Date(`${key}-01T00:00:00`);
-  return d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' });
+  if (lang === 'ar') return `${key.slice(5, 7)}/${key.slice(2, 4)}`;
+  return new Intl.DateTimeFormat(intlLocale(lang), { month: 'short', year: '2-digit' }).format(d);
 };
 const quarterKey = (iso: string) => `${iso.slice(0, 4)}-Q${Math.ceil(Number(iso.slice(5, 7)) / 3)}`;
 
 export default function OpportunitiesAnalytics({ appUser, projectUsers, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [feedback, setFeedback] = useState<OpportunityFeedback[]>([]);
   const [milestones, setMilestones] = useState<OpportunityMilestone[]>([]);
@@ -94,10 +116,13 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
     setExportNote(null);
     try {
       const r = await exportOpportunities();
-      setExportNote(`Saved ${r.fileName} — ${r.opportunities} opportunities, ${r.feedback} outcomes, ${r.milestones} bid gates, ${r.followUps} follow-ups.`);
+      setExportNote(t('Saved {{file}} — {{opportunities}} opportunities, {{feedback}} outcomes, {{milestones}} bid gates, {{followUps}} follow-ups.', {
+        file: r.fileName, opportunities: r.opportunities, feedback: r.feedback,
+        milestones: r.milestones, followUps: r.followUps,
+      }));
     } catch (e) {
       console.error('Export opportunities failed:', e);
-      setExportNote('Export failed. Please try again.');
+      setExportNote(t('Export failed. Please try again.'));
     } finally {
       setExporting(false);
     }
@@ -115,7 +140,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       setLoading(false);
     }, err => {
       console.error('Analytics opportunities listener:', err, { uid: auth.currentUser?.uid });
-      setErrors(e => ({ ...e, opportunities: 'Failed to load opportunities.' }));
+      setErrors(e => ({ ...e, opportunities: t('Failed to load opportunities.') }));
       setLoading(false);
     });
     return () => unsub();
@@ -126,7 +151,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       setFeedback(snap.docs.map(d => ({ id: d.id, ...d.data() } as OpportunityFeedback)));
     }, err => {
       console.error('Analytics feedback listener:', err);
-      setErrors(e => ({ ...e, feedback: 'Failed to load outcome records — reason analysis is unavailable.' }));
+      setErrors(e => ({ ...e, feedback: t('Failed to load outcome records — reason analysis is unavailable.') }));
     });
     return () => unsub();
   }, []);
@@ -136,7 +161,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       setMilestones(snap.docs.map(d => ({ id: d.id, ...d.data() } as OpportunityMilestone)));
     }, err => {
       console.error('Analytics milestones listener:', err);
-      setErrors(e => ({ ...e, milestones: 'Failed to load bid gates — slippage is unavailable.' }));
+      setErrors(e => ({ ...e, milestones: t('Failed to load bid gates — slippage is unavailable.') }));
     });
     return () => unsub();
   }, []);
@@ -341,19 +366,19 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       const other = inBucket.length - won - lost;
       return {
         key,
-        label: grouping === 'month' ? monthLabel(key) : key.replace('-', ' '),
+        label: grouping === 'month' ? monthLabel(key, fmt.lang) : key.replace('-', ' '),
         won, lost, other,
         rate: pct(won, won + lost),
       };
     });
     return { buckets, grouping, max: Math.max(1, ...buckets.map(b => b.won + b.lost + b.other)) };
-  }, [decided, windows]);
+  }, [decided, windows, fmt.lang]);
 
   // ── Client / sector split ─────────────────────────────────────────────────
   const split = useMemo(() => {
     const groups = new Map<string, { won: number; lost: number; other: number; wonValue: number }>();
     decided.list.forEach(o => {
-      const key = (splitBy === 'client' ? o.client : o.sector) || 'Not recorded';
+      const key = (splitBy === 'client' ? o.client : o.sector) || t('Not recorded');
       const cur = groups.get(key) || { won: 0, lost: 0, other: 0, wonValue: 0 };
       if (o.stage === 'Won') { cur.won += 1; cur.wonValue += toNumber(o.estimatedValue); }
       else if (o.stage === 'Lost') cur.lost += 1;
@@ -403,7 +428,10 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
     return { rows: rows.slice(0, 40), hidden: Math.max(0, rows.length - 40) };
   }, [decided, feedbackByOpp]);
 
-  const periodNote = period === 'all' ? 'all time' : PERIOD_LABELS[period].toLowerCase();
+  // Lower-cased only in English, where the label sits mid-sentence; Arabic has
+  // no letter case and `toLowerCase()` on it is a no-op that reads as a bug.
+  const periodLabel = t(PERIOD_LABELS[period]);
+  const periodNote = fmt.lang === 'en' ? periodLabel.toLowerCase() : periodLabel;
   const rateDelta = decided.rate !== null && decided.previous.rate !== null && period !== 'all'
     ? decided.rate - decided.previous.rate
     : null;
@@ -432,12 +460,12 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       <div style={wrap}>
         <div className="empty-state">
           <div className="empty-state-icon"><BarChart3 className="w-8 h-8" /></div>
-          <div className="empty-state-title">Nothing to analyse yet</div>
+          <div className="empty-state-title">{t('Nothing to analyse yet')}</div>
           <div className="empty-state-sub">
-            Win rate, loss reasons and pipeline value appear here as soon as opportunities are recorded.
+            {t('Win rate, loss reasons and pipeline value appear here as soon as opportunities are recorded.')}
           </div>
           <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={() => onNavigate('opportunities')}>
-            <Target className="w-4 h-4" /> Go to Opportunities
+            <Target className="w-4 h-4" /> {t('Go to Opportunities')}
           </button>
         </div>
       </div>
@@ -455,22 +483,22 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
             <BarChart3 className="w-6 h-6" />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Bid Analytics</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Bid Analytics')}</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-              {scoped.length} opportunities in view · outcomes for {periodNote}
+              {t('{{count}} opportunities in view · outcomes for {{period}}', { count: scoped.length, period: periodNote })}
             </p>
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-          <select className="oa-select" value={period} onChange={e => setPeriod(e.target.value as Period)} title="Outcome period">
-            {(Object.keys(PERIOD_LABELS) as Period[]).map(p => <option key={p} value={p}>{PERIOD_LABELS[p]}</option>)}
+          <select className="oa-select" value={period} onChange={e => setPeriod(e.target.value as Period)} title={t('Outcome period')}>
+            {(Object.keys(PERIOD_LABELS) as Period[]).map(p => <option key={p} value={p}>{t(PERIOD_LABELS[p])}</option>)}
           </select>
-          <select className="oa-select" value={sector} onChange={e => setSector(e.target.value)} title="Sector">
-            <option value="All">All sectors</option>
-            {sectorOptions.map(s => <option key={s} value={s}>{s}</option>)}
+          <select className="oa-select" value={sector} onChange={e => setSector(e.target.value)} title={t('Sector')}>
+            <option value="All">{t('All sectors')}</option>
+            {sectorOptions.map(s => <option key={s} value={s}>{dl(s)}</option>)}
           </select>
-          <select className="oa-select" value={owner} onChange={e => setOwner(e.target.value)} title="Bid owner">
-            <option value="All">All bid owners</option>
+          <select className="oa-select" value={owner} onChange={e => setOwner(e.target.value)} title={t('Bid owner')}>
+            <option value="All">{t('All bid owners')}</option>
             {projectUsers.filter(u => u.status === 'Approved').map(u => (
               <option key={u.id} value={u.id}>{u.displayName}</option>
             ))}
@@ -481,14 +509,14 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
             className="btn btn-ghost btn-sm"
             onClick={handleExport}
             disabled={exporting}
-            title="Download every opportunity, outcome, bid gate and follow-up as one Excel workbook (ignores the filters above)"
+            title={t('Download every opportunity, outcome, bid gate and follow-up as one Excel workbook (ignores the filters above)')}
           >
             {exporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
-            {exporting ? 'Exporting…' : 'Export all'}
+            {exporting ? t('Exporting…') : t('Export all')}
           </button>
-          <span className="oa-stamp" title="This page is live — every figure updates as records change">
+          <span className="oa-stamp" title={t('This page is live — every figure updates as records change')}>
             <RefreshCw className="w-3.5 h-3.5" />
-            {updatedAt ? `Live · ${updatedAt.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}` : 'Live'}
+            {updatedAt ? t('Live · {{time}}', { time: fmt.time(updatedAt) }) : t('Live')}
           </span>
         </div>
       </div>
@@ -497,53 +525,61 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
         <div className="oa-note" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-secondary)', marginBottom: 14, fontSize: 13 }}>
           <FileSpreadsheet className="w-4 h-4" style={{ flexShrink: 0, color: 'var(--accent)' }} />
           <span style={{ flex: 1 }}>{exportNote}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => setExportNote(null)}>Dismiss</button>
+          <button className="btn btn-ghost btn-sm" onClick={() => setExportNote(null)}>{t('Dismiss')}</button>
         </div>
       )}
 
       {(sector !== 'All' || owner !== 'All') && (
         <button className="btn btn-ghost btn-sm" style={{ marginBottom: 14 }} onClick={() => { setSector('All'); setOwner('All'); }}>
-          Clear filters
+          {t('Clear filters')}
         </button>
       )}
 
       {/* KPI row */}
       <div className="oa-kpis">
         <Kpi
-          label="Win rate"
-          value={decided.rate === null ? '—' : `${decided.rate}%`}
-          sub={decided.rate === null ? 'no decided bids in period' : `${decided.won.length} won / ${decided.lost.length} lost`}
+          label={t('Win rate')}
+          value={decided.rate === null ? '—' : fmt.percent(decided.rate)}
+          sub={decided.rate === null ? t('no decided bids in period') : t('{{won}} won / {{lost}} lost', { won: decided.won.length, lost: decided.lost.length })}
           tone={decided.rate === null ? 'neutral' : decided.rate >= 50 ? 'good' : decided.rate >= 30 ? 'warn' : 'bad'}
-          delta={rateDelta === null ? undefined : { value: `${rateDelta > 0 ? '+' : ''}${rateDelta} pp`, dir: rateDelta > 0 ? 'up' : rateDelta < 0 ? 'down' : 'flat', note: 'vs previous period' }}
+          delta={rateDelta === null ? undefined : {
+            value: t('{{value}} pp', { value: `${rateDelta > 0 ? '+' : ''}${rateDelta}` }),
+            dir: rateDelta > 0 ? 'up' : rateDelta < 0 ? 'down' : 'flat',
+            note: t('vs previous period'),
+          }}
         />
         <Kpi
-          label="Win rate by value"
-          value={decided.valueRate === null ? '—' : `${decided.valueRate}%`}
-          sub={`${money(decided.wonValue, mainCurrency)} won of ${money(decided.wonValue + decided.lostValue, mainCurrency)} bid`}
+          label={t('Win rate by value')}
+          value={decided.valueRate === null ? '—' : fmt.percent(decided.valueRate)}
+          sub={t('{{won}} won of {{total}} bid', { won: money(decided.wonValue, mainCurrency), total: money(decided.wonValue + decided.lostValue, mainCurrency) })}
           tone="neutral"
         />
         <Kpi
-          label="Value won"
+          label={t('Value won')}
           value={money(decided.wonValue, mainCurrency)}
-          sub={`${decided.won.length} ${decided.won.length === 1 ? 'bid' : 'bids'} · ${periodNote}`}
+          sub={decided.won.length === 1
+            ? t('{{count}} bid · {{period}}', { count: 1, period: periodNote })
+            : t('{{count}} bids · {{period}}', { count: decided.won.length, period: periodNote })}
           tone="good"
         />
         <Kpi
-          label="Open pipeline"
+          label={t('Open pipeline')}
           value={money(pipeline.value, mainCurrency)}
-          sub={`${pipeline.open.length} open bids · today`}
+          sub={t('{{count}} open bids · today', { count: pipeline.open.length })}
           tone="neutral"
         />
         <Kpi
-          label="Weighted forecast"
+          label={t('Weighted forecast')}
           value={money(pipeline.weighted, mainCurrency)}
-          sub={pipeline.unassessed > 0 ? `${pipeline.unassessed} bid${pipeline.unassessed === 1 ? '' : 's'} with no win %` : 'value × win %'}
+          sub={pipeline.unassessed === 0 ? t('value × win %')
+            : pipeline.unassessed === 1 ? t('{{count}} bid with no win %', { count: 1 })
+            : t('{{count}} bids with no win %', { count: pipeline.unassessed })}
           tone="neutral"
         />
         <Kpi
-          label="Past deadline"
+          label={t('Past deadline')}
           value={String(pipeline.overdueCount)}
-          sub={pipeline.overdueCount ? `${money(pipeline.overdueValue, mainCurrency)} still marked open` : 'no open bid is past its deadline'}
+          sub={pipeline.overdueCount ? t('{{value}} still marked open', { value: money(pipeline.overdueValue, mainCurrency) }) : t('no open bid is past its deadline')}
           tone={pipeline.overdueCount ? 'bad' : 'good'}
         />
       </div>
@@ -553,8 +589,8 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
         <div className="oa-note">
           <Info className="w-4 h-4" style={{ flexShrink: 0 }} />
           <span>
-            <b>{coverage.missing} of {coverage.total}</b> bids decided in this period have no outcome record.
-            They count in the win rate but not in the reason, competitor or price analysis below.
+            <b>{t('{{missing}} of {{total}}', { missing: coverage.missing, total: coverage.total })}</b>{' '}
+            {t('bids decided in this period have no outcome record. They count in the win rate but not in the reason, competitor or price analysis below.')}
           </span>
         </div>
       )}
@@ -562,19 +598,19 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
       {/* Primary visual — open pipeline by stage */}
       <Card
-        title="Open pipeline by stage"
-        subtitle={`Where the ${pipeline.open.length} open bids sit today · bar length = number of bids`}
+        title={t('Open pipeline by stage')}
+        subtitle={t('Where the {{count}} open bids sit today · bar length = number of bids', { count: pipeline.open.length })}
       >
         {pipeline.open.length === 0 ? (
-          <Empty text="No open bids. Everything in view has been decided." />
+          <Empty text={t('No open bids. Everything in view has been decided.')} />
         ) : (
           <div style={{ display: 'grid', gap: 10 }}>
             {pipeline.byStage.map(s => {
               const maxCount = Math.max(1, ...pipeline.byStage.map(x => x.count));
               const share = pct(s.count, pipeline.open.length);
               return (
-                <div key={s.stage} className="oa-funnel-row" title={`${s.stage}: ${s.count} bids · ${money(s.value, mainCurrency)}`}>
-                  <span className="oa-funnel-label">{s.stage}</span>
+                <div key={s.stage} className="oa-funnel-row" title={t('{{stage}}: {{count}} bids · {{value}}', { stage: dl(s.stage), count: s.count, value: money(s.value, mainCurrency) })}>
+                  <span className="oa-funnel-label">{dl(s.stage)}</span>
                   <div className="oa-track">
                     <div
                       className="oa-bar"
@@ -582,16 +618,15 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                     />
                   </div>
                   <span className="oa-num" style={{ fontWeight: 800 }}>{s.count}</span>
-                  <span className="oa-num oa-dim oa-c-2">{share === null ? '' : `${share}%`}</span>
-                  <span className="oa-num">{money(s.value, mainCurrency)}</span>
+                  <span className="oa-num oa-dim oa-c-2">{share === null ? '' : fmt.percent(share)}</span>
+                  <span className="oa-num ltr-data">{money(s.value, mainCurrency)}</span>
                 </div>
               );
             })}
           </div>
         )}
         <Foot>
-          A snapshot of today's distribution, not a conversion funnel — stage history is not recorded,
-          so no drop-off percentage is claimed between stages.
+          {t("A snapshot of today's distribution, not a conversion funnel — stage history is not recorded, so no drop-off percentage is claimed between stages.")}
         </Foot>
       </Card>
 
@@ -599,19 +634,19 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       <div className="oa-grid">
         {/* Loss reasons — Pareto */}
         <Card
-          title="Why we lose"
+          title={t('Why we lose')}
           subtitle={reasons.bids
-            ? `${reasons.totalCitations} reasons cited across ${reasons.bids} of ${reasons.lostTotal} lost bids`
-            : 'No outcome record on any lost bid in this period'}
+            ? t('{{citations}} reasons cited across {{bids}} of {{lost}} lost bids', { citations: reasons.totalCitations, bids: reasons.bids, lost: reasons.lostTotal })
+            : t('No outcome record on any lost bid in this period')}
         >
           {reasons.rows.length === 0 ? (
-            <Empty text={decided.lost.length === 0 ? 'No bids lost in this period.' : 'Capture the outcome on a lost bid to build this analysis.'} />
+            <Empty text={decided.lost.length === 0 ? t('No bids lost in this period.') : t('Capture the outcome on a lost bid to build this analysis.')} />
           ) : (
             <>
               <div style={{ display: 'grid', gap: 8 }}>
                 {reasons.rows.map(r => (
-                  <div key={r.reason} className="oa-reason-row" title={`${r.reason}: cited on ${r.cited} bids, primary on ${r.primary}`}>
-                    <span className="oa-reason-label">{r.reason}</span>
+                  <div key={r.reason} className="oa-reason-row" title={t('{{reason}}: cited on {{cited}} bids, primary on {{primary}}', { reason: dl(r.reason), cited: r.cited, primary: r.primary })}>
+                    <span className="oa-reason-label">{dl(r.reason)}</span>
                     <div className="oa-track">
                       <div className="oa-bar" style={{ width: `${(r.cited / reasons.max) * 100}%`, background: 'var(--oa-lost-soft)' }}>
                         {r.primary > 0 && (
@@ -620,14 +655,14 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                       </div>
                     </div>
                     <span className="oa-num" style={{ fontWeight: 800 }}>{r.cited}</span>
-                    <span className="oa-num oa-dim oa-c-2">{r.cumulative}%</span>
+                    <span className="oa-num oa-dim oa-c-2">{fmt.percent(r.cumulative)}</span>
                   </div>
                 ))}
               </div>
               <div className="oa-legend">
-                <span><i style={{ background: 'var(--oa-lost)' }} /> Primary reason</span>
-                <span><i style={{ background: 'var(--oa-lost-soft)' }} /> Also cited</span>
-                <span className="oa-dim">Right column = cumulative share of all citations</span>
+                <span><i style={{ background: 'var(--oa-lost)' }} /> {t('Primary reason')}</span>
+                <span><i style={{ background: 'var(--oa-lost-soft)' }} /> {t('Also cited')}</span>
+                <span className="oa-dim">{t('Right column = cumulative share of all citations')}</span>
               </div>
             </>
           )}
@@ -635,19 +670,21 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
         {/* Outcome trend */}
         <Card
-          title="Decisions over time"
-          subtitle={trend.buckets.length ? `By ${trend.grouping} · win % printed above each column` : 'No decided bids in this period'}
+          title={t('Decisions over time')}
+          subtitle={trend.buckets.length
+            ? (trend.grouping === 'month' ? t('By month · win % printed above each column') : t('By quarter · win % printed above each column'))
+            : t('No decided bids in this period')}
         >
           {trend.buckets.length === 0 ? (
-            <Empty text="Nothing has been decided in the selected period." />
+            <Empty text={t('Nothing has been decided in the selected period.')} />
           ) : (
             <>
               <div className="oa-cols">
                 {trend.buckets.map(b => {
                   const total = b.won + b.lost + b.other;
                   return (
-                    <div key={b.key} className="oa-col" title={`${b.label}: ${b.won} won, ${b.lost} lost, ${b.other} no bid / cancelled`}>
-                      <span className="oa-col-rate">{b.rate === null ? '' : `${b.rate}%`}</span>
+                    <div key={b.key} className="oa-col" title={t('{{label}}: {{won}} won, {{lost}} lost, {{other}} no bid / cancelled', { label: b.label, won: b.won, lost: b.lost, other: b.other })}>
+                      <span className="oa-col-rate">{b.rate === null ? '' : fmt.percent(b.rate)}</span>
                       <div className="oa-col-stack">
                         {b.won > 0 && <div style={{ height: `${(b.won / trend.max) * 100}%`, background: 'var(--oa-won)' }} />}
                         {b.lost > 0 && <div style={{ height: `${(b.lost / trend.max) * 100}%`, background: 'var(--oa-lost)' }} />}
@@ -660,9 +697,9 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                 })}
               </div>
               <div className="oa-legend">
-                <span><i style={{ background: 'var(--oa-won)' }} /> Won</span>
-                <span><i style={{ background: 'var(--oa-lost)' }} /> Lost</span>
-                <span><i style={{ background: 'var(--oa-none)' }} /> No bid / cancelled</span>
+                <span><i style={{ background: 'var(--oa-won)' }} /> {dl('Won')}</span>
+                <span><i style={{ background: 'var(--oa-lost)' }} /> {dl('Lost')}</span>
+                <span><i style={{ background: 'var(--oa-none)' }} /> {t('No bid / cancelled')}</span>
               </div>
             </>
           )}
@@ -670,23 +707,25 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
         {/* Client / sector split */}
         <Card
-          title={splitBy === 'client' ? 'By client' : 'By sector'}
-          subtitle={`Decided bids in ${periodNote}${split.hidden ? ` · top 8 of ${split.rows.length + split.hidden}` : ''}`}
+          title={splitBy === 'client' ? t('By client') : t('By sector')}
+          subtitle={split.hidden
+            ? t('Decided bids in {{period}} · top 8 of {{total}}', { period: periodNote, total: split.rows.length + split.hidden })
+            : t('Decided bids in {{period}}', { period: periodNote })}
           action={
             <div className="oa-toggle">
-              <button className={splitBy === 'client' ? 'on' : ''} onClick={() => setSplitBy('client')}>Client</button>
-              <button className={splitBy === 'sector' ? 'on' : ''} onClick={() => setSplitBy('sector')}>Sector</button>
+              <button className={splitBy === 'client' ? 'on' : ''} onClick={() => setSplitBy('client')}>{t('Client')}</button>
+              <button className={splitBy === 'sector' ? 'on' : ''} onClick={() => setSplitBy('sector')}>{t('Sector')}</button>
             </div>
           }
         >
           {split.rows.length === 0 ? (
-            <Empty text="No decided bids in this period." />
+            <Empty text={t('No decided bids in this period.')} />
           ) : (
             <>
               <div style={{ display: 'grid', gap: 8 }}>
                 {split.rows.map(r => (
-                  <div key={r.name} className="oa-reason-row" title={`${r.name}: ${r.won} won, ${r.lost} lost, ${r.other} no bid / cancelled · ${money(r.wonValue, mainCurrency)} won`}>
-                    <span className="oa-reason-label">{r.name}</span>
+                  <div key={r.name} className="oa-reason-row" title={t('{{name}}: {{won}} won, {{lost}} lost, {{other}} no bid / cancelled · {{value}} won', { name: dl(r.name), won: r.won, lost: r.lost, other: r.other, value: money(r.wonValue, mainCurrency) })}>
+                    <span className={fmt.bidiFor(dl(r.name))}>{dl(r.name)}</span>
                     <div className="oa-track">
                       <div className="oa-split" style={{ width: `${(r.total / Math.max(1, split.max)) * 100}%` }}>
                         {r.won > 0 && <span style={{ flex: r.won, background: 'var(--oa-won)' }} />}
@@ -694,16 +733,16 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                         {r.other > 0 && <span style={{ flex: r.other, background: 'var(--oa-none)' }} />}
                       </div>
                     </div>
-                    <span className="oa-num" style={{ fontWeight: 800 }}>{r.rate === null ? '—' : `${r.rate}%`}</span>
-                    <span className="oa-num oa-dim oa-c-2">{r.total} bid{r.total === 1 ? '' : 's'}</span>
+                    <span className="oa-num" style={{ fontWeight: 800 }}>{r.rate === null ? '—' : fmt.percent(r.rate)}</span>
+                    <span className="oa-num oa-dim oa-c-2">{r.total === 1 ? t('{{count}} bid', { count: 1 }) : t('{{count}} bids', { count: r.total })}</span>
                   </div>
                 ))}
               </div>
               <div className="oa-legend">
-                <span><i style={{ background: 'var(--oa-won)' }} /> Won</span>
-                <span><i style={{ background: 'var(--oa-lost)' }} /> Lost</span>
-                <span><i style={{ background: 'var(--oa-none)' }} /> No bid / cancelled</span>
-                <span className="oa-dim">% column = win rate (won ÷ decided)</span>
+                <span><i style={{ background: 'var(--oa-won)' }} /> {dl('Won')}</span>
+                <span><i style={{ background: 'var(--oa-lost)' }} /> {dl('Lost')}</span>
+                <span><i style={{ background: 'var(--oa-none)' }} /> {t('No bid / cancelled')}</span>
+                <span className="oa-dim">{t('% column = win rate (won ÷ decided)')}</span>
               </div>
             </>
           )}
@@ -711,27 +750,29 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
         {/* Price gap */}
         <Card
-          title="How far off was our price"
+          title={t('How far off was our price')}
           subtitle={priceGap.count
-            ? `${priceGap.count} of ${priceGap.lostTotal} lost bids have both prices recorded`
-            : 'No lost bid in this period records our price and the winning price'}
+            ? t('{{count}} of {{total}} lost bids have both prices recorded', { count: priceGap.count, total: priceGap.lostTotal })
+            : t('No lost bid in this period records our price and the winning price')}
         >
           {priceGap.count === 0 ? (
-            <Empty text="Record our price and the winning price on a lost bid to see the gap." />
+            <Empty text={t('Record our price and the winning price on a lost bid to see the gap.')} />
           ) : (
             <>
               <div className="oa-hero">
                 <span className="oa-hero-value" style={{ color: (priceGap.median ?? 0) > 0 ? 'var(--oa-lost)' : 'var(--oa-won)' }}>
-                  {priceGap.median === null ? '—' : `${priceGap.median > 0 ? '+' : ''}${priceGap.median}%`}
+                  {priceGap.median === null ? '—' : `${priceGap.median > 0 ? '+' : ''}${fmt.percent(priceGap.median, priceGap.median % 1 === 0 ? 0 : 1)}`}
                 </span>
                 <span className="oa-hero-note">
-                  median gap to the winning price{(priceGap.median ?? 0) > 0 ? ' — we bid above the winner' : ''}
+                  {(priceGap.median ?? 0) > 0
+                    ? t('median gap to the winning price — we bid above the winner')
+                    : t('median gap to the winning price')}
                 </span>
               </div>
               <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
                 {priceGap.buckets.map(b => (
-                  <div key={b.label} className="oa-reason-row" title={`${b.label}: ${b.count} lost bids`}>
-                    <span className="oa-reason-label">{b.label}</span>
+                  <div key={b.label} className="oa-reason-row" title={t('{{label}}: {{count}} lost bids', { label: t(b.label), count: b.count })}>
+                    <span className="oa-reason-label">{t(b.label)}</span>
                     <div className="oa-track">
                       <div className="oa-bar" style={{ width: `${(b.count / priceGap.max) * 100}%`, background: 'var(--oa-lost-soft)' }} />
                     </div>
@@ -745,22 +786,22 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
         {/* Gate slippage */}
         <Card
-          title="Bid-gate slippage"
-          subtitle={slippage.rows.length ? 'Average days late per gate · negative = finished early' : 'No dated bid gates yet'}
+          title={t('Bid-gate slippage')}
+          subtitle={slippage.rows.length ? t('Average days late per gate · negative = finished early') : t('No dated bid gates yet')}
           span
         >
           {errors.milestones ? (
             <Empty text={errors.milestones} />
           ) : slippage.rows.length === 0 ? (
-            <Empty text="Seed the five bid gates on an opportunity and give them dates to track slippage." />
+            <Empty text={t('Seed the five bid gates on an opportunity and give them dates to track slippage.')} />
           ) : (
             <div style={{ display: 'grid', gap: 8 }}>
               {slippage.rows.map(r => {
                 const late = r.avg > 0;
                 const widthPct = (Math.abs(r.avg) / slippage.max) * 50;
                 return (
-                  <div key={r.title} className="oa-reason-row" title={`${r.title}: ${r.gates} gates, ${r.open} still open, worst ${r.worst}d`}>
-                    <span className="oa-reason-label">{r.title}</span>
+                  <div key={r.title} className="oa-reason-row" title={t('{{title}}: {{gates}} gates, {{open}} still open, worst {{worst}}d', { title: dl(r.title), gates: r.gates, open: r.open, worst: r.worst })}>
+                    <span className="oa-reason-label">{dl(r.title)}</span>
                     <div className="oa-track oa-diverging">
                       <span className="oa-zero" />
                       <div
@@ -775,56 +816,57 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
                     <span className="oa-num" style={{ fontWeight: 800, color: late ? 'var(--oa-late)' : 'var(--oa-early)' }}>
                       {late ? `+${r.avg}d` : `${r.avg}d`}
                     </span>
-                    <span className="oa-num oa-dim oa-c-2">{r.gates} gate{r.gates === 1 ? '' : 's'}</span>
+                    <span className="oa-num oa-dim oa-c-2">{r.gates === 1 ? t('{{count}} gate', { count: 1 }) : t('{{count}} gates', { count: r.gates })}</span>
                   </div>
                 );
               })}
             </div>
           )}
           <Foot>
-            A finished gate is measured on the day it was completed; an unfinished one against today,
-            so an open gate keeps ageing until it is ticked.
+            {t('A finished gate is measured on the day it was completed; an unfinished one against today, so an open gate keeps ageing until it is ticked.')}
           </Foot>
         </Card>
       </div>
 
       {/* Detail table */}
       <Card
-        title="Decided bids"
-        subtitle={`${decided.list.length} decided in ${periodNote}${table.hidden ? ` · showing the ${table.rows.length} most recent` : ''}`}
+        title={t('Decided bids')}
+        subtitle={table.hidden
+          ? t('{{count}} decided in {{period}} · showing the {{shown}} most recent', { count: decided.list.length, period: periodNote, shown: table.rows.length })
+          : t('{{count}} decided in {{period}}', { count: decided.list.length, period: periodNote })}
       >
         {table.rows.length === 0 ? (
-          <Empty text="No bids were decided in the selected period." />
+          <Empty text={t('No bids were decided in the selected period.')} />
         ) : (
           <div className="oa-tablewrap">
             <table className="oa-table">
               <thead>
                 <tr>
-                  <th>Decided</th>
-                  <th>Opportunity</th>
-                  <th>Client</th>
-                  <th style={{ textAlign: 'end' }}>Value</th>
-                  <th>Outcome</th>
-                  <th>Primary reason</th>
-                  <th style={{ textAlign: 'end' }}>Price gap</th>
+                  <th>{t('Decided')}</th>
+                  <th>{t('Opportunity')}</th>
+                  <th>{t('Client')}</th>
+                  <th style={{ textAlign: 'end' }}>{t('Value')}</th>
+                  <th>{t('Outcome')}</th>
+                  <th>{t('Primary reason')}</th>
+                  <th style={{ textAlign: 'end' }}>{t('Price gap')}</th>
                 </tr>
               </thead>
               <tbody>
                 {table.rows.map(({ o, f, date }) => (
                   <tr key={o.id}>
-                    <td className="oa-num">{date || '—'}</td>
+                    <td className="oa-num ltr-data">{fmt.date(date) || '—'}</td>
                     <td>
                       <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{o.title}</span>
-                      {o.serialNumber && <span className="oa-dim"> · {o.serialNumber}</span>}
+                      {o.serialNumber && <span className="oa-dim ltr-data"> · {o.serialNumber}</span>}
                     </td>
                     <td>{o.client || '—'}</td>
                     <td className="oa-num" style={{ textAlign: 'end' }}>
-                      {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
+                      <span className="ltr-data">{o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}</span>
                     </td>
                     <td>
-                      <span className="oa-chip" style={{ background: STAGE_COLORS[o.stage] }}>{o.stage}</span>
+                      <span className="oa-chip" style={{ background: STAGE_COLORS[o.stage] }}>{dl(o.stage)}</span>
                     </td>
-                    <td>{f?.primaryReason || (f ? '—' : <span className="oa-dim">no record</span>)}</td>
+                    <td>{dl(f?.primaryReason) || (f ? '—' : <span className="oa-dim">{t('no record')}</span>)}</td>
                     <td className="oa-num" style={{ textAlign: 'end', color: (f?.priceGapPercent ?? 0) > 0 ? 'var(--oa-lost)' : undefined }}>
                       {typeof f?.priceGapPercent === 'number' ? `${f.priceGapPercent > 0 ? '+' : ''}${f.priceGapPercent}%` : '—'}
                     </td>
@@ -835,9 +877,8 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
           </div>
         )}
         <Foot>
-          Values are summed as entered, without currency conversion — totals are labelled {mainCurrency},
-          the currency used on most records.
-          {appUser.role === 'Employee' ? '' : ' Open a bid from the Opportunities page to see or edit its outcome record.'}
+          {t('Values are summed as entered, without currency conversion — totals are labelled {{currency}}, the currency used on most records.', { currency: mainCurrency })}
+          {appUser.role === 'Employee' ? '' : ` ${t('Open a bid from the Opportunities page to see or edit its outcome record.')}`}
         </Foot>
       </Card>
     </div>
@@ -866,7 +907,7 @@ function Kpi({ label, value, sub, tone, delta }: {
   return (
     <div className="card oa-kpi">
       <div className="oa-kpi-label">{label}</div>
-      <div className="oa-kpi-value" style={{ color: toneColor }}>{value}</div>
+      <div className={`oa-kpi-value ${bidiClassFor(value)}`} style={{ color: toneColor }}>{value}</div>
       <div className="oa-kpi-sub">{sub}</div>
       {delta && (
         <div className="oa-kpi-delta" style={{ color: delta.dir === 'up' ? 'var(--oa-won)' : delta.dir === 'down' ? 'var(--oa-lost)' : 'var(--text-muted)' }}>
@@ -932,8 +973,11 @@ const OA_STYLE = `
   font-size:12.5px; line-height:1.5; }
 
 /* 420px, not the usual 320: a third column squeezes the 12-column trend chart
-   into a horizontal scroller and ellipsises every reason label. */
-.oa-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(420px, 1fr)); gap:16px; margin-top:16px; }
+   into a horizontal scroller and ellipsises every reason label.
+   ★ min(420px, 100%), never a bare 420px: a fixed minimum cannot shrink below
+   itself, so on a 390px phone the track was 62px wider than the viewport and
+   the whole page scrolled sideways. Same trap the RTL sweep hit on .modgrid. */
+.oa-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(min(420px, 100%), 1fr)); gap:16px; margin-top:16px; }
 .oa-card { padding:18px; }
 /* The odd card out — without this it sits alone beside an empty half-row. */
 .oa-span { grid-column:1 / -1; }

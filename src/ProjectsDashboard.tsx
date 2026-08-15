@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, orderBy,
@@ -11,6 +12,8 @@ import {
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
 import { globalSearch } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat, DATE_SHORT } from './lib/format';
 import {
   Plus, Search, X, FolderKanban, Building2, Hash, Calendar,
   Trash2, Edit2, ChevronRight, AlertCircle,
@@ -49,6 +52,9 @@ const emptyForm = () => ({
 });
 
 export default function ProjectsDashboard({ user, appUser, projectUsers }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -71,7 +77,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       setLoading(false);
     }, err => {
       console.error('Projects listener error:', err, { uid: auth.currentUser?.uid });
-      setError('Failed to load projects.');
+      setError(t('Failed to load projects.'));
       setLoading(false);
     });
     return () => unsub();
@@ -131,9 +137,9 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
 
   const handleSave = async () => {
     const name = formData.name.trim();
-    if (!name) { setFormError('Project name is required.'); return; }
+    if (!name) { setFormError(t('Project name is required.')); return; }
     if (formData.startDate && formData.endDate && formData.endDate < formData.startDate) {
-      setFormError('End date cannot be before the start date.');
+      setFormError(t('End date cannot be before the start date.'));
       return;
     }
     // Trim every text field so stray whitespace never reaches Firestore.
@@ -164,7 +170,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       setEditing(null);
     } catch (e) {
       console.error('Save project failed:', e);
-      setFormError('Failed to save project. Please try again.');
+      setFormError(t('Failed to save project. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -177,7 +183,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       setDeleteTarget(null);
     } catch (e) {
       console.error('Delete project failed:', e);
-      setError('Failed to delete project.');
+      setError(t('Failed to delete project.'));
     }
   };
 
@@ -204,14 +210,16 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
             <FolderKanban className="w-6 h-6" />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Projects</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Projects')}</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-              {projects.length} {projects.length === 1 ? 'project' : 'projects'}
+              {projects.length === 1
+                ? t('{{count}} project', { count: 1 })
+                : t('{{count}} projects', { count: projects.length })}
             </p>
           </div>
         </div>
         <button className="btn btn-primary" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> New Project
+          <Plus className="w-4 h-4" /> {t('New Project')}
         </button>
       </div>
 
@@ -224,17 +232,20 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       {/* Summary stats */}
       {projects.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
+          {/* The four status tiles are labelled through the display layer, so the
+              tile and the badge on the card below can never disagree. "Total" is
+              the only one that is UI copy rather than a stored value. */}
           {[
-            { label: 'Total', value: projects.length, filter: 'All' as const, color: 'var(--text-primary)' },
-            { label: 'Active', value: statusCounts['Active'], filter: 'Active', color: '#3b82f6' },
-            { label: 'On Hold', value: statusCounts['On Hold'], filter: 'On Hold', color: '#f59e0b' },
-            { label: 'Completed', value: statusCounts['Completed'], filter: 'Completed', color: '#16a34a' },
-            { label: 'Cancelled', value: statusCounts['Cancelled'], filter: 'Cancelled', color: '#94a3b8' },
+            { label: t('Total'), value: projects.length, filter: 'All' as const, color: 'var(--text-primary)' },
+            { label: dl('Active'), value: statusCounts['Active'], filter: 'Active', color: '#3b82f6' },
+            { label: dl('On Hold'), value: statusCounts['On Hold'], filter: 'On Hold', color: '#f59e0b' },
+            { label: dl('Completed'), value: statusCounts['Completed'], filter: 'Completed', color: '#16a34a' },
+            { label: dl('Cancelled'), value: statusCounts['Cancelled'], filter: 'Cancelled', color: '#94a3b8' },
           ].map(s => {
             const active = statusFilter === s.filter;
             return (
               <button
-                key={s.label}
+                key={s.filter}
                 onClick={() => setStatusFilter(active && s.filter !== 'All' ? 'All' : s.filter)}
                 className="card"
                 style={{ padding: '12px 14px', textAlign: 'start', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
@@ -253,10 +264,13 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
           <Search className="w-4 h-4" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search projects…"
+            placeholder={t('Search projects…')}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+            // ★ The icon is positioned with `insetInlineStart`, so the room made
+            // for it must be logical too — a physical `padding-left` leaves the
+            // text running under the icon in RTL.
+            style={{ width: '100%', paddingBlock: 10, paddingInlineStart: 36, paddingInlineEnd: 12, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
           />
         </div>
         <select
@@ -264,18 +278,21 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
           onChange={e => setStatusFilter(e.target.value)}
           style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
         >
-          <option value="All">All statuses</option>
-          {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="All">{t('All statuses')}</option>
+          {/* An <option> with no `value` takes its TEXT as its value, which would
+              write the Arabic label into the filter state — every one carries an
+              explicit English value. */}
+          {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
         </select>
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
           style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          title="Sort projects"
+          title={t('Sort projects')}
         >
-          <option value="recent">Most recent</option>
-          <option value="name">Name (A–Z)</option>
-          <option value="status">Status</option>
+          <option value="recent">{t('Most recent')}</option>
+          <option value="name">{t('Name (A–Z)')}</option>
+          <option value="status">{t('Status')}</option>
         </select>
       </div>
 
@@ -287,19 +304,19 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       ) : visible.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><FolderKanban className="w-8 h-8" /></div>
-          <div className="empty-state-title">{isFiltering ? 'No matching projects' : 'No projects yet'}</div>
+          <div className="empty-state-title">{isFiltering ? t('No matching projects') : t('No projects yet')}</div>
           <div className="empty-state-sub">
             {isFiltering
-              ? 'No projects match your search or filter. Try clearing them.'
-              : 'Create your first project to start tracking contracts, financials and updates.'}
+              ? t('No projects match your search or filter. Try clearing them.')
+              : t('Create your first project to start tracking contracts, financials and updates.')}
           </div>
           {isFiltering ? (
             <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStatusFilter('All'); }}>
-              Clear filters
+              {t('Clear filters')}
             </button>
           ) : (
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
-              <Plus className="w-4 h-4" /> New Project
+              <Plus className="w-4 h-4" /> {t('New Project')}
             </button>
           )}
         </div>
@@ -318,12 +335,12 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
                 onClick={() => setSelectedId(p.id)}
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                  <span className={statusBadgeClass(p.status)}>{p.status}</span>
+                  <span className={statusBadgeClass(p.status)}>{dl(p.status)}</span>
                   <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => openEdit(p)}>
+                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Edit')} onClick={() => openEdit(p)}>
                       <Edit2 className="w-4 h-4" />
                     </button>
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Delete" onClick={() => setDeleteTarget(p)}>
+                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete')} onClick={() => setDeleteTarget(p)}>
                       <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
                     </button>
                   </div>
@@ -332,22 +349,22 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
                 <div>
                   <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{p.name}</h3>
                   {p.serialNumber && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{p.serialNumber}</span>
+                    <span className="ltr-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{p.serialNumber}</span>
                   )}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
                   {p.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.client}{p.operator ? ` · ${p.operator}` : ''}</div>}
                   {p.code && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Hash className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.code}</div>}
-                  {p.currentStatus && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.currentStatus}</div>}
+                  {p.currentStatus && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {dl(p.currentStatus)}</div>}
                 </div>
 
                 <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6 }}>
                   <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {p.lastUpdateAt ? `Updated ${new Date(p.lastUpdateAt.seconds * 1000).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}` : ''}
+                    {p.lastUpdateAt ? t('Updated {{date}}', { date: fmt.date(p.lastUpdateAt, DATE_SHORT) }) : ''}
                   </span>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
-                    Open <ChevronRight className="w-4 h-4" />
+                    {t('Open')} <ChevronRight className="w-4 h-4" />
                   </span>
                 </div>
               </motion.div>
@@ -362,37 +379,37 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
           <div className="modal" style={{ maxWidth: 560, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'Edit Project' : 'New Project'}
+                {editing ? t('Edit Project') : t('New Project')}
               </h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsModalOpen(false)}><X className="w-5 h-5" /></button>
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
-              <Field label="Project name *">
-                <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="proj-input" placeholder="e.g. Meleiha Gas Plant O&M Contract" />
+              <Field label={t('Project name *')}>
+                <input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} className="proj-input" placeholder={t('e.g. Meleiha Gas Plant O&M Contract')} />
               </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Contract / Code"><input value={formData.code} onChange={e => setFormData({ ...formData, code: e.target.value })} className="proj-input" placeholder="4600002981" /></Field>
-                <Field label="Status">
+                <Field label={t('Contract / Code')}><input value={formData.code} onChange={e => setFormData({ ...formData, code: e.target.value })} className="proj-input" placeholder="4600002981" /></Field>
+                <Field label={t('Status')}>
                   <select value={formData.status} onChange={e => setFormData({ ...formData, status: e.target.value as ProjectStatus })} className="proj-input">
-                    {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
                   </select>
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Client"><input value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} className="proj-input" placeholder="AGIBA" /></Field>
-                <Field label="Operator"><input value={formData.operator} onChange={e => setFormData({ ...formData, operator: e.target.value })} className="proj-input" placeholder="EPROM" /></Field>
+                <Field label={t('Client')}><input value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} className="proj-input" placeholder="AGIBA" /></Field>
+                <Field label={t('Operator')}><input value={formData.operator} onChange={e => setFormData({ ...formData, operator: e.target.value })} className="proj-input" placeholder="EPROM" /></Field>
               </div>
-              <Field label="Location"><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="proj-input" /></Field>
+              <Field label={t('Location')}><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="proj-input" /></Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Start date"><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="proj-input" /></Field>
-                <Field label="End date"><input type="date" value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="proj-input" /></Field>
+                <Field label={t('Start date')}><input type="date" value={formData.startDate} onChange={e => setFormData({ ...formData, startDate: e.target.value })} className="proj-input" /></Field>
+                <Field label={t('End date')}><input type="date" value={formData.endDate} onChange={e => setFormData({ ...formData, endDate: e.target.value })} className="proj-input" /></Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Issue date"><input type="date" value={formData.issueDate} onChange={e => setFormData({ ...formData, issueDate: e.target.value })} className="proj-input" /></Field>
-                <Field label="Rev."><input value={formData.rev} onChange={e => setFormData({ ...formData, rev: e.target.value })} className="proj-input" placeholder="0" /></Field>
+                <Field label={t('Issue date')}><input type="date" value={formData.issueDate} onChange={e => setFormData({ ...formData, issueDate: e.target.value })} className="proj-input" /></Field>
+                <Field label={t('Rev.')}><input value={formData.rev} onChange={e => setFormData({ ...formData, rev: e.target.value })} className="proj-input" placeholder="0" /></Field>
               </div>
-              <Field label="Description"><textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="proj-input" rows={3} /></Field>
+              <Field label={t('Description')}><textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="proj-input" rows={3} /></Field>
             </div>
 
             {formError && (
@@ -402,8 +419,8 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
-              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" disabled={saving || !formData.name.trim()} onClick={handleSave}>{saving ? 'Saving…' : (editing ? 'Save changes' : 'Create project')}</button>
+              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>{t('Cancel')}</button>
+              <button className="btn btn-primary" disabled={saving || !formData.name.trim()} onClick={handleSave}>{saving ? t('Saving…') : (editing ? t('Save changes') : t('Create project'))}</button>
             </div>
           </div>
         </div>
@@ -413,13 +430,13 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete project?</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>{t('Delete project?')}</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              "{deleteTarget.name}" will be removed. Its contracts, financials and updates are not auto-deleted.
+              {t('"{{name}}" will be removed. Its contracts, financials and updates are not auto-deleted.', { name: deleteTarget.name })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={handleDelete}>{t('Delete')}</button>
             </div>
           </div>
         </div>

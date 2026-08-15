@@ -26,6 +26,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
 import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
@@ -59,6 +61,10 @@ interface Props {
 
 export default function TasksDashboard({ user, appUser, projectUsers, initialStatusFilter, initialView }: Props) {
   const { t } = useTranslation();
+  // Task 6: `label` paints a stored English enum value in the active language;
+  // the value written to Firestore is untouched. `fmt` is the Intl layer.
+  const label = useDisplayLabel();
+  const fmt = useFormat();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
@@ -752,7 +758,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                 transition: 'all 0.15s',
               }}
             >
-              {cat}
+              {cat === 'All' ? t('All') : label(cat)}
             </button>
           ))}
         </div>
@@ -780,12 +786,12 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           <option value="All">{t('All Statuses')}</option>
           <option value="Active">{t('Active')}</option>
           <option value="Overdue">{t('Overdue')}</option>
-          {['Pending', 'In Progress', 'Done'].map(s => <option key={s}>{s}</option>)}
+          {['Pending', 'In Progress', 'Done'].map(s => <option key={s} value={s}>{label(s)}</option>)}
         </select>
 
         <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
           <option value="All">{t('All Departments')}</option>
-          {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{d}</option>)}
+          {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{label(d)}</option>)}
         </select>
         
         {isManagerOrAdmin && view === 'all' && (
@@ -873,7 +879,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                     )}
                     <div style={{ minWidth: 0, flex: 1 }}>
                       <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</div>
-                      {u?.role && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{u.role}</div>}
+                      {u?.role && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label(u.role)}</div>}
                     </div>
                     <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', flexShrink: 0 }} />
                   </div>
@@ -911,7 +917,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             <div key={cat}>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
                 <Layers className="w-4 h-4 text-accent" />
-                {t('{{category}} Tasks', { category: cat })}
+                {t('{{category}} Tasks', { category: label(cat) })}
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -995,14 +1001,14 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             transition: 'all 0.15s'
                                           }}
                                         >
-                                          {s}
+                                          {label(s)}
                                         </button>
                                       ))}
                                     </div>
                                   ) : (
-                                    <span className={statusBadge(task.status)}>{task.status}</span>
+                                    <span className={statusBadge(task.status)}>{label(task.status)}</span>
                                   )}
-                                  <span className={priorityBadge(task.priority)}>{task.priority}</span>
+                                  <span className={priorityBadge(task.priority)}>{label(task.priority)}</span>
                                   {task.isPrivate && (
                                     <span
                                       className="badge"
@@ -1138,7 +1144,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     </span>
                                   )}
                                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> <span className="ltr-data">{task.dueDate}</span></span>}
-                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title={t('Creation date')}><Clock className="w-3 h-3" /> <span className="ltr-data">{task.createdAt.toDate().toLocaleDateString('en-GB')}</span></span>}
+                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title={t('Creation date')}><Clock className="w-3 h-3" /> <span className="ltr-data">{fmt.date(task.createdAt)}</span></span>}
                                   {(task.correspondingSerialNumber || task.correspondingSubject) && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <Link2 className="w-3 h-3" /> 
@@ -1182,7 +1188,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                         <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                                               <img 
                                                 src={getGoogleDrivePreviewUrl(task.attachedFile)} 
-                                                alt="Attachment" 
+                                                alt={t('Attachment')} 
                                                 style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                                                 onLoad={(e) => (e.target as HTMLImageElement).style.opacity = '1'}
                                                 onError={(e) => {
@@ -1424,7 +1430,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                                           transition: 'all 0.15s'
                                                         }}
                                                       >
-                                                        {s}
+                                                        {label(s)}
                                                       </button>
                                                     ))}
                                                   </div>
@@ -1628,7 +1634,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <div>
                     <label className="input-label">{t('Priority')}</label>
                     <select className="input" value={editingTask.priority} onChange={e => setEditingTask({ ...editingTask, priority: e.target.value as any })}>
-                      {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{p}</option>)}
+                      {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{label(p)}</option>)}
                     </select>
                   </div>
                   <div>
@@ -1659,7 +1665,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                         (u.department === appUser.department && u.teamId === appUser.teamId)
                       )
                       .map(u => (
-                        <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                        <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
                       ))
                     }
                   </select>

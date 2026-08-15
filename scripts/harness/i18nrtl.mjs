@@ -61,6 +61,8 @@ globalThis.localStorage = {
   setItem: (k, v) => storeA.set(k, String(v)),
   removeItem: k => storeA.delete(k), clear: () => storeA.clear(),
 };
+// Vite's `import.meta.env`, which node does not have (see bundleOne).
+globalThis.__VITE_ENV__ = {};
 const htmlAttrs = {};
 globalThis.document = { documentElement: { setAttribute: (k, v) => { htmlAttrs[k] = v; } } };
 
@@ -71,7 +73,14 @@ const ar = (await import(pathToFileURL(await bundleOne('src/locales/ar.ts', 'ar'
 
 async function bundleOne(rel, name) {
   const out = path.join(WORK, `${name}.bundle.mjs`);
-  await build({ entryPoints: [path.join(ROOT, rel)], bundle: true, format: 'esm', platform: 'node', outfile: out, logLevel: 'warning' });
+  // `import.meta.env` is Vite's, and node has no such thing — src/utils.ts
+  // reads VITE_SHARE_UNC_ROOT off it at module load, so anything that reaches
+  // utils (lib/format.ts does, for parseAmount) throws on import without this.
+  await build({
+    entryPoints: [path.join(ROOT, rel)], bundle: true, format: 'esm', platform: 'node',
+    outfile: out, logLevel: 'warning',
+    define: { 'import.meta.env': 'globalThis.__VITE_ENV__', 'process.env.NODE_ENV': '"production"' },
+  });
   return out;
 }
 
@@ -99,6 +108,14 @@ check('no ar value is blank', emptyish.length === 0, emptyish.join(' | '));
 const spaceMismatch = enKeys.filter(k =>
   /\s$/.test(en[k]) !== /\s$/.test(ar[k]) || /^\s/.test(en[k]) !== /^\s/.test(ar[k]));
 check('trailing/leading space matches en', spaceMismatch.length === 0, spaceMismatch.map(k => JSON.stringify([en[k], ar[k]])).join(' | '));
+
+// ★ Western digits, never Arabic-Indic. Task 6a settled this for the formatters
+// (`ar-EG-u-nu-latn`), and a hand-typed ٧ in a locale string breaks the same
+// rule from the other side: the KPI tile then reads "خلال ٧ أيام" beside a
+// value of "2". Caught by LOOKING at i18nrtl-dash-opps.png, then pinned here.
+const indicDigits = enKeys.filter(k => /[٠-٩۰-۹]/.test(ar[k]));
+check('★ no ar value hand-types Arabic-Indic digits (the app is -u-nu-latn)',
+  indicDigits.length === 0, indicDigits.map(k => `${k} → ${ar[k]}`).slice(0, 6).join(' | '));
 
 // ★ The regression this guards. i18next's defaults read '.' as a nested path
 // and ':' as a namespace. The keys ARE English sentences, so several contain
@@ -170,7 +187,24 @@ function walkTsx(dir, out = []) {
 const tsxFiles = walkTsx(path.join(ROOT, 'src'));
 check(`${tsxFiles.length} .tsx files scanned`, tsxFiles.length > 30, String(tsxFiles.length));
 
+// ★★ The hole task 6c fell through: `PHYSICAL` only matches the LONGHAND
+// (`paddingLeft`), so `padding: '10px 12px 10px 36px'` sailed past it — and that
+// is precisely the shape every search box in the app used, pairing a logical
+// `insetInlineStart` icon with a physical left pad. In RTL the icon crossed to
+// the right and the text ran underneath it. Found by LOOKING at a screenshot,
+// in FIVE files (Projects / Opportunities / Outlook / ChatBox ×2) plus an
+// avatar chip in Announcements.
+//
+// A 4-value shorthand is the only asymmetric one: 1, 2 and 3 values all give
+// the two horizontal sides the same length.
+const SHORTHAND = /\b(padding|margin)\s*:\s*'([^']*)'/g;
+const asym = (v) => {
+  const parts = v.trim().split(/\s+/);
+  return parts.length === 4 && parts[1] !== parts[3];
+};
+
 const physicalHits = [];
+const shorthandHits = [];
 const insetCounts = {};
 for (const f of tsxFiles) {
   const rel = path.relative(ROOT, f).replace(/\\/g, '/');
@@ -178,11 +212,16 @@ for (const f of tsxFiles) {
   for (const m of text.matchAll(PHYSICAL)) {
     physicalHits.push(`${rel}:${text.slice(0, m.index).split('\n').length} ${m[0].trim()}`);
   }
+  for (const m of text.matchAll(SHORTHAND)) {
+    if (asym(m[2])) shorthandHits.push(`${rel}:${text.slice(0, m.index).split('\n').length} ${m[0].trim()}`);
+  }
   const n = [...text.matchAll(INSET)].length;
   if (n) insetCounts[rel] = n;
 }
 check('★ no physical margin/padding/border/text-align left in any inline style',
   physicalHits.length === 0, physicalHits.slice(0, 8).join(' | '));
+check('★★ no left/right-asymmetric padding/margin SHORTHAND (the longhand scan cannot see it)',
+  shorthandHits.length === 0, shorthandHits.slice(0, 8).join(' | '));
 
 const insetDrift = Object.keys({ ...insetCounts, ...INSET_ALLOW })
   .filter(k => (insetCounts[k] || 0) !== (INSET_ALLOW[k] || 0))
@@ -222,7 +261,49 @@ const TASK_FILES = {
   'src/components/ComboBox.tsx': 6,
   'src/DueSoonDashboard.tsx': 7,
 };
-const T_FILES = { ...SHELL_FILES, ...TASK_FILES };
+// Task 5 added the correspondence flow. `CorrespondenceInbox.tsx` is NOT here:
+// it is a 27-line wrapper that renders CorrespondingsDashboard and contains no
+// copy at all, so a floor on it would assert nothing.
+const CORR_FILES = {
+  'src/CorrespondingsDashboard.tsx': 110,
+  'src/ManagerInbox.tsx': 30,
+  'src/ArchiveDashboard.tsx': 20,
+  'src/OutlookFeed.tsx': 34,
+  'src/components/ChatBox.tsx': 25,
+};
+// Task 6b added the Opportunities module. `opportunityUi.ts` is NOT here: it
+// holds colours and money/date arithmetic and no copy at all.
+const OPP_FILES = {
+  'src/OpportunitiesDashboard.tsx': 70,
+  'src/OpportunityDetail.tsx': 24,
+  'src/OpportunitiesAnalytics.tsx': 95,
+  'src/components/opportunities/OpportunityFollowUpsTab.tsx': 20,
+  'src/components/opportunities/OpportunityMilestonesTab.tsx': 34,
+  'src/components/opportunities/OpportunityOutcomeTab.tsx': 45,
+};
+// Task 6c added the Projects module. `ListControls` is the toolbar the four
+// detail tabs share — its own chrome is translated here, while the filter and
+// option labels arrive already translated from the tab that owns them.
+const PROJ_FILES = {
+  'src/ProjectsDashboard.tsx': 40,
+  'src/ProjectDetail.tsx': 6,
+  'src/components/projects/ListControls.tsx': 8,
+  'src/components/projects/ProjectTrackingTab.tsx': 12,
+  'src/components/projects/ProjectFinancialsTab.tsx': 33,
+  'src/components/projects/ProjectContractsTab.tsx': 40,
+  'src/components/projects/ProjectSubcontractsTab.tsx': 33,
+};
+// Task 6c-ii closed the queue: the manager Overview, the admin user-management
+// screen, and the two screens no earlier pass had touched at all.
+// `ErrorBoundary.tsx` is NOT here: it is a class component and cannot call the
+// hook, so it imports the i18n instance and calls `i18n.t` — it is checked
+// separately below.
+const OV_FILES = {
+  'src/OverviewDashboard.tsx': 70,
+  'src/AdminDashboard.tsx': 35,
+  'src/components/IdleResyncBanner.tsx': 2,
+};
+const T_FILES = { ...SHELL_FILES, ...TASK_FILES, ...CORR_FILES, ...OPP_FILES, ...PROJ_FILES, ...OV_FILES };
 
 for (const [rel, min] of Object.entries(T_FILES)) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -250,6 +331,37 @@ for (const rel of Object.keys(T_FILES)) {
 check('★ every t(\'…\') literal in the translated files is a real key in en.ts',
   missingKeys.length === 0, missingKeys.slice(0, 8).join(' | '));
 
+// The error screen is the one place a hook is impossible — a class component
+// catches the render throw. It calls the i18n instance directly, and its three
+// keys must still resolve.
+{
+  const eb = fs.readFileSync(path.join(ROOT, 'src/ErrorBoundary.tsx'), 'utf8');
+  const ebKeys = [...eb.matchAll(/i18n\.t\(\s*'((?:[^'\\]|\\.)*)'/g)].map(m => m[1]);
+  check('ErrorBoundary (a class component) translates through the i18n instance',
+    /from '\.\/i18n'/.test(eb) && ebKeys.length >= 3, `${ebKeys.length} i18n.t() calls`);
+  check('ErrorBoundary\'s keys are real keys in en.ts',
+    ebKeys.every(k => k in en), ebKeys.filter(k => !(k in en)).join(' | '));
+}
+
+// ★ The sweep that closes the queue: no .tsx in src/ paints UI copy without a
+// translator. A file with NO copy at all (a wrapper, a pure-logic module) is
+// allowed; a file that renders English words is not.
+const NO_COPY_OK = new Set([
+  'src/main.tsx',              // the bootstrap, renders no text
+  'src/CorrespondenceInbox.tsx', // a 27-line deep-link wrapper
+  'src/FollowUpDashboard.tsx',   // the dead stub (superseded by Correspondings)
+  'src/ErrorBoundary.tsx',       // checked above — i18n.t, not the hook
+]);
+const noTranslator = [];
+for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true })) {
+  const rel = `src/${String(f).replace(/\\/g, '/')}`;
+  if (!rel.endsWith('.tsx') || NO_COPY_OK.has(rel)) continue;
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  if (!/useTranslation/.test(src)) noTranslator.push(rel);
+}
+check('★ every .tsx that renders copy is wired to a translator (final sweep)',
+  noTranslator.length === 0, noTranslator.join(' | '));
+
 // ── [A6] the tasks flow keeps no hard-coded English left in its JSX ──────────
 // A floor can be met while a whole panel is still English. These are the exact
 // strings task 4 replaced; any one of them reappearing as a bare JSX literal
@@ -275,11 +387,335 @@ const REVERT_CANARIES = [
     />Nothing due soon</,
     /^\s*Due: \{fmt/m,
   ]],
+  // ── task 5 ──
+  ['src/CorrespondingsDashboard.tsx', [
+    /placeholder="Search subject or sender/,
+    /\/>\s*New Correspondence\s*$/m,
+    /^\s*Team Workload\s*$/m,
+    /^\s*Previous\s*$/m,
+    /\|\| 'Correspondence Details'/,
+    /<\/strong>" will be permanently deleted/,
+  ]],
+  ['src/ManagerInbox.tsx', [
+    /^\s*Review incoming correspondences/m,
+    /<option value="All">All<\/option>/,
+    /^\s*All caught up!\s*$/m,
+    />Manager Note \(optional\)</,
+    /headerTitle="Assign as Task"/,
+  ]],
+  ['src/ArchiveDashboard.tsx', [
+    /^\s*Archive is empty\s*$/m,
+    /placeholder="Search archived tasks/,
+    /^\s*Task Details\s*$/m,
+    />Milestone History</,
+  ]],
+  ['src/OutlookFeed.tsx', [
+    />Outlook Feed</,
+    /^\s*Refresh\s*$/m,
+    /^\s*Loading emails…\s*$/m,
+    /headerTitle="Create Task from Email"/,
+  ]],
+  ['src/components/ChatBox.tsx', [
+    /placeholder="Type a message/,
+    /placeholder="Search users/,
+    /^\s*Nothing to show\s*$/m,
+    /label: 'Offline'/,
+  ]],
+  // ── task 6b ──
+  ['src/OpportunitiesDashboard.tsx', [
+    /placeholder="Search opportunities/,
+    /\/>\s*New Opportunity\s*$/m,
+    /<option value="All">All stages<\/option>/,
+    />Delete opportunity\?</,
+    /label="Estimated value"/,
+  ]],
+  ['src/OpportunityDetail.tsx', [
+    /\/>\s*All opportunities\s*$/m,
+    /<SectionTitle>Bid record<\/SectionTitle>/,
+    /label="Submission deadline"/,
+  ]],
+  ['src/components/opportunities/OpportunityFollowUpsTab.tsx', [
+    /placeholder="What happened/,
+    /^\s*Latest follow-up\s*$/m,
+    /^\s*Post follow-up\s*$/m,
+  ]],
+  ['src/components/opportunities/OpportunityMilestonesTab.tsx', [
+    /^\s*Bid gates\s*$/m,
+    /placeholder="e\.g\. Technical clarification/,
+    /\/>\s*Add gate\s*$/m,
+    /\?\s*'Add the standard bid gates'/,
+  ]],
+  ['src/components/opportunities/OpportunityOutcomeTab.tsx', [
+    /Outcome &amp; feedback/,
+    /placeholder="Debrief notes/,
+    /<SectionTitle>Reasons<\/SectionTitle>/,
+  ]],
+  ['src/OpportunitiesAnalytics.tsx', [
+    /title="Open pipeline by stage"/,
+    /title="Why we lose"/,
+    /<th>Decided<\/th>/,
+    /<Empty text="/,
+  ]],
+  // ── task 6c ──
+  ['src/ProjectsDashboard.tsx', [
+    /placeholder="Search projects/,
+    /\/>\s*New Project\s*$/m,
+    /<option value="All">All statuses<\/option>/,
+    />Delete project\?</,
+    /label="Project name \*"/,
+    /label: 'Total'/,
+  ]],
+  ['src/ProjectDetail.tsx', [
+    /\/>\s*All projects\s*$/m,
+    /label: 'Tracking'/,
+    /label: 'Subcontracts'/,
+  ]],
+  ['src/components/projects/ListControls.tsx', [
+    /<span className="lc-label">Sort by<\/span>/,
+    /title="Reset filters"/,
+    /\? 'Ascending' : 'Descending'/,
+  ]],
+  ['src/components/projects/ProjectTrackingTab.tsx', [
+    /placeholder="Post a status update/,
+    /^\s*Current Status\s*$/m,
+    /'Posting…' : 'Post update'/,
+  ]],
+  ['src/components/projects/ProjectFinancialsTab.tsx', [
+    /^\s*Financial Records\s*$/m,
+    /label="Linked contract"/,
+    /<option value="">— None —<\/option>/,
+    /'Edit record' : 'Add record'/,
+  ]],
+  ['src/components/projects/ProjectContractsTab.tsx', [
+    /label="Contract value"/,
+    /label="Contracting method"/,
+    />Enter at least a contract #, subject or company to save\.</,
+    /'Edit item' :/,
+  ]],
+  ['src/components/projects/ProjectSubcontractsTab.tsx', [
+    /label="Subcontractor \/ supplier \*"/,
+    /placeholder="e\.g\. 50% Completion/,
+    /label: 'Expiring soon'/,
+    /\{expirySummary\.expired\} expired/,
+  ]],
 ];
 for (const [rel, patterns] of REVERT_CANARIES) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
   const hit = patterns.filter(p => p.test(src)).map(String);
   check(`${rel}: no bare English literal came back`, hit.length === 0, hit.join(' | '));
+}
+
+// ═══ [A7] every enum VALUE in types.ts has a display label ═══════════════════
+// Task 6's whole mechanism is `t(storedEnglishValue)`. That call is invisible to
+// [A5] (it passes a variable, not a literal), and a miss is SILENT: i18next
+// echoes the key back, which is the English word, so a stage nobody translated
+// renders exactly like one that is merely "not translated yet". This is the
+// guard that makes the set provably complete — it reads the option lists out of
+// `src/types.ts` itself, so ADDING a stage/status/reason and forgetting the
+// locale fails the run instead of shipping an English badge.
+console.log('\n[A7] every enum value in types.ts has an Arabic display label');
+
+const typesSrc = fs.readFileSync(path.join(ROOT, 'src/types.ts'), 'utf8');
+
+// Deliberately NOT display-labelled, with the reason. Anything else that turns
+// up in types.ts must be translated.
+const NOT_LABELLED = {
+  CURRENCY_OPTIONS: 'ISO currency codes — EGP/USD are the same token in Arabic',
+  PROJECT_OPTIONS: 'client company names (AMOC, AGIBA…) — proper nouns',
+  NotificationType: 'machine values written to Firestore, never painted',
+  ProjectContractType: 'machine values; the human text is the `label` field, which IS covered',
+  OperationType: 'internal error-reporting enum, never painted',
+  UserRole: 'covered via its own values below',
+};
+
+const enumValues = new Map(); // name -> string[]
+
+// `export type X = 'a' | 'b' | 'c';` (possibly wrapped over several lines)
+for (const m of typesSrc.matchAll(/export type (\w+)\s*=\s*((?:\s*\|?\s*'[^']*')+)\s*;/g)) {
+  const vals = [...m[2].matchAll(/'([^']*)'/g)].map(x => x[1]);
+  if (vals.length > 1) enumValues.set(m[1], vals);
+}
+// `export const X_OPTIONS: T[] = [ 'a', 'b' ];`
+for (const m of typesSrc.matchAll(/export const (\w+OPTIONS)[^=]*=\s*\[([^\]]*)\]/g)) {
+  enumValues.set(m[1], [...m[2].matchAll(/'([^']*)'/g)].map(x => x[1]));
+}
+// `export const X_OPTIONS: {value;label}[] = [{ value: 'a', label: 'A' }, …]`
+// — only the labels are painted.
+for (const m of typesSrc.matchAll(/export const (\w+OPTIONS)[^=]*=\s*\[(\s*\{[\s\S]*?)\];/g)) {
+  const labels = [...m[2].matchAll(/label:\s*'([^']*)'/g)].map(x => x[1]);
+  if (labels.length) enumValues.set(m[1], labels);
+}
+
+check(`found ${enumValues.size} option lists in types.ts`, enumValues.size >= 12,
+  [...enumValues.keys()].join(', '));
+
+const unlabelled = [];
+for (const [name, vals] of enumValues) {
+  if (name in NOT_LABELLED) continue;
+  for (const v of vals) {
+    if (!(v in en)) unlabelled.push(`${name}.${v}: no key`);
+    else if (!AR_RANGE.test(ar[v])) unlabelled.push(`${name}.${v}: ar not Arabic`);
+  }
+}
+check('★ every painted enum value has an Arabic label', unlabelled.length === 0,
+  unlabelled.slice(0, 10).join(' | '));
+
+// The skip list must stay honest: a name listed there has to still exist.
+const staleSkips = Object.keys(NOT_LABELLED).filter(n => !enumValues.has(n) && !typesSrc.includes(n));
+check('the [A7] skip list names no enum that has been deleted', staleSkips.length === 0, staleSkips.join(' | '));
+
+// ═══ [A8] the display-label + Intl layer itself ══════════════════════════════
+// [A7] proves the WORDS exist. This proves the two modules that use them behave
+// — they are pure functions, so they can be exercised in node with no browser.
+console.log('\n[A8] lib/displayLabel + lib/format');
+
+const fmtMod = await import(pathToFileURL(await bundleOne('src/lib/format.ts', 'format')).href);
+const dlMod = await import(pathToFileURL(await bundleOne('src/lib/displayLabel.ts', 'displayLabel')).href);
+
+await i18n.changeLanguage('ar');
+const tAr = i18n.t.bind(i18n);
+check('displayLabel paints a stored value in Arabic', dlMod.displayLabel(tAr, 'In Progress') === ar['In Progress'],
+  dlMod.displayLabel(tAr, 'In Progress'));
+// ★ Free text must survive untouched — `category`, `department` and `sector`
+// accept whatever the user typed, and blowing up (or blanking) on those would
+// be far worse than leaving one word English.
+check('★ displayLabel passes unknown free text through unchanged',
+  dlMod.displayLabel(tAr, 'Turnaround Planning Unit') === 'Turnaround Planning Unit');
+check('displayLabel is empty-in / empty-out',
+  dlMod.displayLabel(tAr, '') === '' && dlMod.displayLabel(tAr, null) === '' && dlMod.displayLabel(tAr, undefined) === '');
+
+// ★ Arabic formats through ar-EG-u-nu-latn: Arabic month NAMES, Western digits.
+// Arabic-Indic digits (٢٠٢٦) would be wrong for a dashboard read next to
+// English contracts, and would also break every `.ltr-data` span.
+const SAMPLE = new Date(2026, 7, 15, 14, 30); // 15 Aug 2026, 14:30 local
+check('a numeric date is identical in both languages (it has no words in it)',
+  fmtMod.fmtDate(SAMPLE, 'ar') === fmtMod.fmtDate(SAMPLE, 'en') && fmtMod.fmtDate(SAMPLE, 'en') === '15/08/2026',
+  `${fmtMod.fmtDate(SAMPLE, 'en')} / ${fmtMod.fmtDate(SAMPLE, 'ar')}`);
+const namedAr = fmtMod.fmtDate(SAMPLE, 'ar', fmtMod.DATE_MEDIUM);
+check('★ a named-month date is Arabic under ar', AR_RANGE.test(namedAr), namedAr);
+check('★ …and still uses Western digits, not Arabic-Indic', /15/.test(namedAr) && /2026/.test(namedAr), namedAr);
+check('the same date is English under en', /Aug/.test(fmtMod.fmtDate(SAMPLE, 'en', fmtMod.DATE_MEDIUM)),
+  fmtMod.fmtDate(SAMPLE, 'en', fmtMod.DATE_MEDIUM));
+check('the time is 24h and Latin in both', fmtMod.fmtTime(SAMPLE, 'ar') === '14:30' && fmtMod.fmtTime(SAMPLE, 'en') === '14:30',
+  `${fmtMod.fmtTime(SAMPLE, 'en')} / ${fmtMod.fmtTime(SAMPLE, 'ar')}`);
+check('an empty/invalid date formats to empty, never "Invalid Date"',
+  fmtMod.fmtDate(null, 'ar') === '' && fmtMod.fmtDate('not a date', 'ar') === '' && fmtMod.fmtDate(undefined, 'en') === '');
+check('a Firestore-shaped Timestamp is accepted',
+  fmtMod.fmtDate({ toDate: () => SAMPLE }, 'en') === '15/08/2026');
+
+check('money keeps the currency CODE and groups the number',
+  fmtMod.fmtMoney(1250000, 'EGP', 'ar') === '1,250,000 EGP', fmtMod.fmtMoney(1250000, 'EGP', 'ar'));
+check('★ a non-numeric money value is returned untouched ("TBD" must not become NaN)',
+  fmtMod.fmtMoney('TBD', 'EGP', 'ar') === 'TBD', fmtMod.fmtMoney('TBD', 'EGP', 'ar'));
+
+check('the relative clock is Arabic under ar',
+  fmtMod.fmtAgo(Date.now() - 3 * 3600_000, 'ar', tAr) === tAr('{{count}}h ago', { count: 3 }),
+  fmtMod.fmtAgo(Date.now() - 3 * 3600_000, 'ar', tAr));
+// Past 7 days it stops counting and shows the date — which under ar means an
+// Arabic month name, so this also proves the two halves of the file join up.
+const OLD = Date.now() - 30 * 86_400_000;
+check('…and falls back to a named-month date past 7 days',
+  fmtMod.fmtAgo(OLD, 'ar', tAr) === fmtMod.fmtDate(OLD, 'ar', fmtMod.DATE_SHORT) && AR_RANGE.test(fmtMod.fmtAgo(OLD, 'ar', tAr)),
+  fmtMod.fmtAgo(OLD, 'ar', tAr));
+check('a future timestamp reads "just now", never a negative count',
+  fmtMod.fmtAgo(Date.now() + 60_000, 'ar', tAr) === tAr('just now'));
+
+// ★ The bidi class has to be chosen from the TEXT, not assumed. `.ltr-data`
+// forces a left-to-right run — correct for "15/08/2026" and "Other...", wrong
+// for "أخرى...", which it would drag out of the paragraph's direction.
+check('★ bidiClassFor: Latin text keeps .ltr-data', fmtMod.bidiClassFor('Other...') === 'ltr-data');
+check('★ bidiClassFor: Arabic text gets .bidi-isolate (never forced LTR)',
+  fmtMod.bidiClassFor('أخرى...') === 'bidi-isolate');
+check('bidiClassFor: empty text is treated as Latin', fmtMod.bidiClassFor('') === 'ltr-data' && fmtMod.bidiClassFor(null) === 'ltr-data');
+check('.bidi-isolate exists in index.css', /^\.bidi-isolate\s*\{/m.test(fs.readFileSync(path.join(ROOT, 'src/index.css'), 'utf8')));
+await i18n.changeLanguage('en');
+
+// ── revert canaries for the task-6a pass ────────────────────────────────────
+// A raw `{item.status}` reads perfectly in English, so nothing but this notices
+// when one comes back.
+const T6_CANARIES = [
+  ['src/TasksDashboard.tsx', [
+    /\{task\.status\}<\/span>/,
+    /\{task\.priority\}<\/span>/,
+    /toLocaleDateString/,
+  ]],
+  ['src/CorrespondingsDashboard.tsx', [
+    /\{item\.status\}<\/span>/,
+    /\{formData\.priority\}<\/span>/,
+    /\{item\.category\}<\/span>/,
+    /toLocaleDateString/,
+  ]],
+  ['src/ManagerInbox.tsx', [/^\s*\{corr\.status\}\s*$/m, /^\s*\{selectedCorr\.priority\}\s*$/m, /toLocaleDateString/]],
+  ['src/ArchiveDashboard.tsx', [/\{ms\.status\}<\/span>/, /toLocaleDateString/]],
+  ['src/components/Sidebar.tsx', [/^\s*\{appUser\.role\}\s*$/m, /toLocaleString\('en-GB'/]],
+  ['src/components/ChatBox.tsx', [/\{u\.role\} ·/, /toLocaleTimeString/]],
+  ['src/components/Announcements.tsx', [/timeAgo\(/]],
+  ['src/DueSoonDashboard.tsx', [/toLocaleString\('en-GB'/]],
+  ['src/OutlookFeed.tsx', [/toLocaleString\(\)/]],
+  // ── task 6b: the Opportunities module's own raw-enum / raw-date shapes ──
+  ['src/OpportunitiesDashboard.tsx', [/\{o\.stage\}\s*$/m, /\{s\}<\/option>/, /toLocaleDateString/]],
+  ['src/OpportunityDetail.tsx', [/^\s*\{o\.stage\}\s*$/m, /value=\{o\.submissionDeadline\}/, /toLocaleDateString/]],
+  ['src/components/opportunities/OpportunityFollowUpsTab.tsx', [/\{f\.stage\}<\/span>/, /toLocaleString\('en-GB'/]],
+  ['src/components/opportunities/OpportunityMilestonesTab.tsx', [/\{s\}<\/option>/, /\{m\.title\}\s*$/m]],
+  ['src/components/opportunities/OpportunityOutcomeTab.tsx', [/\{record\.outcome\}\s*$/m, /toLocaleString\('en-GB'/]],
+  ['src/OpportunitiesAnalytics.tsx', [/\{o\.stage\}<\/span>/, /\{s\.stage\}<\/span>/, /toLocaleTimeString/, /toLocaleDateString\('en-GB'/]],
+  // ── task 6c: the Projects module's own raw-enum / raw-date / raw-money shapes.
+  // `formatMoney`/`toLocaleString('en-US')` are the un-localized twins of
+  // `fmt.money`/`fmt.number` — correct before this pass, a regression after it.
+  ['src/ProjectsDashboard.tsx', [/\{p\.status\}<\/span>/, /\{s\}<\/option>/, /toLocaleDateString/]],
+  ['src/ProjectDetail.tsx', [/^\s*\{project\.status\}\s*$/m, /toLocaleDateString/]],
+  ['src/components/projects/ProjectTrackingTab.tsx', [
+    /\{u\.status\}<\/span>/, /\{s\}<\/option>/, /toLocaleString\('en-GB'/,
+    /\{project\.currentStatus \|\| project\.status\}/,
+  ]],
+  ['src/components/projects/ProjectFinancialsTab.tsx', [
+    /\{r\.type\}<\/span>/, /\{r\.status \|\| '—'\}/, /formatMoney\(/, /toLocaleString\('en-US'/,
+  ]],
+  ['src/components/projects/ProjectContractsTab.tsx', [
+    /\{item\.status\}<\/span>/, /\{typeLabel\(item\.type\)\}</, /formatMoney\(/, /toLocaleString\('en-US'/,
+  ]],
+  ['src/components/projects/ProjectSubcontractsTab.tsx', [
+    /\{s\.currentStatus \|\| s\.status\}<\/span>/, /formatMoney\(/, /text: 'Expired'/,
+  ]],
+  // ── task 6c-ii: Overview + Admin. `const t = (s: string) => s;` is the shape
+  // that mattered most here — Overview shipped an IDENTITY translator, so ~20
+  // strings looked wired and rendered English forever. Its return is a revert.
+  ['src/OverviewDashboard.tsx', [
+    /const t = \(s: string\) => s;/,
+    /\{item\.status\}\s*$/m, /\{task\.status\}<\/span>/, /\{ms\.status\}<\/span>/,
+    /\{selectedCorr\.category\}\s*$/m, /\} Priority/, /toLocaleDateString\('en-GB'\)/,
+  ]],
+  ['src/AdminDashboard.tsx', [/\{u\.status\}\s*$/m, /<Shield className="w-3 h-3" \/> \{u\.role\}/]],
+];
+for (const [rel, patterns] of T6_CANARIES) {
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  const hit = patterns.filter(p => p.test(src)).map(String);
+  check(`${rel}: no raw enum / un-localized date came back`, hit.length === 0, hit.join(' | '));
+}
+
+// Every screen task 6a touched must actually hold the layer.
+const LAYER_FILES = [
+  'src/TasksDashboard.tsx', 'src/components/CreateTaskPanel.tsx', 'src/CorrespondingsDashboard.tsx',
+  'src/ManagerInbox.tsx', 'src/ArchiveDashboard.tsx', 'src/components/ChatBox.tsx',
+  'src/components/Sidebar.tsx',
+  // ── task 6b ──
+  'src/OpportunitiesDashboard.tsx', 'src/OpportunityDetail.tsx', 'src/OpportunitiesAnalytics.tsx',
+  'src/components/opportunities/OpportunityFollowUpsTab.tsx',
+  'src/components/opportunities/OpportunityMilestonesTab.tsx',
+  'src/components/opportunities/OpportunityOutcomeTab.tsx',
+  // ── task 6c. ListControls is NOT here: it paints only labels its caller has
+  // already resolved, so it holds no stored value of its own.
+  'src/ProjectsDashboard.tsx', 'src/ProjectDetail.tsx',
+  'src/components/projects/ProjectTrackingTab.tsx',
+  'src/components/projects/ProjectFinancialsTab.tsx',
+  'src/components/projects/ProjectContractsTab.tsx',
+  'src/components/projects/ProjectSubcontractsTab.tsx',
+  // ── task 6c-ii ──
+  'src/OverviewDashboard.tsx', 'src/AdminDashboard.tsx',
+];
+for (const rel of LAYER_FILES) {
+  const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
+  check(`${rel}: wired to useDisplayLabel`, /useDisplayLabel/.test(src));
 }
 
 // ═══ [B] The real TopNav in a real browser ═══════════════════════════════════
@@ -583,6 +1019,16 @@ const navStillEnglish = await evalJS(`(() => {
 check('★ no nav tab is still English in ar', navStillEnglish === '[]', navStillEnglish);
 check('★ Sign Out in the open menu is translated',
   await evalJS(`!!window.__one('button','تسجيل الخروج')`));
+
+// ★ Task 6: the role chip under the user's name. It reads `appUser.role` — a
+// value straight out of Firestore — so it was the one word in this menu the
+// task-3 pass could not touch.
+const roleChip = await evalJS(`(() => {
+  const el = [...document.querySelectorAll('div, span')]
+    .find(e => e.children.length === 0 && /^(مدير النظام|مدير|موظف|Admin|Manager|Employee)$/.test((e.textContent||'').trim()));
+  return el ? (el.textContent || '').trim() : 'not rendered';
+})()`);
+check('★ the role chip paints the stored role in Arabic', roleChip === 'مدير', roleChip);
 await shot('menu-ar');
 
 // The whole header must mirror, not just the menu. The avatar is the last item
@@ -625,6 +1071,20 @@ const badge = await evalJS(`(() => {
 })()`).then(JSON.parse);
 check('unread badge moves to the inline end in RTL', badge.onInlineEnd === true, JSON.stringify(badge));
 check('unread badge leans outward, not back over the bell', badge.leansOutward === true, JSON.stringify(badge));
+
+// ★ Task 6: the row timestamp. It was a hard-coded toLocaleString('en-GB') and
+// is the one string in this dropdown that stayed English through tasks 1–5.
+const notifStamp = await evalJS(`(() => {
+  const d = document.querySelector('.notif-dropdown');
+  if (!d) return 'dropdown not found';
+  const hit = [...d.querySelectorAll('*')]
+    .filter(e => e.children.length === 0)
+    .map(e => (e.textContent || '').trim())
+    .find(txt => /\\d{1,2}[^\\d]+\\d{2}:\\d{2}/.test(txt));
+  return hit || 'no timestamp found';
+})()`);
+check('★ the notification timestamp is an Arabic-month date, not en-GB',
+  AR_RANGE.test(notifStamp) && /\d{2}:\d{2}/.test(notifStamp), notifStamp);
 await shot('notif-ar');
 await clickEl(`(() => [...document.querySelectorAll('button')].find(x => x.querySelector('.lucide-bell, .lucide-bell-ring')))()`, 'close bell');
 
@@ -710,6 +1170,9 @@ import CorrespondingsDashboard from './src/CorrespondingsDashboard';
 import OverviewDashboard from './src/OverviewDashboard';
 import OpportunitiesDashboard from './src/OpportunitiesDashboard';
 import ArchiveDashboard from './src/ArchiveDashboard';
+import OpportunitiesAnalytics from './src/OpportunitiesAnalytics';
+import ProjectsDashboard from './src/ProjectsDashboard';
+import AdminDashboard from './src/AdminDashboard';
 
 const T0 = Math.floor(new Date('2026-08-01T08:00:00Z').getTime() / 1000);
 const ts = s => ({ seconds: T0 + s, nanoseconds: 0, toDate: () => new Date((T0 + s) * 1000) });
@@ -757,7 +1220,10 @@ __seed('correspondences', '--stats--', { value: 4 });
   __seed('opportunities', 'o-' + k, {
     title: i === 1 ? LONG_AR : 'EGPC turnaround maintenance tender — Alexandria refinery',
     client: ['EGPC', 'هيئة البترول', 'ECHEM'][i], sector: 'Refining', location: 'Alexandria',
-    tenderNumber: 'RFQ-2026-0' + i, stage: ['Identified', 'Bid Submitted', 'Won'][i],
+    // ★ Real stage VALUES only: 'Bid Submitted' is not one of
+    // OPPORTUNITY_STAGE_OPTIONS, so the display-label layer would echo it back
+    // in English and [C7] would be asserting against a typo, not a translation.
+    tenderNumber: 'RFQ-2026-0' + i, stage: ['Identified', 'Submitted', 'Won'][i],
     probability: [20, 60, 100][i], estimatedValue: 12500000 * (i + 1), currency: 'EGP',
     announcedDate: '2026-07-0' + (i + 1), submissionDeadline: '2026-08-1' + (i + 5),
     ownerId: USERS[i].id, ownerName: USERS[i].displayName, collaboratorIds: [],
@@ -765,12 +1231,80 @@ __seed('correspondences', '--stats--', { value: 4 });
   });
 });
 
+// ── task 6c: the Projects module ────────────────────────────────────────────
+// Statuses are the stored English values (the display layer is what paints
+// them in Arabic); one project carries the tracking summary the detail page
+// leads with, and each child collection is keyed to 'p-a' so opening the first
+// card lands on populated tabs rather than four empty states.
+// ⚠ The list sorts by createdAt DESC, so 'p-a' must be the NEWEST or the click
+// in [C8] opens an empty project and six assertions fail on missing data.
+__seed('projects', '--stats--', { value: 3 });
+[
+  ['p-a', 'Meleiha Gas Plant operations & maintenance contract', 'Active', 'AGIBA'],
+  ['p-b', LONG_AR, 'On Hold', 'الشركة المصرية للتكرير'],
+  ['p-c', 'Alexandria tank farm inspection framework', 'Completed', 'EGPC'],
+].forEach(([id, name, status, client], i) => {
+  __seed('projects', id, {
+    name, status, client, operator: 'EPROM', code: '46000029' + (81 + i),
+    serialNumber: 'PR00000' + (i + 1), location: 'Alexandria',
+    description: i === 1 ? LONG_AR : 'Full O&M scope including rotating equipment, static equipment and instrumentation.',
+    startDate: '2026-01-0' + (i + 1), endDate: '2027-06-30',
+    currentStatus: status, lastUpdateText: i === 1 ? LONG_AR : 'Mobilization complete; commissioning spares on order.',
+    lastUpdateAt: ts(100 * (2 - i)), userId: 'u-mgr', teamId: 'T1',
+    createdAt: ts(100 * (2 - i)), updatedAt: ts(100 * (2 - i)),
+  });
+});
+['a', 'b'].forEach((k, i) => {
+  __seed('projectUpdates', 'pu-' + k, {
+    projectId: 'p-a', status: ['Active', 'On Hold'][i],
+    text: i === 1 ? LONG_AR : 'Vendor mobilized on site; first turnaround window confirmed with the client.',
+    authorId: USERS[i].id, authorName: USERS[i].displayName, authorColor: USERS[i].userColor,
+    createdAt: ts(50 * i),
+  });
+  __seed('projectFinancials', 'pf-' + k, {
+    projectId: 'p-a', type: ['invoice', 'expense'][i],
+    title: i === 1 ? LONG_AR : 'Milestone 1 progress invoice',
+    amount: [12500000, 3400000][i], currency: 'EGP', date: '2026-0' + (6 + i) + '-15',
+    status: ['Pending', 'Approved'][i], userId: 'u-mgr', createdAt: ts(50 * i),
+  });
+  __seed('projectSubcontracts', 'ps-' + k, {
+    projectId: 'p-a', name: i === 1 ? 'شركة النيل للخدمات الصناعية' : 'Delta Industrial Services',
+    typeOfService: i === 1 ? LONG_AR : 'Scaffolding, insulation and painting during the turnaround window.',
+    soOrContract: 'SO-2026-0' + (i + 1), price: [4500000, 980000][i], currency: 'EGP',
+    startDate: '2026-02-01', expiryDate: ['2026-09-30', '2027-03-31'][i],
+    currentStatus: ['Active', 'On Hold'][i], userId: 'u-mgr', createdAt: ts(50 * i),
+  });
+});
+__seed('projectContracts', 'pc-a', {
+  projectId: 'p-a', type: 'contract', contractNumber: '4600002981',
+  subject: 'Operations & maintenance of the Meleiha gas processing plant',
+  companyName: 'AGIBA Petroleum', department: 'Maintenance Planning',
+  contractValue: 480000000, currency: 'EGP', startDate: '2026-01-01', endDate: '2027-06-30',
+  status: 'Active', contractingMethod: 'أمر مباشر', inCharge: 'Tariq Salama',
+  parentId: null, userId: 'u-mgr', createdAt: ts(0),
+});
+__seed('projectContracts', 'pc-b', {
+  projectId: 'p-a', type: 'amendment', contractNumber: '4600002981-A1',
+  amendmentNumber: 'AMD-01', subject: LONG_AR, companyName: 'AGIBA Petroleum',
+  contractValue: 480000000, valueAfterIncrease: 512000000, currency: 'EGP',
+  status: 'Active', parentId: 'pc-a', userId: 'u-mgr', createdAt: ts(60),
+});
+
 const user = { uid: 'u-mgr', displayName: 'Tariq Salama', email: 't@x.com' };
 const appUser = USERS[0];
-const shared = { user, appUser, projectUsers: USERS };
+// AdminDashboard is the only screen that renders a PENDING user (the approval
+// banner + the two row buttons), so the directory it gets carries a fourth
+// account the other dashboards never see.
+const ADMIN_USERS = [
+  ...USERS,
+  { id: 'u-new', displayName: 'Hossam Asaad', email: 'h@x.com', photoURL: '', status: 'Pending', role: 'Employee', teamId: '', department: '', userColor: '#a855f7' },
+  { id: 'u-out', displayName: '', email: 'x@x.com', photoURL: '', status: 'Rejected', role: 'Employee', teamId: '', department: '', userColor: '#64748b' },
+];
+const shared = { user, appUser, projectUsers: USERS, users: ADMIN_USERS };
 const VIEWS = {
   tasks: TasksDashboard, corr: CorrespondingsDashboard, overview: OverviewDashboard,
-  opps: OpportunitiesDashboard, archive: ArchiveDashboard,
+  opps: OpportunitiesDashboard, archive: ArchiveDashboard, bidanalytics: OpportunitiesAnalytics,
+  projects: ProjectsDashboard, admin: AdminDashboard,
 };
 
 const root = createRoot(document.getElementById('root'));
@@ -832,7 +1366,10 @@ const DASHBOARDS = [
   ['corr', 'CorrespondingsDashboard'],
   ['overview', 'OverviewDashboard'],
   ['opps', 'OpportunitiesDashboard'],
+  ['bidanalytics', 'OpportunitiesAnalytics'],
   ['archive', 'ArchiveDashboard'],
+  ['projects', 'ProjectsDashboard'],
+  ['admin', 'AdminDashboard'],
 ];
 for (const [key, label] of DASHBOARDS) {
   console.log(`\n[C:${label}]`);
@@ -854,7 +1391,7 @@ for (const [key, label] of DASHBOARDS) {
   await sleep(150);
   await shot(`dash-${key}`);
 }
-check('no page errors while mounting all five dashboards in RTL',
+check('no page errors while mounting all eight dashboards in RTL',
   pageErrors.length === errorsBefore && (await evalJS(`window.__errors.length`)) === 0,
   pageErrors.slice(errorsBefore).join(' || ').slice(0, 400));
 
@@ -1010,6 +1547,850 @@ await shot('tasks-panel-ar');
 await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
 await sleep(300);
 check('no errors across the tasks-flow checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C6] the ENUM VALUES themselves are painted in Arabic (task 6) ──────────
+// [A7] proves the words exist and [A8] proves the helpers work; only this
+// proves the two are actually joined up on a rendered screen. It reads the
+// tasks list — the one place where a status is a segmented control, a badge
+// AND a filter <option> at once — then flips the SAME DOM to English.
+console.log('\n[C6] the enum values render in Arabic (task 6)');
+await sleep(400);
+const enumAr = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  const badges = [...document.querySelectorAll('#root .badge, #root [class*="badge-"]')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, opts, badges });
+})()`).then(JSON.parse);
+
+const allEnumText = [...enumAr.btns, ...enumAr.badges, ...enumAr.opts.map(o => o.t)].filter(Boolean);
+check('★ the task status control paints قيد الانتظار / قيد التنفيذ / منجز',
+  ['قيد الانتظار', 'قيد التنفيذ', 'منجز'].every(w => allEnumText.includes(w)),
+  allEnumText.slice(0, 16).join(' | '));
+check('★ the status filter <option>s are Arabic',
+  enumAr.opts.some(o => o.t === 'قيد التنفيذ') && enumAr.opts.some(o => o.t === 'منجز'),
+  enumAr.opts.slice(0, 10).map(o => `${o.v}=${o.t}`).join(' | '));
+
+// ★★ THE RULE THE WHOLE LAYER RESTS ON: the <option>'s VALUE is what gets
+// written to Firestore and compared by every filter, query and rules check —
+// only its label may be Arabic. An <option> with no `value` attribute takes its
+// TEXT as the value, so labelling one without adding `value=` silently starts
+// writing Arabic to the database. This is the assertion that catches that.
+const arabicValues = enumAr.opts.filter(o => /[؀-ۿ]/.test(o.v));
+check('★★ no <option> VALUE is Arabic — only labels are translated, never the stored value',
+  arabicValues.length === 0, arabicValues.map(o => `${o.v} (${o.t})`).join(' | '));
+
+// ★ Project / Internal / External were missed by the first pass of this task
+// and found by LOOKING at i18nrtl-tasks-enums-ar.png — the category filter row
+// is a plain string array in the JSX, not one of the types.ts option lists, so
+// [A7] could never have seen it. Every enum word that reaches this screen is
+// named here, not just the ones with a home in types.ts.
+const latinEnums = allEnumText.filter(x =>
+  /^(Pending|In Progress|Done|Archived|Urgent|High|Medium|Low|Admin|Manager|Employee|Project|Internal|External|Planned|Blocked)$/.test(x));
+check('★ no status / priority / role / category is still painted in English',
+  latinEnums.length === 0, latinEnums.join(' | '));
+
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const enumEn = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify({ btns, opts });
+})()`).then(JSON.parse);
+check('non-vacuous: the same controls read English again under en',
+  enumEn.btns.includes('In Progress') && enumEn.opts.some(o => o.v === 'Done' && o.t === 'Done'),
+  enumEn.btns.slice(0, 14).join(' | '));
+check('non-vacuous: the option VALUES never changed', enumEn.opts.some(o => o.v === 'In Progress'),
+  enumEn.opts.slice(0, 10).map(o => o.v).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await shot('tasks-enums-ar');
+check('no errors across the enum checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C5] the correspondence flow really renders Arabic (task 5) ─────────────
+// Same contract as [C4]: mount the real screens, read the PAINTED text, then
+// flip the same DOM back to English. A floor of t() calls can be met with a
+// whole modal still in English, so this clicks into the modals as well.
+console.log('\n[C5] the correspondence flow renders Arabic (task 5)');
+await evalJS(`window.__mount('corr')`);
+await sleep(600);
+
+const corrText = `(() => {
+  const h1 = document.querySelector('#root h1');
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const body = (document.getElementById('root').innerText || '');
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', btns, body });
+})()`;
+const corrAr = JSON.parse(await evalJS(corrText));
+check('the Correspondences heading reads المراسلات', corrAr.h1 === 'المراسلات', corrAr.h1);
+check('the create button reads مراسلة جديدة', corrAr.btns.some(b => b === 'مراسلة جديدة'),
+  corrAr.btns.slice(0, 12).join(' | '));
+check('the stat row is translated (الإجمالي / مغلق)',
+  corrAr.body.includes('الإجمالي') && corrAr.body.includes('مغلق'), corrAr.btns.slice(0, 8).join(' | '));
+check('the manager workload panel reads أحمال العمل بالفريق',
+  corrAr.body.includes('أحمال العمل بالفريق'), corrAr.body.slice(0, 160));
+
+// Into the form modal — a real click on the same button a user presses.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'مراسلة جديدة')`, 'New Correspondence');
+await sleep(500);
+const corrModal = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.input-label')].map(l => (l.textContent || '').trim());
+  const ph = [...document.querySelectorAll('input, textarea')].map(i => i.placeholder).filter(Boolean);
+  const btns = [...document.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ labels, ph, btns });
+})()`).then(JSON.parse);
+check('the correspondence form labels are Arabic (الموضوع / الجهة المرسلة)',
+  corrModal.labels.includes('الموضوع') && corrModal.labels.includes('الجهة المرسِلة'),
+  corrModal.labels.slice(0, 10).join(' | '));
+check('the subject placeholder is Arabic', corrModal.ph.includes('موضوع المراسلة…'), corrModal.ph.join(' | '));
+check('the submit button reads إنشاء المراسلة', corrModal.btns.some(b => b === 'إنشاء المراسلة'),
+  corrModal.btns.slice(-6).join(' | '));
+// Task 6 turned the enum VALUES Arabic too, so nothing on this form may carry
+// Latin letters any more — labels OR chips.
+const corrLatin = corrModal.labels.filter(l => /[A-Za-z]{3}/.test(l));
+check('★ no correspondence-form label is still English', corrLatin.length === 0, corrLatin.join(' | '));
+
+// ── task 6: the category / priority / status chips paint the ENUM ────────────
+const corrChips = await evalJS(`(() => {
+  const txt = [...document.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify(txt);
+})()`).then(JSON.parse);
+check('★ the category chips render the enum in Arabic (مشروع / داخلي / خارجي)',
+  ['مشروع', 'داخلي', 'خارجي'].every(w => corrChips.includes(w)),
+  corrChips.filter(Boolean).slice(0, 14).join(' | '));
+check('★ the priority chips render the enum in Arabic (عاجلة / عالية / متوسطة / منخفضة)',
+  ['عاجلة', 'عالية', 'متوسطة', 'منخفضة'].every(w => corrChips.includes(w)),
+  corrChips.filter(Boolean).slice(0, 14).join(' | '));
+// ★ The action chips (None / For info / SR for approval / Action needed) were
+// missed by this task's first pass and found by LOOKING at the screenshot, not
+// by any assertion — they are an inline `as const` array in the JSX, invisible
+// to [A7]'s scan of types.ts. Named explicitly here for that reason.
+check('★ the action chips render the enum in Arabic (للعلم / مطلوب إجراء)',
+  ['للعلم', 'مطلوب إجراء'].every(w => corrChips.includes(w)),
+  corrChips.filter(Boolean).slice(0, 20).join(' | '));
+check('★ no chip on the correspondence form is still a Latin enum value',
+  !corrChips.some(x => /^(Project|Internal|External|Other\.\.\.|Urgent|High|Medium|Low|Unread|Reviewing|Assigned|Closed|None|For info|SR for approval|Action needed)$/.test(x)),
+  corrChips.filter(x => /[A-Za-z]{3}/.test(x)).join(' | '));
+
+// ★ The bidi trap this chip exists for, re-proved. Found originally by LOOKING
+// at i18nrtl-corr-modal-ar.png: "Other..." painted as "...Other", because the
+// trailing dots are bidi-NEUTRAL and take the paragraph's direction.
+//
+// Under `ar` the chip now reads "أخرى..." — Arabic, so the dots already sit
+// correctly and .ltr-data would be the WRONG class for it (it would force the
+// word into a left-to-right run). `bidiClassFor` is what makes that choice, so
+// this asserts BOTH halves: the Arabic chip is isolated-but-not-forced, and a
+// chip still carrying a Latin value keeps the original .ltr-data protection.
+const chipClass = await evalJS(`(() => {
+  const b = [...document.querySelectorAll('button')].find(x => (x.textContent||'').trim() === 'أخرى...');
+  if (!b) return JSON.stringify({ err: 'arabic Other chip not rendered' });
+  return JSON.stringify({ cls: b.className, dir: getComputedStyle(b).direction, bidi: getComputedStyle(b).unicodeBidi });
+})()`).then(JSON.parse);
+check('★ the Arabic "أخرى..." chip is isolated but NOT forced left-to-right',
+  chipClass.cls === 'bidi-isolate' && chipClass.dir === 'rtl' && /isolate/.test(chipClass.bidi),
+  JSON.stringify(chipClass));
+
+// Same chip, forced back to the Latin value + the Latin class: the original
+// defect and its fix, still measured on GLYPHS rather than on textContent.
+const latinChip = `(() => {
+  const b = [...document.querySelectorAll('button')].find(x => x.dataset.bidiProbe === '1');
+  if (!b) return JSON.stringify({ err: 'probe chip missing' });
+  const n = [...b.childNodes].find(x => x.nodeType === 3);
+  const r = document.createRange();
+  r.setStart(n, 0); r.setEnd(n, 1);
+  const first = r.getBoundingClientRect();
+  r.setStart(n, n.textContent.length - 1); r.setEnd(n, n.textContent.length);
+  const last = r.getBoundingClientRect();
+  return JSON.stringify({ firstLeft: Math.round(first.left), lastLeft: Math.round(last.left),
+                          dir: getComputedStyle(b).direction });
+})()`;
+await evalJS(`(() => {
+  const b = [...document.querySelectorAll('button')].find(x => (x.textContent||'').trim() === 'أخرى...');
+  b.dataset.bidiProbe = '1'; b.textContent = 'Other...'; b.className = 'ltr-data';
+})()`);
+await sleep(120);
+const chipRtl = JSON.parse(await evalJS(latinChip));
+check('★ a Latin "Other..." chip still keeps its dots at the END in RTL',
+  chipRtl.firstLeft < chipRtl.lastLeft && chipRtl.dir === 'ltr', JSON.stringify(chipRtl));
+await evalJS(`[...document.querySelectorAll('button.ltr-data')].forEach(e => { e.style.unicodeBidi = 'normal'; e.style.direction = 'inherit'; })`);
+await sleep(120);
+const chipBroken = JSON.parse(await evalJS(latinChip));
+check('non-vacuous: without the isolation the dots jump to the front',
+  chipBroken.firstLeft > chipBroken.lastLeft, JSON.stringify(chipBroken));
+await evalJS(`[...document.querySelectorAll('button.ltr-data')].forEach(e => { e.style.unicodeBidi = ''; e.style.direction = ''; })`);
+
+await evalJS(`window.__setLang('en')`);
+await sleep(400);
+const corrEn = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.input-label')].map(l => (l.textContent || '').trim());
+  const btns = [...document.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ labels, btns });
+})()`).then(JSON.parse);
+check('non-vacuous: the same correspondence form reads English under en',
+  corrEn.labels.includes('Subject') && corrEn.btns.some(b => b === 'Create Corresponding'),
+  corrEn.labels.slice(0, 8).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await shot('corr-modal-ar');
+await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
+await sleep(300);
+
+// The archive is the other screen of this pass that owns its own copy.
+await evalJS(`window.__mount('archive')`);
+await sleep(500);
+const archiveAr = await evalJS(`(() => {
+  const h1 = document.querySelector('#root h1');
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the Archive heading reads الأرشيف', archiveAr.h1 === 'الأرشيف', archiveAr.h1);
+check('the archive stat labels are Arabic (مهام مكتملة)',
+  archiveAr.body.includes('مهام مكتملة'), archiveAr.body.slice(0, 160));
+check('no errors across the correspondence-flow checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C7] the Opportunities module really renders Arabic (task 6b) ───────────
+// Same contract as [C4]/[C5]: mount the real screens, read the PAINTED text,
+// click into the modal a user would open, then flip the SAME DOM to English.
+console.log('\n[C7] the Opportunities module renders Arabic (task 6b)');
+await evalJS(`window.__mount('opps')`);
+await sleep(600);
+
+const oppAr = await evalJS(`(() => {
+  const h1 = document.querySelector('#root h1');
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', btns, opts, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the Opportunities heading reads الفرص', oppAr.h1 === 'الفرص', oppAr.h1);
+check('the create button reads فرصة جديدة', oppAr.btns.some(b => b === 'فرصة جديدة'),
+  oppAr.btns.slice(0, 12).join(' | '));
+check('the KPI strip is translated (معدل الفوز / قيمة خط الفرص)',
+  oppAr.body.includes('معدل الفوز') && oppAr.body.includes('قيمة خط الفرص'), oppAr.body.slice(0, 200));
+check('the stage filter <option>s are Arabic (كل المراحل / مُحدَّد)',
+  oppAr.opts.some(o => o.t === 'كل المراحل') && oppAr.opts.some(o => o.v === 'Identified' && o.t === 'مُحدَّد'),
+  oppAr.opts.slice(0, 12).map(o => `${o.v}=${o.t}`).join(' | '));
+// ★★ The stored value must survive translation — same rule the whole layer
+// rests on. A bid whose stage got written in Arabic is invisible to every
+// filter, alert and analytics bucket in the module.
+const oppArabicValues = oppAr.opts.filter(o => /[؀-ۿ]/.test(o.v));
+check('★★ no stage <option> VALUE is Arabic — the stored stage stays English',
+  oppArabicValues.length === 0, oppArabicValues.map(o => `${o.v} (${o.t})`).join(' | '));
+// The stage badge on the card paints the seeded value through the same layer.
+const cardStages = await evalJS(`(() => {
+  const spans = [...document.querySelectorAll('#root .card span')].map(s => (s.textContent || '').trim());
+  return JSON.stringify(spans.filter(Boolean).slice(0, 40));
+})()`).then(JSON.parse);
+check('★ a card stage badge paints the enum in Arabic (مُحدَّد / مُقدَّم / فوز)',
+  ['مُحدَّد', 'مُقدَّم', 'فوز'].some(w => cardStages.includes(w)), cardStages.slice(0, 14).join(' | '));
+check('★ no card badge is still a Latin stage value',
+  !cardStages.some(x => /^(Identified|Prequalification|Bid Preparation|Submitted|Under Evaluation|Won|Lost|No Bid|Cancelled)$/.test(x)),
+  cardStages.filter(x => /[A-Za-z]{3}/.test(x)).join(' | '));
+
+// Into the create modal — a real click on the button a user presses.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'فرصة جديدة')`, 'New Opportunity');
+await sleep(500);
+const oppModal = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.modal label > span')].map(l => (l.textContent || '').trim());
+  const ph = [...document.querySelectorAll('.modal input, .modal textarea')].map(i => i.placeholder).filter(Boolean);
+  const btns = [...document.querySelectorAll('.modal button')].map(b => (b.textContent || '').trim());
+  const h2 = document.querySelector('.modal h2');
+  return JSON.stringify({ labels, ph, btns, h2: h2 ? h2.textContent.trim() : '' });
+})()`).then(JSON.parse);
+check('the opportunity form heading reads فرصة جديدة', oppModal.h2 === 'فرصة جديدة', oppModal.h2);
+check('the form labels are Arabic (العميل / القطاع / المرحلة)',
+  ['العميل', 'القطاع', 'المرحلة'].every(w => oppModal.labels.includes(w)),
+  oppModal.labels.slice(0, 12).join(' | '));
+check('the submit button reads إنشاء الفرصة', oppModal.btns.some(b => b === 'إنشاء الفرصة'),
+  oppModal.btns.slice(-4).join(' | '));
+// A floor of t() calls can be met with a whole section still English.
+const oppLatin = oppModal.labels.filter(l => /[A-Za-z]{3}/.test(l));
+check('★ no opportunity-form label is still English', oppLatin.length === 0, oppLatin.join(' | '));
+
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const oppEn = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.modal label > span')].map(l => (l.textContent || '').trim());
+  const btns = [...document.querySelectorAll('.modal button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ labels, btns });
+})()`).then(JSON.parse);
+check('non-vacuous: the same opportunity form reads English under en',
+  oppEn.labels.includes('Client') && oppEn.btns.some(b => b === 'Create opportunity'),
+  oppEn.labels.slice(0, 8).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await shot('opps-modal-ar');
+await clickEl(`[...document.querySelectorAll('.modal button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
+await sleep(300);
+
+// ── the detail page and its three tabs ──────────────────────────────────────
+// Two thirds of this pass's copy lives behind a card click: the follow-ups,
+// bid-gates and outcome tabs are separate components, and a floor of t() calls
+// on the list page says nothing about them.
+await clickEl(`document.querySelector('#root .card.card-interactive')`, 'open a bid');
+await sleep(600);
+const detail = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the detail tab bar is Arabic (المتابعات / المراحل / النتيجة)',
+  ['المتابعات', 'المراحل', 'النتيجة'].every(w => detail.btns.includes(w)),
+  detail.btns.slice(0, 14).join(' | '));
+check('the back / edit buttons read كل الفرص and تعديل الفرصة',
+  detail.btns.includes('كل الفرص') && detail.btns.includes('تعديل الفرصة'),
+  detail.btns.slice(0, 8).join(' | '));
+check('the follow-ups tab opens in Arabic (آخر متابعة / نشر المتابعة)',
+  detail.body.includes('آخر متابعة') && detail.btns.includes('نشر المتابعة'),
+  detail.body.slice(0, 200));
+check('the headline metrics are Arabic (القيمة التقديرية / احتمالية الفوز)',
+  detail.body.includes('القيمة التقديرية') && detail.body.includes('احتمالية الفوز'),
+  detail.body.slice(0, 240));
+
+// ★★ Money is "12,500,000 EGP": digits, a NEUTRAL space, then a Latin word. In
+// an RTL paragraph that space takes the paragraph direction and the two halves
+// swap — the tile painted "EGP 12,500,000". textContent still reads correctly,
+// so only the glyph positions can see it (the serial-number trap again).
+const moneyOrder = await evalJS(`(() => {
+  const el = [...document.querySelectorAll('#root .ltr-data, #root .bidi-isolate')]
+    .find(e => /^[\\d,]+ [A-Z]{3}$/.test((e.textContent || '').trim()));
+  if (!el) return JSON.stringify({ err: 'no money value rendered' });
+  const n = [...el.childNodes].find(x => x.nodeType === 3);
+  const r = document.createRange();
+  const txt = n.textContent;
+  r.setStart(n, 0); r.setEnd(n, 1);
+  const firstDigit = r.getBoundingClientRect();
+  r.setStart(n, txt.length - 1); r.setEnd(n, txt.length);
+  const lastLetter = r.getBoundingClientRect();
+  return JSON.stringify({ text: txt, digitLeft: Math.round(firstDigit.left), letterLeft: Math.round(lastLetter.left),
+                          dir: getComputedStyle(el).direction });
+})()`).then(JSON.parse);
+check('★★ a money value keeps its digits in front of the currency code in RTL',
+  moneyOrder.digitLeft < moneyOrder.letterLeft && moneyOrder.dir === 'ltr', JSON.stringify(moneyOrder));
+// Non-vacuous: strip the isolation and the currency code really does jump.
+await evalJS(`[...document.querySelectorAll('#root .ltr-data')].forEach(e => { e.style.unicodeBidi = 'normal'; e.style.direction = 'inherit'; })`);
+await sleep(120);
+const moneyBroken = JSON.parse(await evalJS(`(() => {
+  const el = [...document.querySelectorAll('#root .ltr-data')].find(e => /^[\\d,]+ [A-Z]{3}$/.test((e.textContent || '').trim()));
+  if (!el) return JSON.stringify({ err: 'no money value rendered' });
+  const n = [...el.childNodes].find(x => x.nodeType === 3);
+  const r = document.createRange(); const txt = n.textContent;
+  r.setStart(n, 0); r.setEnd(n, 1);
+  const d = r.getBoundingClientRect();
+  r.setStart(n, txt.length - 1); r.setEnd(n, txt.length);
+  const l = r.getBoundingClientRect();
+  return JSON.stringify({ digitLeft: Math.round(d.left), letterLeft: Math.round(l.left) });
+})()`));
+check('non-vacuous: without the isolation the currency code jumps in front',
+  moneyBroken.digitLeft > moneyBroken.letterLeft, JSON.stringify(moneyBroken));
+await evalJS(`[...document.querySelectorAll('#root .ltr-data')].forEach(e => { e.style.unicodeBidi = ''; e.style.direction = ''; })`);
+
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'المراحل')`, 'Milestones tab');
+await sleep(450);
+const gates = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the bid-gates tab is Arabic (بوابات العطاء / إضافة بوابة)',
+  gates.body.includes('بوابات العطاء') && gates.btns.includes('إضافة بوابة'),
+  gates.body.slice(0, 200));
+check('the seed-gates button is Arabic', gates.btns.some(b => b === 'إضافة بوابات العطاء القياسية'),
+  gates.btns.slice(0, 10).join(' | '));
+
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'النتيجة')`, 'Outcome tab');
+await sleep(450);
+const outcome = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the outcome tab is Arabic (النتيجة والتقييم / تسجيل النتيجة)',
+  outcome.body.includes('النتيجة والتقييم') && outcome.btns.includes('تسجيل النتيجة'),
+  outcome.body.slice(0, 200));
+// ★ The reason chips are OPPORTUNITY_REASON_OPTIONS painted through the display
+// label — the same shape as the correspondence action chips that task 5's first
+// pass missed entirely.
+check('★ the win/loss reason chips paint the enum in Arabic (السعر مرتفع / التقييم الفني)',
+  outcome.btns.includes('السعر مرتفع') && outcome.btns.includes('التقييم الفني'),
+  outcome.btns.slice(0, 16).join(' | '));
+const outcomeLatin = outcome.btns.filter(b =>
+  /^(Won|Lost|No Bid|Cancelled|Price too high|Technical evaluation|Local content|Commercial terms|Scope mismatch|Save changes|Record outcome|Cancel|Edit)$/.test(b));
+check('★ no outcome-tab chip or button is still English', outcomeLatin.length === 0, outcomeLatin.join(' | '));
+await shot('opps-detail-ar');
+
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const outcomeEn = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify(btns);
+})()`).then(JSON.parse);
+check('non-vacuous: the same outcome tab reads English under en',
+  outcomeEn.includes('Record outcome') && outcomeEn.includes('Price too high'),
+  outcomeEn.slice(0, 12).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+
+// The analytics page owns the other half of this pass's copy — and it is the
+// only screen in the app whose month labels are localized (a month NAME is
+// language-carrying, unlike the numeric dates everywhere else).
+await evalJS(`window.__mount('bidanalytics')`);
+await sleep(700);
+const anaAr = await evalJS(`(() => {
+  const h1 = document.querySelector('#root h1');
+  const th = [...document.querySelectorAll('#root th')].map(x => (x.textContent || '').trim());
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', th, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the Bid Analytics heading reads تحليلات العطاءات', anaAr.h1 === 'تحليلات العطاءات', anaAr.h1);
+check('the analytics KPI labels are Arabic (معدل الفوز / خط الفرص المفتوح)',
+  anaAr.body.includes('معدل الفوز') && anaAr.body.includes('خط الفرص المفتوح'), anaAr.body.slice(0, 200));
+check('the analytics card titles are Arabic (خط الفرص المفتوح حسب المرحلة / لماذا نخسر)',
+  anaAr.body.includes('خط الفرص المفتوح حسب المرحلة') && anaAr.body.includes('لماذا نخسر'),
+  anaAr.body.slice(0, 300));
+const anaLatinTh = anaAr.th.filter(x => /[A-Za-z]{3}/.test(x));
+check('★ no decided-bids table header is still English', anaLatinTh.length === 0, anaAr.th.join(' | '));
+
+// ★★ The defect no assertion on this page could see and the clip scan misses
+// (nothing clips — the labels simply DRAW OVER each other): `ar-EG` month names
+// are 5–7 glyphs, the trend axis packs 14 nowrap columns, and "أغسطس 25سبتمبر
+// 25أكتوبر" was the result. Measured as overlap, not as text.
+// ⚠ Measure the GLYPHS, not the element: `.oa-col-label` is a flex item, so it
+// is blockified and its own rect is the column's width — the text spills out of
+// it invisibly. A Range over the text node is what actually sees the painted
+// run (the same trick the serial-number and "Other..." checks use).
+const axisOverlap = await evalJS(`(() => {
+  const els = [...document.querySelectorAll('#root .oa-col-label')].filter(e => (e.textContent || '').trim());
+  if (els.length < 2) return JSON.stringify({ n: els.length, overlaps: [] });
+  const rects = els.map(e => {
+    const n = [...e.childNodes].find(x => x.nodeType === 3);
+    const r = document.createRange();
+    r.selectNodeContents(n || e);
+    const box = r.getBoundingClientRect();
+    return { t: (e.textContent || '').trim(), left: box.left, right: box.right };
+  }).sort((a, b) => a.left - b.left);
+  const overlaps = [];
+  for (let i = 1; i < rects.length; i++) {
+    if (rects[i].left < rects[i - 1].right - 0.5) overlaps.push(rects[i - 1].t + ' / ' + rects[i].t);
+  }
+  return JSON.stringify({ n: els.length, overlaps });
+})()`).then(JSON.parse);
+check('★ the trend axis has enough columns to be worth measuring', axisOverlap.n >= 10, String(axisOverlap.n));
+check('★★ no two month labels on the trend axis overlap in Arabic',
+  axisOverlap.overlaps.length === 0, axisOverlap.overlaps.slice(0, 4).join(' | '));
+
+await evalJS(`window.__setLang('en')`);
+await sleep(500);
+const anaEn = await evalJS(`(() => {
+  const h1 = document.querySelector('#root h1');
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('non-vacuous: the same analytics page reads English under en',
+  anaEn.h1 === 'Bid Analytics' && anaEn.body.includes('Win rate'), anaEn.h1);
+await evalJS(`window.__setLang('ar')`);
+await sleep(400);
+await shot('bid-analytics-ar');
+check('no errors across the opportunities checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C8] the Projects module really renders Arabic (task 6c) ────────────────
+// Same contract as [C4]/[C5]/[C7]. Most of this pass's copy lives behind a card
+// click and then behind three more tab clicks, so a t() floor on the list page
+// says nothing about the four tabs — this walks all of them.
+console.log('\n[C8] the Projects module renders Arabic (task 6c)');
+await evalJS(`window.__mount('projects')`);
+await sleep(650);
+
+const projAr = await evalJS(`(() => {
+  const h1 = document.querySelector('#root h1');
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', btns, opts, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the Projects heading reads المشروعات', projAr.h1 === 'المشروعات', projAr.h1);
+check('the create button reads مشروع جديد', projAr.btns.some(b => b === 'مشروع جديد'),
+  projAr.btns.slice(0, 12).join(' | '));
+check('the status tiles are Arabic (الإجمالي / معلّق / مكتمل)',
+  ['الإجمالي', 'معلّق', 'مكتمل'].every(w => projAr.body.includes(w)), projAr.body.slice(0, 200));
+check('the status filter <option>s are Arabic (كل الحالات / نشط)',
+  projAr.opts.some(o => o.t === 'كل الحالات') && projAr.opts.some(o => o.v === 'Active' && o.t === 'نشط'),
+  projAr.opts.slice(0, 10).map(o => `${o.v}=${o.t}`).join(' | '));
+// ★★ The same rule the whole layer rests on: a project whose status got written
+// in Arabic is invisible to the filter, the tiles and OverviewDashboard.
+const projArabicValues = projAr.opts.filter(o => /[؀-ۿ]/.test(o.v));
+check('★★ no status <option> VALUE is Arabic — the stored status stays English',
+  projArabicValues.length === 0, projArabicValues.map(o => `${o.v} (${o.t})`).join(' | '));
+const projLatinBadges = await evalJS(`(() => {
+  const spans = [...document.querySelectorAll('#root .card .badge')].map(s => (s.textContent || '').trim());
+  return JSON.stringify(spans.filter(Boolean));
+})()`).then(JSON.parse);
+check('★ no project card badge is still a Latin status value',
+  !projLatinBadges.some(x => /^(Active|On Hold|Completed|Cancelled)$/.test(x)), projLatinBadges.join(' | '));
+
+// ★★ The defect this pass found by LOOKING: the search icon is placed with
+// `insetInlineStart`, so under RTL it crosses to the right — but the room made
+// for it was a physical `padding-left`, leaving the placeholder running under
+// the icon. Measured as "the padding on the icon's own side is the big one",
+// which is false for every physical-padding version of this box.
+const searchPad = await evalJS(`(() => {
+  const icon = document.querySelector('#root .lucide-search');
+  const input = icon && icon.parentElement.querySelector('input');
+  if (!icon || !input) return JSON.stringify({ err: 'no search box' });
+  const cs = getComputedStyle(input);
+  const i = icon.getBoundingClientRect(), b = input.getBoundingClientRect();
+  return JSON.stringify({
+    iconOnRight: i.left + i.width / 2 > b.left + b.width / 2,
+    padLeft: parseFloat(cs.paddingLeft), padRight: parseFloat(cs.paddingRight),
+    iconWidth: Math.round(i.width),
+  });
+})()`).then(JSON.parse);
+check("★★ the search box reserves its room on the icon's side, not on a fixed left edge",
+  searchPad.iconOnRight === true && searchPad.padRight >= searchPad.iconWidth + 8 && searchPad.padRight > searchPad.padLeft,
+  JSON.stringify(searchPad));
+
+// Into the create modal.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'مشروع جديد')`, 'New Project');
+await sleep(500);
+const projModal = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.modal label > span')].map(l => (l.textContent || '').trim());
+  const btns = [...document.querySelectorAll('.modal button')].map(b => (b.textContent || '').trim());
+  const h2 = document.querySelector('.modal h2');
+  return JSON.stringify({ labels, btns, h2: h2 ? h2.textContent.trim() : '' });
+})()`).then(JSON.parse);
+check('the project form heading reads مشروع جديد', projModal.h2 === 'مشروع جديد', projModal.h2);
+check('the form labels are Arabic (اسم المشروع * / العميل / المشغّل)',
+  ['اسم المشروع *', 'العميل', 'المشغّل'].every(w => projModal.labels.includes(w)),
+  projModal.labels.slice(0, 12).join(' | '));
+check('the submit button reads إنشاء المشروع', projModal.btns.some(b => b === 'إنشاء المشروع'),
+  projModal.btns.slice(-4).join(' | '));
+const projLatin = projModal.labels.filter(l => /[A-Za-z]{3}/.test(l));
+check('★ no project-form label is still English', projLatin.length === 0, projLatin.join(' | '));
+await shot('projects-modal-ar');
+await clickEl(`[...document.querySelectorAll('.modal button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
+await sleep(300);
+
+// ── the detail page and its four tabs ───────────────────────────────────────
+await clickEl(`document.querySelector('#root .card.card-interactive')`, 'open a project');
+await sleep(650);
+const projDetail = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the project tab bar is Arabic (المتابعة / الماليات / العقود / عقود الباطن)',
+  ['المتابعة', 'الماليات', 'العقود', 'عقود الباطن'].every(w => projDetail.btns.includes(w)),
+  projDetail.btns.slice(0, 14).join(' | '));
+check('the back / edit buttons read كل المشروعات and تعديل المشروع',
+  projDetail.btns.includes('كل المشروعات') && projDetail.btns.includes('تعديل المشروع'),
+  projDetail.btns.slice(0, 8).join(' | '));
+check('the tracking tab opens in Arabic (الحالة الحالية / نشر التحديث / السجل)',
+  projDetail.body.includes('الحالة الحالية') && projDetail.btns.includes('نشر التحديث') && projDetail.body.includes('السجل'),
+  projDetail.body.slice(0, 240));
+// ★ The shared toolbar is a separate component from the tab that renders it —
+// its own chrome ("Sort by", the clear button) has to be translated there.
+check('★ the shared list toolbar is Arabic (ترتيب حسب)',
+  projDetail.body.includes('ترتيب حسب'), projDetail.body.slice(0, 300));
+// The composer's status select and the history badges both paint stored values.
+const trackOpts = await evalJS(`(() => {
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify(opts);
+})()`).then(JSON.parse);
+check('★ the tracking status <option>s are Arabic with English VALUES',
+  trackOpts.some(o => o.v === 'Active' && o.t === 'نشط') && !trackOpts.some(o => /[؀-ۿ]/.test(o.v)),
+  trackOpts.slice(0, 10).map(o => `${o.v}=${o.t}`).join(' | '));
+
+// ── financials: the money tab, and the one that changed an English string ───
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'الماليات')`, 'Financials tab');
+await sleep(500);
+const fin = await evalJS(`(() => {
+  const th = [...document.querySelectorAll('#root th')].map(x => (x.textContent || '').trim()).filter(Boolean);
+  const badges = [...document.querySelectorAll('#root .badge')].map(b => (b.textContent || '').trim());
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ th, badges, btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the financials tab is Arabic (السجلات المالية / إضافة سجل)',
+  fin.body.includes('السجلات المالية') && fin.btns.includes('إضافة سجل'), fin.body.slice(0, 200));
+check('the per-currency rollup is Arabic (الإيرادات / المصروفات / الصافي)',
+  ['الإيرادات', 'المصروفات', 'الصافي'].every(w => fin.body.includes(w)), fin.body.slice(0, 260));
+const finLatinTh = fin.th.filter(x => /[A-Za-z]{3}/.test(x));
+check('★ no financials table header is still English', finLatinTh.length === 0, fin.th.join(' | '));
+// ★ The record type is stored lower-case and used to be presented by a CSS
+// capitalize, which cannot produce an Arabic word. It goes through the display
+// layer now — and the STORED value is still "invoice".
+check('★ the record-type badge paints the stored lower-case enum in Arabic (فاتورة / مصروف)',
+  fin.badges.some(b => b === 'فاتورة' || b === 'مصروف'), fin.badges.join(' | '));
+check('★ no record-type badge is still the raw English enum',
+  !fin.badges.some(b => /^(invoice|income|expense|budget|Invoice|Expense)$/.test(b)), fin.badges.join(' | '));
+
+// ★★ Money is "12,500,000 EGP": digits, a NEUTRAL space, a Latin code. Same
+// family as the opportunities tile — measured as glyph positions, not text.
+const finMoney = await evalJS(`(() => {
+  const el = [...document.querySelectorAll('#root .ltr-data, #root .bidi-isolate')]
+    .find(e => /^[\\d,]+ [A-Z]{3}$/.test((e.textContent || '').trim()));
+  if (!el) return JSON.stringify({ err: 'no money value rendered' });
+  const n = [...el.childNodes].find(x => x.nodeType === 3);
+  const r = document.createRange(); const txt = n.textContent;
+  r.setStart(n, 0); r.setEnd(n, 1);
+  const d = r.getBoundingClientRect();
+  r.setStart(n, txt.length - 1); r.setEnd(n, txt.length);
+  const l = r.getBoundingClientRect();
+  return JSON.stringify({ text: txt, digitLeft: Math.round(d.left), letterLeft: Math.round(l.left), dir: getComputedStyle(el).direction });
+})()`).then(JSON.parse);
+check('★★ a financials money value keeps its digits in front of the currency code in RTL',
+  finMoney.digitLeft < finMoney.letterLeft && finMoney.dir === 'ltr', JSON.stringify(finMoney));
+
+// ── contracts: the tree, its type badges and the deepest form in the app ────
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'العقود')`, 'Contracts tab');
+await sleep(500);
+const con = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const spans = [...document.querySelectorAll('#root .card span')].map(s => (s.textContent || '').trim()).filter(Boolean);
+  return JSON.stringify({ btns, spans, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the contracts tab is Arabic (العقود / إضافة عقد)',
+  con.body.includes('العقود') && con.btns.includes('إضافة عقد'), con.body.slice(0, 200));
+check('★ the contract-type badge paints the type label in Arabic (عقد / ملحق)',
+  con.spans.includes('عقد') || con.spans.includes('ملحق'), con.spans.slice(0, 16).join(' | '));
+check('★ no contract-type badge is still English',
+  !con.spans.some(x => /^(Contract|Amendment|Agreement|Work Authorization|Sub-Contract)$/.test(x)),
+  con.spans.filter(x => /[A-Za-z]{3}/.test(x)).slice(0, 8).join(' | '));
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'إضافة عقد')`, 'Add contract');
+await sleep(500);
+const conModal = await evalJS(`(() => {
+  const labels = [...document.querySelectorAll('.modal label > span')].map(l => (l.textContent || '').trim());
+  const opts = [...document.querySelectorAll('.modal option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify({ labels, opts });
+})()`).then(JSON.parse);
+check('the contract form labels are Arabic (قيمة العقد / أسلوب التعاقد / رقم الملحق)',
+  ['قيمة العقد', 'أسلوب التعاقد', 'رقم الملحق'].every(w => conModal.labels.includes(w)),
+  conModal.labels.slice(0, 14).join(' | '));
+const conLatin = conModal.labels.filter(l => /[A-Za-z]{3}/.test(l));
+check('★ no contract-form label is still English', conLatin.length === 0, conLatin.join(' | '));
+// ★ The contract type <option> carries the MACHINE value ('sub_contract') —
+// translating its label must not touch it.
+check('★★ the contract-type <option> values are still the machine enums',
+  conModal.opts.some(o => o.v === 'sub_contract' && /[؀-ۿ]/.test(o.t)) &&
+  !conModal.opts.some(o => /[؀-ۿ]/.test(o.v)),
+  conModal.opts.map(o => `${o.v}=${o.t}`).join(' | '));
+await clickEl(`[...document.querySelectorAll('.modal button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
+await sleep(300);
+
+// ── subcontracts: the validity clock, the one piece of computed Arabic copy ─
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'عقود الباطن')`, 'Subcontracts tab');
+await sleep(500);
+const sub = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  const opts = [...document.querySelectorAll('#root option')].map(o => ({ v: o.value, t: (o.textContent || '').trim() }));
+  return JSON.stringify({ btns, opts, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the subcontracts tab is Arabic (عقود الباطن / إضافة عقد باطن)',
+  sub.body.includes('عقود الباطن') && sub.btns.includes('إضافة عقد باطن'), sub.body.slice(0, 200));
+check('the validity filter is Arabic (السريان / يقترب انتهاؤه / منتهٍ)',
+  sub.opts.some(o => o.t === 'يقترب انتهاؤه') && sub.opts.some(o => o.t === 'منتهٍ'),
+  sub.opts.map(o => o.t).slice(0, 12).join(' | '));
+// ★ `daysLeftLabel` is module-level, so it had to take `t` as an argument —
+// the same move task 5 made for presenceOf/formatRelativeTime. If it did not,
+// this line is the only place in the module still painting English.
+// ★★ Found by LOOKING, not by an assertion: an ENGLISH free-text paragraph
+// inside the RTL page had its trailing full stop dragged to the front —
+// ".Full O&M scope including…". Same bidi-neutral rule as "Other..." and the
+// serial number, at paragraph scale. textContent is unchanged, so only the
+// painted glyph position can see it: the period must be the RIGHTMOST glyph of
+// the last line, not the leftmost.
+const prosePunct = await evalJS(`(() => {
+  const el = [...document.querySelectorAll('#root .card div, #root .card p')]
+    .find(e => e.children.length === 0 && /^[A-Za-z][^؀-ۿ]{25,}\\.$/.test((e.textContent || '').trim()));
+  if (!el) return JSON.stringify({ err: 'no english prose block rendered' });
+  const n = [...el.childNodes].find(x => x.nodeType === 3);
+  const txt = n.textContent;
+  const r = document.createRange();
+  r.setStart(n, 0); r.setEnd(n, 1);
+  const first = r.getBoundingClientRect();
+  r.setStart(n, txt.length - 1); r.setEnd(n, txt.length);
+  const dot = r.getBoundingClientRect();
+  // ⚠ Compare the dot against ITS OWN LINE, not the element box: the paragraph
+  // wraps, so the element's left edge says nothing about where the last line
+  // starts. A Range over the whole text node yields one rect per line — the
+  // last one is the line the dot lives on.
+  const whole = document.createRange();
+  whole.selectNodeContents(n);
+  const rects = [...whole.getClientRects()];
+  const line = rects[rects.length - 1];
+  return JSON.stringify({
+    text: txt.slice(0, 40), dir: getComputedStyle(el).direction, lines: rects.length,
+    dotLeft: Math.round(dot.left), lineLeft: Math.round(line.left), lineRight: Math.round(line.right),
+    firstLeft: Math.round(first.left),
+  });
+})()`).then(JSON.parse);
+// The dot must sit in the last 20px of its own line (the end), not at its start.
+check('★★ an English paragraph keeps its full stop at the END of its line, not dragged to the front',
+  prosePunct.dir === 'ltr' && prosePunct.dotLeft > prosePunct.lineRight - 20 && prosePunct.dotLeft > prosePunct.lineLeft + 4,
+  JSON.stringify(prosePunct));
+
+check('★ the days-left clock is Arabic, not "N days left"',
+  /متبقٍ|متبقيًا|منتهٍ/.test(sub.body) && !/\d+ days? left/.test(sub.body),
+  (sub.body.match(/.{0,30}(left|متبق).{0,20}/) || [''])[0]);
+await shot('projects-detail-ar');
+
+// Non-vacuous: the same DOM, flipped back to English.
+await evalJS(`window.__setLang('en')`);
+await sleep(500);
+const subEn = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+// ⚠ `innerText` returns the RENDERED text, and `.lc-label` is
+// `text-transform: uppercase` — so this reads "SORT BY", not "Sort by". The
+// Arabic half of the same check passes either way because Arabic has no case,
+// which is exactly how a case-sensitive match hides here.
+check('non-vacuous: the same subcontracts tab reads English under en',
+  subEn.btns.includes('Add subcontract') && /sort by/i.test(subEn.body),
+  subEn.btns.slice(0, 10).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(350);
+check('no errors across the projects checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C9] Overview + Admin render Arabic (task 6c-ii, the last of the queue) ──
+// Overview shipped `const t = (s: string) => s;` — an IDENTITY translator. Every
+// t('…') in it looked wired and rendered English forever, and no source-level
+// floor could ever have caught it, because the calls were all there. Only a
+// rendered read can. Same shape as [C4]: assert Arabic, then flip the SAME DOM
+// back to English so a hard-coded Arabic string fails too.
+console.log('\n[C9] the Overview + Admin screens render Arabic (task 6c-ii)');
+await evalJS(`window.__mount('overview')`);
+await sleep(700);
+
+const ov = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const h1 = root.querySelector('h1');
+  const h2s = [...root.querySelectorAll('h2')].map(e => (e.textContent || '').trim());
+  const btns = [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', h2s, btns, body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('the Overview header is Arabic (النظرة العامة)',
+  ov.h1 === 'النظرة العامة' && ov.body.includes('إحصاءات لحظية'), `${ov.h1} | ${ov.body.slice(0, 80)}`);
+check('the four summary stat cards are Arabic (المراسلات / مهام نشطة / المتأخرة / نسبة الإنجاز)',
+  ['المراسلات', 'مهام نشطة', 'المتأخرة', 'نسبة الإنجاز'].every(w => ov.body.includes(w)),
+  ov.body.slice(0, 200));
+check('the recency feed and its range tabs are Arabic (الوارد اليوم / أمس / هذا الأسبوع)',
+  ov.h2s.some(h => h.includes('الوارد اليوم')) &&
+  ['اليوم', 'أمس', 'هذا الأسبوع'].every(w => ov.btns.some(b => b === w)),
+  ov.h2s.join(' | '));
+// ★ The status BUCKET cards paint stored enum values through the display layer.
+check('★ the three status cards paint the stored enums in Arabic (قيد الانتظار / قيد التنفيذ / منجزة)',
+  ov.h2s.filter(h => /[؀-ۿ]/.test(h)).length >= 3 &&
+  !ov.h2s.some(h => /^(Pending|In Progress|Done)$/.test(h)),
+  ov.h2s.join(' | '));
+const ovLatin = ov.btns.filter(b => /\b(Correspondences|Tasks|Show all|Back to|View Full Details|FULL DETAILS)\b/.test(b));
+check('★ no Overview button is still English', ovLatin.length === 0, ovLatin.slice(0, 6).join(' | '));
+
+// ★★ The KPI panel is collapsed by default, and its "N pts" strings are the
+// `<number> <LATIN>` family that needed bidi work everywhere else in this queue.
+// ⚠ The KPI header sits ~2,500px down the page. `scrollIntoView` inside the
+// finder is not enough on its own here — the click is dispatched at VIEWPORT
+// coordinates, so the window itself has to be scrolled first and given a frame
+// to settle, or `elementFromPoint` returns null and the click lands nowhere.
+await evalJS(`(() => {
+  const b = [...document.querySelectorAll('#root button')].find(x => (x.textContent||'').includes('مؤشرات أداء الفريق'));
+  if (b) window.scrollTo(0, b.getBoundingClientRect().top + window.scrollY - 200);
+  return !!b;
+})()`);
+await sleep(300);
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').includes('مؤشرات أداء الفريق'))`, 'Team KPIs');
+await sleep(450);
+const kpi = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  return JSON.stringify({ body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('★ the team-KPI panel opens in Arabic and its points are not "N pts"',
+  /نقطة/.test(kpi.body) && !/\d+\s*pts\b/.test(kpi.body),
+  (kpi.body.match(/.{0,30}(pts|نقطة).{0,15}/) || [''])[0]);
+
+// The drill-in: a status card opens the per-assignee view with its own toolbar.
+await clickEl(`[...document.querySelectorAll('#root .card')].find(c => (c.textContent||'').includes('المهام المرتبطة'))`, 'a status card');
+await sleep(600);
+const drill = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const btns = [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  const ph = [...root.querySelectorAll('input')].map(i => i.placeholder || '');
+  return JSON.stringify({ btns, ph, body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('the drill-in toolbar is Arabic (رجوع إلى الحالات + the two count tabs)',
+  drill.btns.some(b => b === 'رجوع إلى الحالات') &&
+  drill.btns.some(b => /^المراسلات \(\d+\)$/.test(b)) &&
+  drill.btns.some(b => /^المهام \(\d+\)$/.test(b)),
+  drill.btns.slice(0, 8).join(' | '));
+check('the drill-in search box is Arabic', drill.ph.some(p => /[؀-ۿ]/.test(p)), drill.ph.join(' | '));
+
+// ★★ Found by LOOKING at the screenshot with all the assertions above green:
+// the English correspondence body on the drill-in card painted as
+// ".Finance needs the asset list before the renewal date" — the trailing full
+// stop is bidi-NEUTRAL and takes the RTL paragraph's direction. Third screen
+// this family has appeared on (Other... / #TK000001 / the projects paragraph):
+// assume any free-text block needs `fmt.bidiFor`.
+const ovProse = await evalJS(`(() => {
+  const el = [...document.querySelectorAll('#root .card p')]
+    .find(e => e.children.length === 0 && /^[A-Za-z][^؀-ۿ]{20,}\\.$/.test((e.textContent || '').trim()));
+  if (!el) return JSON.stringify({ err: 'no english body rendered' });
+  const n = [...el.childNodes].find(x => x.nodeType === 3);
+  const txt = n.textContent;
+  const r = document.createRange();
+  r.setStart(n, txt.length - 1); r.setEnd(n, txt.length);
+  const dot = r.getBoundingClientRect();
+  const whole = document.createRange();
+  whole.selectNodeContents(n);
+  const rects = [...whole.getClientRects()];
+  const line = rects[rects.length - 1];
+  return JSON.stringify({ dir: getComputedStyle(el).direction, dotLeft: Math.round(dot.left),
+                          lineLeft: Math.round(line.left), lineRight: Math.round(line.right) });
+})()`).then(JSON.parse);
+check('★★ the card body keeps its full stop at the END of its line, not dragged to the front',
+  ovProse.dir === 'ltr' && ovProse.dotLeft > ovProse.lineRight - 20, JSON.stringify(ovProse));
+await shot('overview-ar');
+
+// Non-vacuous: the same mounted Overview, flipped to English.
+await evalJS(`window.__setLang('en')`);
+await sleep(500);
+const ovEn = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const btns = [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('non-vacuous: the same Overview reads English under en',
+  ovEn.btns.includes('Back to Statuses') && /Correspondences \(\d+\)/.test(ovEn.body),
+  ovEn.btns.slice(0, 8).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(350);
+
+// ── Admin: the approval queue, the users table and the export card ──────────
+await evalJS(`window.__mount('admin')`);
+await sleep(600);
+const adm = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const h1 = root.querySelector('h1');
+  const ths = [...root.querySelectorAll('th')].map(e => (e.textContent || '').trim());
+  const btns = [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  const badges = [...root.querySelectorAll('.badge')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ h1: h1 ? h1.textContent.trim() : '', ths, btns, badges, body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('the Admin screen is Arabic (إدارة المستخدمين + الاعتماد/الرفض)',
+  adm.h1 === 'إدارة المستخدمين' && adm.btns.includes('اعتماد') && adm.btns.includes('رفض'),
+  `${adm.h1} | ${adm.btns.slice(0, 6).join(' | ')}`);
+check('★ no users-table header is still English',
+  adm.ths.length >= 5 && adm.ths.every(h => !/[A-Za-z]{3}/.test(h)), adm.ths.join(' | '));
+// ★ The status badge is a stored value painted through the display layer, and
+// the pending row is the only place all three statuses appear at once.
+check('★ the user status badges paint the stored enums in Arabic',
+  adm.badges.length >= 3 && adm.badges.every(b => /[؀-ۿ]/.test(b)), adm.badges.join(' | '));
+check('the export & backup card is Arabic, and the npm commands are NOT translated',
+  /التصدير والنسخ الاحتياطي/.test(adm.body) && adm.btns.some(b => b.includes('تصدير إلى Excel')),
+  adm.body.slice(0, 160));
+await shot('admin-ar');
+
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const admEn = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const btns = [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: root.innerText || '' });
+})()`).then(JSON.parse);
+check('non-vacuous: the same Admin screen reads English under en',
+  admEn.btns.includes('Approve') && /User Management/i.test(admEn.body),
+  admEn.btns.slice(0, 8).join(' | '));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+check('no errors across the Overview + Admin checks', (await evalJS(`window.__errors.length`)) === 0);
 
 if (fail) {
   try {

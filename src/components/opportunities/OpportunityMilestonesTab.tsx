@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
@@ -10,6 +11,8 @@ import {
   MILESTONE_STATUS_OPTIONS,
 } from '../../types';
 import { daysUntil } from './opportunityUi';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat } from '../../lib/format';
 import { Flag, Plus, Trash2, Check, X, CalendarClock, AlertTriangle } from 'lucide-react';
 
 interface Props {
@@ -28,6 +31,10 @@ const STATUS_COLORS: Record<MilestoneStatus, string> = {
 // The gates a bid actually passes through. Offered as one-click starters so a
 // new opportunity gets a comparable milestone set instead of ad-hoc titles —
 // the analytics view later aggregates slippage by gate title.
+//
+// ★ These titles are STORED, in English, and painted through the display-label
+// layer like any other enum. Translating what gets written would split every
+// gate into two incomparable buckets the moment two users pick two languages.
 const BID_GATES = [
   'Prequalification submitted',
   'Site visit',
@@ -58,6 +65,9 @@ const slippage = (m: OpportunityMilestone) => {
 };
 
 export default function OpportunityMilestonesTab({ opportunity, user, appUser }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [milestones, setMilestones] = useState<OpportunityMilestone[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -82,7 +92,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       setMilestones(rows);
     }, err => {
       console.error('opportunityMilestones listener:', err);
-      setError('Failed to load milestones.');
+      setError(t('Failed to load milestones.'));
     });
     return () => unsub();
   }, [opportunity.id]);
@@ -133,7 +143,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       setTitle(''); setDueDate(''); setNotes(''); setStatus('Planned');
     } catch (e) {
       console.error('add milestone failed:', e);
-      setError('Failed to add the milestone. Please try again.');
+      setError(t('Failed to add the milestone. Please try again.'));
     } finally {
       setBusy(false);
     }
@@ -151,7 +161,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       }
     } catch (e) {
       console.error('seed gates failed:', e);
-      setError('Failed to add the standard gates.');
+      setError(t('Failed to add the standard gates.'));
     } finally {
       setBusy(false);
     }
@@ -168,7 +178,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       });
     } catch (e) {
       console.error('update milestone status failed:', e);
-      setError('Failed to update the milestone.');
+      setError(t('Failed to update the milestone.'));
     }
   };
 
@@ -177,7 +187,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       await updateDoc(doc(db, 'opportunityMilestones', m.id), { ...patch, updatedAt: serverTimestamp() });
     } catch (e) {
       console.error('update milestone failed:', e);
-      setError('Failed to update the milestone.');
+      setError(t('Failed to update the milestone.'));
     }
   };
 
@@ -188,7 +198,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       setDeleteTarget(null);
     } catch (e) {
       console.error('delete milestone failed:', e);
-      setError('Failed to delete the milestone.');
+      setError(t('Failed to delete the milestone.'));
       setDeleteTarget(null);
     }
   };
@@ -206,7 +216,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <Flag className="w-5 h-5" style={{ color: 'var(--accent)' }} />
           <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-            Bid gates
+            {t('Bid gates')}
           </span>
         </div>
 
@@ -214,7 +224,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
           <span style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1 }}>
             {stats.done}/{stats.total}
           </span>
-          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700 }}>gates passed · {stats.percent}%</span>
+          <span style={{ fontSize: 13, color: 'var(--text-muted)', fontWeight: 700 }}>{t('gates passed · {{percent}}%', { percent: stats.percent })}</span>
         </div>
         <div style={{ height: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', marginTop: 10 }}>
           <div style={{ width: `${stats.percent}%`, height: '100%', background: stats.late > 0 ? '#f59e0b' : '#16a34a' }} />
@@ -224,22 +234,22 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
           {stats.next && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--text-secondary)' }}>
               <CalendarClock className="w-3.5 h-3.5" />
-              Next gate: <strong style={{ color: 'var(--text-primary)' }}>{stats.next.title}</strong>
-              {stats.next.dueDate ? ` · ${stats.next.dueDate}` : ' · no date set'}
+              {t('Next gate:')} <strong style={{ color: 'var(--text-primary)' }}>{dl(stats.next.title)}</strong>
+              {stats.next.dueDate ? ` · ${fmt.date(stats.next.dueDate)}` : ` · ${t('no date set')}`}
             </span>
           )}
           {stats.late > 0 && (
             <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: '#dc2626', fontWeight: 700 }}>
               <AlertTriangle className="w-3.5 h-3.5" />
-              {stats.late} gate{stats.late > 1 ? 's' : ''} past due
-              {stats.worst !== null && ` · worst slippage ${stats.worst}d`}
+              {stats.late === 1 ? t('{{count}} gate past due', { count: 1 }) : t('{{count}} gates past due', { count: stats.late })}
+              {stats.worst !== null && ` · ${t('worst slippage {{count}}d', { count: stats.worst })}`}
             </span>
           )}
           {stats.blocked > 0 && (
-            <span style={{ color: '#dc2626', fontWeight: 700 }}>{stats.blocked} blocked</span>
+            <span style={{ color: '#dc2626', fontWeight: 700 }}>{t('{{count}} blocked', { count: stats.blocked })}</span>
           )}
           {stats.total === 0 && (
-            <span style={{ color: 'var(--text-muted)' }}>No gates recorded yet.</span>
+            <span style={{ color: 'var(--text-muted)' }}>{t('No gates recorded yet.')}</span>
           )}
         </div>
 
@@ -247,8 +257,10 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
           <button className="btn btn-ghost btn-sm" style={{ marginTop: 14 }} disabled={busy} onClick={seedGates}>
             <Plus className="w-4 h-4" />
             {stats.total === 0
-              ? 'Add the standard bid gates'
-              : `Add the ${missingGates.length} missing standard gate${missingGates.length > 1 ? 's' : ''}`}
+              ? t('Add the standard bid gates')
+              : missingGates.length === 1
+                ? t('Add the {{count}} missing standard gate', { count: 1 })
+                : t('Add the {{count}} missing standard gates', { count: missingGates.length })}
           </button>
         )}
       </div>
@@ -257,34 +269,34 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       <div className="card" style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <label style={{ display: 'grid', gap: 4, flex: '2 1 240px' }}>
-            <span style={labelStyle}>Milestone</span>
+            <span style={labelStyle}>{t('Milestone')}</span>
             <input
               value={title}
               onChange={e => setTitle(e.target.value)}
               list="opp-gate-suggestions"
-              placeholder="e.g. Technical clarification meeting"
+              placeholder={t('e.g. Technical clarification meeting')}
               style={{ ...inputStyle, width: '100%' }}
             />
             <datalist id="opp-gate-suggestions">
-              {BID_GATES.map(g => <option key={g} value={g} />)}
+              {BID_GATES.map(g => <option key={g} value={g} label={dl(g)} />)}
             </datalist>
           </label>
           <label style={{ display: 'grid', gap: 4 }}>
-            <span style={labelStyle}>Due date</span>
+            <span style={labelStyle}>{t('Due date')}</span>
             <input type="date" value={dueDate} onChange={e => setDueDate(e.target.value)} style={inputStyle} />
           </label>
           <label style={{ display: 'grid', gap: 4 }}>
-            <span style={labelStyle}>Status</span>
+            <span style={labelStyle}>{t('Status')}</span>
             <select value={status} onChange={e => setStatus(e.target.value as MilestoneStatus)} style={inputStyle}>
-              {MILESTONE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+              {MILESTONE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
             </select>
           </label>
           <label style={{ display: 'grid', gap: 4, flex: '1 1 200px' }}>
-            <span style={labelStyle}>Notes (optional)</span>
+            <span style={labelStyle}>{t('Notes (optional)')}</span>
             <input value={notes} onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, width: '100%' }} />
           </label>
           <button className="btn btn-primary" disabled={busy || !title.trim()} onClick={add}>
-            <Plus className="w-4 h-4" /> Add gate
+            <Plus className="w-4 h-4" /> {t('Add gate')}
           </button>
         </div>
       </div>
@@ -292,7 +304,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       {/* The gates */}
       {milestones.length === 0 ? (
         <div style={{ fontSize: 13, color: 'var(--text-muted)', padding: '16px 0' }}>
-          No milestones yet — add the standard bid gates above to track prequalification through award.
+          {t('No milestones yet — add the standard bid gates above to track prequalification through award.')}
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
@@ -305,7 +317,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
               <div key={m.id} className="card" style={{ padding: 14, borderInlineStart: `3px solid ${color}` }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                   <button
-                    title={m.status === 'Done' ? 'Mark as planned' : 'Mark as done'}
+                    title={m.status === 'Done' ? t('Mark as planned') : t('Mark as done')}
                     onClick={() => setStatusOf(m, m.status === 'Done' ? 'Planned' : 'Done')}
                     style={{
                       width: 22, height: 22, flexShrink: 0, cursor: 'pointer', padding: 0,
@@ -322,7 +334,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
                     textDecoration: m.status === 'Done' ? 'line-through' : 'none',
                     opacity: m.status === 'Done' ? 0.75 : 1,
                   }}>
-                    {m.title}
+                    {dl(m.title)}
                   </span>
 
                   <select
@@ -330,11 +342,11 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
                     onChange={e => setStatusOf(m, e.target.value as MilestoneStatus)}
                     style={{ ...inputStyle, padding: '5px 8px', fontSize: 12, fontWeight: 700, color }}
                   >
-                    {MILESTONE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {MILESTONE_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
                   </select>
 
                   <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)' }}>
-                    Due
+                    {t('Due')}
                     <input
                       type="date"
                       value={m.dueDate || ''}
@@ -345,7 +357,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
 
                   {m.status === 'Done' && (
                     <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--text-muted)' }}>
-                      Completed
+                      {t('Completed on')}
                       <input
                         type="date"
                         value={m.completedDate || ''}
@@ -363,13 +375,13 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
                         background: slip > 0 ? '#fee2e2' : '#dcfce7',
                       }}>
                         {slip > 0
-                          ? `${slip}d late`
+                          ? t('{{count}}d late', { count: slip })
                           : m.status === 'Done'
-                            ? (slip === 0 ? 'On time' : `${Math.abs(slip)}d early`)
-                            : (dueIn === 0 ? 'Due today' : `${Math.abs(slip)}d left`)}
+                            ? (slip === 0 ? t('On time') : t('{{count}}d early', { count: Math.abs(slip) }))
+                            : (dueIn === 0 ? t('Due today') : t('{{count}}d left', { count: Math.abs(slip) }))}
                       </span>
                     )}
-                    <button className="btn btn-ghost btn-icon btn-sm" title="Delete milestone" onClick={() => setDeleteTarget(m)}>
+                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete milestone')} onClick={() => setDeleteTarget(m)}>
                       <Trash2 className="w-3.5 h-3.5" style={{ color: '#dc2626' }} />
                     </button>
                   </span>
@@ -377,9 +389,9 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
 
                 <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap', marginTop: 8, marginInlineStart: 32, fontSize: 12, color: 'var(--text-muted)' }}>
                   {m.notes && <span style={{ color: 'var(--text-secondary)' }}>{m.notes}</span>}
-                  {m.addedByName && <span>Added by {m.addedByName}</span>}
+                  {m.addedByName && <span>{t('Added by {{name}}', { name: m.addedByName })}</span>}
                   {isLate && m.status === 'Blocked' && (
-                    <span style={{ color: '#dc2626', fontWeight: 700 }}>Blocked and past due</span>
+                    <span style={{ color: '#dc2626', fontWeight: 700 }}>{t('Blocked and past due')}</span>
                   )}
                 </div>
               </div>
@@ -392,14 +404,14 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>
-              Delete “{deleteTarget.title}”?
+              {t('Delete “{{title}}”?', { title: dl(deleteTarget.title) })}
             </h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              The gate and its slippage record are removed from this opportunity.
+              {t('The gate and its slippage record are removed from this opportunity.')}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}><X className="w-4 h-4" /> Cancel</button>
-              <button className="btn btn-danger" onClick={remove}><Trash2 className="w-4 h-4" /> Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}><X className="w-4 h-4" /> {t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={remove}><Trash2 className="w-4 h-4" /> {t('Delete')}</button>
             </div>
           </div>
         </div>

@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
@@ -84,6 +86,10 @@ interface Props {
 
 export default function CorrespondingsDashboard({ user, appUser, projectUsers, onNavigate, initialStatusFilter }: Props) {
   const { t } = useTranslation();
+  // Task 6: stored English enum values are PAINTED in the active language;
+  // what is written to Firestore is unchanged. See lib/displayLabel.ts.
+  const label = useDisplayLabel();
+  const fmt = useFormat();
   const [items, setItems] = useState<Corresponding[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<Corresponding | null>(null);
@@ -131,7 +137,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       setItems(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Corresponding)));
     }, err => {
       handleFirestoreError(err, OperationType.LIST, 'correspondences');
-      setError('Failed to load correspondences.');
+      setError(t('Failed to load correspondences.'));
     });
     return () => unsub();
   }, [appUser]);
@@ -307,9 +313,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     if (!file) return;
     
     // Google Drive can handle larger files, but let's keep a reasonable limit
-    if (file.size > 10 * 1024 * 1024) { 
-      alert('Max file size is 10MB.'); 
-      return; 
+    if (file.size > 10 * 1024 * 1024) {
+      alert(t('Max file size is 10MB.'));
+      return;
     }
 
     setIsUploading(true);
@@ -318,7 +324,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       setFormData(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
     } catch (err: any) {
       console.error('Upload error:', err);
-      alert('Failed to upload to Google Drive: ' + err.message);
+      alert(t('Failed to upload to Google Drive: {{message}}', { message: err.message }));
     } finally {
       setIsUploading(false);
     }
@@ -460,7 +466,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       closeModal();
     } catch (err) {
       handleFirestoreError(err, editing ? OperationType.UPDATE : OperationType.CREATE, 'correspondences');
-      setError('Failed to save.');
+      setError(t('Failed to save.'));
     }
   };
 
@@ -573,7 +579,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       setAssignDraft(p => { const n = { ...p }; delete n[item.id]; return n; });
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `correspondences/${item.id}`);
-      setError('Failed to assign.');
+      setError(t('Failed to assign.'));
     } finally {
       setAssigningId(null);
     }
@@ -586,7 +592,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       setDeleteTarget(null);
     } catch (err) {
       handleFirestoreError(err, OperationType.DELETE, `correspondences/${deleteTarget.id}`);
-      setError('Delete failed.');
+      setError(t('Delete failed.'));
     }
   };
 
@@ -595,12 +601,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       {/* Header */}
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          Correspondences
+          {t('Correspondences')}
         </h1>
         <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
           {isManager
-            ? 'Log, review, and assign incoming documents as tasks — all in one place.'
-            : 'Log incoming documents — managers will review and assign them as tasks.'}
+            ? t('Log, review, and assign incoming documents as tasks — all in one place.')
+            : t('Log incoming documents — managers will review and assign them as tasks.')}
         </p>
       </div>
 
@@ -629,7 +635,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               }}
             >
               <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-              <div style={{ fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
+              <div style={{ fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
             </button>
           );
         })}
@@ -663,7 +669,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <input
             className="input"
             style={{ paddingInlineStart: 40 }}
-            placeholder="Search subject or sender…"
+            placeholder={t('Search subject or sender…')}
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -676,22 +682,22 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             style={{ width: 'auto' }}
             value={dateFilter}
             onChange={e => setDateFilter(e.target.value)}
-            title="Filter by day"
+            title={t('Filter by day')}
           />
           {dateFilter && (
             <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-              Clear Date
+              {t('Clear Date')}
             </button>
           )}
 
           <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
             <option value="All">{t('All Departments')}</option>
-            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d}>{d}</option>)}
+            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d}>{label(d)}</option>)}
           </select>
         </div>
 
         <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus className="w-4 h-4" /> New Correspondence
+          <Plus className="w-4 h-4" /> {t('New Correspondence')}
         </button>
       </div>
 
@@ -737,8 +743,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     </span>
                   )}
                   <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{item.subject}</h3>
-                  <span className={statusBadgeClass(item.status)}>{item.status}</span>
-                  <span className={priorityBadgeClass(item.priority)}>{item.priority}</span>
+                  <span className={statusBadgeClass(item.status)}>{label(item.status)}</span>
+                  <span className={priorityBadgeClass(item.priority)}>{label(item.priority)}</span>
                   {item.category && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
@@ -746,7 +752,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       textTransform: 'uppercase',
                       background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
                       color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
-                    }}>{item.category}</span>
+                    }} className={fmt.bidiFor(label(item.category))}>{label(item.category)}</span>
                   )}
                   {item.actions && item.actions !== 'None' && (
                     <span style={{
@@ -754,7 +760,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
                       textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
                       border: '1px solid #fecaca'
-                    }}>{item.actions}</span>
+                    }}>{label(item.actions)}</span>
                   )}
                   {!item.assignedToId && item.status !== 'Closed' && (
                     <span className="badge" style={{ background: '#f43f5e', color: '#fff' }}>{t('UNASSIGNED')}</span>
@@ -799,7 +805,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
                       );
                     })()}
-                    {projectUsers.find(u => u.id === item.userId)?.displayName || 'Unknown'}
+                    {projectUsers.find(u => u.id === item.userId)?.displayName || t('Unknown')}
                   </span>
                   {item.assignedTo && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
@@ -833,7 +839,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               <div style={{ flex: 1, minWidth: 0 }}>
                                 <span
                                   onClick={() => openOrCopyPath(path)}
-                                  title={isUrl ? path : `Click to copy path: ${path}`}
+                                  title={isUrl ? path : t('Click to copy path: {{path}}', { path })}
                                   style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                                 >{friendlyName}</span>
                                 {!isUrl && (
@@ -842,7 +848,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               </div>
                               <button
                                 onClick={() => openOrCopyPath(path)}
-                                title="Open (web link) or copy this path"
+                                title={t('Open (web link) or copy this path')}
                                 className="btn btn-ghost btn-sm"
                                 style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto', flexShrink: 0 }}
                               >
@@ -863,7 +869,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--blue-50)', border: '1px solid var(--blue-200)', color: 'var(--blue-400)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}
                       >
                         <Paperclip className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.attachedFileName || 'View attachment'}</span>
+                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.attachedFileName || t('View attachment')}</span>
                         <ExternalLink className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
                       </a>
                     )}
@@ -884,7 +890,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           >
                             <option value="">— {t('Select employee')} —</option>
                             {targetUsers.map(u => (
-                              <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                              <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
                             ))}
                           </select>
                           <div style={{ position: 'relative', flex: '2 1 220px', minWidth: 180 }}>
@@ -920,14 +926,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <button
                   className="btn btn-ghost btn-icon btn-sm"
                   onClick={e => { e.stopPropagation(); openModal(item, false); }}
-                  title="Edit"
+                  title={t('Edit')}
                 >
                   <Edit2 className="w-3.5 h-3.5" />
                 </button>
                 <button
                   className="btn btn-danger btn-icon btn-sm"
                   onClick={e => { e.stopPropagation(); setDeleteTarget(item); }}
-                  title="Delete"
+                  title={t('Delete')}
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
@@ -946,7 +952,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             disabled={currentPage === 1}
             onClick={() => setCurrentPage(prev => prev - 1)}
           >
-            Previous
+            {t('Previous Page')}
           </button>
           <div style={{ display: 'flex', gap: 6 }}>
             {Array.from({ length: Math.ceil(filtered.length / 20) }, (_, i) => i + 1).map(p => (
@@ -964,7 +970,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             disabled={currentPage === Math.ceil(filtered.length / 20)}
             onClick={() => setCurrentPage(prev => prev + 1)}
           >
-            Next
+            {t('Next Page')}
           </button>
         </div>
       )}
@@ -975,7 +981,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             <MailOpen style={{ width: 28, height: 28 }} />
           </div>
           <p className="empty-state-title">{t('No correspondences found')}</p>
-          <p className="empty-state-sub">{t('No items match your filters')}<br />Use the button above to add a new correspondence.</p>
+          <p className="empty-state-sub">{t('No items match your filters')}<br />{t('Use the button above to add a new correspondence.')}</p>
         </div>
       )}
       </div>{/* end left column */}
@@ -985,10 +991,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="card" style={{ padding: 20 }}>
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--text-muted)', marginBottom: 16 }}>
-              Team Workload
+              {t('Team Workload')}
             </div>
             {targetUsers.length === 0 ? (
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>No team members</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', padding: '16px 0' }}>{t('No team members')}</p>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
                 {[...targetUsers].sort((a, b) => {
@@ -1023,11 +1029,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                         <div style={{ flex: 1, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: inProgress > 0 ? '#fbbf24' : 'var(--text-muted)', lineHeight: 1 }}>{inProgress}</div>
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Active</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>{t('Active')}</div>
                         </div>
                         <div style={{ flex: 1, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: done > 0 ? '#4ade80' : 'var(--text-muted)', lineHeight: 1 }}>{done}</div>
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>Done</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-muted)', marginTop: 2 }}>{t('Done')}</div>
                         </div>
                       </div>
                       {total > 0 && (
@@ -1037,8 +1043,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       )}
                       {oldestActive && (
                         <div style={{ marginTop: 5, fontSize: 10, color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                          <span style={{ opacity: 0.6 }}>Since</span>
-                          <span style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{oldestActive.toLocaleDateString('en-GB')}</span>
+                          <span style={{ opacity: 0.6 }}>{t('Since')}</span>
+                          <span className="ltr-data" style={{ fontWeight: 700, color: 'var(--text-secondary)' }}>{fmt.date(oldestActive)}</span>
                         </div>
                       )}
                     </div>
@@ -1072,7 +1078,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         background: isViewing ? 'var(--blue-100)' : editing ? '#fef3c7' : '#dcfce7',
                         color: isViewing ? 'var(--blue-700)' : editing ? '#92400e' : '#15803d',
                       }}>
-                        {isViewing ? 'View' : editing ? 'Editing' : 'New'}
+                        {isViewing ? t('View') : editing ? t('Editing') : t('New')}
                       </span>
                       {(editing || isViewing) && formData.serialNumber && (
                         <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em' }} className="ltr-data">
@@ -1081,15 +1087,15 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       )}
                       {isViewing && formData.status && (
                         <span className={statusBadgeClass(formData.status)} style={{ fontSize: 11 }}>
-                          {formData.status}
+                          {label(formData.status)}
                         </span>
                       )}
                     </div>
                     <h2 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', lineHeight: 1.2 }}>
-                      {isViewing ? (formData.subject || 'Correspondence Details') : (editing ? 'Edit Correspondence' : 'New Correspondence')}
+                      {isViewing ? (formData.subject || t('Correspondence Details')) : (editing ? t('Edit Correspondence') : t('New Correspondence'))}
                     </h2>
                     {isViewing && formData.sentFrom && (
-                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>From: {formData.sentFrom}</div>
+                      <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 3 }}>{t('From:')}{formData.sentFrom}</div>
                     )}
                   </div>
                   <button className="btn btn-ghost btn-icon" onClick={closeModal} style={{ flexShrink: 0, marginTop: 2 }}><X className="w-4 h-4" /></button>
@@ -1106,7 +1112,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <div style={{ fontSize: 17, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{formData.subject}</div>
                     ) : (
-                      <input className="input" style={{ fontSize: 16, fontWeight: 600 }} value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder="Correspondence subject…" />
+                      <input className="input" style={{ fontSize: 16, fontWeight: 600 }} value={formData.subject} onChange={e => set('subject', e.target.value)} placeholder={t('Correspondence subject…')} />
                     )}
                   </div>
                   {/* Body */}
@@ -1115,7 +1121,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{formData.body}</div>
                     ) : (
-                      <textarea className="input" rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder="Describe the content of the correspondence…" />
+                      <textarea className="input" rows={3} value={formData.body} onChange={e => set('body', e.target.value)} placeholder={t('Describe the content of the correspondence…')} />
                     )}
                   </div>
                   {/* Sent From */}
@@ -1124,7 +1130,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>{formData.sentFrom}</div>
                     ) : (
-                      <input className="input" value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder="Organization or person…" />
+                      <input className="input" value={formData.sentFrom} onChange={e => set('sentFrom', e.target.value)} placeholder={t('Organization or person…')} />
                     )}
                   </div>
                   {/* Category */}
@@ -1146,8 +1152,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               ? !CATEGORY_OPTIONS.filter(x => x !== 'Other...').includes(formData.category)
                               : formData.category === c;
                             return (
+                              // ★ Found by LOOKING at the RTL screenshot: the
+                              // enum values are Latin and "Other..." ends in
+                              // bidi-NEUTRAL dots, so in an RTL container they
+                              // were painted as "...Other". Every chip that
+                              // shows a raw enum value needs the isolation.
                               <button
                                 key={c} type="button"
+                                className={fmt.bidiFor(label(c))}
                                 onClick={() => isOther ? set('category', '') : set('category', c)}
                                 style={{
                                   flex: '1 0 auto', padding: '5px 10px', fontSize: 12, fontWeight: 600, borderRadius: 0, border: 'none', cursor: 'pointer',
@@ -1157,7 +1169,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                   transition: 'all 0.15s'
                                 }}
                               >
-                                {c}
+                                {label(c)}
                               </button>
                             );
                           })}
@@ -1165,7 +1177,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         {!CATEGORY_OPTIONS.filter(c => c !== 'Other...').includes(formData.category) && (
                           <input
                             className="input"
-                            placeholder="Type custom category..."
+                            placeholder={t('Type custom category…')}
                             value={formData.category}
                             onChange={e => set('category', e.target.value)}
                             autoFocus
@@ -1178,7 +1190,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div>
                     <label className="input-label">{t('Priority')}</label>
                     {isViewing ? (
-                      <span className={priorityBadgeClass(formData.priority)}>{formData.priority}</span>
+                      <span className={priorityBadgeClass(formData.priority)}>{label(formData.priority)}</span>
                     ) : (
                       <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: '100%' }}>
                         {PRIORITY_OPTIONS.map(p => (
@@ -1193,7 +1205,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               transition: 'all 0.15s'
                             }}
                           >
-                            {p}
+                            {label(p)}
                           </button>
                         ))}
                       </div>
@@ -1267,7 +1279,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               color: formData.actions === a ? '#fff' : 'var(--text-muted)',
                               transition: 'all 0.15s'
                             }}
-                          >{a}</button>
+                          >{label(a)}</button>
                         ))}
                       </div>
                     )}
@@ -1292,7 +1304,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div>
                     <label className="input-label">{t('Deadline')}</label>
                     {isViewing ? (
-                      <div style={{ fontSize: 14, color: formData.deadline ? '#fbbf24' : 'var(--text-muted)' }}>{formData.deadline || 'No deadline'}</div>
+                      <div className="ltr-data" style={{ fontSize: 14, color: formData.deadline ? '#fbbf24' : 'var(--text-muted)' }}>{formData.deadline || t('No deadline')}</div>
                     ) : (
                       <input className="input" type="date" value={formData.deadline} onChange={e => set('deadline', e.target.value)} />
                     )}
@@ -1301,7 +1313,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div>
                     <label className="input-label">{t('Status')}</label>
                     {isViewing ? (
-                      <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
+                      <span className={statusBadgeClass(formData.status)}>{label(formData.status)}</span>
                     ) : (
                       (appUser.role === 'Admin' || appUser.role === 'Manager') ? (
                         <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', background: 'var(--surface-3)', padding: 2, borderRadius: 0, border: '1px solid var(--border)', width: '100%' }}>
@@ -1317,12 +1329,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                 transition: 'all 0.15s'
                               }}
                             >
-                              {s}
+                              {label(s)}
                             </button>
                           ))}
                         </div>
                       ) : (
-                        <span className={statusBadgeClass(formData.status)}>{formData.status}</span>
+                        <span className={statusBadgeClass(formData.status)}>{label(formData.status)}</span>
                       )
                     )}
                   </div>
@@ -1330,7 +1342,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <label className="input-label">{t('Assignee')}</label>
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-primary)', fontWeight: 600 }}>
-                        {formData.assignedTo || 'Unassigned'}
+                        {formData.assignedTo || t('Unassigned')}
                       </div>
                     ) : (
                       <select 
@@ -1345,7 +1357,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           }
                         }}
                       >
-                        <option value="">— Unassigned —</option>
+                        <option value="">{t('— Unassigned —')}</option>
                         {projectUsers
                           .filter(u => 
                             u.id === user.uid || 
@@ -1353,7 +1365,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             (u.department === appUser.department && u.teamId === appUser.teamId)
                           )
                           .map(u => (
-                            <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                            <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
                           ))
                         }
                       </select>
@@ -1364,7 +1376,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 {/* ── Section: Files & Notes ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>{t('Files')} & Notes</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>{t('Files & Notes')}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                   {/* Shared Folder Paths */}
@@ -1378,7 +1390,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           onClick={() => set('filePaths', [...(formData.filePaths || []), ''])}
                           style={{ fontSize: 11 }}
                         >
-                          <Plus className="w-3.5 h-3.5" /> Add Path
+                          <Plus className="w-3.5 h-3.5" /> {t('Add Path')}
                         </button>
                       )}
                     </div>
@@ -1401,14 +1413,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               <Clock className="w-3.5 h-3.5 text-muted" />
                               <code
                                 onClick={() => path && openOrCopyPath(path)}
-                                title={path ? 'Click to open (web link) or copy this path' : undefined}
+                                title={path ? t('Click to open (web link) or copy this path') : undefined}
                                 style={{ flex: 1, wordBreak: 'break-all', fontSize: 12, cursor: path ? 'pointer' : 'default', textDecoration: path ? 'underline' : 'none', textDecorationStyle: 'dotted' }}
-                              >{path || 'Empty path'}</code>
+                              >{path || t('Empty path')}</code>
                               <button 
                                 type="button"
                                 className="btn btn-ghost btn-icon btn-sm"
                                 onClick={() => copyToClipboard(path)}
-                                title="Copy Path"
+                                title={t('Copy Path')}
                               >
                                 {copiedPath === path ? <Check className="w-3.5 h-3.5 text-green" /> : <Copy className="w-3.5 h-3.5" />}
                               </button>
@@ -1424,7 +1436,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                   newPaths[idx] = e.target.value.replace(/["']/g, '');
                                   set('filePaths', newPaths);
                                 }} 
-                                placeholder="e.g. \\SERVER\Documents\ProjectA" 
+                                placeholder={t('Shared folder path example')}
                               />
                               <button 
                                 type="button" 
@@ -1463,7 +1475,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                               <img 
                                 src={getGoogleDrivePreviewUrl(formData.attachedFile)} 
-                                alt="Attachment" 
+                                alt={t('Attachment')} 
                                 style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                                 onError={(e) => {
                                   (e.target as HTMLImageElement).style.display = 'none';
@@ -1482,7 +1494,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                 alignItems: 'center',
                                 backdropFilter: 'blur(4px)'
                               }}>
-                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{formData.attachedFileName || 'Attached Image'}</span>
+                                <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{formData.attachedFileName || t('Attached Image')}</span>
                                 <a 
                                   href={formData.attachedFile} 
                                   target="_blank" 
@@ -1490,7 +1502,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                   className="btn btn-sm"
                                   style={{ background: 'rgba(255,255,255,0.2)', color: '#fff', border: '1px solid rgba(255,255,255,0.3)', backdropFilter: 'blur(8px)' }}
                                 >
-                                  <Download className="w-3.5 h-3.5" /> Download
+                                  <Download className="w-3.5 h-3.5" /> {t('Download')}
                                 </a>
                               </div>
                             </div>
@@ -1500,7 +1512,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                 <Paperclip className="w-5 h-5" />
                               </div>
                               <div style={{ flex: 1 }}>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{formData.attachedFileName || 'Attachment'}</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{formData.attachedFileName || t('Attachment')}</div>
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                               </div>
                               <a 
@@ -1529,7 +1541,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                           transition: 'border-color 0.2s',
                         }}>
                           <Paperclip className="w-4 h-4" style={{ flexShrink: 0 }} />
-                          <span>{isUploading ? 'Uploading to Drive…' : 'Click to attach a file'}</span>
+                          <span>{isUploading ? t('Uploading to Drive...') : t('Click to attach a file')}</span>
                           <input type="file" onChange={handleFileUpload} style={{ display: 'none' }} />
                         </label>
                         {formData.attachedFileName && (
@@ -1540,7 +1552,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             </div>
                             {formData.attachedFile && (formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) && (
                               <div style={{ borderRadius: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
-                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt="Preview" style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 0, display: 'block' }} />
+                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt={t('Preview')} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 0, display: 'block' }} />
                               </div>
                             )}
                           </div>
@@ -1553,10 +1565,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <label className="input-label">{t('Manager Notes / Internal Comments')}</label>
                     {isViewing ? (
                       <div style={{ fontSize: 14, color: 'var(--text-secondary)', background: 'var(--surface-2)', padding: '12px 16px', borderRadius: 0, border: '1px solid var(--border)', fontStyle: 'italic', lineHeight: 1.6 }}>
-                        {formData.notes || 'No notes available.'}
+                        {formData.notes || t('No notes available.')}
                       </div>
                     ) : (
-                      <textarea className="input" rows={2} value={formData.notes} onChange={e => set('notes', e.target.value)} placeholder="Add internal notes or instructions…" />
+                      <textarea className="input" rows={2} value={formData.notes} onChange={e => set('notes', e.target.value)} placeholder={t('Add internal notes or instructions…')} />
                     )}
                   </div>
 
@@ -1586,14 +1598,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         onClick={() => setIsViewing(false)}
                         style={{ gap: 8 }}
                       >
-                        <Edit2 className="w-4 h-4" /> Edit Details
+                        <Edit2 className="w-4 h-4" /> {t('Edit Details')}
                       </button>
                     </>
                   ) : (
                     <>
                       <button type="button" className="btn btn-ghost" onClick={closeModal}>{t('Cancel')}</button>
                       <button type="submit" className="btn btn-primary" disabled={isUploading}>
-                        {editing ? 'Save Changes' : 'Create Corresponding'}
+                        {editing ? t('Save Changes') : t('Create Corresponding')}
                       </button>
                     </>
                   )}
@@ -1611,8 +1623,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             <motion.div className="modal" style={{ maxWidth: 420 }} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} onClick={e => e.stopPropagation()}>
               <div style={{ padding: 28 }}>
                 <h3 style={{ fontWeight: 800, fontSize: 18, color: 'var(--text-primary)', marginBottom: 10 }}>{t('Delete Corresponding?')}</h3>
+                {/* The subject is lifted OUT of the sentence: Arabic reorders the
+                    clause, and a mid-sentence <strong> cannot be translated
+                    without <Trans>. */}
+                <p style={{ color: 'var(--text-secondary)', fontSize: 14, fontWeight: 700, marginBottom: 6 }}>
+                  {deleteTarget.subject}
+                </p>
                 <p style={{ color: 'var(--text-muted)', fontSize: 14, marginBottom: 24 }}>
-                  "<strong style={{ color: 'var(--text-secondary)' }}>{deleteTarget.subject}</strong>" will be permanently deleted.
+                  {t('This item will be permanently deleted.')}
                 </p>
                 <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                   <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
@@ -1646,8 +1664,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               <div style={{ padding: '24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', background: 'var(--surface)', flexShrink: 0 }}>
                 <div style={{ flex: 1 }}>
                   <div style={{ display: 'flex', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
-                    <span className={statusBadgeClass(selectedCorrForDetails.status)}>{selectedCorrForDetails.status}</span>
-                    <span className={priorityBadgeClass(selectedCorrForDetails.priority)}>{selectedCorrForDetails.priority} Priority</span>
+                    <span className={statusBadgeClass(selectedCorrForDetails.status)}>{label(selectedCorrForDetails.status)}</span>
+                    {/* The word around the value must sit on the correct side of
+                        it in either script, so this stays ONE interpolated key.
+                        The value itself now goes through the task-6 label. */}
+                    <span className={priorityBadgeClass(selectedCorrForDetails.priority)}>{t('Priority: {{priority}}', { priority: label(selectedCorrForDetails.priority) })}</span>
                     <span style={{ padding: '4px 12px', borderRadius: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase',
                       background: selectedCorrForDetails.category === 'Project' ? 'rgba(59,130,246,0.15)' : selectedCorrForDetails.category === 'External' ? 'rgba(34,197,94,0.15)' : 'rgba(139,92,246,0.15)',
                       color: selectedCorrForDetails.category === 'Project' ? '#3b82f6' : selectedCorrForDetails.category === 'External' ? '#22c55e' : '#8b5cf6',
@@ -1659,7 +1680,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <h2 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary, #0f172a)', margin: 0, lineHeight: 1.3 }}>{selectedCorrForDetails.subject}</h2>
                   {selectedCorrForDetails.serialNumber && (
                     <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary, #334155)', marginTop: 4, letterSpacing: '0.02em' }}>
-                      REF: {selectedCorrForDetails.serialNumber}
+                      {t('REF:')}<span className="ltr-data">{selectedCorrForDetails.serialNumber}</span>
                     </div>
                   )}
                 </div>
@@ -1702,12 +1723,12 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                        Received: {selectedCorrForDetails.dateReceived || '—'}
+                        {t('Received:')}<span className="ltr-data">{selectedCorrForDetails.dateReceived || '—'}</span>
                       </div>
                       {selectedCorrForDetails.deadline ? (
                         <div style={{ fontSize: 13, fontWeight: 600, color: isOverdue(selectedCorrForDetails.deadline) && selectedCorrForDetails.status !== 'Closed' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                           <Clock className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
-                          Deadline: {selectedCorrForDetails.deadline}
+                          {t('Deadline:')}<span className="ltr-data">{selectedCorrForDetails.deadline}</span>
                         </div>
                       ) : null}
                     </div>
@@ -1728,12 +1749,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               </div>
                             )}
                             <div>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorrForDetails.assignedTo || 'Unassigned'}</div>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>{selectedCorrForDetails.assignedTo || t('Unassigned')}</div>
                               {selectedCorrForDetails.assignedAt && (
                                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                                  Assigned {typeof selectedCorrForDetails.assignedAt === 'string'
-                                    ? selectedCorrForDetails.assignedAt
-                                    : selectedCorrForDetails.assignedAt?.toDate?.()?.toLocaleDateString?.() || ''}
+                                  {t('Assigned on {{date}}', {
+                                    date: typeof selectedCorrForDetails.assignedAt === 'string'
+                                      ? selectedCorrForDetails.assignedAt
+                                      : fmt.date(selectedCorrForDetails.assignedAt),
+                                  })}
                                 </div>
                               )}
                             </div>
@@ -1759,7 +1782,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             <div style={{ flex: 1, minWidth: 0 }}>
                               <span
                                 onClick={() => openOrCopyPath(path)}
-                                title={isUrl ? path : `Click to copy path: ${path}`}
+                                title={isUrl ? path : t('Click to copy path: {{path}}', { path })}
                                 style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
                               >{friendlyName}</span>
                               {!isUrl && (
@@ -1768,7 +1791,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             </div>
                             <button
                               onClick={() => openOrCopyPath(path)}
-                              title="Open (web link) or copy this path"
+                              title={t('Open (web link) or copy this path')}
                               className="btn btn-ghost btn-sm"
                               style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto', flexShrink: 0 }}
                             >
@@ -1803,7 +1826,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         <FileText className="w-5 h-5" />
                       </div>
                       <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorrForDetails.attachedFileName || 'View Attachment'}</div>
+                        <div style={{ fontWeight: 700, fontSize: 14 }}>{selectedCorrForDetails.attachedFileName || t('View attachment')}</div>
                         <div style={{ fontSize: 11, opacity: 0.8 }}>{t('Click to open in new tab')}</div>
                       </div>
                       <ExternalLink className="w-4 h-4" />
@@ -1827,7 +1850,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       }
                     }}
                   >
-                    <Edit2 className="w-4 h-4" /> View Linked Task
+                    <Edit2 className="w-4 h-4" /> {t('View Linked Task')}
                   </button>
                 )}
                 <button
@@ -1838,7 +1861,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     openModal(selectedCorrForDetails, false);
                   }}
                 >
-                  Edit
+                  {t('Edit')}
                 </button>
                 <button className="btn btn-ghost" style={{ height: 44 }} onClick={() => setSelectedCorrForDetails(null)}>{t('Close')}</button>
               </div>

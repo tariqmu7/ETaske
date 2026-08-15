@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { disableNetwork, enableNetwork } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { RefreshCw, CheckCircle2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 // The whole app is already real-time (live onSnapshot listeners), so we never
 // hard-reload — that would throw away scroll position, open panels and form
@@ -29,6 +30,7 @@ function isTyping(): boolean {
 }
 
 export default function IdleResyncBanner() {
+  const { t } = useTranslation();
   const [phase, setPhase] = useState<Phase>('active');
   const lastActivityRef = useRef(Date.now());
   const phaseRef = useRef<Phase>('active');
@@ -120,12 +122,12 @@ export default function IdleResyncBanner() {
       {syncing ? (
         <>
           <RefreshCw size={15} style={{ animation: 'spin 1s linear infinite' }} />
-          Syncing latest updates…
+          {t('Syncing latest updates…')}
         </>
       ) : (
         <>
           <CheckCircle2 size={15} />
-          You're up to date
+          {t("You're up to date")}
         </>
       )}
     </div>

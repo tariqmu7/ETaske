@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
@@ -6,9 +7,12 @@ import {
 import { db } from '../../lib/firebase';
 import { User } from 'firebase/auth';
 import { Project, ProjectSubcontract, CURRENCY_OPTIONS } from '../../types';
-import { isOverdue, isDueSoon, parseAmount, formatMoney } from '../../utils';
+import { isOverdue, isDueSoon, parseAmount } from '../../utils';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat } from '../../lib/format';
 import { Plus, X, Edit2, Trash2, Truck, Building2, AlertTriangle } from 'lucide-react';
 import ListControls, { SortDir } from './ListControls';
+import type { TFunction } from 'i18next';
 
 interface Props { project: Project; user: User; }
 
@@ -18,15 +22,23 @@ const emptyForm = () => ({
   status: '', currentStatus: '', remarks: '',
 });
 
-function daysLeftLabel(expiry?: string): { text: string; color: string } | null {
+// Module-level, so it takes the translator as an argument the way task 5's
+// helpers do — it cannot call a hook from out here.
+function daysLeftLabel(expiry: string | undefined, t: TFunction): { text: string; color: string } | null {
   if (!expiry) return null;
-  if (isOverdue(expiry)) return { text: 'Expired', color: '#dc2626' };
+  if (isOverdue(expiry)) return { text: t('Expired'), color: '#dc2626' };
   const d = new Date(expiry).getTime() - Date.now();
   const days = Math.ceil(d / 86400000);
-  return { text: `${days} day${days === 1 ? '' : 's'} left`, color: isDueSoon(expiry, 24 * 30) ? '#f59e0b' : '#16a34a' };
+  return {
+    text: days === 1 ? t('{{count}} day left', { count: 1 }) : t('{{count}} days left', { count: days }),
+    color: isDueSoon(expiry, 24 * 30) ? '#f59e0b' : '#16a34a',
+  };
 }
 
 export default function ProjectSubcontractsTab({ project, user }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [items, setItems] = useState<ProjectSubcontract[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [editing, setEditing] = useState<ProjectSubcontract | null>(null);
@@ -47,12 +59,13 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
 
   const statusOf = (s: ProjectSubcontract) => (s.currentStatus || s.status || '').trim();
 
-  // Filter dropdown is populated from the statuses actually in use.
+  // Filter dropdown is populated from the statuses actually in use. The VALUE
+  // stays the stored word — only its label goes through the display layer.
   const statusOptions = useMemo(() => {
     const set = new Set<string>();
     items.forEach(s => { const v = statusOf(s); if (v) set.add(v); });
-    return [{ value: 'all', label: 'All statuses' }, ...Array.from(set).sort().map(v => ({ value: v, label: v }))];
-  }, [items]);
+    return [{ value: 'all', label: t('All statuses') }, ...Array.from(set).sort().map(v => ({ value: v, label: dl(v) }))];
+  }, [items, t, dl]);
 
   const visible = useMemo(() => {
     let rows = items.slice();
@@ -119,57 +132,57 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Subcontracts</h3>
-        <button className="btn btn-primary btn-sm" onClick={openCreate}><Plus className="w-4 h-4" /> Add subcontract</button>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Subcontracts')}</h3>
+        <button className="btn btn-primary btn-sm" onClick={openCreate}><Plus className="w-4 h-4" /> {t('Add subcontract')}</button>
       </div>
 
       {(expirySummary.expired > 0 || expirySummary.expiringSoon > 0) && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '9px 14px', marginBottom: 14, background: 'rgba(245,158,11,0.12)', color: '#92400e', fontSize: 13, fontWeight: 600 }}>
           <AlertTriangle className="w-4 h-4" style={{ flexShrink: 0 }} />
-          {expirySummary.expired > 0 && <span>{expirySummary.expired} expired</span>}
+          {expirySummary.expired > 0 && <span>{t('{{count}} expired', { count: expirySummary.expired })}</span>}
           {expirySummary.expired > 0 && expirySummary.expiringSoon > 0 && <span>·</span>}
-          {expirySummary.expiringSoon > 0 && <span>{expirySummary.expiringSoon} expiring within 30 days</span>}
+          {expirySummary.expiringSoon > 0 && <span>{t('{{count}} expiring within 30 days', { count: expirySummary.expiringSoon })}</span>}
         </div>
       )}
 
       {items.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><Truck className="w-8 h-8" /></div>
-          <div className="empty-state-title">No subcontracts</div>
-          <div className="empty-state-sub">Track subcontractors / service orders, their service, validity and current status.</div>
+          <div className="empty-state-title">{t('No subcontracts')}</div>
+          <div className="empty-state-sub">{t('Track subcontractors / service orders, their service, validity and current status.')}</div>
         </div>
       ) : (
         <>
           <ListControls
             filters={[
-              { key: 'status', label: 'Status', value: statusFilter, options: statusOptions, onChange: setStatusFilter },
-              { key: 'validity', label: 'Validity', value: validityFilter, onChange: setValidityFilter, options: [
-                { value: 'all', label: 'All' },
-                { value: 'valid', label: 'Valid' },
-                { value: 'soon', label: 'Expiring soon' },
-                { value: 'expired', label: 'Expired' },
+              { key: 'status', label: t('Status'), value: statusFilter, options: statusOptions, onChange: setStatusFilter },
+              { key: 'validity', label: t('Validity'), value: validityFilter, onChange: setValidityFilter, options: [
+                { value: 'all', label: t('All') },
+                { value: 'valid', label: t('Valid') },
+                { value: 'soon', label: t('Expiring soon') },
+                { value: 'expired', label: t('Expired') },
               ] },
             ]}
             sortOptions={[
-              { value: 'name', label: 'Name' },
-              { value: 'price', label: 'Price' },
-              { value: 'startDate', label: 'Start date' },
-              { value: 'expiryDate', label: 'Expiry date' },
-              { value: 'status', label: 'Status' },
-              { value: 'createdAt', label: 'Recently added' },
+              { value: 'name', label: t('Name') },
+              { value: 'price', label: t('Price') },
+              { value: 'startDate', label: t('Start date') },
+              { value: 'expiryDate', label: t('Expiry date') },
+              { value: 'status', label: t('Status') },
+              { value: 'createdAt', label: t('Recently added') },
             ]}
             sortValue={sortKey}
             onSortChange={setSortKey}
             sortDir={sortDir}
             onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            trailing={`${visible.length} of ${items.length}`}
+            trailing={t('{{shown}} of {{total}}', { shown: visible.length, total: items.length })}
           />
           {visible.length === 0 ? (
-            <div className="empty-state"><div className="empty-state-title">No subcontracts match</div></div>
+            <div className="empty-state"><div className="empty-state-title">{t('No subcontracts match')}</div></div>
           ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
           {visible.map(s => {
-            const dl = daysLeftLabel(s.expiryDate);
+            const left = daysLeftLabel(s.expiryDate, t);
             return (
               <div key={s.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -182,17 +195,20 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(s)}><Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} /></button>
                   </div>
                 </div>
-                {s.typeOfService && <div style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{s.typeOfService}</div>}
+                {/* ★ Free-text prose is in whatever language the user typed. An
+                    English paragraph inside an RTL page has its trailing full
+                    stop dragged to the front unless the run is isolated. */}
+                {s.typeOfService && <div className={fmt.bidiFor(s.typeOfService)} style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.4 }}>{s.typeOfService}</div>}
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  {s.soOrContract && <span>SO/Contract: <b style={{ color: 'var(--text-secondary)' }}>{s.soOrContract}</b></span>}
-                  {parseAmount(s.price) != null && <span>{formatMoney(s.price, s.currency)}</span>}
+                  {s.soOrContract && <span>{t('SO/Contract:')} <b className="ltr-data" style={{ color: 'var(--text-secondary)' }}>{s.soOrContract}</b></span>}
+                  {parseAmount(s.price) != null && <span className={fmt.bidiFor(fmt.money(s.price, s.currency))}>{fmt.money(s.price, s.currency)}</span>}
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px 14px', fontSize: 12, color: 'var(--text-muted)' }}>
-                  {(s.startDate || s.expiryDate) && <span>📅 <span className="ltr-data">{[s.startDate, s.expiryDate].filter(Boolean).join(' → ')}</span></span>}
+                  {(s.startDate || s.expiryDate) && <span>📅 <span className="ltr-data">{[s.startDate, s.expiryDate].filter(Boolean).map(d => fmt.date(d)).join(' → ')}</span></span>}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 'auto', paddingTop: 4, flexWrap: 'wrap' }}>
-                  {(s.currentStatus || s.status) && <span className="badge badge-inprogress">{s.currentStatus || s.status}</span>}
-                  {dl && <span style={{ fontSize: 12, fontWeight: 700, color: dl.color }}>{dl.text}</span>}
+                  {(s.currentStatus || s.status) && <span className="badge badge-inprogress">{dl(s.currentStatus || s.status)}</span>}
+                  {left && <span style={{ fontSize: 12, fontWeight: 700, color: left.color }}>{left.text}</span>}
                 </div>
               </div>
             );
@@ -206,34 +222,34 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
           <div className="modal" style={{ maxWidth: 520, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? 'Edit subcontract' : 'Add subcontract'}</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? t('Edit subcontract') : t('Add subcontract')}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
             </div>
             <div style={{ display: 'grid', gap: 12, maxHeight: '65vh', overflowY: 'auto', paddingInlineEnd: 4 }}>
-              <L label="Subcontractor / supplier *"><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inp} /></L>
-              <L label="Type of service"><textarea value={form.typeOfService} onChange={e => setForm({ ...form, typeOfService: e.target.value })} style={inp} rows={2} /></L>
+              <L label={t('Subcontractor / supplier *')}><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} style={inp} /></L>
+              <L label={t('Type of service')}><textarea value={form.typeOfService} onChange={e => setForm({ ...form, typeOfService: e.target.value })} style={inp} rows={2} /></L>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="SO / Contract"><input value={form.soOrContract} onChange={e => setForm({ ...form, soOrContract: e.target.value })} style={inp} /></L>
-                <L label="Reference"><input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} style={inp} /></L>
+                <L label={t('SO / Contract')}><input value={form.soOrContract} onChange={e => setForm({ ...form, soOrContract: e.target.value })} style={inp} /></L>
+                <L label={t('Reference')}><input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} style={inp} /></L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Price"><input value={form.price} inputMode="decimal" onChange={e => setForm({ ...form, price: e.target.value })} style={inp} placeholder="0" /></L>
-                <L label="Currency">
+                <L label={t('Price')}><input value={form.price} inputMode="decimal" onChange={e => setForm({ ...form, price: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label={t('Currency')}>
                   <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
                     {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </L>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Start date"><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
-                <L label="Expiry date"><input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} style={inp} /></L>
+                <L label={t('Start date')}><input type="date" value={form.startDate} onChange={e => setForm({ ...form, startDate: e.target.value })} style={inp} /></L>
+                <L label={t('Expiry date')}><input type="date" value={form.expiryDate} onChange={e => setForm({ ...form, expiryDate: e.target.value })} style={inp} /></L>
               </div>
-              <L label="Current status"><input value={form.currentStatus} onChange={e => setForm({ ...form, currentStatus: e.target.value })} style={inp} placeholder="e.g. 50% Completion, Awaiting Spares…" /></L>
-              <L label="Remarks"><textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} style={inp} rows={2} /></L>
+              <L label={t('Current status')}><input value={form.currentStatus} onChange={e => setForm({ ...form, currentStatus: e.target.value })} style={inp} placeholder={t('e.g. 50% Completion, Awaiting Spares…')} /></L>
+              <L label={t('Remarks')}><textarea value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} style={inp} rows={2} /></L>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" disabled={!form.name.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>{t('Cancel')}</button>
+              <button className="btn btn-primary" disabled={!form.name.trim()} onClick={save}>{editing ? t('Save') : t('Add')}</button>
             </div>
           </div>
         </div>
@@ -242,10 +258,10 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 380, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>Delete "{deleteTarget.name}"?</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>{t('Delete "{{name}}"?', { name: deleteTarget.name })}</h2>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={remove}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
             </div>
           </div>
         </div>

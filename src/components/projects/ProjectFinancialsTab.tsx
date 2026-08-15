@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp,
@@ -9,7 +10,9 @@ import {
   Project, ProjectFinancialRecord, ProjectFinancialType, PROJECT_FINANCIAL_TYPE_OPTIONS,
   ProjectContractItem, CURRENCY_OPTIONS,
 } from '../../types';
-import { parseAmount, formatMoney } from '../../utils';
+import { parseAmount } from '../../utils';
+import { useDisplayLabel } from '../../lib/displayLabel';
+import { useFormat } from '../../lib/format';
 import { Plus, X, Edit2, Trash2, DollarSign, Link2 } from 'lucide-react';
 import ListControls, { SortDir } from './ListControls';
 
@@ -37,6 +40,9 @@ function typeBadge(t: ProjectFinancialType) {
 }
 
 export default function ProjectFinancialsTab({ project, user }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [records, setRecords] = useState<ProjectFinancialRecord[]>([]);
   const [contracts, setContracts] = useState<ProjectContractItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
@@ -86,7 +92,9 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
     if (!id) return '';
     const c = contracts.find(x => x.id === id);
     if (!c) return '';
-    return c.contractNumber || c.subject || c.companyName || 'Contract';
+    // The fallback is the contract-TYPE label, so it goes through the same
+    // display layer the contracts tab paints its badges with.
+    return c.contractNumber || c.subject || c.companyName || dl('Contract');
   };
 
   // Per-currency rollup. Invoice and income are kept separate so that logging
@@ -143,29 +151,31 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
       {/* Totals */}
       {Object.keys(totals).length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 12, marginBottom: 18 }}>
-          {Object.entries(totals).map(([cur, t]) => {
-            const net = t.income - t.expense;
+          {/* ⚠ The rollup was destructured as `t`, which shadows the translator.
+              It is `sums` now — renaming it is part of wiring this file up. */}
+          {Object.entries(totals).map(([cur, sums]) => {
+            const net = sums.income - sums.expense;
             return (
               <div key={cur} className="card stat-green" style={{ padding: 14 }}>
-                <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{cur}</div>
+                <div className="ltr-data" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{cur}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
-                  <span>Income</span><b style={{ color: '#16a34a' }}>{t.income.toLocaleString('en-US')}</b>
+                  <span>{t('Income')}</span><b className="ltr-data" style={{ color: '#16a34a' }}>{fmt.number(sums.income)}</b>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)' }}>
-                  <span>Expense</span><b style={{ color: '#dc2626' }}>{t.expense.toLocaleString('en-US')}</b>
+                  <span>{t('Expense')}</span><b className="ltr-data" style={{ color: '#dc2626' }}>{fmt.number(sums.expense)}</b>
                 </div>
-                {t.invoiced > 0 && (
+                {sums.invoiced > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text-muted)' }}>
-                    <span>Invoiced</span><b style={{ color: 'var(--text-secondary)' }}>{t.invoiced.toLocaleString('en-US')}</b>
+                    <span>{t('Invoiced')}</span><b className="ltr-data" style={{ color: 'var(--text-secondary)' }}>{fmt.number(sums.invoiced)}</b>
                   </div>
                 )}
-                {t.budget > 0 && (
+                {sums.budget > 0 && (
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, color: 'var(--text-muted)' }}>
-                    <span>Budget</span><b style={{ color: 'var(--text-secondary)' }}>{t.budget.toLocaleString('en-US')}</b>
+                    <span>{t('Budget')}</span><b className="ltr-data" style={{ color: 'var(--text-secondary)' }}>{fmt.number(sums.budget)}</b>
                   </div>
                 )}
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', marginTop: 6, paddingTop: 6, borderTop: '1px solid var(--border)' }}>
-                  <span>Net</span><span style={{ color: net < 0 ? '#dc2626' : '#16a34a' }}>{net.toLocaleString('en-US')}</span>
+                  <span>{t('Net')}</span><span className="ltr-data" style={{ color: net < 0 ? '#dc2626' : '#16a34a' }}>{fmt.number(net)}</span>
                 </div>
               </div>
             );
@@ -174,46 +184,50 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
       )}
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Financial Records</h3>
-        <button className="btn btn-primary btn-sm" onClick={openCreate}><Plus className="w-4 h-4" /> Add record</button>
+        <h3 style={{ fontSize: 15, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Financial Records')}</h3>
+        <button className="btn btn-primary btn-sm" onClick={openCreate}><Plus className="w-4 h-4" /> {t('Add record')}</button>
       </div>
 
       {records.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><DollarSign className="w-8 h-8" /></div>
-          <div className="empty-state-title">No financial records</div>
-          <div className="empty-state-sub">Track invoices, income, expenses and budgets for this project.</div>
+          <div className="empty-state-title">{t('No financial records')}</div>
+          <div className="empty-state-sub">{t('Track invoices, income, expenses and budgets for this project.')}</div>
         </div>
       ) : (
         <>
         <ListControls
           filters={[
-            { key: 'type', label: 'Type', value: typeFilter, onChange: setTypeFilter, options: [
-              { value: 'all', label: 'All types' },
-              ...PROJECT_FINANCIAL_TYPE_OPTIONS.map(t => ({ value: t, label: t.charAt(0).toUpperCase() + t.slice(1) })),
+            { key: 'type', label: t('Type'), value: typeFilter, onChange: setTypeFilter, options: [
+              { value: 'all', label: t('All types') },
+              // ★ The record type is stored lower-case ("invoice"). The tab used
+              // to upper-case the first letter by hand; the display layer now
+              // supplies the presentable word in both languages, and the stored
+              // value in `value:` is untouched.
+              ...PROJECT_FINANCIAL_TYPE_OPTIONS.map(ft => ({ value: ft, label: dl(ft) })),
             ] },
           ]}
           sortOptions={[
-            { value: 'date', label: 'Date' },
-            { value: 'amount', label: 'Amount' },
-            { value: 'title', label: 'Title' },
-            { value: 'type', label: 'Type' },
-            { value: 'status', label: 'Status' },
+            { value: 'date', label: t('Date') },
+            { value: 'amount', label: t('Amount') },
+            { value: 'title', label: t('Title') },
+            { value: 'type', label: t('Type') },
+            { value: 'status', label: t('Status') },
           ]}
           sortValue={sortKey}
           onSortChange={setSortKey}
           sortDir={sortDir}
           onSortDirToggle={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-          trailing={`${visible.length} of ${records.length}`}
+          trailing={t('{{shown}} of {{total}}', { shown: visible.length, total: records.length })}
         />
         {visible.length === 0 ? (
-          <div className="empty-state"><div className="empty-state-title">No records match</div></div>
+          <div className="empty-state"><div className="empty-state-title">{t('No records match')}</div></div>
         ) : (
         <div className="card" style={{ padding: 0, overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
             <thead style={{ background: 'var(--surface-3)', borderBottom: '2px solid var(--border)' }}>
               <tr>
-                {['Type', 'Title', 'Amount', 'Date', 'Status', ''].map((h, i) => (
+                {[t('Type'), t('Title'), t('Amount'), t('Date'), t('Status'), ''].map((h, i) => (
                   <th key={i} style={{ padding: '11px 14px', textAlign: 'start', fontWeight: 700, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{h}</th>
                 ))}
               </tr>
@@ -221,7 +235,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
             <tbody>
               {visible.map(r => (
                 <tr key={r.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                  <td style={{ padding: '10px 14px' }}><span className={typeBadge(r.type)} style={{ textTransform: 'capitalize' }}>{r.type}</span></td>
+                  <td style={{ padding: '10px 14px' }}><span className={typeBadge(r.type)}>{dl(r.type)}</span></td>
                   <td style={{ padding: '10px 14px', color: 'var(--text-primary)', fontWeight: 600 }}>
                     {r.title}
                     {r.relatedContractId && contractLabel(r.relatedContractId) && (
@@ -229,11 +243,17 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
                         <Link2 className="w-3 h-3" /> {contractLabel(r.relatedContractId)}
                       </div>
                     )}
-                    {r.notes && <div style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{r.notes}</div>}
+                    {r.notes && <div className={fmt.bidiFor(r.notes)} style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-muted)' }}>{r.notes}</div>}
                   </td>
-                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>{formatMoney(r.amount, r.currency)}</td>
-                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>{r.date || '—'}</td>
-                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{r.status || '—'}</td>
+                  {/* ★ "12,500 EGP" is digits + a NEUTRAL space + a Latin word: in
+                      an RTL row the two halves swap unless the run is isolated. */}
+                  <td style={{ padding: '10px 14px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
+                    <span className={fmt.bidiFor(fmt.money(r.amount, r.currency))}>{fmt.money(r.amount, r.currency)}</span>
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    {r.date ? <span className="ltr-data">{fmt.date(r.date)}</span> : '—'}
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--text-secondary)' }}>{dl(r.status) || '—'}</td>
                   <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(r)}><Edit2 className="w-4 h-4" /></button>
                     <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setDeleteTarget(r)}><Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} /></button>
@@ -251,37 +271,37 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
         <div className="modal-overlay" onClick={() => setIsOpen(false)}>
           <div className="modal" style={{ maxWidth: 480, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? 'Edit record' : 'Add record'}</h2>
+              <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{editing ? t('Edit record') : t('Add record')}</h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsOpen(false)}><X className="w-5 h-5" /></button>
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <L label="Type"><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectFinancialType })} style={inp}>{PROJECT_FINANCIAL_TYPE_OPTIONS.map(t => <option key={t} value={t} style={{ textTransform: 'capitalize' }}>{t}</option>)}</select></L>
-                <L label="Date"><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inp} /></L>
+                <L label={t('Type')}><select value={form.type} onChange={e => setForm({ ...form, type: e.target.value as ProjectFinancialType })} style={inp}>{PROJECT_FINANCIAL_TYPE_OPTIONS.map(ft => <option key={ft} value={ft}>{dl(ft)}</option>)}</select></L>
+                <L label={t('Date')}><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inp} /></L>
               </div>
-              <L label="Title *"><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={inp} placeholder="e.g. Milestone 1 invoice" /></L>
+              <L label={t('Title *')}><input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} style={inp} placeholder={t('e.g. Milestone 1 invoice')} /></L>
               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 12 }}>
-                <L label="Amount"><input value={form.amount} inputMode="decimal" onChange={e => setForm({ ...form, amount: e.target.value })} style={inp} placeholder="0" /></L>
-                <L label="Currency">
+                <L label={t('Amount')}><input value={form.amount} inputMode="decimal" onChange={e => setForm({ ...form, amount: e.target.value })} style={inp} placeholder="0" /></L>
+                <L label={t('Currency')}>
                   <select value={form.currency} onChange={e => setForm({ ...form, currency: e.target.value })} style={inp}>
                     {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </L>
               </div>
               {contracts.length > 0 && (
-                <L label="Linked contract">
+                <L label={t('Linked contract')}>
                   <select value={form.relatedContractId} onChange={e => setForm({ ...form, relatedContractId: e.target.value })} style={inp}>
-                    <option value="">— None —</option>
-                    {contracts.map(c => <option key={c.id} value={c.id}>{c.contractNumber || c.subject || c.companyName || 'Contract'}</option>)}
+                    <option value="">{t('— None —')}</option>
+                    {contracts.map(c => <option key={c.id} value={c.id}>{c.contractNumber || c.subject || c.companyName || dl('Contract')}</option>)}
                   </select>
                 </L>
               )}
-              <L label="Status"><input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inp} placeholder="Paid / Pending…" /></L>
-              <L label="Notes"><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inp} rows={2} /></L>
+              <L label={t('Status')}><input value={form.status} onChange={e => setForm({ ...form, status: e.target.value })} style={inp} placeholder={t('Paid / Pending…')} /></L>
+              <L label={t('Notes')}><textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} style={inp} rows={2} /></L>
             </div>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 18 }}>
-              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" disabled={!form.title.trim()} onClick={save}>{editing ? 'Save' : 'Add'}</button>
+              <button className="btn btn-ghost" onClick={() => setIsOpen(false)}>{t('Cancel')}</button>
+              <button className="btn btn-primary" disabled={!form.title.trim()} onClick={save}>{editing ? t('Save') : t('Add')}</button>
             </div>
           </div>
         </div>
@@ -290,10 +310,10 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 380, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>Delete this record?</h2>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 16px' }}>{t('Delete this record?')}</h2>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={remove}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={remove}>{t('Delete')}</button>
             </div>
           </div>
         </div>

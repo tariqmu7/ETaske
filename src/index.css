@@ -1161,6 +1161,17 @@ h1, h2, h3, h4, p, span, div {
   text-align: start;
 }
 
+/* Task 6. A date formatted through Intl under `ar` can contain Arabic letters
+   ("15 أغسطس") — .ltr-data would force that whole run left-to-right and put the
+   month name on the wrong side of the day. This isolates the value from the
+   surrounding sentence (the only part of .ltr-data such a date actually needs)
+   without dictating its direction. `lib/format.ts` -> bidiClass() picks between
+   the two: numeric dates keep .ltr-data, named-month dates get this. */
+.bidi-isolate {
+  unicode-bidi: isolate;
+  text-align: start;
+}
+
 /* Arabic renders taller than Latin at the same px size; the app's dense
    10-12px labels lose their diacritics without a touch more leading. */
 [dir="rtl"] body {

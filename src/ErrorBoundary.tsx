@@ -1,4 +1,5 @@
 import React from 'react';
+import i18n from './i18n';
 
 interface Props {
   children: React.ReactNode;
@@ -59,7 +60,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
           }}
         >
           <h1 style={{fontSize: '18px', fontWeight: 600, margin: '0 0 8px'}}>
-            Something went wrong
+            {i18n.t('Something went wrong')}
           </h1>
           <p
             style={{
@@ -69,8 +70,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               lineHeight: 1.5,
             }}
           >
-            An unexpected error stopped this view from rendering. Reloading
-            usually clears it. If it keeps happening, share the message below.
+            {i18n.t('An unexpected error stopped this view from rendering. Reloading usually clears it. If it keeps happening, share the message below.')}
           </p>
           <pre
             style={{
@@ -104,7 +104,7 @@ export class ErrorBoundary extends React.Component<Props, State> {
               cursor: 'pointer',
             }}
           >
-            Reload
+            {i18n.t('Reload')}
           </button>
         </div>
       </div>

@@ -1,5 +1,6 @@
 /// <reference types="vite/client" />
 import React, { useState, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   collection, query, onSnapshot, addDoc, updateDoc, deleteDoc,
   doc, serverTimestamp, orderBy,
@@ -13,6 +14,8 @@ import {
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
 import { globalSearch } from './utils';
+import { useDisplayLabel } from './lib/displayLabel';
+import { useFormat } from './lib/format';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import { recordRecent } from './lib/recents';
 import { exportOpportunities } from './lib/exportData';
@@ -56,6 +59,9 @@ const emptyForm = () => ({
 });
 
 export default function OpportunitiesDashboard({ user, appUser, projectUsers, onNavigate }: Props) {
+  const { t } = useTranslation();
+  const dl = useDisplayLabel();
+  const fmt = useFormat();
   const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,7 +93,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       setLoading(false);
     }, err => {
       console.error('Opportunities listener error:', err, { uid: auth.currentUser?.uid });
-      setError('Failed to load opportunities.');
+      setError(t('Failed to load opportunities.'));
       setLoading(false);
     });
     return () => unsub();
@@ -196,15 +202,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
 
   const handleSave = async () => {
     const title = formData.title.trim();
-    if (!title) { setFormError('Opportunity title is required.'); return; }
+    if (!title) { setFormError(t('Opportunity title is required.')); return; }
     const probability = formData.probability === '' ? undefined : Number(formData.probability);
     if (probability !== undefined && (!isFinite(probability) || probability < 0 || probability > 100)) {
-      setFormError('Probability must be between 0 and 100.');
+      setFormError(t('Probability must be between 0 and 100.'));
       return;
     }
     if (formData.announcedDate && formData.submissionDeadline &&
         formData.submissionDeadline < formData.announcedDate) {
-      setFormError('Submission deadline cannot be before the announcement date.');
+      setFormError(t('Submission deadline cannot be before the announcement date.'));
       return;
     }
     const owner = projectUsers.find(u => u.id === formData.ownerId);
@@ -254,7 +260,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       setEditing(null);
     } catch (e) {
       console.error('Save opportunity failed:', e);
-      setFormError('Failed to save opportunity. Please try again.');
+      setFormError(t('Failed to save opportunity. Please try again.'));
     } finally {
       setSaving(false);
     }
@@ -267,7 +273,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       setDeleteTarget(null);
     } catch (e) {
       console.error('Delete opportunity failed:', e);
-      setError('Failed to delete opportunity. Only managers and admins can delete.');
+      setError(t('Failed to delete opportunity. Only managers and admins can delete.'));
       setDeleteTarget(null);
     }
   };
@@ -282,10 +288,13 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     setError(null);
     try {
       const r = await exportOpportunities();
-      setExportNote(`Saved ${r.fileName} — ${r.opportunities} opportunities, ${r.feedback} outcomes, ${r.milestones} bid gates, ${r.followUps} follow-ups.`);
+      setExportNote(t('Saved {{file}} — {{opportunities}} opportunities, {{feedback}} outcomes, {{milestones}} bid gates, {{followUps}} follow-ups.', {
+        file: r.fileName, opportunities: r.opportunities, feedback: r.feedback,
+        milestones: r.milestones, followUps: r.followUps,
+      }));
     } catch (e) {
       console.error('Export opportunities failed:', e);
-      setError('Export failed. Please try again.');
+      setError(t('Export failed. Please try again.'));
     } finally {
       setExporting(false);
     }
@@ -349,9 +358,11 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
             <Target className="w-6 h-6" />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Opportunities</h1>
+            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Opportunities')}</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-              {opportunities.length} {opportunities.length === 1 ? 'opportunity' : 'opportunities'} · {stats.open} open
+              {opportunities.length === 1
+                ? t('{{count}} opportunity · {{open}} open', { count: 1, open: stats.open })
+                : t('{{count}} opportunities · {{open}} open', { count: opportunities.length, open: stats.open })}
             </p>
           </div>
         </div>
@@ -360,18 +371,18 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
             className="btn btn-ghost"
             onClick={handleExport}
             disabled={exporting}
-            title="Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook"
+            title={t('Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook')}
           >
             {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            {exporting ? 'Exporting…' : 'Export'}
+            {exporting ? t('Exporting…') : t('Export')}
           </button>
           {onNavigate && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
-            <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title="Win rate, loss reasons and pipeline analysis">
-              <BarChart3 className="w-4 h-4" /> Analytics
+            <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title={t('Win rate, loss reasons and pipeline analysis')}>
+              <BarChart3 className="w-4 h-4" /> {t('Analytics')}
             </button>
           )}
           <button className="btn btn-primary" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> New Opportunity
+            <Plus className="w-4 h-4" /> {t('New Opportunity')}
           </button>
         </div>
       </div>
@@ -386,7 +397,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--text-secondary)', marginBottom: 16, fontSize: 13 }}>
           <FileSpreadsheet className="w-4 h-4" style={{ flexShrink: 0, color: 'var(--accent)' }} />
           <span style={{ flex: 1 }}>{exportNote}</span>
-          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setExportNote(null)} title="Dismiss">
+          <button className="btn btn-ghost btn-icon btn-sm" onClick={() => setExportNote(null)} title={t('Dismiss')}>
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -396,21 +407,21 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       {opportunities.length > 0 && (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
           {[
-            { label: 'Open', value: String(stats.open), sub: 'in pipeline', filter: 'Open', color: 'var(--text-primary)' },
-            { label: 'Pipeline value', value: money(stats.openValue, mainCurrency), sub: 'open bids', filter: 'Open', color: '#3b82f6' },
-            { label: 'Weighted', value: money(stats.weighted, mainCurrency), sub: 'value × probability', filter: 'Open', color: '#8b5cf6' },
-            { label: 'Win rate', value: stats.winRate === null ? '—' : `${stats.winRate}%`, sub: `${stats.won}W / ${stats.lost}L`, filter: 'Won', color: '#16a34a' },
-            { label: 'Due ≤ 7 days', value: String(stats.dueSoon), sub: `${stats.overdue} past deadline`, filter: 'Open', color: stats.overdue > 0 ? '#dc2626' : '#f59e0b' },
+            { key: 'open', label: t('Open'), value: String(stats.open), sub: t('in pipeline'), filter: 'Open', color: 'var(--text-primary)' },
+            { key: 'value', label: t('Pipeline value'), value: money(stats.openValue, mainCurrency), sub: t('open bids'), filter: 'Open', color: '#3b82f6' },
+            { key: 'weighted', label: t('Weighted'), value: money(stats.weighted, mainCurrency), sub: t('value × probability'), filter: 'Open', color: '#8b5cf6' },
+            { key: 'winrate', label: t('Win rate'), value: stats.winRate === null ? '—' : fmt.percent(stats.winRate), sub: t('{{won}}W / {{lost}}L', { won: stats.won, lost: stats.lost }), filter: 'Won', color: '#16a34a' },
+            { key: 'duesoon', label: t('Due ≤ 7 days'), value: String(stats.dueSoon), sub: t('{{count}} past deadline', { count: stats.overdue }), filter: 'Open', color: stats.overdue > 0 ? '#dc2626' : '#f59e0b' },
           ].map(s => {
             const active = stageFilter === s.filter;
             return (
               <button
-                key={s.label}
+                key={s.key}
                 onClick={() => setStageFilter(active ? 'All' : s.filter)}
                 className="card"
                 style={{ padding: '12px 14px', textAlign: 'start', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
               >
-                <div style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                <div className={fmt.bidiFor(s.value)} style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
                 <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.sub}</div>
               </button>
@@ -425,10 +436,12 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           <Search className="w-4 h-4" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
           <input
             type="text"
-            placeholder="Search opportunities…"
+            placeholder={t('Search opportunities…')}
             value={search}
             onChange={e => setSearch(e.target.value)}
-            style={{ width: '100%', padding: '10px 12px 10px 36px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+            // Logical padding: the icon sits at `insetInlineStart`, so a physical
+            // `padding-left` would leave the text under it in RTL.
+            style={{ width: '100%', paddingBlock: 10, paddingInlineStart: 36, paddingInlineEnd: 12, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
           />
         </div>
         <select
@@ -436,20 +449,20 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           onChange={e => setStageFilter(e.target.value)}
           style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
         >
-          <option value="All">All stages</option>
-          <option value="Open">Open only</option>
-          {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+          <option value="All">{t('All stages')}</option>
+          <option value="Open">{t('Open only')}</option>
+          {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
         </select>
         <select
           value={sortBy}
           onChange={e => setSortBy(e.target.value as typeof sortBy)}
           style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          title="Sort opportunities"
+          title={t('Sort opportunities')}
         >
-          <option value="deadline">Submission deadline</option>
-          <option value="value">Value (high → low)</option>
-          <option value="stage">Stage</option>
-          <option value="recent">Most recent</option>
+          <option value="deadline">{t('Submission deadline')}</option>
+          <option value="value">{t('Value (high → low)')}</option>
+          <option value="stage">{t('Stage')}</option>
+          <option value="recent">{t('Most recent')}</option>
         </select>
       </div>
 
@@ -461,19 +474,19 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       ) : visible.length === 0 ? (
         <div className="empty-state">
           <div className="empty-state-icon"><Target className="w-8 h-8" /></div>
-          <div className="empty-state-title">{isFiltering ? 'No matching opportunities' : 'No opportunities yet'}</div>
+          <div className="empty-state-title">{isFiltering ? t('No matching opportunities') : t('No opportunities yet')}</div>
           <div className="empty-state-sub">
             {isFiltering
-              ? 'No opportunities match your search or filter. Try clearing them.'
-              : 'Add your first tender or bid to start tracking the pipeline, deadlines and win rate.'}
+              ? t('No opportunities match your search or filter. Try clearing them.')
+              : t('Add your first tender or bid to start tracking the pipeline, deadlines and win rate.')}
           </div>
           {isFiltering ? (
             <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStageFilter('All'); }}>
-              Clear filters
+              {t('Clear filters')}
             </button>
           ) : (
             <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
-              <Plus className="w-4 h-4" /> New Opportunity
+              <Plus className="w-4 h-4" /> {t('New Opportunity')}
             </button>
           )}
         </div>
@@ -498,14 +511,14 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                     <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', color: '#fff', background: STAGE_COLORS[o.stage] || '#64748b' }}>
-                      {o.stage}
+                      {dl(o.stage)}
                     </span>
                     <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-icon btn-sm" title="Edit" onClick={() => openEdit(o)}>
+                      <button className="btn btn-ghost btn-icon btn-sm" title={t('Edit')} onClick={() => openEdit(o)}>
                         <Edit2 className="w-4 h-4" />
                       </button>
                       {canDelete && (
-                        <button className="btn btn-ghost btn-icon btn-sm" title="Delete" onClick={() => setDeleteTarget(o)}>
+                        <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete')} onClick={() => setDeleteTarget(o)}>
                           <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
                         </button>
                       )}
@@ -515,7 +528,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                   <div>
                     <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{o.title}</h3>
                     {o.serialNumber && (
-                      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{o.serialNumber}</span>
+                      <span className="ltr-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{o.serialNumber}</span>
                     )}
                   </div>
 
@@ -526,7 +539,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                     {showCountdown && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: late ? '#dc2626' : soon ? '#f59e0b' : 'var(--text-secondary)', fontWeight: late || soon ? 700 : 400 }}>
                         <CalendarClock className="w-3.5 h-3.5" />
-                        {late ? `${Math.abs(dLeft as number)}d past deadline` : (dLeft === 0 ? 'Due today' : `${dLeft}d to deadline`)}
+                        {late
+                          ? t('{{count}}d past deadline', { count: Math.abs(dLeft as number) })
+                          : (dLeft === 0 ? t('Due today') : t('{{count}}d to deadline', { count: dLeft as number }))}
                       </div>
                     )}
                   </div>
@@ -541,12 +556,12 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                   )}
 
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 6 }}>
-                    <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
+                    <span className="ltr-data" style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
                       {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
                     </span>
                     {o.probability !== undefined && o.probability !== null && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
-                        <Percent className="w-3.5 h-3.5" /> {o.probability}
+                      <span className="ltr-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
+                        <Percent className="w-3.5 h-3.5" /> {fmt.number(o.probability)}
                       </span>
                     )}
                   </div>
@@ -567,36 +582,36 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           <div className="modal" style={{ maxWidth: 620, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                {editing ? 'Edit Opportunity' : 'New Opportunity'}
+                {editing ? t('Edit Opportunity') : t('New Opportunity')}
               </h2>
               <button className="btn btn-ghost btn-icon" onClick={() => setIsModalOpen(false)}><X className="w-5 h-5" /></button>
             </div>
 
             <div style={{ display: 'grid', gap: 14 }}>
-              <Field label="Title *">
-                <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="opp-input" placeholder="e.g. EGPC Turnaround Services Tender 2026" />
+              <Field label={t('Title *')}>
+                <input value={formData.title} onChange={e => setFormData({ ...formData, title: e.target.value })} className="opp-input" placeholder={t('e.g. EGPC Turnaround Services Tender 2026')} />
               </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Client"><input value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} className="opp-input" placeholder="EGPC" /></Field>
-                <Field label="Sector"><input value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} className="opp-input" placeholder="Refining" /></Field>
+                <Field label={t('Client')}><input value={formData.client} onChange={e => setFormData({ ...formData, client: e.target.value })} className="opp-input" placeholder={t('e.g. EGPC')} /></Field>
+                <Field label={t('Sector')}><input value={formData.sector} onChange={e => setFormData({ ...formData, sector: e.target.value })} className="opp-input" placeholder={t('e.g. Refining')} /></Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Tender / RFQ number"><input value={formData.tenderNumber} onChange={e => setFormData({ ...formData, tenderNumber: e.target.value })} className="opp-input" /></Field>
-                <Field label="Source">
+                <Field label={t('Tender / RFQ number')}><input value={formData.tenderNumber} onChange={e => setFormData({ ...formData, tenderNumber: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Source')}>
                   <select value={formData.source} onChange={e => setFormData({ ...formData, source: e.target.value as OpportunitySource })} className="opp-input">
-                    {OPPORTUNITY_SOURCE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {OPPORTUNITY_SOURCE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
                   </select>
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Stage">
+                <Field label={t('Stage')}>
                   <select value={formData.stage} onChange={e => setFormData({ ...formData, stage: e.target.value as OpportunityStage })} className="opp-input">
-                    {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
+                    {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
                   </select>
                 </Field>
-                <Field label="Bid owner">
+                <Field label={t('Bid owner')}>
                   <select value={formData.ownerId} onChange={e => setFormData({ ...formData, ownerId: e.target.value })} className="opp-input">
-                    <option value="">Unassigned</option>
+                    <option value="">{t('Unassigned')}</option>
                     {projectUsers.filter(u => u.status === 'Approved').map(u => (
                       <option key={u.id} value={u.id}>{u.displayName}</option>
                     ))}
@@ -604,36 +619,36 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr', gap: 14 }}>
-                <Field label="Estimated value">
+                <Field label={t('Estimated value')}>
                   <input type="number" min="0" value={formData.estimatedValue} onChange={e => setFormData({ ...formData, estimatedValue: e.target.value })} className="opp-input" />
                 </Field>
-                <Field label="Currency">
+                <Field label={t('Currency')}>
                   <select value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })} className="opp-input">
                     {CURRENCY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </Field>
-                <Field label="Win %">
+                <Field label={t('Win %')}>
                   <input type="number" min="0" max="100" value={formData.probability} onChange={e => setFormData({ ...formData, probability: e.target.value })} className="opp-input" />
                 </Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                <Field label="Announced date"><input type="date" value={formData.announcedDate} onChange={e => setFormData({ ...formData, announcedDate: e.target.value })} className="opp-input" /></Field>
-                <Field label="Submission deadline"><input type="date" value={formData.submissionDeadline} onChange={e => setFormData({ ...formData, submissionDeadline: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Announced date')}><input type="date" value={formData.announcedDate} onChange={e => setFormData({ ...formData, announcedDate: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Submission deadline')}><input type="date" value={formData.submissionDeadline} onChange={e => setFormData({ ...formData, submissionDeadline: e.target.value })} className="opp-input" /></Field>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 14 }}>
-                <Field label="Submitted on"><input type="date" value={formData.submittedDate} onChange={e => setFormData({ ...formData, submittedDate: e.target.value })} className="opp-input" /></Field>
-                <Field label="Decision date"><input type="date" value={formData.decisionDate} onChange={e => setFormData({ ...formData, decisionDate: e.target.value })} className="opp-input" /></Field>
-                <Field label="Next action"><input type="date" value={formData.nextActionDate} onChange={e => setFormData({ ...formData, nextActionDate: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Submitted on')}><input type="date" value={formData.submittedDate} onChange={e => setFormData({ ...formData, submittedDate: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Decision date')}><input type="date" value={formData.decisionDate} onChange={e => setFormData({ ...formData, decisionDate: e.target.value })} className="opp-input" /></Field>
+                <Field label={t('Next action')}><input type="date" value={formData.nextActionDate} onChange={e => setFormData({ ...formData, nextActionDate: e.target.value })} className="opp-input" /></Field>
               </div>
-              <Field label="Location"><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
-              <Field label="Scope"><textarea value={formData.scope} onChange={e => setFormData({ ...formData, scope: e.target.value })} className="opp-input" rows={3} /></Field>
+              <Field label={t('Location')}><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
+              <Field label={t('Scope')}><textarea value={formData.scope} onChange={e => setFormData({ ...formData, scope: e.target.value })} className="opp-input" rows={3} /></Field>
 
               {closedOutcome && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>
-                  <Field label={formData.stage === 'Won' ? 'Awarded to us — competitor' : 'Awarded to (competitor)'}>
+                  <Field label={formData.stage === 'Won' ? t('Awarded to us — competitor') : t('Awarded to (competitor)')}>
                     <input value={formData.awardedTo} onChange={e => setFormData({ ...formData, awardedTo: e.target.value })} className="opp-input" />
                   </Field>
-                  <Field label="Awarded value">
+                  <Field label={t('Awarded value')}>
                     <input type="number" min="0" value={formData.awardedValue} onChange={e => setFormData({ ...formData, awardedValue: e.target.value })} className="opp-input" />
                   </Field>
                 </div>
@@ -647,9 +662,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 22 }}>
-              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>Cancel</button>
+              <button className="btn btn-ghost" onClick={() => setIsModalOpen(false)}>{t('Cancel')}</button>
               <button className="btn btn-primary" disabled={saving || !formData.title.trim()} onClick={handleSave}>
-                {saving ? 'Saving…' : (editing ? 'Save changes' : 'Create opportunity')}
+                {saving ? t('Saving…') : (editing ? t('Save changes') : t('Create opportunity'))}
               </button>
             </div>
           </div>
@@ -660,14 +675,13 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       {deleteTarget && (
         <div className="modal-overlay" onClick={() => setDeleteTarget(null)}>
           <div className="modal" style={{ maxWidth: 420, padding: '22px 24px' }} onClick={e => e.stopPropagation()}>
-            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>Delete opportunity?</h2>
+            <h2 style={{ fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>{t('Delete opportunity?')}</h2>
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '0 0 20px' }}>
-              "{deleteTarget.title}" will be removed, and it will no longer count towards win rate or loss analysis.
-              Its follow-ups, milestones and feedback are not auto-deleted.
+              {t('“{{title}}” will be removed, and it will no longer count towards win rate or loss analysis. Its follow-ups, milestones and feedback are not auto-deleted.', { title: deleteTarget.title })}
             </p>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
-              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>Cancel</button>
-              <button className="btn btn-danger" onClick={handleDelete}>Delete</button>
+              <button className="btn btn-ghost" onClick={() => setDeleteTarget(null)}>{t('Cancel')}</button>
+              <button className="btn btn-danger" onClick={handleDelete}>{t('Delete')}</button>
             </div>
           </div>
         </div>

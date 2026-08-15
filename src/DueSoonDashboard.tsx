@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useFormat, DATE_MEDIUM } from './lib/format';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
@@ -37,6 +38,7 @@ const CLOSED = ['Done', 'Closed', 'Archived'];
  */
 export default function DueSoonDashboard({ user, onNavigate }: Props) {
   const { t } = useTranslation();
+  const f = useFormat();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [corrs, setCorrs] = useState<Corresponding[]>([]);
 
@@ -90,9 +92,7 @@ export default function DueSoonDashboard({ user, onNavigate }: Props) {
 
   const fmt = (s: string) => {
     const d = new Date(s);
-    return isNaN(d.getTime()) ? s : d.toLocaleString('en-GB', {
-      day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
+    return isNaN(d.getTime()) ? s : f.dateTime(d, { ...DATE_MEDIUM, hour: '2-digit', minute: '2-digit' });
   };
 
   const overdueRows = rows.filter(r => r.overdue);

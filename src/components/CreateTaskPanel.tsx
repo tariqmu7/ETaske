@@ -15,6 +15,7 @@ import { Plus, X, Paperclip, ChevronRight, Users, Lock, Globe, Check } from 'luc
 import { motion, AnimatePresence } from 'motion/react';
 import { getUserColor } from '../utils';
 import ComboBox from './ComboBox';
+import { useDisplayLabel } from '../lib/displayLabel';
 
 // Public / Private segmented control. Private tasks are visible & editable only
 // to their owner (the assignee) — enforced in firestore.rules.
@@ -195,6 +196,12 @@ export default function CreateTaskPanel({
   onCreated,
 }: Props) {
   const { t } = useTranslation();
+  // Task 6. Only the closed <select>s below take display labels. The ComboBox
+  // fields (category / department / project) deliberately do NOT: a ComboBox is
+  // searchable AND create-capable, so its display text IS the value that gets
+  // written — labelling it would either put Arabic into Firestore or make the
+  // search box filter English options against Arabic typing.
+  const label = useDisplayLabel();
   const [newTask, setNewTask] = useState<NewTaskDraft>(() => ({ ...emptyDraft(user, appUser), ...prefill }));
   const [showAdvancedCreate, setShowAdvancedCreate] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -499,7 +506,7 @@ export default function CreateTaskPanel({
                 <div>
                   <label className="input-label">{t('Priority')}</label>
                   <select className="input" value={newTask.priority} onChange={e => setNewTask({ ...newTask, priority: e.target.value as Corresponding['priority'] })}>
-                    {PRIORITY_OPTIONS.map(p => <option key={p}>{p}</option>)}
+                    {PRIORITY_OPTIONS.map(p => <option key={p} value={p}>{label(p)}</option>)}
                   </select>
                 </div>
                 <div>
@@ -530,7 +537,7 @@ export default function CreateTaskPanel({
                       (u.department === appUser.department && u.teamId === appUser.teamId)
                     )
                     .map(u => (
-                      <option key={u.id} value={u.id}>{u.displayName} ({u.role})</option>
+                      <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
                     ))
                   }
                 </select>
