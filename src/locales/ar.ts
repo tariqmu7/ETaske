@@ -738,6 +738,7 @@ const ar: Record<keyof typeof en, string> = {
   "Create opportunity": "إنشاء الفرصة",
   "Opportunity title is required.": "عنوان الفرصة مطلوب.",
   "Probability must be between 0 and 100.": "يجب أن تكون الاحتمالية بين 0 و100.",
+  "Estimated value and awarded value must be numbers.": "يجب أن تكون القيمة التقديرية وقيمة الترسية أرقامًا.",
   "Submission deadline cannot be before the announcement date.": "لا يمكن أن يسبق الموعد النهائي للتقديم تاريخ الإعلان.",
   "Failed to load opportunities.": "تعذّر تحميل الفرص.",
   "Failed to save opportunity. Please try again.": "تعذّر حفظ الفرصة. برجاء المحاولة مرة أخرى.",
@@ -1192,6 +1193,44 @@ const ar: Record<keyof typeof en, string> = {
   "Preview": "معاينة",
   "Syncing latest updates…": "جارٍ جلب آخر التحديثات…",
   "You're up to date": "بياناتك محدَّثة",
+
+  // ── الربط بين السجلات (المهمة 3): تبويب المهام داخل الفرصة ──
+  "Work on this bid": "العمل على هذا العطاء",
+  "Loading linked tasks…": "جارٍ تحميل المهام المرتبطة…",
+  "Failed to load the linked tasks.": "تعذّر تحميل المهام المرتبطة.",
+  "No task is linked to this bid yet.": "لا توجد مهمة مرتبطة بهذا العطاء حتى الآن.",
+  "{{open}} open · {{total}} linked in total": "{{open}} مفتوحة · {{total}} مرتبطة إجمالاً",
+  "{{count}} overdue": "{{count}} متأخرة",
+  "New task for this bid": "مهمة جديدة لهذا العطاء",
+  "Nothing is being worked on for this bid": "لا يوجد عمل جارٍ على هذا العطاء",
+  "A task created here is linked to the bid, and its progress is echoed into this bid’s history.": "المهمة التي تُنشأ من هنا ترتبط بالعطاء، ويُسجَّل تقدّمها في سجل هذا العطاء.",
+  "The task was created and linked, but its entry could not be added to this bid’s history.": "تم إنشاء المهمة وربطها، لكن تعذّر إضافة قيدها إلى سجل هذا العطاء.",
+  "Linked opportunity": "الفرصة المرتبطة",
+  "Linked to {{serial}}": "مرتبطة بـ {{serial}}",
+  "Linked to this opportunity": "مرتبطة بهذه الفرصة",
+  "Due {{date}}": "الاستحقاق {{date}}",
+
+  // Queue task 4 — the cross-record link picker
+  "Linked Records": "السجلات المرتبطة",
+  "Project record": "سجل المشروع",
+  "Opportunity / Bid": "الفرصة / العطاء",
+  "Linked project": "المشروع المرتبط",
+  "Not linked to a bid": "غير مرتبطة بعطاء",
+  "Not linked to a project": "غير مرتبطة بمشروع",
+  "Progress on this task is echoed into the history of whatever it is linked to.": "يُسجَّل تقدم هذه المهمة في سجل ما ترتبط به.",
+  "The bid and project lists could not be loaded — an existing link is kept as it is.": "تعذر تحميل قائمتي العطاءات والمشروعات — ويبقى الارتباط الحالي كما هو.",
+
+  // Queue task 5 — the correspondence side of the link picker
+  "This correspondence — and the task it is assigned as — is echoed into the history of whatever it is linked to.": "تُسجَّل هذه المراسلة — والمهمة التي تُسنَد منها — في سجل ما ترتبط به.",
+
+  // Queue task 6 — surfacing the links
+  "Loading linked records…": "جارٍ تحميل السجلات المرتبطة…",
+  "Failed to load the linked records.": "تعذر تحميل السجلات المرتبطة.",
+  "No correspondence or task is linked to this bid yet.": "لا توجد مراسلة أو مهمة مرتبطة بهذا العطاء بعد.",
+  "No correspondence or task is linked to this project yet.": "لا توجد مراسلة أو مهمة مرتبطة بهذا المشروع بعد.",
+  "Tasks linked to this bid are listed on its Tasks tab.": "المهام المرتبطة بهذا العطاء معروضة في تبويب المهام الخاص به.",
+  "Linked": "المرتبطة",
+  "Correspondences and tasks attached to this project.": "المراسلات والمهام المرتبطة بهذا المشروع.",
 };
 
 export default ar;

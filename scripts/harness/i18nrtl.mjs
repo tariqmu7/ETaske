@@ -280,6 +280,8 @@ const OPP_FILES = {
   'src/components/opportunities/OpportunityFollowUpsTab.tsx': 20,
   'src/components/opportunities/OpportunityMilestonesTab.tsx': 34,
   'src/components/opportunities/OpportunityOutcomeTab.tsx': 45,
+  // Cross-linking task 3: create-a-task-from-a-bid + the linked-task list.
+  'src/components/opportunities/OpportunityTasksTab.tsx': 15,
 };
 // Task 6c added the Projects module. `ListControls` is the toolbar the four
 // detail tabs share — its own chrome is translated here, while the filter and
@@ -303,7 +305,15 @@ const OV_FILES = {
   'src/AdminDashboard.tsx': 35,
   'src/components/IdleResyncBanner.tsx': 2,
 };
-const T_FILES = { ...SHELL_FILES, ...TASK_FILES, ...CORR_FILES, ...OPP_FILES, ...PROJ_FILES, ...OV_FILES };
+// Cross-linking queue: the three shared components the links live in. The
+// picker (task 4) writes them, the block (task 6) paints the forward view on a
+// task, the panel (task 6) paints the reverse view on a bid / project.
+const LINK_FILES = {
+  'src/components/RecordLinkPicker.tsx': 8,
+  'src/components/LinkedRecordsBlock.tsx': 5,
+  'src/components/LinkedRecordsPanel.tsx': 12,
+};
+const T_FILES = { ...SHELL_FILES, ...TASK_FILES, ...CORR_FILES, ...OPP_FILES, ...PROJ_FILES, ...OV_FILES, ...LINK_FILES };
 
 for (const [rel, min] of Object.entries(T_FILES)) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -428,6 +438,16 @@ const REVERT_CANARIES = [
     /<option value="All">All stages<\/option>/,
     />Delete opportunity\?</,
     /label="Estimated value"/,
+  ]],
+  // ── cross-linking task 6 ──
+  ['src/components/LinkedRecordsBlock.tsx', [
+    />Linked Records</,
+    /title="Project record"/,
+  ]],
+  ['src/components/LinkedRecordsPanel.tsx', [
+    />Linked Records</,
+    />Loading linked records…</,
+    /^\s*Loading linked records…\s*$/m,
   ]],
   ['src/OpportunityDetail.tsx', [
     /\/>\s*All opportunities\s*$/m,
@@ -658,6 +678,7 @@ const T6_CANARIES = [
   ['src/components/opportunities/OpportunityFollowUpsTab.tsx', [/\{f\.stage\}<\/span>/, /toLocaleString\('en-GB'/]],
   ['src/components/opportunities/OpportunityMilestonesTab.tsx', [/\{s\}<\/option>/, /\{m\.title\}\s*$/m]],
   ['src/components/opportunities/OpportunityOutcomeTab.tsx', [/\{record\.outcome\}\s*$/m, /toLocaleString\('en-GB'/]],
+  ['src/components/opportunities/OpportunityTasksTab.tsx', [/\{task\.status\}</, /toLocaleDateString/]],
   ['src/OpportunitiesAnalytics.tsx', [/\{o\.stage\}<\/span>/, /\{s\.stage\}<\/span>/, /toLocaleTimeString/, /toLocaleDateString\('en-GB'/]],
   // ── task 6c: the Projects module's own raw-enum / raw-date / raw-money shapes.
   // `formatMoney`/`toLocaleString('en-US')` are the un-localized twins of
@@ -703,6 +724,7 @@ const LAYER_FILES = [
   'src/components/opportunities/OpportunityFollowUpsTab.tsx',
   'src/components/opportunities/OpportunityMilestonesTab.tsx',
   'src/components/opportunities/OpportunityOutcomeTab.tsx',
+  'src/components/opportunities/OpportunityTasksTab.tsx',
   // ── task 6c. ListControls is NOT here: it paints only labels its caller has
   // already resolved, so it holds no stored value of its own.
   'src/ProjectsDashboard.tsx', 'src/ProjectDetail.tsx',
@@ -712,6 +734,9 @@ const LAYER_FILES = [
   'src/components/projects/ProjectSubcontractsTab.tsx',
   // ── task 6c-ii ──
   'src/OverviewDashboard.tsx', 'src/AdminDashboard.tsx',
+  // ── cross-linking task 6: the reverse panel paints a stored task /
+  // correspondence status on someone else's page.
+  'src/components/LinkedRecordsPanel.tsx',
 ];
 for (const rel of LAYER_FILES) {
   const src = fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -1198,6 +1223,10 @@ __seed('correspondences', '--stats--', { value: 4 });
     serialNumber: 'TK00000' + (i + 1), category: ['Project', 'Administrative', 'Project'][i],
     assignedTo: USERS[i].displayName, assignedToId: USERS[i].id,
     isPrivate: false, collaboratorIds: i === 0 ? ['u-emp2'] : [],
+    // Cross-linking task 6: the FIRST task is attached to the first project, so
+    // the project's Linked tab has a row to paint. ⚠ No task is attached to a
+    // BID — [C7] asserts the bid Tasks tab's empty state.
+    ...(i === 0 ? { projectId: 'p-a', projectName: 'Meleiha Gas Plant operations & maintenance contract' } : {}),
     deadline: ['2026-08-16', '2026-12-31', '2026-07-01'][i],
     userId: 'u-mgr', teamId: 'T1', createdAt: ts(100 * i), updatedAt: ts(100 * i),
   });
@@ -1210,6 +1239,12 @@ __seed('correspondences', '--stats--', { value: 4 });
     dateReceived: '2026-08-1' + i, deadline: ['2026-08-16', '2026-12-31', '2026-07-01'][i],
     serialNumber: 'CR00000' + (i + 1), status: ['Unread', 'Assigned', 'Closed'][i],
     assignedTo: USERS[i].displayName, assignedToId: USERS[i].id,
+    // Cross-linking task 6: each correspondence is attached to the bid of the
+    // same index, so WHICHEVER bid [C7] opens has exactly one linked email on
+    // its overview; the first one also carries the project.
+    opportunityId: 'o-' + k, opportunitySerial: 'OP00000' + (i + 1),
+    opportunityTitle: 'Linked bid ' + k,
+    ...(i === 0 ? { projectId: 'p-a', projectName: 'Meleiha Gas Plant operations & maintenance contract' } : {}),
     userId: 'u-mgr', teamId: 'T1', createdAt: ts(100 * i), updatedAt: ts(100 * i),
   });
   __seed('milestones', 'm-' + k, {
@@ -1881,6 +1916,47 @@ check('non-vacuous: without the isolation the currency code jumps in front',
   moneyBroken.digitLeft > moneyBroken.letterLeft, JSON.stringify(moneyBroken));
 await evalJS(`[...document.querySelectorAll('#root .ltr-data')].forEach(e => { e.style.unicodeBidi = ''; e.style.direction = ''; })`);
 
+// ── cross-linking task 3: the Tasks tab ─────────────────────────────────────
+// No seeded task carries an `opportunityId`, so this is the EMPTY state — which
+// is the half a floor of t() calls is least likely to cover.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'المهام')`, 'Tasks tab');
+await sleep(450);
+const bidTasks = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+check('the bid Tasks tab is Arabic (العمل على هذا العطاء / مهمة جديدة لهذا العطاء)',
+  bidTasks.body.includes('العمل على هذا العطاء') && bidTasks.btns.includes('مهمة جديدة لهذا العطاء'),
+  bidTasks.body.slice(0, 200));
+check('its EMPTY state is Arabic too',
+  bidTasks.body.includes('لا يوجد عمل جارٍ على هذا العطاء'), bidTasks.body.slice(0, 240));
+const bidTasksLatin = bidTasks.btns.filter(b => /^(New task for this bid|Tasks)$/.test(b));
+check('★ nothing on the bid Tasks tab is still English', bidTasksLatin.length === 0, bidTasksLatin.join(' | '));
+
+// ── cross-linking task 6: the reverse "Linked records" panel on the bid ─────
+// The overview tab is where a bid says what is attached to it. Each seeded
+// correspondence carries the bid of its own index, so whichever card [C7]
+// opened has exactly one linked email — the POPULATED state, not the empty one.
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'نظرة عامة')`, 'Overview tab');
+await sleep(450);
+const bidLinks = await evalJS(`(() => {
+  const body = document.getElementById('root').innerText || '';
+  const serials = [...document.querySelectorAll('#root .ltr-data')].map(x => (x.textContent || '').trim());
+  return JSON.stringify({ body, serials });
+})()`).then(JSON.parse);
+check('the bid overview carries the Linked Records panel in Arabic (السجلات المرتبطة)',
+  bidLinks.body.includes('السجلات المرتبطة'), bidLinks.body.slice(0, 240));
+check('★ it is POPULATED: the linked correspondence group and its serial are painted',
+  /المراسلات \(1\)/.test(bidLinks.body) && bidLinks.serials.some(x => /^CR0000\d+$/.test(x)),
+  bidLinks.serials.slice(0, 8).join(' | '));
+check('★ the count is painted ONCE, in the group heading — no second summary sentence',
+  (bidLinks.body.match(/المراسلات \(/g) || []).length === 1 && !/·\s*\d+\s*مهمة/.test(bidLinks.body),
+  bidLinks.body.slice(0, 300));
+await shot('bid-linked-ar');
+check('★ the bid panel points at the Tasks tab instead of listing the same rows twice',
+  bidLinks.body.includes('المهام المرتبطة بهذا العطاء معروضة في تبويب المهام الخاص به.'),
+  bidLinks.body.slice(0, 400));
+
 await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'المراحل')`, 'Milestones tab');
 await sleep(450);
 const gates = await evalJS(`(() => {
@@ -2239,6 +2315,48 @@ check('non-vacuous: the same subcontracts tab reads English under en',
   subEn.btns.slice(0, 10).join(' | '));
 await evalJS(`window.__setLang('ar')`);
 await sleep(350);
+// ── cross-linking task 6: the project's own "Linked" tab ────────────────────
+// The reverse view again, this time WITH tasks: the first seeded task and the
+// first seeded correspondence both carry `projectId: 'p-a'`, and [C8] opened
+// that project (it is the newest card).
+await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'المرتبطة')`, 'Linked tab');
+await sleep(550);
+const prjLinks = await evalJS(`(() => {
+  const body = document.getElementById('root').innerText || '';
+  const serials = [...document.querySelectorAll('#root .ltr-data')].map(x => (x.textContent || '').trim());
+  const badges = [...document.querySelectorAll('#root .badge')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ body, serials, badges });
+})()`).then(JSON.parse);
+check('the project Linked tab is Arabic (السجلات المرتبطة)',
+  prjLinks.body.includes('السجلات المرتبطة'), prjLinks.body.slice(0, 240));
+check('★ BOTH groups are populated and Arabic (المراسلات (1) / المهام (1))',
+  /المراسلات \(1\)/.test(prjLinks.body) && /المهام \(1\)/.test(prjLinks.body),
+  prjLinks.body.slice(0, 400));
+check('★ the linked task and correspondence serials are painted as LTR data',
+  prjLinks.serials.some(x => /^TK0000\d+$/.test(x)) && prjLinks.serials.some(x => /^CR0000\d+$/.test(x)),
+  prjLinks.serials.slice(0, 10).join(' | '));
+// The rows paint a STORED status on a page that does not own it — the display
+// layer, not a raw enum.
+check('★ no linked row badge is still a Latin status value',
+  !prjLinks.badges.some(x => /^(Pending|In Progress|Done|Archived|Unread|Reviewing|Assigned|Closed)$/.test(x)),
+  prjLinks.badges.join(' | '));
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const prjLinksEn = await evalJS(`(() => {
+  const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
+  return JSON.stringify({ btns, body: document.getElementById('root').innerText || '' });
+})()`).then(JSON.parse);
+// ⚠ `innerText` returns the TRANSFORMED text and the group titles are
+// `text-transform: uppercase` — so this reads "CORRESPONDENCES (1)". The Arabic
+// half of the same check passes either way, which is exactly how a
+// case-sensitive match hides here (the same trap as the subcontracts pass).
+check('non-vacuous: the same Linked tab reads English under en',
+  prjLinksEn.btns.includes('Linked') && /correspondences \(1\)/i.test(prjLinksEn.body) && /tasks \(1\)/i.test(prjLinksEn.body),
+  JSON.stringify({ btns: prjLinksEn.btns.slice(0, 12), body: prjLinksEn.body.slice(0, 400) }));
+await evalJS(`window.__setLang('ar')`);
+await sleep(350);
+await shot('projects-linked-ar');
+
 check('no errors across the projects checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // ── [C9] Overview + Admin render Arabic (task 6c-ii, the last of the queue) ──

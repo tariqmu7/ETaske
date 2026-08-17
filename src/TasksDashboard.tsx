@@ -10,11 +10,14 @@ import { createNotification, notifyManagers } from './lib/pushNotification';
 import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding,
+  AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding, RecordLinks,
   PRIORITY_OPTIONS, MILESTONE_STATUS_OPTIONS, OperationType,
   CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS,
   NotificationType
 } from './types';
+import {
+  linksOf, newlyLinked, recordLinksPatch, hasAnyLink, mirrorRecordEvent, actorFrom, LinkSource,
+} from './lib/recordLinks';
 import { getNextSerialNumber } from './lib/counters';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { consumePending, subscribeOpen } from './lib/deepLink';
@@ -32,10 +35,24 @@ import { Copy, Check } from 'lucide-react';
 import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import CreateTaskPanel, { PrivacyToggle, CollaboratorPicker } from './components/CreateTaskPanel';
+import RecordLinkPicker from './components/RecordLinkPicker';
+import LinkedRecordsBlock from './components/LinkedRecordsBlock';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
 }
+
+// How a task describes itself in a linked bid's / project's history. One place,
+// so "Task TK000123 …" reads the same whichever event wrote it.
+const taskSource = (task: Task, status?: TaskStatus): LinkSource => ({
+  kind: 'task',
+  id: task.id,
+  title: task.taskName,
+  serialNumber: task.serialNumber,
+  status: status || task.status,
+  assignedTo: task.assignedTo,
+  dueDate: task.dueDate || undefined,
+});
 
 function priorityBadge(p: string) {
   const map: Record<string, string> = { Urgent: 'badge-urgent', High: 'badge-high', Medium: 'badge-medium', Low: 'badge-low' };
@@ -87,6 +104,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [isAddingMilestone, setIsAddingMilestone] = useState(false);
   const [isAddingTask, setIsAddingTask] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  // The edit form's cross-record links (queue task 4). Kept beside the task
+  // rather than inside it: what the form writes is a PATCH built by
+  // `recordLinksPatch`, because a link the user removed has to be actively
+  // cleared — an omitted key would silently keep the old one.
+  const [editLinks, setEditLinks] = useState<RecordLinks>({});
+  const editingTaskId = editingTask?.id || null;
+  useEffect(() => {
+    setEditLinks(linksOf(tasks.find(tk => tk.id === editingTaskId) || undefined));
+    // Only when a DIFFERENT task is opened — a live snapshot must not overwrite
+    // a link the user is in the middle of changing.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingTaskId]);
   const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
   const [isDragOverEdit, setIsDragOverEdit] = useState(false);
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
@@ -325,8 +354,15 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
   const handleUpdateTask = async () => {
     if (!editingTask || !editingTask.taskName.trim()) return;
+    // Read BEFORE the write: the listener may have already replaced the row in
+    // `tasks` by the time the awaited update resolves, and the link diff has to
+    // compare against what was stored when the form opened.
+    const priorLinks = linksOf(tasks.find(tk => tk.id === editingTask.id) || undefined);
     try {
       await updateDoc(doc(db, 'tasks', editingTask.id), {
+        // One write, not two: the link patch rides along with the rest of the
+        // form (see `recordLinksPatch` — a dropped side is a deleteField()).
+        ...recordLinksPatch(editLinks),
         taskName: editingTask.taskName.trim(),
         description: editingTask.description.trim(),
         priority: editingTask.priority,
@@ -344,6 +380,19 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       });
 
       const originalTask = tasks.find(t => t.id === editingTask.id);
+
+      // A record the task was JUST attached to hears about it. A save that left
+      // the links untouched posts nothing (`newlyLinked`) — re-saving a form is
+      // not an event.
+      const freshLinks = newlyLinked(priorLinks, editLinks);
+      if (hasAnyLink(freshLinks)) {
+        await mirrorRecordEvent(
+          freshLinks,
+          taskSource(editingTask),
+          actorFrom(user.uid, appUser),
+          'linked',
+        );
+      }
 
       // Notify collaborators newly added in this edit.
       const prevCollabs = originalTask?.collaboratorIds || [];
@@ -437,6 +486,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
       // produces a false "status updated" notification.
       await updateDoc(doc(db, 'tasks', taskId), update);
 
+      // The linked bid / project hear about the move. `completed` reads
+      // differently from a plain status change, which is the whole point of
+      // echoing it — a bid owner scanning history wants the finished line.
+      if (task && hasAnyLink(linksOf(task))) {
+        await mirrorRecordEvent(
+          linksOf(task),
+          taskSource(task, status),
+          actorFrom(user.uid, appUser),
+          status === 'Done' ? 'completed' : 'status',
+        );
+      }
+
       if (status === 'Done' && task?.correspondingId) {
         await updateDoc(doc(db, 'correspondences', task.correspondingId), {
           status: 'Closed',
@@ -502,6 +563,16 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           status: 'Closed',
           updatedAt: serverTimestamp()
         });
+      }
+      // Archiving is a status move like any other, so the linked records hear
+      // about it too — otherwise a bid's history would just stop mid-story.
+      if (task && hasAnyLink(linksOf(task))) {
+        await mirrorRecordEvent(
+          linksOf(task),
+          taskSource(task, 'Archived'),
+          actorFrom(user.uid, appUser),
+          'status',
+        );
       }
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `tasks/${taskId}`);
@@ -1175,6 +1246,12 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   )}
                                 </div>
 
+                                {/* Queue task 6 — what this task is attached
+                                    to. Always visible, not only when expanded:
+                                    a bid/project link is how a row is told
+                                    apart in a list of similar task names. */}
+                                <LinkedRecordsBlock links={linksOf(task)} />
+
                                 {isExpanded && task.attachedFile && (
                                   <div style={{ marginTop: 24 }}>
                                     <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Attachment')}</div>
@@ -1732,6 +1809,14 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                       listLabel={t('Projects')}
                     />
                   </div>
+                </div>
+
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span>{t('Linked Records')}</span>
+                  <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <RecordLinkPicker value={editLinks} onChange={setEditLinks} active={!!editingTask} />
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

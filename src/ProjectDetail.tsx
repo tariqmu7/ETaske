@@ -6,14 +6,16 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import {
   ArrowLeft, Activity, DollarSign, FileText, Truck, Edit2,
-  Building2, Hash, MapPin, CalendarRange,
+  Building2, Hash, MapPin, CalendarRange, Link2,
 } from 'lucide-react';
+import LinkedRecordsPanel from './components/LinkedRecordsPanel';
+import type { AppView } from './App';
 import ProjectTrackingTab from './components/projects/ProjectTrackingTab';
 import ProjectFinancialsTab from './components/projects/ProjectFinancialsTab';
 import ProjectContractsTab from './components/projects/ProjectContractsTab';
 import ProjectSubcontractsTab from './components/projects/ProjectSubcontractsTab';
 
-type Tab = 'tracking' | 'financials' | 'contracts' | 'subcontracts';
+type Tab = 'tracking' | 'financials' | 'contracts' | 'subcontracts' | 'linked';
 
 function statusColors(status: string): { bg: string; fg: string } {
   switch (status) {
@@ -32,9 +34,11 @@ interface Props {
   projectUsers: AppUser[];
   onBack: () => void;
   onEdit: () => void;
+  /** Lets the Linked tab jump into the task / correspondence it lists. */
+  onNavigate?: (v: AppView) => void;
 }
 
-export default function ProjectDetail({ project, user, appUser, projectUsers, onBack, onEdit }: Props) {
+export default function ProjectDetail({ project, user, appUser, projectUsers, onBack, onEdit, onNavigate }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
@@ -48,6 +52,9 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
     { id: 'financials', label: t('Financials'), icon: <DollarSign className="w-4 h-4" /> },
     { id: 'contracts', label: t('Contracts'), icon: <FileText className="w-4 h-4" /> },
     { id: 'subcontracts', label: t('Subcontracts'), icon: <Truck className="w-4 h-4" /> },
+    // Queue task 6: the reverse view of the cross-record link — what is
+    // attached to this project, from the other collections.
+    { id: 'linked', label: t('Linked'), icon: <Link2 className="w-4 h-4" /> },
   ];
 
   return (
@@ -112,6 +119,21 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
       {tab === 'financials' && <ProjectFinancialsTab project={project} user={user} />}
       {tab === 'contracts' && <ProjectContractsTab project={project} user={user} />}
       {tab === 'subcontracts' && <ProjectSubcontractsTab project={project} user={user} />}
+      {tab === 'linked' && (
+        <div style={{ display: 'grid', gap: 12 }}>
+          <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
+            {t('Correspondences and tasks attached to this project.')}
+          </p>
+          <LinkedRecordsPanel
+            target="project"
+            targetId={project.id}
+            user={user}
+            appUser={appUser}
+            projectUsers={projectUsers}
+            onNavigate={onNavigate}
+          />
+        </div>
+      )}
     </div>
   );
 }

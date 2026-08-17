@@ -8,13 +8,15 @@ import { taskDetails } from '../lib/notifyDetails';
 import { getNextSerialNumber } from '../lib/counters';
 import { subscribeVisibleTasks } from '../lib/taskVisibility';
 import {
-  AppUser, Task, Corresponding, CorrespondingCategory,
+  AppUser, Task, Corresponding, CorrespondingCategory, RecordLinks,
   PRIORITY_OPTIONS, CATEGORY_OPTIONS, PROJECT_OPTIONS, DEPARTMENT_OPTIONS,
 } from '../types';
 import { Plus, X, Paperclip, ChevronRight, Users, Lock, Globe, Check } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { getUserColor } from '../utils';
 import ComboBox from './ComboBox';
+import RecordLinkPicker from './RecordLinkPicker';
+import { announceNewRecord, actorFrom, hasAnyLink, MirrorResult } from '../lib/recordLinks';
 import { useDisplayLabel } from '../lib/displayLabel';
 
 // Public / Private segmented control. Private tasks are visible & editable only
@@ -152,6 +154,17 @@ interface Props {
   prefill?: Partial<NewTaskDraft>;
   /** Extra fields merged into the created task doc (e.g. traceability links). */
   extraFields?: Record<string, any>;
+  /**
+   * Cross-record links the panel opens with. The picker is seeded from this and
+   * the user can change it; the panel writes the links onto the new task AND
+   * mirrors the history entry itself (`announceNewRecord`), so a caller never
+   * has to — otherwise two entry points would each post their own.
+   */
+  linkPrefill?: RecordLinks;
+  /** The opportunity was chosen by the caller's screen and cannot be changed. */
+  lockOpportunity?: boolean;
+  /** Hide the picker entirely (a flow that must not offer linking). */
+  hideLinkPicker?: boolean;
   /** Optional header overrides — the form itself is unchanged. */
   headerIcon?: React.ReactNode;
   headerIconBackground?: string;
@@ -162,9 +175,11 @@ interface Props {
   /**
    * Fired after the task doc is written. The draft is handed back so a caller
    * can mirror what was actually chosen in the form (ManagerInbox writes the
-   * assignee back onto the correspondence).
+   * assignee back onto the correspondence). `mirror` reports how the history
+   * echo went — it is best-effort by design, so a caller that shows the linked
+   * record's own history can warn about a missing entry.
    */
-  onCreated?: (taskId: string, draft: NewTaskDraft) => void;
+  onCreated?: (taskId: string, draft: NewTaskDraft, mirror?: MirrorResult) => void;
 }
 
 function emptyDraft(user: User, appUser: AppUser): NewTaskDraft {
@@ -192,6 +207,7 @@ function emptyDraft(user: User, appUser: AppUser): NewTaskDraft {
 export default function CreateTaskPanel({
   open, onClose, user, appUser, projectUsers,
   tasks: tasksProp, prefill, extraFields,
+  linkPrefill, lockOpportunity, hideLinkPicker,
   headerIcon, headerIconBackground, headerTitle, headerSubtitle, sourceStrip,
   onCreated,
 }: Props) {
@@ -203,6 +219,7 @@ export default function CreateTaskPanel({
   // search box filter English options against Arabic typing.
   const label = useDisplayLabel();
   const [newTask, setNewTask] = useState<NewTaskDraft>(() => ({ ...emptyDraft(user, appUser), ...prefill }));
+  const [links, setLinks] = useState<RecordLinks>(() => ({ ...(linkPrefill || {}) }));
   const [showAdvancedCreate, setShowAdvancedCreate] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -220,13 +237,15 @@ export default function CreateTaskPanel({
 
   // Seed the form every time the panel opens.
   const prefillKey = JSON.stringify(prefill ?? {});
+  const linkPrefillKey = JSON.stringify(linkPrefill ?? {});
   useEffect(() => {
     if (!open) return;
     setNewTask({ ...emptyDraft(user, appUser), ...prefill });
+    setLinks({ ...(linkPrefill || {}) });
     setShowAdvancedCreate(false);
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, prefillKey]);
+  }, [open, prefillKey, linkPrefillKey]);
 
   const dynamicSubCategories = useMemo(() => {
     const fromTasks = Array.from(new Set(tasks.map(t => t.subCategory).filter(Boolean))).sort();
@@ -319,6 +338,9 @@ export default function CreateTaskPanel({
         attachedFile: newTask.attachedFile || null,
         attachedFileName: newTask.attachedFileName || null,
         ...(extraFields || {}),
+        // The link block is written LAST so what the picker shows is what the
+        // task is born with, even if a caller seeded the same keys.
+        ...links,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -383,9 +405,31 @@ export default function CreateTaskPanel({
         }, projectUsers, { actorId: user.uid, excludeIds: [assigneeId] });
       }
 
+      // The linked bid / project hear about the new task. Best-effort by design
+      // (src/lib/recordLinks.ts): the task is created and linked either way, so
+      // a failed echo is reported to the caller, never thrown at the user as a
+      // failed save.
+      let mirror: MirrorResult | undefined;
+      if (hasAnyLink(links)) {
+        mirror = await announceNewRecord(
+          links,
+          {
+            kind: 'task',
+            id: taskRef.id,
+            title: created.taskName || '',
+            serialNumber: serial,
+            status: 'Pending',
+            assignedTo: created.assignedTo,
+            dueDate: newTask.dueDate || undefined,
+          },
+          actorFrom(user.uid, appUser),
+        );
+      }
+
       const submitted = newTask;
       setNewTask(emptyDraft(user, appUser));
-      onCreated?.(taskRef.id, submitted);
+      setLinks({ ...(linkPrefill || {}) });
+      onCreated?.(taskRef.id, submitted, mirror);
       onClose();
     } catch (err) {
       console.error('Firestore:', { err, op: 'CREATE', path: 'tasks' });
@@ -607,6 +651,24 @@ export default function CreateTaskPanel({
                   />
                 </div>
               </div>
+
+              {/* Divider: Linked records */}
+              {!hideLinkPicker && (
+                <>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span>{t('Linked Records')}</span>
+                    <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+                  </div>
+                  <div style={{ marginBottom: 20 }}>
+                    <RecordLinkPicker
+                      value={links}
+                      onChange={setLinks}
+                      lockOpportunity={lockOpportunity}
+                      active={open}
+                    />
+                  </div>
+                </>
+              )}
 
               {/* Divider: Attachment */}
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

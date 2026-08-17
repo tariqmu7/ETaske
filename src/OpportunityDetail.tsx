@@ -6,14 +6,17 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import {
   ArrowLeft, Edit2, MessageSquare, FileText, Building2, Hash, MapPin,
-  CalendarClock, User as UserIcon, Percent, Trophy, Flag,
+  CalendarClock, User as UserIcon, Percent, Trophy, Flag, CheckSquare,
 } from 'lucide-react';
 import OpportunityFollowUpsTab from './components/opportunities/OpportunityFollowUpsTab';
 import OpportunityMilestonesTab from './components/opportunities/OpportunityMilestonesTab';
 import OpportunityOutcomeTab from './components/opportunities/OpportunityOutcomeTab';
+import OpportunityTasksTab from './components/opportunities/OpportunityTasksTab';
+import LinkedRecordsPanel from './components/LinkedRecordsPanel';
 import { STAGE_COLORS, fullMoney, daysUntil } from './components/opportunities/opportunityUi';
+import type { AppView } from './App';
 
-type Tab = 'overview' | 'followups' | 'milestones' | 'outcome';
+type Tab = 'overview' | 'followups' | 'tasks' | 'milestones' | 'outcome';
 
 interface Props {
   opportunity: Opportunity;
@@ -22,16 +25,19 @@ interface Props {
   projectUsers: AppUser[];
   onBack: () => void;
   onEdit: () => void;
+  /** Lets the Tasks tab jump into the tasks dashboard on a linked task. */
+  onNavigate?: (v: AppView) => void;
 }
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <FileText className="w-4 h-4" /> },
   { id: 'followups', label: 'Follow-ups', icon: <MessageSquare className="w-4 h-4" /> },
+  { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-4 h-4" /> },
   { id: 'milestones', label: 'Milestones', icon: <Flag className="w-4 h-4" /> },
   { id: 'outcome', label: 'Outcome', icon: <Trophy className="w-4 h-4" /> },
 ];
 
-export default function OpportunityDetail({ opportunity, user, appUser, projectUsers, onBack, onEdit }: Props) {
+export default function OpportunityDetail({ opportunity, user, appUser, projectUsers, onBack, onEdit, onNavigate }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
@@ -150,6 +156,20 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
             </div>
           </div>
 
+          {/* Queue task 6 — the reverse view of the link: the emails logged
+              against this bid. Tasks are excluded here because they have their
+              own tab (task 3); listing the same rows twice on one page reads
+              as two different lists that could disagree. */}
+          <LinkedRecordsPanel
+            target="opportunity"
+            targetId={o.id}
+            user={user}
+            appUser={appUser}
+            projectUsers={projectUsers}
+            onNavigate={onNavigate}
+            includeTasks={false}
+          />
+
           {!isOpportunityOpen(o.stage) && (
             <div className="card" style={{ padding: 20, borderInlineStart: `3px solid ${stageColor}` }}>
               <SectionTitle>
@@ -176,6 +196,16 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
 
       {tab === 'followups' && (
         <OpportunityFollowUpsTab opportunity={o} user={user} appUser={appUser} />
+      )}
+
+      {tab === 'tasks' && (
+        <OpportunityTasksTab
+          opportunity={o}
+          user={user}
+          appUser={appUser}
+          projectUsers={projectUsers}
+          onNavigate={onNavigate}
+        />
       )}
 
       {tab === 'milestones' && (

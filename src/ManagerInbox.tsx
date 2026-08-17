@@ -11,6 +11,7 @@ import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import { AppUser, Corresponding, Task, OperationType } from './types';
 import CreateTaskPanel, { NewTaskDraft } from './components/CreateTaskPanel';
+import { linksOf } from './lib/recordLinks';
 import {
   Inbox, UserCheck, Calendar, Building2,
   AlertCircle, X, Users, Search, Tag, FileText, Paperclip, Hash, Clock
@@ -687,7 +688,10 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
       {/* Conversion uses the same create-task form as the Tasks dashboard and the
           Outlook feed, so a task born from a correspondence carries the same
-          fields as any other. */}
+          fields as any other. It also INHERITS the correspondence's bid/project
+          link (`linkPrefill`), editable — the manager may know better than the
+          person who logged the email. The panel writes the link and posts the
+          history entry itself, so nothing is announced from here. */}
       <CreateTaskPanel
         open={isConverting && !!selectedCorr && !hasTask}
         onClose={() => setIsConverting(false)}
@@ -704,6 +708,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
           notes: [],
           userId: user.uid,
         } : undefined}
+        linkPrefill={selectedCorr ? linksOf(selectedCorr) : undefined}
         headerIcon={<Inbox style={{ width: 16, height: 16, color: '#fff' }} />}
         headerTitle={t('Assign as Task')}
         headerSubtitle={selectedCorr?.serialNumber ? t('From {{serial}}', { serial: selectedCorr.serialNumber }) : t('From correspondence')}

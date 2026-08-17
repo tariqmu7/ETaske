@@ -185,8 +185,10 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       source: o.source || 'Public Tender',
       scope: o.scope || '',
       stage: o.stage || 'Identified',
-      probability: o.probability === undefined ? '' : String(o.probability),
-      estimatedValue: o.estimatedValue === undefined ? '' : String(o.estimatedValue),
+      // null as well as undefined: handleSave writes null for a blank number, so
+      // checking undefined alone made the next edit read back "null" and save NaN.
+      probability: o.probability === undefined || o.probability === null ? '' : String(o.probability),
+      estimatedValue: o.estimatedValue === undefined || o.estimatedValue === null ? '' : String(o.estimatedValue),
       currency: o.currency || mainCurrency,
       announcedDate: o.announcedDate || '',
       submissionDeadline: o.submissionDeadline || '',
@@ -194,7 +196,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       decisionDate: o.decisionDate || '',
       ownerId: o.ownerId || '',
       awardedTo: o.awardedTo || '',
-      awardedValue: o.awardedValue === undefined ? '' : String(o.awardedValue),
+      awardedValue: o.awardedValue === undefined || o.awardedValue === null ? '' : String(o.awardedValue),
       nextActionDate: o.nextActionDate || '',
     });
     setIsModalOpen(true);
@@ -206,6 +208,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     const probability = formData.probability === '' ? undefined : Number(formData.probability);
     if (probability !== undefined && (!isFinite(probability) || probability < 0 || probability > 100)) {
       setFormError(t('Probability must be between 0 and 100.'));
+      return;
+    }
+    // Never let a non-numeric entry reach Firestore as NaN — it poisons every
+    // pipeline/weighted-value total that sums estimatedValue.
+    const estimatedValue = formData.estimatedValue === '' ? null : Number(formData.estimatedValue);
+    const awardedValue = formData.awardedValue === '' ? null : Number(formData.awardedValue);
+    if ((estimatedValue !== null && !isFinite(estimatedValue)) ||
+        (awardedValue !== null && !isFinite(awardedValue))) {
+      setFormError(t('Estimated value and awarded value must be numbers.'));
       return;
     }
     if (formData.announcedDate && formData.submissionDeadline &&
@@ -224,7 +235,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       scope: formData.scope.trim(),
       stage: formData.stage,
       probability: probability ?? null,
-      estimatedValue: formData.estimatedValue === '' ? null : Number(formData.estimatedValue),
+      estimatedValue,
       currency: formData.currency,
       announcedDate: formData.announcedDate,
       submissionDeadline: formData.submissionDeadline,
@@ -233,7 +244,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       ownerId: formData.ownerId,
       ownerName: owner?.displayName || '',
       awardedTo: formData.awardedTo.trim(),
-      awardedValue: formData.awardedValue === '' ? null : Number(formData.awardedValue),
+      awardedValue,
       nextActionDate: formData.nextActionDate,
     };
     setSaving(true);
@@ -348,6 +359,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           projectUsers={projectUsers}
           onBack={() => setSelectedId(null)}
           onEdit={() => openEdit(selected)}
+          onNavigate={onNavigate}
         />
       ) : (
       <>

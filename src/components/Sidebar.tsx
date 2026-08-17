@@ -148,12 +148,15 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       show: true,
     },
     { id: 'projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, show: true },
+    // Opportunities sits in the primary row, next to Projects: the bid pipeline
+    // is day-to-day work, and a submission deadline hidden behind "More" is the
+    // one thing that cannot be caught up on the next day. Badge counts bids at
+    // their submission deadline (≤7 days or already past), not the whole
+    // pipeline — the deadline is the part that can be missed.
+    { id: 'opportunities', label: 'Opportunities', icon: <Target className="w-4 h-4" />, badge: navCounts.bidsDueSoon, show: true },
   ];
 
   const overflowItems: NavItem[] = [
-    // Badge counts bids at their submission deadline (≤7 days or already past),
-    // not the whole pipeline — the deadline is the part that can be missed.
-    { id: 'opportunities', label: 'Opportunities', icon: <Target className="w-4 h-4" />, badge: navCounts.bidsDueSoon, show: true },
     { id: 'bid-analytics', label: 'Bid Analytics', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
     { id: 'archive', label: 'Archive', icon: <Archive className="w-4 h-4" />, show: true },
     { id: 'outlook-feed', label: 'Outlook', icon: <Mail className="w-4 h-4" />, show: true },

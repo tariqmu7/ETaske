@@ -285,6 +285,11 @@ window.__labelled = (root, name) => {
   const f = holder.querySelector('input, select, textarea');
   return f ? f.value : null;
 };
+// The FIELD under a label, for the cases that need the element itself.
+window.__labelledEl = (root, name) => {
+  const l = [...root.querySelectorAll('.input-label')].find(x => x.textContent.trim().startsWith(name));
+  return l ? l.parentElement.querySelector('input, select, textarea') : null;
+};
 `;
 await waitFor(`document.getElementById('root') && document.getElementById('root').children.length`, 'app mount');
 await evalJS(HELPERS);
@@ -388,7 +393,10 @@ const draft = () => evalJS(`(() => {
   ${HELPERS}
   const root = window.__panelRoot();
   const sel = root.querySelector('select[class="input"], select');
-  const assignee = [...root.querySelectorAll('select')].pop();
+  // The assignee select is found by its LABEL, not by position: the create
+  // panel gained the link-picker selects (queue task 4) after it, so
+  // "the last <select>" now means the linked-project one.
+  const assignee = window.__labelledEl(root, 'Assignee');
   return {
     taskName: window.__panel().value,
     description: root.querySelector('textarea').value,
@@ -422,7 +430,7 @@ check('the attachment carried over',
   await evalJS(`document.body.textContent.includes('vibration.pdf')`));
 
 console.log('\n[4] choosing an assignee and collaborators, then creating');
-await setSelect(`[...document.querySelectorAll('select')].pop()`, 'u-emp1', 'assignee');
+await setSelect(`window.__labelledEl(window.__panelRoot(), 'Assignee')`, 'u-emp1', 'assignee');
 await clickEl(`window.__one('button', 'Ahmed Salem')`, 'collaborator chip');
 check('the collaborator count is shown',
   await evalJS(`document.body.textContent.includes('1 collaborator')`));

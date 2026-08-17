@@ -751,6 +751,7 @@ const en = {
   "Create opportunity": "Create opportunity",
   "Opportunity title is required.": "Opportunity title is required.",
   "Probability must be between 0 and 100.": "Probability must be between 0 and 100.",
+  "Estimated value and awarded value must be numbers.": "Estimated value and awarded value must be numbers.",
   "Submission deadline cannot be before the announcement date.": "Submission deadline cannot be before the announcement date.",
   "Failed to load opportunities.": "Failed to load opportunities.",
   "Failed to save opportunity. Please try again.": "Failed to save opportunity. Please try again.",
@@ -1232,6 +1233,49 @@ const en = {
   "Preview": "Preview",
   "Syncing latest updates…": "Syncing latest updates…",
   "You're up to date": "You're up to date",
+
+  // ── Cross-linking task 3: the Tasks tab on an opportunity ──
+  // "Tasks", "Unassigned" and "OVERDUE" are already keys above — the tab reuses
+  // them rather than introducing near-duplicates.
+  "Work on this bid": "Work on this bid",
+  "Loading linked tasks…": "Loading linked tasks…",
+  "Failed to load the linked tasks.": "Failed to load the linked tasks.",
+  "No task is linked to this bid yet.": "No task is linked to this bid yet.",
+  "{{open}} open · {{total}} linked in total": "{{open}} open · {{total}} linked in total",
+  "{{count}} overdue": "{{count}} overdue",
+  "New task for this bid": "New task for this bid",
+  "Nothing is being worked on for this bid": "Nothing is being worked on for this bid",
+  "A task created here is linked to the bid, and its progress is echoed into this bid’s history.": "A task created here is linked to the bid, and its progress is echoed into this bid’s history.",
+  "The task was created and linked, but its entry could not be added to this bid’s history.": "The task was created and linked, but its entry could not be added to this bid’s history.",
+  "Linked opportunity": "Linked opportunity",
+  "Linked to {{serial}}": "Linked to {{serial}}",
+  "Linked to this opportunity": "Linked to this opportunity",
+  "Due {{date}}": "Due {{date}}",
+
+  // Queue task 4 — the cross-record link picker
+  "Linked Records": "Linked Records",
+  "Project record": "Project record",
+  "Opportunity / Bid": "Opportunity / Bid",
+  "Linked project": "Linked project",
+  "Not linked to a bid": "Not linked to a bid",
+  "Not linked to a project": "Not linked to a project",
+  "Progress on this task is echoed into the history of whatever it is linked to.": "Progress on this task is echoed into the history of whatever it is linked to.",
+  "The bid and project lists could not be loaded — an existing link is kept as it is.": "The bid and project lists could not be loaded — an existing link is kept as it is.",
+
+  // Queue task 5 — the correspondence side of the link picker
+  "This correspondence — and the task it is assigned as — is echoed into the history of whatever it is linked to.": "This correspondence — and the task it is assigned as — is echoed into the history of whatever it is linked to.",
+
+  // Queue task 6 — surfacing the links (the block on a task, the reverse panel
+  // on a bid / project). "OVERDUE", "Unassigned", "From:", "Due {{date}}",
+  // "Linked Records", "Linked opportunity" and "Linked project" are keys above
+  // and are reused — a duplicate key here is a tsc error.
+  "Loading linked records…": "Loading linked records…",
+  "Failed to load the linked records.": "Failed to load the linked records.",
+  "No correspondence or task is linked to this bid yet.": "No correspondence or task is linked to this bid yet.",
+  "No correspondence or task is linked to this project yet.": "No correspondence or task is linked to this project yet.",
+  "Tasks linked to this bid are listed on its Tasks tab.": "Tasks linked to this bid are listed on its Tasks tab.",
+  "Linked": "Linked",
+  "Correspondences and tasks attached to this project.": "Correspondences and tasks attached to this project.",
 } as const;
 
 export default en;
