@@ -11,7 +11,7 @@ import { createNotification, notifyManagers } from './lib/pushNotification';
 import { taskDetails, corrDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Corresponding, CorrespondingStatus, RecordLinks, Task, TaskNote,
+  AppUser, Corresponding, CorrespondingStatus, Project, RecordLinks, Task, TaskNote,
   DEPARTMENT_OPTIONS, PROJECT_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
@@ -24,7 +24,7 @@ import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
-  UserPlus, Send, MessageSquare
+  UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
@@ -35,6 +35,8 @@ import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import RecordLinkPicker from './components/RecordLinkPicker';
+import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -49,6 +51,23 @@ function statusBadgeClass(s: CorrespondingStatus) {
     default: return 'badge';
   }
 }
+
+/**
+ * The dimension the intake list is bucketed by (the same control the tasks board
+ * grew first — see `components/GroupByBar.tsx`). `status` is the default because
+ * the intake question is always "what still needs reading / reviewing / closing".
+ *
+ * **Sender and assignee are two options, not one.** They look interchangeable
+ * but they are not: the default status filter here is `Unassigned`, so grouping
+ * that view by assignee would put every visible row in a single "Unassigned"
+ * bucket and say nothing. "Sent From" is what actually separates unassigned
+ * intake; "Assignee" only earns its keep once the list is filtered to assigned
+ * work.
+ */
+type CorrGroupBy = 'status' | 'category' | 'location' | 'sender' | 'user';
+
+/** Bucket order for `groupBy === 'status'` — the intake workflow order. */
+const CORR_STATUS_GROUP_ORDER: readonly CorrespondingStatus[] = ['Unread', 'Reviewing', 'Assigned', 'Closed'];
 
 // Every history echo describes the correspondence the same way, wherever it is
 // written from (the form, quick-assign, the ManagerInbox conversion).
@@ -136,6 +155,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
   const [pendingOpenCorrId, setPendingOpenCorrId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [groupBy, setGroupBy] = useState<CorrGroupBy>('status');
+  // Projects are read for ONE reason: a correspondence carries no location of
+  // its own (src/types.ts — `location` lives on Project), so "group by location"
+  // has to resolve it through the record link `projectId`.
+  const [projects, setProjects] = useState<Project[]>([]);
   // Inline quick-assign drafts for unassigned cards, keyed by correspondence id
   const [assignDraft, setAssignDraft] = useState<Record<string, { toId: string; comment: string }>>({});
   const [assigningId, setAssigningId] = useState<string | null>(null);
@@ -214,6 +238,25 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     return () => unsub();
   }, [user.uid]);
 
+  // Projects listener — only feeds the location lookup below. A failure is not
+  // surfaced to the user: it costs the location grouping its labels, nothing
+  // else, and the intake list itself is unaffected.
+  useEffect(() => {
+    if (appUser.status !== 'Approved') return;
+    const unsub = onSnapshot(collection(db, 'projects'), snap => {
+      setProjects(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Project)));
+    }, err => {
+      handleFirestoreError(err, OperationType.LIST, 'projects');
+    });
+    return () => unsub();
+  }, [appUser.status]);
+
+  const projectLocationById = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach(p => { if (p.location?.trim()) map.set(p.id, p.location.trim()); });
+    return map;
+  }, [projects]);
+
   const filtered = useMemo(() => {
     return visibleItems.filter(i => {
       if (search && !globalSearch(i, search)) return false;
@@ -237,6 +280,66 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     const startIndex = (currentPage - 1) * itemsPerPage;
     return filtered.slice(startIndex, startIndex + itemsPerPage);
   }, [filtered, currentPage]);
+
+  // What a correspondence's group key is, per dimension. An empty string sends
+  // the row to the trailing "no value" bucket (`UNGROUPED`).
+  const groupKeyOf = useMemo(() => {
+    switch (groupBy) {
+      case 'status':
+        return (i: Corresponding) => i.status;
+      // `category` is free text (`CorrespondingCategory = string`) with the
+      // CATEGORY_OPTIONS as suggestions, so the buckets are whatever was typed —
+      // alphabetical, no fixed order.
+      case 'category':
+        return (i: Corresponding) => i.category;
+      case 'location':
+        return (i: Corresponding) => (i.projectId ? projectLocationById.get(i.projectId) : '');
+      case 'sender':
+        return (i: Corresponding) => i.sentFrom;
+      case 'user':
+        return (i: Corresponding) => i.assignedTo;
+    }
+  }, [groupBy, projectLocationById]);
+
+  // Buckets for the current page, sorted soonest-deadline-first inside each one
+  // (undated last; equal dates keep newest-created-first — the listener orders
+  // createdAt desc and `buildGroups` sorts stably).
+  const groupedItems = useMemo(
+    () => buildGroups(paginatedItems, groupKeyOf, {
+      order: groupBy === 'status' ? CORR_STATUS_GROUP_ORDER : undefined,
+      sort: byDueDateAsc<Corresponding>(i => i.deadline),
+    }),
+    [paginatedItems, groupKeyOf, groupBy],
+  );
+
+  // Header for one bucket. Each dimension gets its own phrasing because one
+  // template reads wrong for half of them ("Ahmed Correspondences").
+  const groupHeading = (group: { key: string; value: string }) => {
+    if (group.key === UNGROUPED) {
+      switch (groupBy) {
+        case 'location': return t('No location');
+        case 'sender': return t('No sender');
+        case 'user': return t('Unassigned');
+        default: return t('Uncategorized');
+      }
+    }
+    const name = label(group.value);
+    switch (groupBy) {
+      case 'category': return t('Category: {{name}}', { name });
+      case 'location': return t('Location: {{name}}', { name });
+      case 'sender': return t('From {{name}}', { name });
+      case 'user': return t('Assigned to {{name}}', { name });
+      default: return t('{{status}} Correspondences', { status: name });
+    }
+  };
+
+  const groupByOptions = useMemo<GroupByOption<CorrGroupBy>[]>(() => [
+    { key: 'status', label: t('Status'), icon: ListChecks },
+    { key: 'category', label: t('Category'), icon: Tag },
+    { key: 'location', label: t('Location'), icon: MapPin },
+    { key: 'sender', label: t('Sent From'), icon: Send },
+    { key: 'user', label: t('Assignee'), icon: UserIcon },
+  ], [t]);
 
   const stats = useMemo(() => ({
     total: visibleItems.length,
@@ -776,10 +879,24 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         </button>
       </div>
 
-      {/* Items list */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {/* Its own row, not another chip in the filter bar: this changes how the
+          list is *arranged*, not which correspondences are in it. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
+        <GroupByBar<CorrGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
+      </div>
+
+      {/* Items list, bucketed by the current dimension */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+        {groupedItems.map(group => (
+        <div key={group.key}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+            <Layers className="w-4 h-4 text-accent" />
+            {groupHeading(group)}
+            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+          </h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <AnimatePresence>
-          {filtered.slice((currentPage - 1) * 20, currentPage * 20).map(item => {
+          {group.items.map(item => {
             // Unassigned cards are rendered "full" (whole body + links + an inline
             // quick-assign panel) and are NOT clickable — everything is on the card.
             const isUnassignedCard = !item.assignedToId && item.status !== 'Closed';
@@ -1017,6 +1134,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             );
           })}
         </AnimatePresence>
+          </div>
+        </div>
+        ))}
       </div>
 
       {/* Pagination Controls */}

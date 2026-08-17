@@ -1254,7 +1254,14 @@ __seed('correspondences', '--stats--', { value: 4 });
   });
   __seed('opportunities', 'o-' + k, {
     title: i === 1 ? LONG_AR : 'EGPC turnaround maintenance tender — Alexandria refinery',
-    client: ['EGPC', 'هيئة البترول', 'ECHEM'][i], sector: 'Refining', location: 'Alexandria',
+    client: ['EGPC', 'هيئة البترول', 'ECHEM'][i], sector: 'Refining',
+    // Group-by task 4: the four dimensions need real variety or every assertion
+    // passes on a single bucket. o-a and o-b SHARE 'Alexandria' so one bucket
+    // holds two cards and the in-bucket order is provable against the board's
+    // own sort select; o-c carries NO location and NO source on purpose — that
+    // is what proves the "no value" bucket sorts LAST.
+    location: ['Alexandria', 'Alexandria', ''][i],
+    source: ['Public Tender', 'Framework', ''][i],
     // ★ Real stage VALUES only: 'Bid Submitted' is not one of
     // OPPORTUNITY_STAGE_OPTIONS, so the display-label layer would echo it back
     // in English and [C7] would be asserting against a typo, not a translation.
@@ -1273,7 +1280,7 @@ __seed('correspondences', '--stats--', { value: 4 });
 // card lands on populated tabs rather than four empty states.
 // ⚠ The list sorts by createdAt DESC, so 'p-a' must be the NEWEST or the click
 // in [C8] opens an empty project and six assertions fail on missing data.
-__seed('projects', '--stats--', { value: 3 });
+__seed('projects', '--stats--', { value: 4 });
 [
   ['p-a', 'Meleiha Gas Plant operations & maintenance contract', 'Active', 'AGIBA'],
   ['p-b', LONG_AR, 'On Hold', 'الشركة المصرية للتكرير'],
@@ -1281,13 +1288,32 @@ __seed('projects', '--stats--', { value: 3 });
 ].forEach(([id, name, status, client], i) => {
   __seed('projects', id, {
     name, status, client, operator: 'EPROM', code: '46000029' + (81 + i),
-    serialNumber: 'PR00000' + (i + 1), location: 'Alexandria',
+    serialNumber: 'PR00000' + (i + 1),
+    // Group-by task 3: the three group dimensions need real variety or every
+    // assertion passes on a single bucket. ⚠ p-a MUST keep 'Alexandria' — [C5b]
+    // resolves the correspondence location through this very project.
+    // p-c carries NO location on purpose: it is what proves the "no value"
+    // bucket sorts last.
+    location: ['Alexandria', 'Suez', ''][i],
     description: i === 1 ? LONG_AR : 'Full O&M scope including rotating equipment, static equipment and instrumentation.',
-    startDate: '2026-01-0' + (i + 1), endDate: '2027-06-30',
+    startDate: '2026-01-0' + (i + 1), endDate: ['2027-06-30', '2026-09-30', ''][i],
     currentStatus: status, lastUpdateText: i === 1 ? LONG_AR : 'Mobilization complete; commissioning spares on order.',
-    lastUpdateAt: ts(100 * (2 - i)), userId: 'u-mgr', teamId: 'T1',
+    lastUpdateAt: ts(100 * (2 - i)), userId: ['u-mgr', 'u-emp1', 'u-mgr'][i], teamId: 'T1',
     createdAt: ts(100 * (2 - i)), updatedAt: ts(100 * (2 - i)),
   });
+});
+// Group-by task 3: a SECOND Active project sharing p-a's client and location.
+// Without it every bucket holds exactly one card and no assertion can tell an
+// in-bucket sort from luck. ⚠ Its createdAt is the OLDEST of the four, so the
+// default "Most recent" sort keeps p-a the first card [C8] clicks — while its
+// much earlier endDate makes it first once the sort flips to "End date".
+__seed('projects', 'p-d', {
+  name: 'Suez refinery jetty maintenance framework', status: 'Active', client: 'AGIBA',
+  operator: 'EPROM', code: '4600002984', serialNumber: 'PR000004', location: 'Alexandria',
+  description: 'Jetty and loading-arm maintenance under the same framework agreement.',
+  startDate: '2026-02-01', endDate: '2026-03-31',
+  currentStatus: 'Active', lastUpdateText: 'Scope frozen pending the client walkdown.',
+  lastUpdateAt: ts(10), userId: 'u-mgr', teamId: 'T1', createdAt: ts(10), updatedAt: ts(10),
 });
 ['a', 'b'].forEach((k, i) => {
   __seed('projectUpdates', 'pu-' + k, {
@@ -1769,6 +1795,73 @@ await shot('corr-modal-ar');
 await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
 await sleep(300);
 
+// ── [C5b] the "Group by (X)" control really re-buckets the intake list ──────
+// Group-by queue task 2. Assertions read the PAINTED headings after a REAL
+// click on the segmented control, because the whole feature is "the same rows,
+// arranged differently" — a props-level test would prove nothing about that.
+console.log('\n[C5b] the correspondences group-by control (group-by task 2)');
+const groupBar = await evalJS(`(() => {
+  const g = document.querySelector('#root [role="group"][aria-label]');
+  if (!g) return JSON.stringify({ err: 'no group-by bar' });
+  return JSON.stringify({ aria: g.getAttribute('aria-label'),
+    opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
+    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
+})()`).then(JSON.parse);
+check('the group-by bar renders its five dimensions in Arabic',
+  ['الحالة', 'الفئة', 'الموقع', 'الجهة المرسِلة', 'المسؤول'].every(o => (groupBar.opts || []).includes(o)),
+  JSON.stringify(groupBar));
+check('★ "الحالة" is the pressed default', (groupBar.pressed || [])[0] === 'الحالة', JSON.stringify(groupBar.pressed));
+
+// `innerText` is the transformed, rendered text — the same read [C5] uses.
+const bodyText = () => evalJS(`document.getElementById('root').innerText || ''`);
+const pickGroup = async (labelAr) => {
+  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  await sleep(320);
+  return bodyText();
+};
+
+const byStatus = await bodyText();
+check('★ by status: the three seeded buckets are painted, in WORKFLOW order (not alphabetical)',
+  byStatus.includes('مراسلات: غير مقروء')
+  && byStatus.indexOf('مراسلات: غير مقروء') < byStatus.indexOf('مراسلات: مُسنَد')
+  && byStatus.indexOf('مراسلات: مُسنَد') < byStatus.indexOf('مراسلات: مغلق'),
+  byStatus.slice(0, 200).replace(/\n/g, ' / '));
+
+const bySender = await pickGroup('الجهة المرسِلة');
+check('★ by sender: the buckets became the senders, and the status buckets are gone',
+  bySender.includes('من EGPC') && bySender.includes('من Stores') && !bySender.includes('مراسلات: مغلق'),
+  bySender.slice(0, 200).replace(/\n/g, ' / '));
+
+// The location dimension is the one with no field of its own: it is resolved
+// through the record link `projectId` → projects/{id}.location. Only c-a carries
+// a project, so this also proves the UNGROUPED bucket sorts LAST.
+const byLocation = await pickGroup('الموقع');
+check('★ by location: resolved through the linked project (only c-a has one)',
+  byLocation.includes('موقع: Alexandria') && byLocation.includes('بدون موقع'),
+  byLocation.slice(0, 200).replace(/\n/g, ' / '));
+check('★ the "no value" bucket is LAST, never leading the page',
+  byLocation.indexOf('بدون موقع') > byLocation.indexOf('موقع: Alexandria'),
+  `${byLocation.indexOf('موقع: Alexandria')} vs ${byLocation.indexOf('بدون موقع')}`);
+
+const byAssignee = await pickGroup('المسؤول');
+check('★ by assignee: one bucket per person',
+  byAssignee.includes('مُسندة إلى Tariq Salama') && byAssignee.includes('مُسندة إلى Ahmed Salem'),
+  byAssignee.slice(0, 200).replace(/\n/g, ' / '));
+
+// Non-vacuous: the SAME DOM, flipped, must read English — the group keys are the
+// stored values, only the heading is translated.
+await evalJS(`window.__setLang('en')`);
+await sleep(400);
+const byAssigneeEn = await bodyText();
+check('non-vacuous: the same buckets read English under en',
+  byAssigneeEn.includes('Assigned to Tariq Salama') && !byAssigneeEn.includes('مُسندة إلى'),
+  byAssigneeEn.slice(0, 200).replace(/\n/g, ' / '));
+await shot('corr-groupby-en');
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await pickGroup('الحالة');
+check('no errors across the group-by checks', (await evalJS(`window.__errors.length`)) === 0);
+
 // The archive is the other screen of this pass that owns its own copy.
 await evalJS(`window.__mount('archive')`);
 await sleep(500);
@@ -1818,6 +1911,110 @@ check('★ a card stage badge paints the enum in Arabic (مُحدَّد / مُق
 check('★ no card badge is still a Latin stage value',
   !cardStages.some(x => /^(Identified|Prequalification|Bid Preparation|Submitted|Under Evaluation|Won|Lost|No Bid|Cancelled)$/.test(x)),
   cardStages.filter(x => /[A-Za-z]{3}/.test(x)).join(' | '));
+
+// ── [C7b] the "Group by (X)" control really re-buckets the bid grid ─────────
+// Group-by queue task 4, the last board. Same contract as [C5b]/[C8b]: REAL
+// clicks on the segmented control, assertions on the PAINTED headings.
+console.log('\n[C7b] the opportunities group-by control (group-by task 4)');
+const oppBar = await evalJS(`(() => {
+  const g = document.querySelector('#root [role="group"][aria-label]');
+  if (!g) return JSON.stringify({ err: 'no group-by bar' });
+  return JSON.stringify({ opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
+    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
+})()`).then(JSON.parse);
+check('the opportunities group-by bar renders its four dimensions in Arabic',
+  ['المرحلة', 'الموقع', 'المصدر', 'المسؤول'].every(o => (oppBar.opts || []).includes(o)),
+  JSON.stringify(oppBar));
+check('★ "المرحلة" is the pressed default', (oppBar.pressed || [])[0] === 'المرحلة', JSON.stringify(oppBar.pressed));
+
+const oppText = () => evalJS(`document.getElementById('root').innerText || ''`);
+const pickOppGroup = async (labelAr) => {
+  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  await sleep(320);
+  return oppText();
+};
+const oppCardTitles = () => evalJS(`(() => {
+  const h = [...document.querySelectorAll('#root .card.card-interactive h3')].map(x => (x.textContent || '').trim());
+  return JSON.stringify(h);
+})()`).then(JSON.parse);
+
+const oppByStage = await oppText();
+check('★ by stage: the buckets are painted in PIPELINE order (not alphabetical)',
+  oppByStage.includes('فرص: مُحدَّد')
+  && oppByStage.indexOf('فرص: مُحدَّد') < oppByStage.indexOf('فرص: مُقدَّم')
+  && oppByStage.indexOf('فرص: مُقدَّم') < oppByStage.indexOf('فرص: فوز'),
+  oppByStage.slice(0, 200).replace(/\n/g, ' / '));
+
+// Like the projects board and unlike tasks/correspondences, an Opportunity OWNS
+// its location — no listener, no link to resolve. o-c carries none, which is
+// what proves the "no value" bucket sorts LAST.
+const oppByLocation = await pickOppGroup('الموقع');
+check('★ by location: read straight off the bid, and the stage buckets are gone',
+  oppByLocation.includes('موقع: Alexandria') && !oppByLocation.includes('فرص: مُحدَّد'),
+  oppByLocation.slice(0, 200).replace(/\n/g, ' / '));
+check('★ the "no location" bucket is LAST, never leading the grid',
+  oppByLocation.includes('بدون موقع')
+  && oppByLocation.indexOf('بدون موقع') > oppByLocation.indexOf('موقع: Alexandria'),
+  `${oppByLocation.indexOf('موقع: Alexandria')} vs ${oppByLocation.indexOf('بدون موقع')}`);
+
+// ★ The in-bucket order is the board's OWN sort select — this board has one, so
+// the grouping deliberately forces no order of its own. The Alexandria bucket
+// holds two bids: o-a is due first, o-b is worth twice as much.
+const alexByDeadline = await oppCardTitles();
+check('★ inside a bucket the default "Submission deadline" sort still rules',
+  alexByDeadline[0].startsWith('EGPC turnaround'), alexByDeadline.slice(0, 3).join(' | '));
+await evalJS(`(() => {
+  const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'value'));
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'value');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+await sleep(320);
+const alexByValue = await oppCardTitles();
+check('★★ switching the sort to "Value (high → low)" reorders INSIDE the bucket',
+  !alexByValue[0].startsWith('EGPC turnaround') && alexByValue[1].startsWith('EGPC turnaround'),
+  alexByValue.slice(0, 3).join(' | '));
+await evalJS(`(() => {
+  const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'value'));
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'deadline');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+await sleep(320);
+
+// The source enum goes through the SAME display layer as the stage badge — a
+// heading holding "Public Tender" would mean the layer was bypassed.
+const oppBySource = await pickOppGroup('المصدر');
+check('★ by source: the enum is painted through the display layer, not raw',
+  oppBySource.includes('مصدر: مناقصة عامة') && oppBySource.includes('مصدر: اتفاقية إطارية')
+  && !/مصدر: (Public Tender|Framework)/.test(oppBySource),
+  oppBySource.slice(0, 200).replace(/\n/g, ' / '));
+check('★ the "no source" bucket is LAST', oppBySource.includes('بدون مصدر')
+  && oppBySource.indexOf('بدون مصدر') > oppBySource.indexOf('مصدر: مناقصة عامة'),
+  `${oppBySource.indexOf('مصدر: مناقصة عامة')} vs ${oppBySource.indexOf('بدون مصدر')}`);
+
+// ★ Unlike a project, an Opportunity STORES `ownerName` beside `ownerId`, so the
+// bucket needs no user lookup — and a uid must still never reach a heading.
+const oppByOwner = await pickOppGroup('المسؤول');
+check('★ by owner: the stored ownerName is the bucket, one per person',
+  oppByOwner.includes('مسؤول: Tariq Salama') && oppByOwner.includes('مسؤول: Nevin Anwar'),
+  oppByOwner.slice(0, 200).replace(/\n/g, ' / '));
+check('★★ no bucket heading leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(oppByOwner),
+  (oppByOwner.match(/u-\w+/g) || []).join(' | '));
+
+// Non-vacuous: the SAME DOM, flipped — the group keys are the stored values,
+// only the heading is translated.
+await evalJS(`window.__setLang('en')`);
+await sleep(400);
+const oppByOwnerEn = await oppText();
+check('non-vacuous: the same buckets read English under en',
+  oppByOwnerEn.includes('Owner: Tariq Salama') && !oppByOwnerEn.includes('مسؤول:'),
+  oppByOwnerEn.slice(0, 200).replace(/\n/g, ' / '));
+await shot('opps-groupby-en');
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await pickOppGroup('المرحلة');
+check('no errors across the opportunities group-by checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // Into the create modal — a real click on the button a user presses.
 await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'فرصة جديدة')`, 'New Opportunity');
@@ -2115,6 +2312,108 @@ const searchPad = await evalJS(`(() => {
 check("★★ the search box reserves its room on the icon's side, not on a fixed left edge",
   searchPad.iconOnRight === true && searchPad.padRight >= searchPad.iconWidth + 8 && searchPad.padRight > searchPad.padLeft,
   JSON.stringify(searchPad));
+
+// ── [C8b] the "Group by (X)" control really re-buckets the projects grid ────
+// Group-by queue task 3. Same contract as [C5b]: REAL clicks on the segmented
+// control, assertions on the PAINTED headings — the feature is "the same
+// projects, arranged differently", which a props-level test cannot show.
+console.log('\n[C8b] the projects group-by control (group-by task 3)');
+const projBar = await evalJS(`(() => {
+  const g = document.querySelector('#root [role="group"][aria-label]');
+  if (!g) return JSON.stringify({ err: 'no group-by bar' });
+  return JSON.stringify({ opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
+    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
+})()`).then(JSON.parse);
+check('the projects group-by bar renders its four dimensions in Arabic',
+  ['الحالة', 'العميل', 'الموقع', 'المسؤول'].every(o => (projBar.opts || []).includes(o)),
+  JSON.stringify(projBar));
+check('★ "الحالة" is the pressed default', (projBar.pressed || [])[0] === 'الحالة', JSON.stringify(projBar.pressed));
+
+const projText = () => evalJS(`document.getElementById('root').innerText || ''`);
+const pickProjGroup = async (labelAr) => {
+  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  await sleep(320);
+  return projText();
+};
+// The card titles are how a bucket's CONTENT is read back — a heading alone
+// says nothing about which projects landed under it.
+const cardTitles = () => evalJS(`(() => {
+  const h = [...document.querySelectorAll('#root .card.card-interactive h3')].map(x => (x.textContent || '').trim());
+  return JSON.stringify(h);
+})()`).then(JSON.parse);
+
+const projByStatus = await projText();
+check('★ by status: the buckets are painted in LIFECYCLE order (not alphabetical)',
+  projByStatus.includes('مشروعات: نشط')
+  && projByStatus.indexOf('مشروعات: نشط') < projByStatus.indexOf('مشروعات: معلّق')
+  && projByStatus.indexOf('مشروعات: معلّق') < projByStatus.indexOf('مشروعات: مكتمل'),
+  projByStatus.slice(0, 200).replace(/\n/g, ' / '));
+
+// ★ The in-bucket order is the board's OWN sort select — this board has one, so
+// the grouping deliberately does not force an order of its own. Two Active
+// projects make that provable: p-a is the newest, p-d ends 15 months earlier.
+const activeRecent = await cardTitles();
+check('★ inside a bucket the default "Most recent" sort still rules (newest first)',
+  activeRecent[0].startsWith('Meleiha') && activeRecent[1].startsWith('Suez refinery jetty'),
+  activeRecent.slice(0, 3).join(' | '));
+await evalJS(`(() => {
+  const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'end');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+await sleep(320);
+const activeByEnd = await cardTitles();
+check('★★ switching the sort to "End date (soonest)" reorders INSIDE the bucket',
+  activeByEnd[0].startsWith('Suez refinery jetty') && activeByEnd[1].startsWith('Meleiha'),
+  activeByEnd.slice(0, 3).join(' | '));
+await evalJS(`(() => {
+  const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
+  const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
+  setter.call(sel, 'recent');
+  sel.dispatchEvent(new Event('change', { bubbles: true }));
+})()`);
+await sleep(320);
+
+const projByClient = await pickProjGroup('العميل');
+check('★ by client: the buckets became the clients, and the status buckets are gone',
+  projByClient.includes('عميل: AGIBA') && projByClient.includes('عميل: EGPC') && !projByClient.includes('مشروعات: نشط'),
+  projByClient.slice(0, 200).replace(/\n/g, ' / '));
+
+// Unlike the tasks and correspondences boards, a Project OWNS its location —
+// no listener, no link to resolve. p-c carries none, which is what proves the
+// "no value" bucket sorts LAST.
+const projByLocation = await pickProjGroup('الموقع');
+check('★ by location: read straight off the project, no linked record needed',
+  projByLocation.includes('موقع: Alexandria') && projByLocation.includes('موقع: Suez'),
+  projByLocation.slice(0, 200).replace(/\n/g, ' / '));
+check('★ the "no location" bucket is LAST, never leading the grid',
+  projByLocation.includes('بدون موقع')
+  && projByLocation.indexOf('بدون موقع') > projByLocation.indexOf('موقع: Suez'),
+  `${projByLocation.indexOf('موقع: Suez')} vs ${projByLocation.indexOf('بدون موقع')}`);
+
+// The owner dimension is the one with no name of its own: a project stores only
+// `userId`, so the bucket is keyed by the resolved display name.
+const projByOwner = await pickProjGroup('المسؤول');
+check('★ by owner: the creator uid is resolved to a person, one bucket each',
+  projByOwner.includes('مسؤول: Tariq Salama') && projByOwner.includes('مسؤول: Nevin Anwar'),
+  projByOwner.slice(0, 200).replace(/\n/g, ' / '));
+check('★★ no bucket heading leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(projByOwner),
+  (projByOwner.match(/u-\w+/g) || []).join(' | '));
+
+// Non-vacuous: the SAME DOM, flipped — the group keys are the stored values,
+// only the heading is translated.
+await evalJS(`window.__setLang('en')`);
+await sleep(400);
+const projByOwnerEn = await projText();
+check('non-vacuous: the same buckets read English under en',
+  projByOwnerEn.includes('Owner: Tariq Salama') && !projByOwnerEn.includes('مسؤول:'),
+  projByOwnerEn.slice(0, 200).replace(/\n/g, ' / '));
+await shot('projects-groupby-en');
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+await pickProjGroup('الحالة');
+check('no errors across the projects group-by checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // Into the create modal.
 await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'مشروع جديد')`, 'New Project');

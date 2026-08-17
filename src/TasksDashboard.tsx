@@ -10,7 +10,7 @@ import { createNotification, notifyManagers } from './lib/pushNotification';
 import { taskDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding, RecordLinks,
+  AppUser, Task, TaskStatus, Milestone, MilestoneStatus, Corresponding, Project, RecordLinks,
   PRIORITY_OPTIONS, MILESTONE_STATUS_OPTIONS, OperationType,
   CATEGORY_OPTIONS, CorrespondingCategory, PROJECT_OPTIONS, DEPARTMENT_OPTIONS,
   NotificationType
@@ -25,7 +25,7 @@ import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
-  Users, ArrowLeft, Lock, Globe
+  Users, ArrowLeft, Lock, Globe, MapPin, Briefcase, ListChecks, User as UserIcon
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
@@ -37,6 +37,8 @@ import ComboBox from './components/ComboBox';
 import CreateTaskPanel, { PrivacyToggle, CollaboratorPicker } from './components/CreateTaskPanel';
 import RecordLinkPicker from './components/RecordLinkPicker';
 import LinkedRecordsBlock from './components/LinkedRecordsBlock';
+import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -68,6 +70,17 @@ function msBadge(s: MilestoneStatus) {
   return `badge ${map[s] || 'badge-pending'}`;
 }
 
+/**
+ * The dimension the list is bucketed by. `status` is the default: the board's
+ * job is "what is pending / being worked on / finished", which is why it
+ * replaced the old Project/Internal/External split — that split survives as a
+ * *filter* (the button row), where it always belonged.
+ */
+type TaskGroupBy = 'status' | 'project' | 'location' | 'user';
+
+/** Bucket order for `groupBy === 'status'` — the workflow order, not alphabetical. */
+const STATUS_GROUP_ORDER: readonly TaskStatus[] = ['Pending', 'In Progress', 'Done'];
+
 interface Props {
   user: User;
   appUser: AppUser;
@@ -84,6 +97,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const fmt = useFormat();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [correspondences, setCorrespondences] = useState<Corresponding[]>([]);
+  // Projects are read for ONE reason: a task carries no location of its own
+  // (see src/types.ts — `location` lives on Project), so "group by location"
+  // has to resolve it through `task.projectId`.
+  const [projects, setProjects] = useState<Project[]>([]);
   const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [pendingOpenTaskId, setPendingOpenTaskId] = useState<string | null>(null);
@@ -126,6 +143,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [promptDueDate, setPromptDueDate] = useState('');
   const [employeeFilter, setEmployeeFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
+  const [groupBy, setGroupBy] = useState<TaskGroupBy>('status');
   const [deptFilter, setDeptFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -195,6 +213,25 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     return () => unsub();
   }, [appUser.status]);
 
+  // Projects listener — only feeds the location lookup below. A failure is not
+  // surfaced to the user: it costs the location grouping its labels, nothing
+  // else, and the task list itself is unaffected.
+  useEffect(() => {
+    if (!appUser || appUser.status !== 'Approved') return;
+    const unsub = onSnapshot(collection(db, 'projects'), snap => {
+      setProjects(snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Project)));
+    }, err => {
+      handleFirestoreError(err, OperationType.LIST, 'projects');
+    });
+    return () => unsub();
+  }, [appUser.status]);
+
+  const projectLocationById = useMemo(() => {
+    const map = new Map<string, string>();
+    projects.forEach(p => { if (p.location?.trim()) map.set(p.id, p.location.trim()); });
+    return map;
+  }, [projects]);
+
   // Apply incoming filter/view when navigated here from another view (e.g. Overview stat cards)
   useEffect(() => {
     if (initialStatusFilter) setStatusFilter(initialStatusFilter);
@@ -251,31 +288,64 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
   const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
-  const groupedTasks = useMemo(() => {
-    const groups: Record<string, Task[]> = {};
-    // When drilled into a single employee, group by status (Pending → In
-    // Progress → Done); otherwise group by category. Tasks already arrive
-    // newest-first (query orders by createdAt desc), so each group stays sorted.
-    if (view === 'all' && employeeFilter !== 'All') {
-      (['Pending', 'In Progress', 'Done'] as TaskStatus[]).forEach(s => {
-        const list = paginatedTasks.filter(t => t.status === s);
-        if (list.length) groups[s] = list;
-      });
-    } else {
-      paginatedTasks.forEach(t => {
-        const cat = t.category || 'Uncategorized';
-        if (!groups[cat]) groups[cat] = [];
-        groups[cat].push(t);
-      });
+  // What a task's group key is, per dimension. Returning an empty string sends
+  // the task to the trailing "no value" bucket (`UNGROUPED`).
+  const groupKeyOf = useMemo(() => {
+    switch (groupBy) {
+      case 'status':
+        return (t: Task) => t.status;
+      // `projectName` is the real projects/{id} link; `subCategory` is the older
+      // free-text project string the task form has always written. Both are live
+      // (see src/types.ts) so the link wins and the free text is the fallback —
+      // otherwise every pre-link task would read "No project".
+      case 'project':
+        return (t: Task) => t.projectName || (t.subCategory !== 'None' ? t.subCategory : '');
+      case 'location':
+        return (t: Task) => (t.projectId ? projectLocationById.get(t.projectId) : '');
+      case 'user':
+        return (t: Task) => t.assignedTo;
     }
-    return groups;
-  }, [paginatedTasks, view, employeeFilter]);
+  }, [groupBy, projectLocationById]);
+
+  // Buckets for the current page, sorted soonest-due-first inside each one
+  // (undated last; equal dates keep newest-created-first — the listener already
+  // sorts createdAt desc and `buildGroups` sorts stably).
+  const groupedTasks = useMemo(
+    () => buildGroups(paginatedTasks, groupKeyOf, {
+      order: groupBy === 'status' ? STATUS_GROUP_ORDER : undefined,
+      sort: byDueDateAsc<Task>(t => t.dueDate),
+    }),
+    [paginatedTasks, groupKeyOf, groupBy],
+  );
+
+  // Header for one bucket. Each dimension gets its own phrasing because a single
+  // "{{x}} Tasks" template reads wrong for half of them ("Ahmed Tasks").
+  const groupHeading = (group: { key: string; value: string }) => {
+    if (group.key === UNGROUPED) {
+      switch (groupBy) {
+        case 'project': return t('No project');
+        case 'location': return t('No location');
+        case 'user': return t('Unassigned');
+        default: return t('Uncategorized');
+      }
+    }
+    const name = label(group.value);
+    switch (groupBy) {
+      case 'project': return t('Project: {{name}}', { name });
+      case 'location': return t('Location: {{name}}', { name });
+      case 'user': return t('Assigned to {{name}}', { name });
+      default: return t('{{category}} Tasks', { category: name });
+    }
+  };
 
   // When viewing "All Tasks" with no specific employee picked, the task list is
   // replaced by a grid of employee cards. Group the (otherwise-filtered) tasks
   // by assignee so each card can show that person's task counts. Clicking a card
   // sets `employeeFilter`, which falls through to the normal filtered list.
-  const showEmployeeGrid = view === 'all' && employeeFilter === 'All' && !focusedTaskId;
+  // "Group by user" is that same question asked of the list, so it skips the
+  // grid — otherwise picking it would show a grid of one-person cards instead of
+  // the per-person buckets the user just asked for.
+  const showEmployeeGrid = view === 'all' && employeeFilter === 'All' && !focusedTaskId && groupBy !== 'user';
 
   const employeeGroups = useMemo(() => {
     const map = new Map<string, { name: string; id?: string; tasks: Task[] }>();
@@ -292,6 +362,13 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     inProgress: tasks.filter(t => t.status === 'In Progress' && (view === 'all' || t.assignedTo === appUser.displayName)).length,
     done: tasks.filter(t => t.status === 'Done' && (view === 'all' || t.assignedTo === appUser.displayName)).length,
   }), [tasks, view, appUser.displayName]);
+
+  const groupByOptions = useMemo<GroupByOption<TaskGroupBy>[]>(() => [
+    { key: 'status', label: t('Status'), icon: ListChecks },
+    { key: 'project', label: t('Project'), icon: Briefcase },
+    { key: 'location', label: t('Location'), icon: MapPin },
+    { key: 'user', label: t('Assignee'), icon: UserIcon },
+  ], [t]);
 
   const dueSoonTasks = useMemo(
     () => tasks.filter(t => t.status !== 'Done' && t.status !== 'Archived' && isDueSoon(t.dueDate)),
@@ -882,6 +959,12 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         )}
       </div>
 
+      {/* Its own row, not another chip in the filter bar: this changes how the
+          list is *arranged*, not which tasks are in it. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
+        <GroupByBar<TaskGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
+      </div>
+
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
           <AlertCircle className="w-4 h-4" /> {error}
@@ -983,12 +1066,13 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         </button>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {(Object.entries(groupedTasks) as [string, Task[]][]).map(([cat, catTasks]) => {
+        {groupedTasks.map(group => {
+          const catTasks = group.items;
           return (
-            <div key={cat}>
+            <div key={group.key}>
               <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
                 <Layers className="w-4 h-4 text-accent" />
-                {t('{{category}} Tasks', { category: label(cat) })}
+                {groupHeading(group)}
                 <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

@@ -17,9 +17,12 @@ import { useFormat, DATE_SHORT } from './lib/format';
 import {
   Plus, Search, X, FolderKanban, Building2, Hash, Calendar,
   Trash2, Edit2, ChevronRight, AlertCircle,
+  Layers, ListChecks, MapPin, User as UserIcon,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetail from './ProjectDetail';
+import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 import type { AppView } from './App';
 
 interface Props {
@@ -39,6 +42,29 @@ function statusBadgeClass(s?: ProjectStatus) {
     default: return 'badge';
   }
 }
+
+/**
+ * The dimension the project grid is bucketed by (the same control the tasks and
+ * correspondences boards grew first — see `components/GroupByBar.tsx`).
+ *
+ * `location` is the odd one out in a good way: on the other two boards it has to
+ * be resolved through a linked project, but a Project OWNS its location field,
+ * so this board needs no extra listener.
+ *
+ * `owner` is the project's creator (`userId`), which is the only person a
+ * project stores — there is no assignee on this record.
+ */
+type ProjectGroupBy = 'status' | 'client' | 'location' | 'owner';
+
+/**
+ * Bucket order for `groupBy === 'status'`. `PROJECT_STATUS_OPTIONS` is already
+ * written in lifecycle order, so it is reused rather than restated — the filter
+ * select and the buckets can never drift apart.
+ */
+const PROJECT_STATUS_GROUP_ORDER: readonly ProjectStatus[] = PROJECT_STATUS_OPTIONS;
+
+/** "Soonest end date first, undated last" — the optional in-bucket sort. */
+const byEndDate = byDueDateAsc<Project>(p => p.endDate);
 
 const emptyForm = () => ({
   name: '',
@@ -63,7 +89,8 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status'>('recent');
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status' | 'end'>('recent');
+  const [groupBy, setGroupBy] = useState<ProjectGroupBy>('status');
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -103,12 +130,73 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
     rows.sort((a, b) => {
       if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
       if (sortBy === 'status') return (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
+      // Soonest-ending first. Rows the comparator calls equal keep the incoming
+      // createdAt-desc order (the sort is stable), so undated projects still
+      // read newest-first at the bottom.
+      if (sortBy === 'end') return byEndDate(a, b);
       return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0); // recent
     });
     return rows;
   }, [projects, search, statusFilter, sortBy]);
 
   const isFiltering = search.trim() !== '' || statusFilter !== 'All';
+
+  // A project stores only `userId` (its creator), so the owner buckets are keyed
+  // by the resolved display name — an opaque uid would sort the buckets into a
+  // meaningless order and print as a uid in the heading.
+  const ownerNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    projectUsers.forEach(u => { if (u.displayName) map.set(u.id, u.displayName); });
+    return map;
+  }, [projectUsers]);
+
+  // What a project's group key is, per dimension. An empty string sends the row
+  // to the trailing "no value" bucket (`UNGROUPED`).
+  const groupKeyOf = useMemo(() => {
+    switch (groupBy) {
+      case 'status': return (p: Project) => p.status;
+      case 'client': return (p: Project) => p.client;
+      case 'location': return (p: Project) => p.location;
+      case 'owner': return (p: Project) => ownerNameById.get(p.userId);
+    }
+  }, [groupBy, ownerNameById]);
+
+  // Buckets over the already-sorted list. No `sort` is passed on purpose: unlike
+  // the tasks and correspondences boards, this one has its own sort control, and
+  // forcing an order here would make that select dead inside every bucket.
+  const groupedProjects = useMemo(
+    () => buildGroups(visible, groupKeyOf, {
+      order: groupBy === 'status' ? PROJECT_STATUS_GROUP_ORDER : undefined,
+    }),
+    [visible, groupKeyOf, groupBy],
+  );
+
+  // Header for one bucket. Each dimension gets its own phrasing because a single
+  // "{{x}} Projects" template reads wrong for half of them ("Ahmed Projects").
+  const groupHeading = (group: { key: string; value: string }) => {
+    if (group.key === UNGROUPED) {
+      switch (groupBy) {
+        case 'client': return t('No client');
+        case 'location': return t('No location');
+        case 'owner': return t('No owner');
+        default: return t('Uncategorized');
+      }
+    }
+    const name = dl(group.value);
+    switch (groupBy) {
+      case 'client': return t('Client: {{name}}', { name });
+      case 'location': return t('Location: {{name}}', { name });
+      case 'owner': return t('Owner: {{name}}', { name });
+      default: return t('{{status}} Projects', { status: name });
+    }
+  };
+
+  const groupByOptions = useMemo<GroupByOption<ProjectGroupBy>[]>(() => [
+    { key: 'status', label: t('Status'), icon: ListChecks },
+    { key: 'client', label: t('Client'), icon: Building2 },
+    { key: 'location', label: t('Location'), icon: MapPin },
+    { key: 'owner', label: t('Owner'), icon: UserIcon },
+  ], [t]);
 
   const selected = useMemo(() => projects.find(p => p.id === selectedId) || null, [projects, selectedId]);
 
@@ -297,7 +385,14 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
           <option value="recent">{t('Most recent')}</option>
           <option value="name">{t('Name (A–Z)')}</option>
           <option value="status">{t('Status')}</option>
+          <option value="end">{t('End date (soonest)')}</option>
         </select>
+      </div>
+
+      {/* Its own row, not another control in the filter bar: this changes how the
+          grid is *arranged*, not which projects are in it. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
+        <GroupByBar<ProjectGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
       </div>
 
       {/* Grid */}
@@ -325,9 +420,17 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {groupedProjects.map(group => (
+          <div key={group.key}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+              <Layers className="w-4 h-4 text-accent" />
+              {groupHeading(group)}
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           <AnimatePresence>
-            {visible.map(p => (
+            {group.items.map(p => (
               <motion.div
                 key={p.id}
                 layout
@@ -374,6 +477,9 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
               </motion.div>
             ))}
           </AnimatePresence>
+            </div>
+          </div>
+          ))}
         </div>
       )}
 

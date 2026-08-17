@@ -22,11 +22,13 @@ import { exportOpportunities } from './lib/exportData';
 import {
   Plus, Search, X, Target, Building2, Hash, CalendarClock,
   Trash2, Edit2, AlertCircle, User as UserIcon, Percent, MessageSquare, BarChart3,
-  FileSpreadsheet, Loader2,
+  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox,
 } from 'lucide-react';
 import type { AppView } from './App';
 import { motion, AnimatePresence } from 'motion/react';
 import OpportunityDetail from './OpportunityDetail';
+import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import { buildGroups, UNGROUPED } from './lib/grouping';
 import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
 
 interface Props {
@@ -35,6 +37,25 @@ interface Props {
   projectUsers: AppUser[];
   onNavigate?: (v: AppView) => void;
 }
+
+/**
+ * The dimension the bid grid is bucketed by — the fourth and last board to grow
+ * the shared control (see `components/GroupByBar.tsx`).
+ *
+ * Like a Project and unlike a Task or a Corresponding, an Opportunity OWNS its
+ * `location`, so this board needs no extra listener either. `owner` is the bid
+ * owner, and the record stores `ownerName` next to `ownerId` (the module's
+ * denormalisation rule), so the bucket key needs no `projectUsers` lookup at
+ * all — the projects board had to resolve one.
+ */
+type OpportunityGroupBy = 'stage' | 'location' | 'source' | 'owner';
+
+/**
+ * Bucket order for `groupBy === 'stage'`. `OPPORTUNITY_STAGE_OPTIONS` is already
+ * the pipeline order (Identified → … → Won/Lost), so it is reused rather than
+ * restated — the same reason the projects board reuses its status options.
+ */
+const OPPORTUNITY_STAGE_GROUP_ORDER: readonly OpportunityStage[] = OPPORTUNITY_STAGE_OPTIONS;
 
 const emptyForm = () => ({
   title: '',
@@ -68,6 +89,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'deadline' | 'value' | 'recent' | 'stage'>('deadline');
+  const [groupBy, setGroupBy] = useState<OpportunityGroupBy>('stage');
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
@@ -165,6 +187,56 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   }, [opportunities, search, stageFilter, sortBy, stageRank]);
 
   const isFiltering = search.trim() !== '' || stageFilter !== 'All';
+
+  // What a bid's group key is, per dimension. An empty string sends the row to
+  // the trailing "no value" bucket (`UNGROUPED`). `ownerName` is the stored
+  // denormalised label, so no user lookup is needed here.
+  const groupKeyOf = useMemo(() => {
+    switch (groupBy) {
+      case 'stage': return (o: Opportunity) => o.stage;
+      case 'location': return (o: Opportunity) => o.location;
+      case 'source': return (o: Opportunity) => o.source;
+      case 'owner': return (o: Opportunity) => o.ownerName;
+    }
+  }, [groupBy]);
+
+  // Buckets over the already-sorted list. As on the projects board, no `sort` is
+  // passed: this board has its own sort select (deadline / value / stage /
+  // recent) and forcing an order inside a bucket would make that control dead —
+  // "Submission deadline", its default, already IS soonest-due-first.
+  const groupedOpportunities = useMemo(
+    () => buildGroups(visible, groupKeyOf, {
+      order: groupBy === 'stage' ? OPPORTUNITY_STAGE_GROUP_ORDER : undefined,
+    }),
+    [visible, groupKeyOf, groupBy],
+  );
+
+  // Header for one bucket. Each dimension gets its own phrasing because a single
+  // "{{x}} Opportunities" template reads wrong for half of them.
+  const groupHeading = (group: { key: string; value: string }) => {
+    if (group.key === UNGROUPED) {
+      switch (groupBy) {
+        case 'location': return t('No location');
+        case 'source': return t('No source');
+        case 'owner': return t('No owner');
+        default: return t('Uncategorized');
+      }
+    }
+    const name = dl(group.value);
+    switch (groupBy) {
+      case 'location': return t('Location: {{name}}', { name });
+      case 'source': return t('Source: {{name}}', { name });
+      case 'owner': return t('Owner: {{name}}', { name });
+      default: return t('{{stage}} Opportunities', { stage: name });
+    }
+  };
+
+  const groupByOptions = useMemo<GroupByOption<OpportunityGroupBy>[]>(() => [
+    { key: 'stage', label: t('Stage'), icon: ListChecks },
+    { key: 'location', label: t('Location'), icon: MapPin },
+    { key: 'source', label: t('Source'), icon: Inbox },
+    { key: 'owner', label: t('Owner'), icon: UserIcon },
+  ], [t]);
 
   const openCreate = () => {
     setEditing(null);
@@ -478,6 +550,12 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
         </select>
       </div>
 
+      {/* Its own row, not another control in the filter bar: this changes how the
+          grid is *arranged*, not which bids are in it. */}
+      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
+        <GroupByBar<OpportunityGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
+      </div>
+
       {/* Grid */}
       {loading ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
@@ -503,9 +581,17 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           )}
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {groupedOpportunities.map(group => (
+          <div key={group.key}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+              <Layers className="w-4 h-4 text-accent" />
+              {groupHeading(group)}
+              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
           <AnimatePresence>
-            {visible.map(o => {
+            {group.items.map(o => {
               const dLeft = daysUntil(o.submissionDeadline);
               const showCountdown = isOpportunityOpen(o.stage) && dLeft !== null;
               const late = showCountdown && (dLeft as number) < 0;
@@ -581,6 +667,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
               );
             })}
           </AnimatePresence>
+            </div>
+          </div>
+          ))}
         </div>
       )}
 
