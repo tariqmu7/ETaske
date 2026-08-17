@@ -1,0 +1,126 @@
+{
+  "_source": "External work.docx (colleague's external-business pipeline, received 2026-08-13). Arabic status lines kept verbatim in followUp so nothing is lost in translation.",
+  "opportunities": [
+    {
+      "id": "ext-noc-oman",
+      "title": "NOC Oman — Agency / commission agreement (شركة نوك العمانية)",
+      "client": "NOC Oman",
+      "location": "Oman",
+      "sector": "O&M / Technical Support",
+      "source": "Referral",
+      "stage": "Prequalification",
+      "scope": "Agency agreement covering O&M contracts and technical support contracts. Commission article under negotiation.",
+      "lastFollowUpText": "شركة نوك العمانية تعترض على النسب وانهم يريدون نسبة من كل العقد.\n\nNOC's counter-position (per email reply to Aly Ahmed Aly):\n1) O&M Contracts — EPROM position: 2% on the O&M management fees only, not total contract value (total may include equipment, spare parts and other pass-through costs with no margin for EPROM). NOC proposes 2.5% for O&M contracts, plus any profitable scope of work; the proposed profitable-items list to be attached to the agreement as Appendix (1) to avoid conflict or misunderstanding.\n2) Technical Support Contracts — EPROM position: 1.5% on the project management fees. NOC proposes 2%.\n3) Payment Terms — no advance payment; commission payable only after EPROM has actually received the corresponding invoiced amounts from the client. AGREED (OK).\n4) For any contract not falling under points 1 & 2, the commission is to be fixed in advance but not less than the above.\n\nAction: amend the commission article in the agreement accordingly and add clauses covering any executed services not already covered, to prevent future conflicts.",
+      "followUpStage": "Prequalification"
+    },
+    {
+      "id": "ext-burgan-kuwait",
+      "title": "Burgan Kuwait — tender participation (شركة برقان الكويتية)",
+      "client": "Burgan",
+      "location": "Kuwait",
+      "source": "Limited Tender",
+      "stage": "Bid Preparation",
+      "scope": "Reviewing Burgan's tender list to identify which tenders we can participate in.",
+      "lastFollowUpText": "شركة برقان الكويتية: ننتظر رد جميع الادارات الفنية لنرسل لهم رد متكامل على المناقصات التي يمكننا المشاركة فيها.\n\nEN: Waiting on replies from all technical departments so we can send Burgan one integrated response covering the tenders we are able to bid on. Blocked on internal technical input.",
+      "followUpStage": "Bid Preparation"
+    },
+    {
+      "id": "ext-petrojet-uae",
+      "title": "Petrojet UAE — cooperation (بتروجيت الامارات)",
+      "client": "Petrojet UAE",
+      "location": "United Arab Emirates",
+      "source": "Referral",
+      "stage": "Identified",
+      "scope": "Initial contact for cooperation on external work.",
+      "lastFollowUpText": "تواصلنا مع بتروجيت الامارات ولنا معهم اجتماع يوم 19 الساعة 11.\n\nEN: Contacted Petrojet UAE. Meeting scheduled for the 19th at 11:00.",
+      "nextActionDate": "2026-08-19",
+      "followUpStage": "Identified"
+    },
+    {
+      "id": "ext-petrojet-oman",
+      "title": "Petrojet Oman — cooperation (بتروجيت عمان)",
+      "client": "Petrojet Oman",
+      "location": "Oman",
+      "source": "Referral",
+      "stage": "Identified",
+      "scope": "Initial contact for cooperation on external work.",
+      "lastFollowUpText": "تواصلنا مع بتروجيت عمان مرتين ولم يردوا.\n\nEN: Contacted Petrojet Oman twice — no response so far.",
+      "followUpStage": "Identified"
+    },
+    {
+      "id": "ext-petrojet-algeria",
+      "title": "Petrojet Algeria — cooperation (بتروجيت الجزائر)",
+      "client": "Petrojet Algeria",
+      "location": "Algeria",
+      "source": "Referral",
+      "stage": "Identified",
+      "scope": "Initial contact for cooperation; company brochure shared.",
+      "lastFollowUpText": "تواصلنا مع بتروجيت الجزائر ووعد بالدعم والمساعدة وارسلنا له بروشور الشركة وفي انتظار رده.\n\nEN: Contacted Petrojet Algeria; they promised support and assistance. We sent them the company brochure and are awaiting their reply.",
+      "followUpStage": "Identified"
+    },
+    {
+      "id": "ext-nnpc-chinese-companies",
+      "title": "Chinese contractors working with NNPC — outreach (الشركات الصينية مع NNPC)",
+      "client": "NNPC (via Chinese contractors)",
+      "location": "Nigeria",
+      "source": "Other",
+      "stage": "Identified",
+      "scope": "Reaching out to the Chinese companies that have signed agreements with NNPC.",
+      "lastFollowUpText": "نحاول التواصل مع الشركات الصينية التي اتفقت مع NNPC.\n\nEN: Attempting to make contact with the Chinese companies that concluded agreements with NNPC. No contact established yet.",
+      "followUpStage": "Identified"
+    },
+    {
+      "id": "ext-pen-and-process",
+      "title": "Pen & Process — interactive training material (بترشيح من IFPT)",
+      "client": "Pen & Process",
+      "sector": "Training / Learning content",
+      "source": "Referral",
+      "stage": "Identified",
+      "scope": "Preparation of interactive scientific / training material. Introduced on IFPT's recommendation.",
+      "lastFollowUpText": "تواصل مع شركة Pen & Process طبقا لترشيح IFPT لتجهيز مواد علمية تفاعلية.\n\nEN: Contacted Pen & Process on IFPT's recommendation, to produce interactive scientific/training material.",
+      "followUpStage": "Identified"
+    },
+    {
+      "id": "ext-ifpt-egypt",
+      "title": "IFPT — cooperation in Egypt (شركة IFPT)",
+      "client": "IFPT",
+      "location": "Egypt",
+      "sector": "Training / Technical services",
+      "source": "Referral",
+      "stage": "Prequalification",
+      "scope": "IFPT wants to cooperate with us in Egypt. An internal team has been formed for the cooperation.",
+      "lastFollowUpText": "شركة IFPT تريد التعاون معنا في مصر وحددوا عقد اجتماع في سبتمبر للكلام في التفاصيل وتم تشكيل فريق للتعاون معهم.\n\nEN: IFPT wants to cooperate with us in Egypt. A meeting is set for September to discuss the details, and a team has been formed to work with them. (Exact September date not stated in the source — to be confirmed.)",
+      "followUpStage": "Prequalification"
+    },
+    {
+      "id": "ext-technip-iraq",
+      "title": "Technip Iraq — potential cooperation (تكنيب العراق)",
+      "client": "Technip",
+      "location": "Iraq",
+      "source": "Referral",
+      "stage": "Identified",
+      "scope": "Potential cooperation identified; not yet actioned.",
+      "lastFollowUpText": "هناك تعاون محتمل مع تكنيب العراق.\n\nEN: There is a potential cooperation with Technip Iraq.",
+      "followUpStage": "Identified"
+    }
+  ],
+  "_retired": [
+    {
+      "id": "ext-edc-jordan",
+      "serialNumber": "OP000010",
+      "retiredOn": "2026-08-17",
+      "reason": "Duplicate of intl-adc-jordan-tender (OP000019) in international-registrations-seed.json — the same ADC Jordan tender arrived from both reports. Merged into OP000019 and deleted from Firestore by scripts/merge-duplicate-opportunities.ts. Kept here so the original wording survives and so a seeder re-run cannot resurrect it.",
+      "record": {
+        "id": "ext-edc-jordan",
+        "title": "ADC Jordan — tender (شركة EDC الاردن)",
+        "client": "ADC",
+        "location": "Jordan",
+        "source": "Public Tender",
+        "stage": "Cancelled",
+        "scope": "Tender package prepared and technically approved by the client, then the tender itself was halted.",
+        "lastFollowUpText": "شركة EDC في الاردن: تم تجهيز المناقصة ووافقوا عليها فنيا وتوقفت المناقصة.\n\nEN: The tender was prepared and they approved it technically, then the tender was stopped/suspended by the client. Recorded as Cancelled (client-side stop, not a loss on price or technical evaluation).",
+        "followUpStage": "Cancelled"
+      }
+    }
+  ]
+}
