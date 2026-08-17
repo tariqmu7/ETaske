@@ -11,10 +11,14 @@ import { createNotification, notifyManagers } from './lib/pushNotification';
 import { taskDetails, corrDetails } from './lib/notifyDetails';
 import { User } from 'firebase/auth';
 import {
-  AppUser, Corresponding, CorrespondingStatus, Task, TaskNote,
+  AppUser, Corresponding, CorrespondingStatus, RecordLinks, Task, TaskNote,
   DEPARTMENT_OPTIONS, PROJECT_OPTIONS, PRIORITY_OPTIONS, OperationType, FirestoreErrorInfo,
   CATEGORY_OPTIONS, CorrespondingCategory
 } from './types';
+import {
+  actorFrom, announceNewRecord, buildRecordLinks, hasAnyLink, linksOf,
+  LinkSource, mirrorRecordEvent, newlyLinked, recordLinksPatch,
+} from './lib/recordLinks';
 import { getNextSerialNumber } from './lib/counters';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
@@ -30,6 +34,7 @@ import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
 import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
+import RecordLinkPicker from './components/RecordLinkPicker';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -44,6 +49,20 @@ function statusBadgeClass(s: CorrespondingStatus) {
     default: return 'badge';
   }
 }
+
+// Every history echo describes the correspondence the same way, wherever it is
+// written from (the form, quick-assign, the ManagerInbox conversion).
+const corrSource = (
+  fields: { id: string; subject: string; serialNumber?: string; status?: string; assignedTo?: string; deadline?: string },
+): LinkSource => ({
+  kind: 'correspondence',
+  id: fields.id,
+  title: fields.subject,
+  serialNumber: fields.serialNumber || undefined,
+  status: fields.status,
+  assignedTo: fields.assignedTo || undefined,
+  dueDate: fields.deadline || undefined,
+});
 
 function priorityBadgeClass(p: string) {
   switch (p) {
@@ -95,6 +114,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [editing, setEditing] = useState<Corresponding | null>(null);
   const [isViewing, setIsViewing] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
+  // The link block is kept OUT of `formData`: it is written through
+  // `buildRecordLinks`/`recordLinksPatch`, never as plain form fields, and a
+  // dropped link has to become `deleteField()` rather than an empty string.
+  const [formLinks, setFormLinks] = useState<RecordLinks>({});
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>(initialStatusFilter || 'Unassigned');
 
@@ -265,9 +288,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         assignedTo: item.assignedTo || '', assignedToId: item.assignedToId || '',
         filePaths: item.filePaths || [],
       });
+      setFormLinks(linksOf(item));
     } else {
       setEditing(null);
       setFormData(emptyForm());
+      setFormLinks({});
     }
     setIsModalOpen(true);
   };
@@ -334,6 +359,10 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     e.preventDefault();
     const data: any = {
       ...formData,
+      // On a CREATE the picked links are embedded as-is (absent keys mean "no
+      // link"); on an UPDATE they must go through `recordLinksPatch`, because a
+      // link the user removed has to be written as `deleteField()`.
+      ...(editing ? recordLinksPatch(formLinks) : formLinks),
       userId: user.uid,
       teamId: appUser.teamId || 'NONE',
       updatedAt: serverTimestamp(),
@@ -342,6 +371,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       data.attachedFile = deleteField();
       data.attachedFileName = deleteField();
     }
+    // Read BEFORE the awaited write: the live snapshot may already have replaced
+    // the row by the time the mirror decides what is newly linked.
+    const priorLinks = editing ? linksOf(editing) : {};
+    const statusChanged = !!editing && editing.status !== formData.status;
+    const actor = actorFrom(user.uid, appUser);
     try {
       let docId = editing?.id;
       let corrSerial = formData.serialNumber;
@@ -351,6 +385,26 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         corrSerial = await getNextSerialNumber('correspondences');
         const docRef = await addDoc(collection(db, 'correspondences'), { ...data, serialNumber: corrSerial, createdAt: serverTimestamp() });
         docId = docRef.id;
+      }
+
+      // Echo into the linked bid / project. Best-effort by design (see
+      // lib/recordLinks.ts) — the correspondence is already saved either way.
+      const source = corrSource({
+        id: docId!, subject: formData.subject, serialNumber: corrSerial,
+        status: formData.status, assignedTo: formData.assignedTo, deadline: formData.deadline,
+      });
+      const freshLinks = newlyLinked(priorLinks, formLinks);
+      if (!editing) {
+        if (hasAnyLink(formLinks)) await announceNewRecord(formLinks, source, actor);
+      } else if (hasAnyLink(freshLinks)) {
+        // A newly attached target is told it was attached — not that the status
+        // moved, and never twice for the same target (`newlyLinked`).
+        await mirrorRecordEvent(freshLinks, source, actor, 'linked');
+      } else if (statusChanged && hasAnyLink(formLinks)) {
+        await mirrorRecordEvent(
+          formLinks, source, actor,
+          formData.status === 'Closed' ? 'completed' : 'status',
+        );
       }
 
       // Every manager/admin sees intake activity, whoever logged it — the actor
@@ -390,6 +444,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           correspondingId: docId,
           correspondingSubject: formData.subject,
           correspondingSerialNumber: corrSerial,
+          // The task inherits the correspondence's links: the email and the work
+          // it produced belong to the same bid / project.
+          ...formLinks,
           attachedFile: formData.attachedFile || null,
           attachedFileName: formData.attachedFileName || null,
           filePaths: formData.filePaths?.length ? formData.filePaths : [],
@@ -408,6 +465,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           status: 'Assigned',
           assignedAt: serverTimestamp(),
         });
+
+        // The task is a record of its own, so it gets its own history line.
+        if (hasAnyLink(formLinks)) {
+          await announceNewRecord(formLinks, {
+            kind: 'task', id: taskRef.id, title: formData.subject, serialNumber: taskSerial,
+            status: 'Pending', assignedTo: formData.assignedTo, dueDate: formData.deadline || undefined,
+          }, actor);
+        }
 
         // Notify assignee (skip if self-assigned)
         if (formData.assignedToId !== user.uid) {
@@ -507,6 +572,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         correspondingId: item.id,
         correspondingSubject: item.subject,
         correspondingSerialNumber: item.serialNumber || '',
+        // Same inheritance as the modal flow above.
+        ...linksOf(item),
         attachedFile: item.attachedFile || null,
         attachedFileName: item.attachedFileName || null,
         filePaths: item.filePaths?.length ? item.filePaths : [],
@@ -528,6 +595,14 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         updatedAt: serverTimestamp(),
         ...(comment ? { notes: comment } : {}),
       });
+
+      const quickLinks = linksOf(item);
+      if (hasAnyLink(quickLinks)) {
+        await announceNewRecord(quickLinks, {
+          kind: 'task', id: taskRef.id, title: item.subject, serialNumber: taskSerial,
+          status: 'Pending', assignedTo: assignee.displayName, dueDate: item.deadline || undefined,
+        }, actorFrom(user.uid, appUser), comment || undefined);
+      }
 
       const assignedBody = taskDetails(
         comment
@@ -1373,6 +1448,36 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   </div>
                   </div>{/* end grid: Workflow */}
                 </div>{/* end section: Workflow */}
+
+                {/* ── Section: Linked records (queue task 5) ── */}
+                <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 14 }}>{t('Linked Records')}</div>
+                  {isViewing ? (
+                    <div style={{ display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-primary)' }}>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>{t('Opportunity / Bid')}: </span>
+                        {formLinks.opportunityId ? (
+                          <>
+                            {formLinks.opportunitySerial && <span className="ltr-data" style={{ fontWeight: 700 }}>{formLinks.opportunitySerial}</span>}
+                            {formLinks.opportunitySerial && ' — '}
+                            {formLinks.opportunityTitle || t('Linked opportunity')}
+                          </>
+                        ) : t('Not linked to a bid')}
+                      </div>
+                      <div>
+                        <span style={{ color: 'var(--text-muted)' }}>{t('Project record')}: </span>
+                        {formLinks.projectId ? (formLinks.projectName || t('Linked project')) : t('Not linked to a project')}
+                      </div>
+                    </div>
+                  ) : (
+                    <RecordLinkPicker
+                      value={formLinks}
+                      onChange={setFormLinks}
+                      active={isModalOpen}
+                      hint={t('This correspondence — and the task it is assigned as — is echoed into the history of whatever it is linked to.')}
+                    />
+                  )}
+                </div>{/* end section: Linked Records */}
 
                 {/* ── Section: Files & Notes ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>

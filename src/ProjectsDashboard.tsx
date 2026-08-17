@@ -20,11 +20,14 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetail from './ProjectDetail';
+import type { AppView } from './App';
 
 interface Props {
   user: User;
   appUser: AppUser;
   projectUsers: AppUser[];
+  /** Threaded to ProjectDetail's Linked tab so it can open a task / email. */
+  onNavigate?: (v: AppView) => void;
 }
 
 function statusBadgeClass(s?: ProjectStatus) {
@@ -51,7 +54,7 @@ const emptyForm = () => ({
   endDate: '',
 });
 
-export default function ProjectsDashboard({ user, appUser, projectUsers }: Props) {
+export default function ProjectsDashboard({ user, appUser, projectUsers, onNavigate }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
@@ -197,6 +200,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers }: Props
         projectUsers={projectUsers}
         onBack={() => setSelectedId(null)}
         onEdit={() => openEdit(selected)}
+        onNavigate={onNavigate}
       />
     );
   }

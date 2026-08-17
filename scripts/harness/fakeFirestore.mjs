@@ -85,7 +85,12 @@ export async function addDoc(c, data) {
 export async function updateDoc(ref, data) {
   const m = coll(ref.__coll);
   if (!m.has(ref.id)) throw new Error('no such doc ' + ref.__coll + '/' + ref.id);
-  m.set(ref.id, { ...m.get(ref.id), ...materialize(data) });
+  // deleteField() REMOVES the key in real Firestore. Merging the sentinel in as
+  // a value instead would leave a truthy \`opportunityId\` behind and make an
+  // unlinked record look linked.
+  const merged = { ...m.get(ref.id), ...materialize(data) };
+  for (const [k, v] of Object.entries(data)) if (v && v.__deleteField) delete merged[k];
+  m.set(ref.id, merged);
   globalThis.__writes.push({ op: 'update', path: ref.__coll + '/' + ref.id, data: { ...data } });
   emit();
 }

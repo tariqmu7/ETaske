@@ -487,7 +487,11 @@ ${creatingFrom.body_preview}`,
         </div>
       )}
 
-      {/* Create Task — the same panel the Tasks dashboard uses, prefilled from the email */}
+      {/* Create Task — the same panel the Tasks dashboard uses, prefilled from the
+          email. Queue task 5: NO `linkPrefill` on purpose — an Outlook message is
+          not a stored record, so there is nothing to inherit from; the panel's own
+          link picker is what lets the user attach the new task to a bid/project,
+          and it writes the link + the history entry itself. */}
       <CreateTaskPanel
         open={showCreateTask && !!creatingFrom}
         onClose={() => setShowCreateTask(false)}

@@ -24,6 +24,22 @@ export interface AppUser {
   telegramChatId?: string;
 }
 
+// ─── Cross-record links ───────────────────────────────────────────────────────
+
+// A task or a correspondence may be attached to an Opportunity and/or a Project.
+// The id is the source of truth; the serial/name beside it is a DENORMALIZED
+// LABEL so a list can render "OP000012 · Zohr tie-in" without reading the other
+// collection (the same rule the opportunity/project mirrors already follow).
+// A stale label is acceptable — it is never compared, filtered or aggregated on;
+// only the id is. Written through `src/lib/recordLinks.ts`, never by hand.
+export interface RecordLinks {
+  opportunityId?: string;
+  opportunitySerial?: string;   // OP000012
+  opportunityTitle?: string;
+  projectId?: string;
+  projectName?: string;
+}
+
 // ─── Correspondences (incoming) ───────────────────────────────────────────────
 
 export type CorrespondingStatus = 'Unread' | 'Reviewing' | 'Assigned' | 'Closed';
@@ -54,6 +70,12 @@ export interface Corresponding {
   assignedToId?: string;        // employee uid
   assignedAt?: Timestamp;
   convertedToTaskId?: string;   // ref to resulting task
+  // Cross-record links (opportunity / project) — see RecordLinks above
+  opportunityId?: string;
+  opportunitySerial?: string;
+  opportunityTitle?: string;
+  projectId?: string;
+  projectName?: string;
   // Meta
   notes?: string;               // manager notes on review
   userId: string;               // who entered this corresponding
@@ -133,6 +155,15 @@ export interface Task {
   correspondingId?: string;
   correspondingSubject?: string;
   correspondingSerialNumber?: string;
+  // Cross-record links (opportunity / project) — see RecordLinks above.
+  // NOTE: `subCategory` still carries the free-text PROJECT_OPTIONS string the
+  // task form has always shown; `projectId` is the real projects/{id} ref and
+  // the two are independent on purpose.
+  opportunityId?: string;
+  opportunitySerial?: string;
+  opportunityTitle?: string;
+  projectId?: string;
+  projectName?: string;
   // Attachments
   attachedFile?: string;
   attachedFileName?: string;

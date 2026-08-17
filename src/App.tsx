@@ -477,7 +477,7 @@ export default function App() {
           />
         )}
         {activeView === 'projects' && (
-          <ProjectsDashboard user={user} appUser={appUser} projectUsers={projectUsers} />
+          <ProjectsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
         {activeView === 'opportunities' && (
           <OpportunitiesDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
@@ -513,6 +513,10 @@ export default function App() {
           { id: 'home',            label: 'Home',            icon: <Home />,       show: true },
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
           { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
+          // Promoted out of the More sheet to match the desktop top nav. The
+          // narrow bottom nav is icon-only and scrolls, so a 5th tab costs
+          // 56px, not a squeezed label — see .bottom-tab in index.css.
+          { id: 'opportunities',   label: 'Opportunities',   icon: <Target />,      show: true },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
           .filter(item => item.show)
           .map(item => (
@@ -557,7 +561,6 @@ export default function App() {
               {([
                 { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'projects',        label: 'Projects',        icon: <FolderKanban />,show: true },
-                { id: 'opportunities',   label: 'Opportunities',   icon: <Target />,      show: true },
                 { id: 'bid-analytics',   label: 'Bid Analytics',   icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
                 { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
