@@ -279,14 +279,22 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           }
         </button>
 
-        {/* Install PWA */}
+        {/* Install PWA — labelled, not a bare icon: it appears only until the app
+            is installed, so it has to read as an offer rather than a mystery glyph. */}
         {pwa.canInstall && (
           <button
-            className="btn btn-ghost btn-icon"
+            className="btn btn-ghost"
             onClick={pwa.promptInstall}
-            title={t('Add to Home Screen')}
+            title={t('Install ETaske on this device')}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '6px 10px', fontSize: 12, fontWeight: 700,
+              color: 'var(--accent)', border: '1px solid var(--accent)',
+              whiteSpace: 'nowrap',
+            }}
           >
-            <Download className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+            <Download className="w-4 h-4" />
+            <span className="hidden sm:inline">{t('Install app')}</span>
           </button>
         )}
 
@@ -470,6 +478,35 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
               </div>
 
               <div style={{ padding: '6px 8px' }}>
+                {/* Install — mirrored here because the header pill is easy to miss.
+                    iOS fires no beforeinstallprompt event at all, so there it can
+                    only tell the user where Safari hides the command. */}
+                {pwa.canInstall && (
+                  <button
+                    onClick={() => { setShowUserMenu(false); void pwa.promptInstall(); }}
+                    style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'none'}
+                    title={t('Install ETaske on this device')}
+                  >
+                    <Download className="w-4 h-4" style={{ color: 'var(--accent)' }} />
+                    <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      {t('Install app')}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>{t('Works offline, opens in its own window')}</span>
+                    </span>
+                  </button>
+                )}
+                {pwa.isIOS && !pwa.isInstalled && !pwa.canInstall && (
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}
+                  >
+                    <Download className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+                    <span style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.2 }}>
+                      {t('Add to Home Screen')}
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-muted)' }}>{t('Share → Add to Home Screen')}</span>
+                    </span>
+                  </div>
+                )}
                 {appUser.telegramChatId ? (
                   <button
                     onClick={() => { disconnectTelegram(appUser.id).catch(console.error); }}
