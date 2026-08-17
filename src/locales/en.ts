@@ -1276,6 +1276,45 @@ const en = {
   "Tasks linked to this bid are listed on its Tasks tab.": "Tasks linked to this bid are listed on its Tasks tab.",
   "Linked": "Linked",
   "Correspondences and tasks attached to this project.": "Correspondences and tasks attached to this project.",
+
+  // Group-by queue task 1 — the shared "Group by (X)" control on the tasks board.
+  // "Status", "Project", "Location", "Assignee", "Unassigned",
+  // "Assigned to {{name}}" and "{{category}} Tasks" are keys above and are
+  // reused — a duplicate key here is a tsc error.
+  "Group by": "Group by",
+  "Uncategorized": "Uncategorized",
+  "No project": "No project",
+  "No location": "No location",
+  "Project: {{name}}": "Project: {{name}}",
+  "Location: {{name}}": "Location: {{name}}",
+
+  // Group-by queue task 2 — the same control on the correspondences board.
+  // "Status", "Category", "Location", "Assignee", "Sent From", "Unassigned",
+  // "Uncategorized", "No location", "Location: {{name}}" and
+  // "Assigned to {{name}}" are reused from above.
+  "{{status}} Correspondences": "{{status}} Correspondences",
+  "Category: {{name}}": "Category: {{name}}",
+  "From {{name}}": "From {{name}}",
+  "No sender": "No sender",
+
+  // Group-by queue task 3 — the same control on the projects board.
+  // "Status", "Client", "Location", "Uncategorized", "No location" and
+  // "Location: {{name}}" are reused from above.
+  "Owner": "Owner",
+  "{{status}} Projects": "{{status}} Projects",
+  "Client: {{name}}": "Client: {{name}}",
+  "Owner: {{name}}": "Owner: {{name}}",
+  "No client": "No client",
+  "No owner": "No owner",
+  "End date (soonest)": "End date (soonest)",
+
+  // Group-by queue task 4 — the same control on the opportunities board.
+  // "Stage", "Location", "Source", "Owner", "Uncategorized", "No location",
+  // "Location: {{name}}", "Owner: {{name}}" and "No owner" are reused from
+  // above — an Opportunity stores `ownerName`, so no uid ever reaches a heading.
+  "{{stage}} Opportunities": "{{stage}} Opportunities",
+  "Source: {{name}}": "Source: {{name}}",
+  "No source": "No source",
 } as const;
 
 export default en;

@@ -1231,6 +1231,42 @@ const ar: Record<keyof typeof en, string> = {
   "Tasks linked to this bid are listed on its Tasks tab.": "المهام المرتبطة بهذا العطاء معروضة في تبويب المهام الخاص به.",
   "Linked": "المرتبطة",
   "Correspondences and tasks attached to this project.": "المراسلات والمهام المرتبطة بهذا المشروع.",
+
+  // Group-by queue task 1 — the shared "Group by (X)" control on the tasks board.
+  "Group by": "التجميع حسب",
+  "Uncategorized": "غير مصنّفة",
+  "No project": "بدون مشروع",
+  "No location": "بدون موقع",
+  "Project: {{name}}": "مشروع: {{name}}",
+  "Location: {{name}}": "موقع: {{name}}",
+
+  // Group-by queue task 2 — the same control on the correspondences board.
+  // Colon form on purpose: the status labels are adjectives ("غير مقروء",
+  // "مُسنَد"), so "المراسلات {{status}}" would break gender/definiteness
+  // agreement. The colon sidesteps it, and matches "تصنيف: {{name}}" below.
+  "{{status}} Correspondences": "مراسلات: {{status}}",
+  "Category: {{name}}": "تصنيف: {{name}}",
+  "From {{name}}": "من {{name}}",
+  "No sender": "بدون مُرسِل",
+
+  // Group-by queue task 3 — the same control on the projects board. Same colon
+  // form as the correspondences headings, and for the same reason: the status
+  // labels are adjectives ("نشط", "معلّق"), so "المشروعات نشط" would break
+  // gender/definiteness agreement.
+  "Owner": "المسؤول",
+  "{{status}} Projects": "مشروعات: {{status}}",
+  "Client: {{name}}": "عميل: {{name}}",
+  "Owner: {{name}}": "مسؤول: {{name}}",
+  "No client": "بدون عميل",
+  "No owner": "بدون مسؤول",
+  "End date (soonest)": "تاريخ الانتهاء (الأقرب)",
+
+  // Group-by queue task 4 — the same control on the opportunities board. Colon
+  // form again: the stage labels are adjectives/nouns ("مُقدَّم", "فائزة"), so
+  // "الفرص مُقدَّم" would break gender/definiteness agreement.
+  "{{stage}} Opportunities": "فرص: {{stage}}",
+  "Source: {{name}}": "مصدر: {{name}}",
+  "No source": "بدون مصدر",
 };
 
 export default ar;
