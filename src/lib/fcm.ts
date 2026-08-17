@@ -12,7 +12,16 @@ export function getFCMMessaging() {
 export async function registerServiceWorker(): Promise<ServiceWorkerRegistration | null> {
   if (!('serviceWorker' in navigator)) return null;
   try {
-    return await navigator.serviceWorker.register('/firebase-messaging-sw.js', { scope: '/' });
+    // App-relative: production is served from a GitHub Pages subpath (/ETaske/),
+    // where '/firebase-messaging-sw.js' 404s and a '/' scope is rejected.
+    // The scope is Firebase's own push-only sub-scope, NOT the app base — the
+    // app base belongs to the shell worker (src/lib/pwa.ts) and one scope can
+    // only ever have one worker, so sharing it would evict the shell worker and
+    // silently kill installability.
+    return await navigator.serviceWorker.register(
+      new URL('firebase-messaging-sw.js', window.location.href).href,
+      { scope: new URL('./firebase-cloud-messaging-push-scope', window.location.href).href },
+    );
   } catch (e) {
     console.error('SW registration failed:', e);
     return null;

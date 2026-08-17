@@ -1,24 +1,35 @@
 {
-  "name": "ETaske",
+  "id": "etaske-workflow",
+  "name": "ETaske — Enterprise Workflow",
   "short_name": "ETaske",
-  "description": "Enterprise workflow dashboard",
+  "description": "Correspondences, tasks, milestones and archive for the whole organization, in real time.",
   "start_url": "./",
+  "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui", "browser"],
   "background_color": "#0f172a",
   "theme_color": "#6366f1",
-  "orientation": "portrait-primary",
+  "lang": "en",
+  "dir": "auto",
+  "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "./favicon.png",
+      "src": "./icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "./favicon.png",
+      "src": "./icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "./icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }
