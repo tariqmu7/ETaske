@@ -36,7 +36,8 @@ interface Props {
 export default function TopNav({ appUser, activeView, onNavigate, notifications, dueSoonCount, announcementCount, navCounts, onOpenPalette, onLogout, pwa, isDark, onToggleTheme }: Props) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
-  const [showMore, setShowMore] = useState(false);
+  // One open nav group at a time; null = all closed.
+  const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [tgConnecting, setTgConnecting] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
@@ -58,13 +59,18 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   }, [showUserMenu]);
 
   useEffect(() => {
-    if (!showMore) return;
+    if (!openMenu) return;
     const handler = (e: MouseEvent) => {
-      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setShowMore(false);
+      if (moreRef.current && !moreRef.current.contains(e.target as Node)) setOpenMenu(null);
     };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenMenu(null); };
     document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [showMore]);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', handler);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [openMenu]);
 
   const handleClearAll = () => {
     const unread = notifications.filter(n => !n.read);
@@ -126,20 +132,19 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   // `label` stays the English source text: it IS the i18next key (keySeparator
   // is off), so the tables below double as the key list and t() runs at render.
   type NavItem = { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean };
+  // A group is one top-level button holding related destinations. A group whose
+  // visible children collapse to one renders as a plain tab instead — nobody
+  // should open a menu to reach a single destination.
+  type NavGroup = { key: string; label: string; icon: React.ReactNode; items: NavItem[] };
 
-  // High-frequency tabs stay visible; low-frequency ones (Archive, Outlook,
-  // Users) collapse into a "More" dropdown so the bar doesn't overflow/scroll
-  // on mid-size screens. Badges surface pending work without a click.
-  const primaryItems: NavItem[] = [
-    { id: 'home', label: 'Home', icon: <Home className="w-4 h-4" />, show: true },
-    { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
-    {
-      id: 'correspondences',
-      label: 'Correspondences',
-      icon: <MailOpen className="w-4 h-4" />,
-      badge: isManagerOrAdmin ? navCounts.corrNeedsReview : navCounts.corrUnread,
-      show: true,
-    },
+  // ── Nav grouping (UX pass, task 2) ──────────────────────────────────────
+  // The bar used to carry up to 11 destinations (7 tabs + a More menu); a
+  // manager had to scan the whole row to find anything. It is now four
+  // top-level choices — Home, Work, Portfolio, Insights — plus More for what
+  // is opened weekly at most (Archive, Outlook, Users). Grouping is by the
+  // QUESTION ASKED, not by data model: "what is on me" (Work), "what are we
+  // chasing / running" (Portfolio), "how are we doing" (Insights).
+  const workItems: NavItem[] = [
     {
       id: 'tasks',
       label: 'Tasks',
@@ -147,26 +152,64 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       badge: navCounts.myActiveTasks,
       show: true,
     },
+    {
+      id: 'correspondences',
+      label: 'Correspondences',
+      icon: <MailOpen className="w-4 h-4" />,
+      badge: isManagerOrAdmin ? navCounts.corrNeedsReview : navCounts.corrUnread,
+      show: true,
+    },
+    // Manager Inbox is a tab INSIDE CorrespondingsDashboard, not a screen of
+    // its own — listing it here puts the review queue one click away instead
+    // of two, which is the point of the group.
+    { id: 'manager-inbox', label: 'Manager Inbox', icon: <MailOpen className="w-4 h-4" />, show: isManagerOrAdmin },
+  ];
+
+  const portfolioItems: NavItem[] = [
     { id: 'projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, show: true },
-    // Opportunities sits in the primary row, next to Projects: the bid pipeline
-    // is day-to-day work, and a submission deadline hidden behind "More" is the
-    // one thing that cannot be caught up on the next day. Badge counts bids at
-    // their submission deadline (≤7 days or already past), not the whole
-    // pipeline — the deadline is the part that can be missed.
+    // Badge counts bids at their submission deadline (7 days out or already
+    // past), not the whole pipeline — the deadline is the part that can be
+    // missed, and it now sits one level down, so the count rides the group too.
     { id: 'opportunities', label: 'Opportunities', icon: <Target className="w-4 h-4" />, badge: navCounts.bidsDueSoon, show: true },
   ];
 
-  const overflowItems: NavItem[] = [
+  const insightsItems: NavItem[] = [
+    { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
     { id: 'bid-analytics', label: 'Bid Analytics', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
+  ];
+
+  const moreItems: NavItem[] = [
     { id: 'archive', label: 'Archive', icon: <Archive className="w-4 h-4" />, show: true },
     { id: 'outlook-feed', label: 'Outlook', icon: <Mail className="w-4 h-4" />, show: true },
     { id: 'admin', label: 'Users', icon: <Users className="w-4 h-4" />, show: appUser.role === 'Admin' },
   ];
 
-  const moreActive = overflowItems.some(i => i.show && i.id === activeView);
-  const overflowBadge = overflowItems
-    .filter(i => i.show)
-    .reduce((sum, i) => sum + (i.badge ?? 0), 0);
+  const groups: NavGroup[] = ([
+    { key: 'work', label: 'Work', icon: <CheckSquare className="w-4 h-4" />, items: workItems },
+    { key: 'portfolio', label: 'Portfolio', icon: <FolderKanban className="w-4 h-4" />, items: portfolioItems },
+    { key: 'insights', label: 'Insights', icon: <BarChart3 className="w-4 h-4" />, items: insightsItems },
+    { key: 'more', label: 'More', icon: <MoreHorizontal className="w-4 h-4" />, items: moreItems },
+  ] as NavGroup[])
+    .map(g => ({ ...g, items: g.items.filter(i => i.show) }))
+    .filter(g => g.items.length > 0);
+
+  // Correspondences owns the manager-inbox view as one of its tabs, so either
+  // view lights up either entry (notifications still deep-link to the inbox).
+  const itemActive = (item: NavItem) =>
+    activeView === item.id
+    || (item.id === 'correspondences' && activeView === 'manager-inbox');
+
+  // A badge inside a closed menu is invisible, so a group carries the sum of
+  // its children's counts.
+  const groupBadge = (g: NavGroup) => g.items.reduce((sum, i) => sum + (i.badge ?? 0), 0);
+  const groupActive = (g: NavGroup) => g.items.some(i => activeView === i.id);
+
+  const menuItemStyle = (active: boolean): React.CSSProperties => ({
+    width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 10,
+    padding: '9px 14px', background: active ? 'var(--blue-50)' : 'transparent',
+    border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
+    color: active ? 'var(--blue-600)' : 'var(--text-primary)',
+  });
 
   return (
     <header className="topnav">
@@ -183,77 +226,79 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         <span className="topnav-brand">ETaske</span>
       </button>
 
-      {/* Nav tabs */}
+      {/* Home is the only bare destination in the bar. */}
       <nav className="topnav-tabs">
-        {primaryItems.filter(i => i.show).map(item => {
-          // The merged Correspondences & Inbox tab stays active for either
-          // underlying view (notifications can still deep-link to manager-inbox).
-          const isActive = activeView === item.id
-            || (item.id === 'correspondences' && activeView === 'manager-inbox');
-          return (
-          <button
-            key={item.id}
-            onClick={() => onNavigate(item.id)}
-            className={`nav-tab${isActive ? ' active' : ''}`}
-          >
-            {item.icon}
-            <span>{t(item.label)}</span>
-            {item.badge !== undefined && item.badge > 0 && (
-              <span className="tab-badge">
-                {item.badge > 99 ? '99+' : item.badge}
-              </span>
-            )}
-          </button>
-          );
-        })}
-
+        <button
+          onClick={() => onNavigate('home')}
+          className={`nav-tab${activeView === 'home' ? ' active' : ''}`}
+        >
+          <Home className="w-4 h-4" />
+          <span>{t('Home')}</span>
+        </button>
       </nav>
 
-      {/* "More" dropdown — collapses low-frequency tabs on desktop too.
-          Lives OUTSIDE .topnav-tabs: that element is an overflow-x scroll
-          container, which would clip this absolutely-positioned menu. */}
-      <div ref={moreRef} className="topnav-more" style={{ position: 'relative', flexShrink: 0 }}>
-        <button
-          onClick={() => setShowMore(v => !v)}
-          className={`nav-tab${moreActive ? ' active' : ''}`}
-          aria-haspopup="menu"
-          aria-expanded={showMore}
-        >
-          <MoreHorizontal className="w-4 h-4" />
-          <span>{t('More')}</span>
-          {/* A badge inside a closed menu is invisible, so the count is also
-              carried on the button that hides it. */}
-          {overflowBadge > 0 && (
-            <span className="tab-badge">{overflowBadge > 99 ? '99+' : overflowBadge}</span>
-          )}
-        </button>
-        {showMore && (
-            <div role="menu" style={{
-              position: 'absolute', top: 'calc(100% + 6px)', insetInlineEnd: 0, minWidth: 180,
-              background: 'var(--surface)', border: '1px solid var(--border)',
-              boxShadow: '0 12px 32px rgba(0,0,0,0.16)', zIndex: 1000, padding: '6px 0',
-            }}>
-              {overflowItems.filter(i => i.show).map(item => (
-                <button
-                  key={item.id}
-                  role="menuitem"
-                  onClick={() => { onNavigate(item.id); setShowMore(false); }}
-                  style={{
-                    width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '9px 14px', background: activeView === item.id ? 'var(--blue-50)' : 'transparent',
-                    border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600,
-                    color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
-                  }}
-                >
-                  {item.icon}
-                  <span style={{ flex: 1 }}>{t(item.label)}</span>
-                  {item.badge !== undefined && item.badge > 0 && (
-                    <span className="tab-badge">{item.badge > 99 ? '99+' : item.badge}</span>
-                  )}
-                </button>
-              ))}
+      {/* The group menus live OUTSIDE .topnav-tabs: that element is an
+          overflow-x scroll container, which would clip an absolutely
+          positioned dropdown. */}
+      <div ref={moreRef} className="topnav-more" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        {groups.map(g => {
+          const single = g.items.length === 1 ? g.items[0] : null;
+          const badge = groupBadge(g);
+          if (single) {
+            return (
+              <button
+                key={g.key}
+                onClick={() => onNavigate(single.id)}
+                className={`nav-tab${itemActive(single) ? ' active' : ''}`}
+                title={t(single.label)}
+                aria-label={t(single.label)}
+              >
+                {single.icon}
+                <span>{t(single.label)}</span>
+                {badge > 0 && <span className="tab-badge">{badge > 99 ? '99+' : badge}</span>}
+              </button>
+            );
+          }
+          const open = openMenu === g.key;
+          return (
+            <div key={g.key} style={{ position: 'relative' }}>
+              <button
+                onClick={() => setOpenMenu(open ? null : g.key)}
+                className={`nav-tab${groupActive(g) ? ' active' : ''}`}
+                title={t(g.label)}
+                aria-label={t(g.label)}
+                aria-haspopup="menu"
+                aria-expanded={open}
+              >
+                {g.icon}
+                <span>{t(g.label)}</span>
+                {badge > 0 && <span className="tab-badge">{badge > 99 ? '99+' : badge}</span>}
+              </button>
+              {open && (
+                <div role="menu" style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', insetInlineStart: 0, minWidth: 200,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.16)', zIndex: 1000, padding: '6px 0',
+                }}>
+                  {g.items.map(item => (
+                    <button
+                      key={item.id}
+                      role="menuitem"
+                      onClick={() => { onNavigate(item.id); setOpenMenu(null); }}
+                      style={menuItemStyle(itemActive(item))}
+                    >
+                      {item.icon}
+                      <span style={{ flex: 1 }}>{t(item.label)}</span>
+                      {item.badge !== undefined && item.badge > 0 && (
+                        <span className="tab-badge">{item.badge > 99 ? '99+' : item.badge}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
+          );
+        })}
       </div>
 
       {/* User + logout */}

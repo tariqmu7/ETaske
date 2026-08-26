@@ -111,6 +111,9 @@ const en = {
   "Outlook": "Outlook",
   "Users": "Users",
   "Announcements": "Announcements",
+  "Work": "Work",
+  "Portfolio": "Portfolio",
+  "Insights": "Insights",
   "More": "More",
   "More Options": "More Options",
   "Breadcrumb": "Breadcrumb",
@@ -168,6 +171,9 @@ const en = {
   "View my tasks": "View my tasks",
   "Review {{count}} due soon": "Review {{count}} due soon",
   "Jump back in": "Jump back in",
+  "Needs you today": "Needs you today",
+  "Awaiting review": "Awaiting review",
+  "See all {{count}}": "See all {{count}}",
   "Org analytics, workload and progress at a glance.": "Org analytics, workload and progress at a glance.",
   "Triage incoming letters, then review and assign them as tasks.": "Triage incoming letters, then review and assign them as tasks.",
   "Incoming letters and requests waiting to be triaged.": "Incoming letters and requests waiting to be triaged.",
@@ -1342,6 +1348,25 @@ const en = {
   // The card subtitle: what the bucket's still-live bids are worth. "Open" and
   // "OVERDUE" (the badge) are keys above and are reused.
   "{{value}} open": "{{value}} open",
+  // UX simplification task 4 (2026-08-26) — the shared `BoardToolbar`: one row
+  // per board, with the rarely-touched filters behind a disclosure.
+  "Filters": "Filters",
+  "Clear all": "Clear all",
+  "More actions": "More actions",
+  "No tasks yet": "No tasks yet",
+  "A task is the work itself. Managers create one from a correspondence, or you can add one directly.": "A task is the work itself. Managers create one from a correspondence, or you can add one directly.",
+  "Nothing assigned to you": "Nothing assigned to you",
+  "You have no open tasks. Switch to All Tasks to see what the rest of the team is working on.": "You have no open tasks. Switch to All Tasks to see what the rest of the team is working on.",
+  "No correspondences yet": "No correspondences yet",
+  "Every piece of work starts here: log an incoming letter, then a manager reviews it and assigns it as a task.": "Every piece of work starts here: log an incoming letter, then a manager reviews it and assigns it as a task.",
+  "How work flows here": "How work flows here",
+  "1. Log it": "1. Log it",
+  "Every incoming letter or request is recorded as a correspondence.": "Every incoming letter or request is recorded as a correspondence.",
+  "2. Assign it": "2. Assign it",
+  "A manager reviews it and turns it into a task with an owner and a deadline.": "A manager reviews it and turns it into a task with an owner and a deadline.",
+  "3. Finish it": "3. Finish it",
+  "Track milestones on the task; marking it Done files it in the archive.": "Track milestones on the task; marking it Done files it in the archive.",
+  "Got it": "Got it",
 } as const;
 
 export default en;

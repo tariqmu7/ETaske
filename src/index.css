@@ -170,6 +170,17 @@ body {
   .topnav-more { display: none !important; }
 }
 
+/* Tablet / small laptop: the grouped nav (UX task 2) sits OUTSIDE the
+   scrollable .topnav-tabs — it cannot scroll, because its dropdowns would be
+   clipped — so between 769px and 1023px the group buttons drop their text and
+   run icon-only. Each one carries a title/aria-label, and the label comes back
+   the moment there is room. Without this the bar pushes the document ~75px
+   wide at 900px. */
+@media (min-width: 769px) and (max-width: 1023px) {
+  .topnav-more .nav-tab span { display: none; }
+  .topnav-more .nav-tab { padding: 7px 10px; }
+}
+
 @media (min-width: 480px) {
   .topnav-brand { display: block; }
 }

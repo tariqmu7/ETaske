@@ -5,9 +5,12 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { AppUser } from './types';
-import { AppView, NavCounts } from './App';
+import { AppView, NavCounts, AttentionItem } from './App';
+import { fmtDate, DATE_SHORT } from './lib/format';
+import { useLanguage } from './hooks/useLanguage';
 import { getRecents, RecentItem } from './lib/recents';
 import { requestOpen } from './lib/deepLink';
+import HowItWorks from './components/HowItWorks';
 
 interface Props {
   appUser: AppUser;
@@ -16,7 +19,16 @@ interface Props {
   announcementCount: number;
   unreadNotifications: number;
   navCounts: NavCounts;
+  attention: AttentionItem[];
 }
+
+// Overdue first, then the 48h window, then the triage queue — the order the
+// user should work them in. Ties break on the earlier deadline.
+const REASON_RANK: Record<AttentionItem['reason'], number> = { overdue: 0, 'due-soon': 1, review: 2 };
+
+// Home is a launcher, not a work queue: past a handful of rows the list stops
+// telling you what to do next and becomes another board to scan.
+const ATTENTION_LIMIT = 6;
 
 interface Tile {
   id: AppView;
@@ -35,8 +47,9 @@ const recentIcon = (kind: RecentItem['kind']) =>
       : kind === 'opportunity' ? <Target className="w-4 h-4" />
         : <FolderKanban className="w-4 h-4" />;
 
-export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications, navCounts }: Props) {
+export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, announcementCount, unreadNotifications, navCounts, attention }: Props) {
   const { t } = useTranslation();
+  const { lang } = useLanguage();
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
   const hour = new Date().getHours();
   const greeting = t(hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening');
@@ -53,6 +66,20 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       window.removeEventListener('storage', refresh);
     };
   }, []);
+
+  const ranked = [...attention].sort((a, b) =>
+    (REASON_RANK[a.reason] - REASON_RANK[b.reason]) || (a.due || '').localeCompare(b.due || ''));
+  const shown = ranked.slice(0, ATTENTION_LIMIT);
+
+  const openAttention = (item: AttentionItem) => {
+    requestOpen({ type: item.kind, id: item.id, label: item.label, serial: item.serial });
+    onNavigate(item.kind === 'task' ? 'tasks' : 'correspondences');
+  };
+
+  const reasonStyle = (reason: AttentionItem['reason']) =>
+    reason === 'overdue' ? { label: t('Overdue'), color: 'var(--danger)', bg: 'rgba(239,68,68,0.12)' }
+      : reason === 'due-soon' ? { label: t('Due Soon'), color: '#ea580c', bg: 'rgba(249,115,22,0.12)' }
+        : { label: t('Awaiting review'), color: 'var(--blue-600)', bg: 'var(--surface-2)' };
 
   const openRecent = (r: RecentItem) => {
     if (r.kind === 'task') { requestOpen({ type: 'task', id: r.id, label: r.label, serial: r.serial }); onNavigate('tasks'); }
@@ -180,6 +207,53 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
           {unreadNotifications > 0 && ` · ${t(unreadNotifications > 1 ? '{{count}} unread notifications' : '{{count}} unread notification', { count: unreadNotifications })}`}
         </p>
       </div>
+
+      {/* First-run guidance — the three steps work takes here. Hidden for
+          anyone who has already opened a record, and dismissible for good. */}
+      <HowItWorks enabled={recents.length === 0} onNavigate={onNavigate} />
+
+      {/* Needs you today — the records actually waiting on this user. */}
+      {shown.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 10 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <AlertCircle className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
+              <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 }}>{t('Needs you today')}</h2>
+            </div>
+            {ranked.length > shown.length && (
+              <button
+                onClick={() => onNavigate('due-soon')}
+                style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 700, color: 'var(--blue-600)' }}
+              >
+                {t('See all {{count}}', { count: ranked.length })}
+              </button>
+            )}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {shown.map(item => {
+              const r = reasonStyle(item.reason);
+              return (
+                <button
+                  key={`${item.kind}-${item.id}`}
+                  onClick={() => openAttention(item)}
+                  className="card card-interactive"
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--surface)', border: '1px solid var(--border)', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start', width: '100%' }}
+                >
+                  <span style={{ color: r.color, flexShrink: 0, display: 'flex' }}>{recentIcon(item.kind)}</span>
+                  <span style={{ minWidth: 0, flex: 1 }}>
+                    <span style={{ display: 'block', fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.label}</span>
+                    {item.serial && <span className="ltr-data" style={{ display: 'block', fontSize: 11, color: 'var(--text-muted)' }}>{item.serial}</span>}
+                  </span>
+                  {item.due && (
+                    <span className="ltr-data" style={{ fontSize: 12, color: 'var(--text-muted)', flexShrink: 0 }}>{fmtDate(item.due, lang, DATE_SHORT)}</span>
+                  )}
+                  <span style={{ fontSize: 11, fontWeight: 800, color: r.color, background: r.bg, padding: '3px 8px', flexShrink: 0 }}>{r.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Quick actions — emphasised when there's nothing pressing to do. */}
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>

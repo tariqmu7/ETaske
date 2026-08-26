@@ -22,7 +22,7 @@ import {
 import { getNextSerialNumber } from './lib/counters';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
-  Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
+  Plus, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
   UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon, ArrowLeft
 } from 'lucide-react';
@@ -37,6 +37,7 @@ import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import RecordLinkPicker from './components/RecordLinkPicker';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
@@ -889,16 +890,21 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
   return (
     <div style={{ padding: '20px 0', minHeight: '60vh' }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
-          {t('Correspondences')}
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
-          {isManager
-            ? t('Log, review, and assign incoming documents as tasks — all in one place.')
-            : t('Log incoming documents — managers will review and assign them as tasks.')}
-        </p>
+      {/* Header — exactly one action: New Correspondence. */}
+      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+            {t('Correspondences')}
+          </h1>
+          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+            {isManager
+              ? t('Log, review, and assign incoming documents as tasks — all in one place.')
+              : t('Log incoming documents — managers will review and assign them as tasks.')}
+          </p>
+        </div>
+        <button className="btn btn-primary" onClick={() => openModal()}>
+          <Plus className="w-4 h-4" /> {t('New Correspondence')}
+        </button>
       </div>
 
       {/* Segmented status filter (doubles as the stats row) */}
@@ -953,50 +959,32 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       {/* Unified layout: list (left) + team workload panel (right, managers only) */}
       <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: isManager ? '1fr 300px' : '1fr', gap: 24, alignItems: 'start' }}>
       <div style={{ minWidth: 0 }}>
-      {/* Toolbar */}
-      <div className="filter-bar">
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 16, height: 16, color: 'var(--text-muted)' }} />
-          <input
-            className="input"
-            style={{ paddingInlineStart: 40 }}
-            placeholder={t('Search subject or sender…')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input
-            type="date"
-            className="input"
-            style={{ width: 'auto' }}
-            value={dateFilter}
-            onChange={e => setDateFilter(e.target.value)}
-            title={t('Filter by day')}
-          />
-          {dateFilter && (
-            <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-              {t('Clear Date')}
-            </button>
-          )}
-
-          <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-            <option value="All">{t('All Departments')}</option>
-            {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d}>{label(d)}</option>)}
-          </select>
-        </div>
-
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus className="w-4 h-4" /> {t('New Correspondence')}
-        </button>
-      </div>
-
-      {/* Its own row, not another chip in the filter bar: this changes how the
-          list is *arranged*, not which correspondences are in it. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
-        <GroupByBar<CorrGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
-      </div>
+      {/* One toolbar row: search + Group by + the date/department filters folded
+          into `Filters`. The create button now lives in the header. */}
+      <BoardToolbar
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder={t('Search subject or sender…')}
+        groupBy={<GroupByBar<CorrGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        activeFilterCount={(dateFilter ? 1 : 0) + (deptFilter !== 'All' ? 1 : 0)}
+        onClearFilters={() => { setDateFilter(''); setDeptFilter('All'); }}
+        filters={
+          <>
+            <input
+              type="date"
+              className="input"
+              style={{ width: 'auto' }}
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              title={t('Filter by day')}
+            />
+            <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              <option value="All">{t('All Departments')}</option>
+              {DEPARTMENT_OPTIONS.filter(d => d !== 'None' && d !== 'Other...').map(d => <option key={d} value={d}>{label(d)}</option>)}
+            </select>
+          </>
+        }
+      />
 
       {showGroupGrid ? (
         // Grouping IS the grid: one card per bucket, and the list only appears
@@ -1010,8 +998,22 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               <div className="empty-state-icon">
                 <MailOpen style={{ width: 28, height: 28 }} />
               </div>
-              <p className="empty-state-title">{t('No correspondences found')}</p>
-              <p className="empty-state-sub">{t('No items match your filters')}<br />{t('Use the button above to add a new correspondence.')}</p>
+              {/* A board that has never held a record is not a board whose
+                  filters hide everything — the old copy told the first-run user
+                  to clear filters they had never set. */}
+              {visibleItems.length === 0 ? (
+                <>
+                  <p className="empty-state-title">{t('No correspondences yet')}</p>
+                  <p className="empty-state-sub">{t('Every piece of work starts here: log an incoming letter, then a manager reviews it and assigns it as a task.')}</p>
+                  <button className="btn btn-ghost btn-sm" onClick={() => openModal()}>{t('New Correspondence')}</button>
+                </>
+              ) : (
+                <>
+                  <p className="empty-state-title">{t('No correspondences found')}</p>
+                  <p className="empty-state-sub">{t('No items match your filters')}<br />{t('Use the button above to add a new correspondence.')}</p>
+                  <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(''); setStatusFilter('All'); setDeptFilter('All'); setDateFilter(''); }}>{t('Clear All Filters')}</button>
+                </>
+              )}
             </div>
           }
         />
@@ -1076,8 +1078,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   )}
                   <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{item.subject}</h3>
                   <span className={statusBadgeClass(item.status)}>{label(item.status)}</span>
-                  <span className={priorityBadgeClass(item.priority)}>{label(item.priority)}</span>
-                  {item.category && (
+                  {isUnassignedCard && <span className={priorityBadgeClass(item.priority)}>{label(item.priority)}</span>}
+                  {isUnassignedCard && item.category && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
                       borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
@@ -1086,7 +1088,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
                     }} className={fmt.bidiFor(label(item.category))}>{label(item.category)}</span>
                   )}
-                  {item.actions && item.actions !== 'None' && (
+                  {isUnassignedCard && item.actions && item.actions !== 'None' && (
                     <span style={{
                       display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
                       borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
@@ -1106,39 +1108,43 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 </div>
 
                 {/* Body — full on unassigned cards, one-line snippet elsewhere */}
-                {item.body && (
-                  <p style={isUnassignedCard
-                    ? { color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 8px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }
-                    : { color: 'var(--text-muted)', fontSize: 13, margin: '0 0 6px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.body}</p>
+                {isUnassignedCard && item.body && (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 8px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{item.body}</p>
                 )}
 
                 {/* Meta line */}
                 <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Building2 className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                    {item.department}{item.subCategory ? ` › ${item.subCategory}` : ''}
-                  </span>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <MailOpen className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                    {t('From:')} {item.sentFrom}
-                  </span>
+                  {isUnassignedCard && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <Building2 className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                      {item.department}{item.subCategory ? ` › ${item.subCategory}` : ''}
+                    </span>
+                  )}
+                  {isUnassignedCard && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <MailOpen className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                      {t('From:')} {item.sentFrom}
+                    </span>
+                  )}
                   {item.deadline && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fbbf24' }}>
                       <Calendar className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
                       {item.deadline}
                     </span>
                   )}
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    {(() => {
-                      const u = projectUsers.find(pu => pu.id === item.userId);
-                      return u?.photoURL ? (
-                        <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover', opacity: 0.8 }} alt="" />
-                      ) : (
-                        <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
-                      );
-                    })()}
-                    {projectUsers.find(u => u.id === item.userId)?.displayName || t('Unknown')}
-                  </span>
+                  {isUnassignedCard && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {(() => {
+                        const u = projectUsers.find(pu => pu.id === item.userId);
+                        return u?.photoURL ? (
+                          <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover', opacity: 0.8 }} alt="" />
+                        ) : (
+                          <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
+                        );
+                      })()}
+                      {projectUsers.find(u => u.id === item.userId)?.displayName || t('Unknown')}
+                    </span>
+                  )}
                   {item.assignedTo && (
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
                       {(() => {

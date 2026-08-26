@@ -20,8 +20,8 @@ import { consumePending, subscribeOpen } from './lib/deepLink';
 import { recordRecent } from './lib/recents';
 import { exportOpportunities } from './lib/exportData';
 import {
-  Plus, Search, X, Target, Building2, Hash, CalendarClock,
-  Trash2, Edit2, AlertCircle, User as UserIcon, Percent, MessageSquare, BarChart3,
+  Plus, X, Target, Building2, CalendarClock,
+  Trash2, Edit2, AlertCircle, User as UserIcon, BarChart3,
   FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ArrowLeft,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -29,7 +29,9 @@ import type { AppView } from './App';
 import { motion, AnimatePresence } from 'motion/react';
 import OpportunityDetail from './OpportunityDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
+import CardMenu from './components/CardMenu';
 import { buildGroups, UNGROUPED } from './lib/grouping';
 import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
 
@@ -554,25 +556,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
             </p>
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button
-            className="btn btn-ghost"
-            onClick={handleExport}
-            disabled={exporting}
-            title={t('Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook')}
-          >
-            {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-            {exporting ? t('Exporting…') : t('Export')}
-          </button>
-          {onNavigate && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
-            <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title={t('Win rate, loss reasons and pipeline analysis')}>
-              <BarChart3 className="w-4 h-4" /> {t('Analytics')}
-            </button>
-          )}
-          <button className="btn btn-primary" onClick={openCreate}>
-            <Plus className="w-4 h-4" /> {t('New Opportunity')}
-          </button>
-        </div>
+        <button className="btn btn-primary" onClick={openCreate}>
+          <Plus className="w-4 h-4" /> {t('New Opportunity')}
+        </button>
       </div>
 
       {error && (
@@ -618,47 +604,59 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div style={{ position: 'relative', flex: '1 1 240px' }}>
-          <Search className="w-4 h-4" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            placeholder={t('Search opportunities…')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            // Logical padding: the icon sits at `insetInlineStart`, so a physical
-            // `padding-left` would leave the text under it in RTL.
-            style={{ width: '100%', paddingBlock: 10, paddingInlineStart: 36, paddingInlineEnd: 12, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          />
-        </div>
-        <select
-          value={stageFilter}
-          onChange={e => setStageFilter(e.target.value)}
-          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-        >
-          <option value="All">{t('All stages')}</option>
-          <option value="Open">{t('Open only')}</option>
-          {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
-        </select>
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          title={t('Sort opportunities')}
-        >
-          <option value="deadline">{t('Submission deadline')}</option>
-          <option value="value">{t('Value (high → low)')}</option>
-          <option value="stage">{t('Stage')}</option>
-          <option value="recent">{t('Most recent')}</option>
-        </select>
-      </div>
-
-      {/* Its own row, not another control in the filter bar: this changes how the
-          grid is *arranged*, not which bids are in it. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
-        <GroupByBar<OpportunityGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
-      </div>
+      {/* One toolbar row: search + Group by + the rest folded into `Filters`,
+          with Export/Analytics demoted here so the header carries exactly one
+          action — New Opportunity. */}
+      <BoardToolbar
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder={t('Search opportunities…')}
+        groupBy={<GroupByBar<OpportunityGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        activeFilterCount={(stageFilter !== 'All' ? 1 : 0) + (sortBy !== 'deadline' ? 1 : 0)}
+        onClearFilters={() => { setStageFilter('All'); setSortBy('deadline'); }}
+        filters={
+          <>
+            <select
+              value={stageFilter}
+              onChange={e => setStageFilter(e.target.value)}
+              style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+            >
+              <option value="All">{t('All stages')}</option>
+              <option value="Open">{t('Open only')}</option>
+              {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+              title={t('Sort opportunities')}
+            >
+              <option value="deadline">{t('Submission deadline')}</option>
+              <option value="value">{t('Value (high → low)')}</option>
+              <option value="stage">{t('Stage')}</option>
+              <option value="recent">{t('Most recent')}</option>
+            </select>
+          </>
+        }
+        secondary={
+          <>
+            <button
+              className="btn btn-ghost"
+              onClick={handleExport}
+              disabled={exporting}
+              title={t('Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook')}
+            >
+              {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
+              {exporting ? t('Exporting…') : t('Export')}
+            </button>
+            {onNavigate && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
+              <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title={t('Win rate, loss reasons and pipeline analysis')}>
+                <BarChart3 className="w-4 h-4" /> {t('Analytics')}
+              </button>
+            )}
+          </>
+        }
+      />
 
       {/* Grid */}
       {loading ? (
@@ -732,16 +730,10 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                     <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', color: '#fff', background: STAGE_COLORS[o.stage] || '#64748b' }}>
                       {dl(o.stage)}
                     </span>
-                    <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                      <button className="btn btn-ghost btn-icon btn-sm" title={t('Edit')} onClick={() => openEdit(o)}>
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                      {canDelete && (
-                        <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete')} onClick={() => setDeleteTarget(o)}>
-                          <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
-                        </button>
-                      )}
-                    </div>
+                    <CardMenu items={[
+                      { label: t('Edit'), icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => openEdit(o) },
+                      ...(canDelete ? [{ label: t('Delete'), icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => setDeleteTarget(o), danger: true }] : []),
+                    ]} />
                   </div>
 
                   <div>
@@ -753,7 +745,6 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
 
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
                     {o.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.client}{o.sector ? ` · ${o.sector}` : ''}</div>}
-                    {o.tenderNumber && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Hash className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.tenderNumber}</div>}
                     {o.ownerName && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><UserIcon className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.ownerName}</div>}
                     {showCountdown && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: late ? '#dc2626' : soon ? '#f59e0b' : 'var(--text-secondary)', fontWeight: late || soon ? 700 : 400 }}>
@@ -765,24 +756,10 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                     )}
                   </div>
 
-                  {o.lastFollowUpText && (
-                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6, fontSize: 12, color: 'var(--text-muted)', borderTop: '1px solid var(--border)', paddingTop: 8 }}>
-                      <MessageSquare className="w-3.5 h-3.5" style={{ flexShrink: 0, marginTop: 1 }} />
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
-                        {o.lastFollowUpText}
-                      </span>
-                    </div>
-                  )}
-
                   <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 6 }}>
                     <span className="ltr-data" style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
                       {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
                     </span>
-                    {o.probability !== undefined && o.probability !== null && (
-                      <span className="ltr-data" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>
-                        <Percent className="w-3.5 h-3.5" /> {fmt.number(o.probability)}
-                      </span>
-                    )}
                   </div>
                 </motion.div>
               );

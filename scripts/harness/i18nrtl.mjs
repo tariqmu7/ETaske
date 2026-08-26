@@ -243,7 +243,7 @@ const SHELL_FILES = {
   'src/App.tsx': 3,
   'src/components/Sidebar.tsx': 25,
   'src/components/Breadcrumbs.tsx': 3,
-  'src/HomeDashboard.tsx': 35,
+  'src/HomeDashboard.tsx': 40,
   'src/components/CommandPalette.tsx': 38,
   'src/components/KeyboardHelp.tsx': 1,
   'src/components/DueSoonBanner.tsx': 4,
@@ -794,8 +794,12 @@ function Harness() {
   const [dark, setDark] = React.useState(false);
   React.useEffect(() => { document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light'); }, [dark]);
   window.__setDark = setDark;
+  // activeView is real state (UX task 2): a group button only reads "active"
+  // once one of its children is the current view, so a fixed prop would make
+  // every active-state assertion vacuous.
+  const [view, setView] = React.useState('tasks');
   return React.createElement(TopNav, {
-    appUser, activeView: 'tasks', onNavigate: v => { window.__navigated = v; },
+    appUser, activeView: view, onNavigate: v => { window.__navigated = v; setView(v); },
     notifications, dueSoonCount: 2, announcementCount: 1, navCounts,
     onOpenPalette: () => {}, onLogout: () => { window.__loggedOut = true; },
     pwa, isDark: dark, onToggleTheme: () => setDark(d => !d),
@@ -943,6 +947,24 @@ async function clickEl(finderJS, label) {
   await sleep(180);
 }
 
+// Task 4 of the UX-simplification queue (2026-08-26): every board's filter
+// selects now live behind a `Filters` disclosure in the shared BoardToolbar,
+// so they are NOT in the DOM until it is opened. Any assertion that reads a
+// filter <option> — or drives a sort <select> — has to open it first. Guarded
+// on aria-expanded, because a second click would close it again.
+async function openBoardFilters() {
+  const opened = await evalJS(`(() => {
+    const btn = [...document.querySelectorAll('#root button[aria-expanded]')]
+      .find(b => /Filters|عوامل التصفية/.test(b.textContent || ''));
+    if (!btn) return 'no-button';
+    if (btn.getAttribute('aria-expanded') === 'true') return 'already-open';
+    btn.click();
+    return 'opened';
+  })()`);
+  await sleep(220);
+  return opened;
+}
+
 async function shot(name) {
   if (!SHOT) return;
   const r = await send('Page.captureScreenshot', { format: 'png' });
@@ -1048,8 +1070,11 @@ check('the English button keeps its own script (not "الإنجليزية")',
 // English strings inside the component, so the bar stayed English while the
 // page around it flipped — the most visible possible miss.
 const navTabsAr = await evalJS(`JSON.stringify([...document.querySelectorAll('.nav-tab')].map(b => b.textContent.trim()))`);
-check('★ nav tabs are translated (المهام / المراسلات / الرئيسية)',
-  /المهام/.test(navTabsAr) && /المراسلات/.test(navTabsAr) && /الرئيسية/.test(navTabsAr), navTabsAr);
+// UX task 2 regrouped the bar: the top level is now Home + the group buttons
+// (Work / Portfolio / Insights / More), and Tasks / Correspondences live one
+// level down inside the Work menu — they are asserted in [B7].
+check('★ nav tabs are translated (الرئيسية / العمل / المحفظة)',
+  /الرئيسية/.test(navTabsAr) && /العمل/.test(navTabsAr) && /المحفظة/.test(navTabsAr), navTabsAr);
 const navStillEnglish = await evalJS(`(() => {
   const left = [...document.querySelectorAll('.nav-tab')]
     .map(b => b.textContent.replace(/[0-9+]/g, '').trim())
@@ -1170,7 +1195,77 @@ check('the en choice is persisted', await evalJS(`localStorage.getItem('etaske-l
 check('the Language label is English again', await evalJS(`!!window.__one('div','Language')`));
 const navTabsEn = await evalJS(`JSON.stringify([...document.querySelectorAll('.nav-tab')].map(b => b.textContent.trim()))`);
 check('non-vacuous: the same nav tabs read English again',
-  /Tasks/.test(navTabsEn) && /Correspondences/.test(navTabsEn) && !/المهام/.test(navTabsEn), navTabsEn);
+  /Work/.test(navTabsEn) && /Portfolio/.test(navTabsEn) && !/العمل/.test(navTabsEn), navTabsEn);
+
+// ═══ [B7] UX task 2 — the grouped nav ════════════════════════════════════════
+// The bar used to show up to 7 tabs + More. It must now show at most 5 buttons
+// (Home + at most four groups), and every destination that left the top level
+// must still be reachable in exactly one click from inside its group menu.
+console.log('\n[B7] grouped nav: four groups, every destination still reachable');
+
+const topTabs = await evalJS(`JSON.stringify([...document.querySelectorAll('.nav-tab')]
+  .map(b => b.textContent.replace(/[0-9+]/g, '').trim()))`).then(JSON.parse);
+check('★ at most 5 top-level nav buttons (was 7 + More)', topTabs.length <= 5, JSON.stringify(topTabs));
+check('the group labels are the four intended ones',
+  ['Home', 'Work', 'Portfolio', 'Insights', 'More'].every(l => topTabs.includes(l)), JSON.stringify(topTabs));
+check('no destination leaked back into the top level',
+  !topTabs.some(l => ['Tasks', 'Correspondences', 'Projects', 'Opportunities', 'Overview', 'Bid Analytics', 'Archive', 'Outlook', 'Users'].includes(l)),
+  JSON.stringify(topTabs));
+
+// Every group is opened in turn and its menu read, so a destination that was
+// dropped from the tables — not just hidden — fails here.
+const GROUPS = {
+  Work: ['Tasks', 'Correspondences', 'Manager Inbox'],
+  Portfolio: ['Projects', 'Opportunities'],
+  Insights: ['Overview', 'Bid Analytics'],
+  // Users is Admin-only and this harness signs in as a Manager, so it is
+  // asserted absent below rather than listed here.
+  More: ['Archive', 'Outlook'],
+};
+for (const [group, expected] of Object.entries(GROUPS)) {
+  await clickEl(`window.__one('button','${group}')`, `${group} group`);
+  const items = await evalJS(`JSON.stringify([...document.querySelectorAll('[role="menu"] [role="menuitem"]')]
+    .map(b => b.textContent.replace(/[0-9+]/g, '').trim()))`).then(JSON.parse);
+  check(`${group} menu holds ${expected.join(' / ')}`,
+    expected.every(l => items.includes(l)), JSON.stringify(items));
+  // Escape closes it, so the next group's menu is read on its own.
+  await evalJS(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  const stillOpen = await evalJS(`document.querySelectorAll('[role="menu"]').length`);
+  check(`${group} menu closes on Escape`, stillOpen === 0, String(stillOpen));
+}
+
+await clickEl(`window.__one('button','More')`, 'More group');
+const moreItemsSeen = await evalJS(`JSON.stringify([...document.querySelectorAll('[role="menuitem"]')].map(b => b.textContent.trim()))`);
+check('Users stays hidden from a Manager', !/Users/.test(moreItemsSeen), moreItemsSeen);
+await evalJS(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+
+// The badge sums to the group button, or a pending count would be invisible
+// behind a closed menu.
+const workBadge = await evalJS(`(() => {
+  const b = window.__one('button','Work');
+  const badge = b && b.querySelector('.tab-badge');
+  return badge ? badge.textContent.trim() : 'none';
+})()`);
+check('★ the Work group carries its children\u2019s badge count', workBadge !== 'none', workBadge);
+
+// Non-vacuous: leave Work first (mount starts on `tasks`), so both the
+// navigation and the active state have to actually change.
+await clickEl(`window.__one('button','Portfolio')`, 'Portfolio group');
+await clickEl(`[...document.querySelectorAll('[role="menuitem"]')].find(b => b.textContent.trim().startsWith('Projects'))`, 'Projects item');
+check('Work is no longer active after leaving it',
+  !(await evalJS(`window.__one('button','Work').className.includes('active')`)));
+check('Portfolio reads active on Projects',
+  await evalJS(`window.__one('button','Portfolio').className.includes('active')`));
+
+// One click, not two: the menu item navigates straight to the view.
+await clickEl(`window.__one('button','Work')`, 'Work group');
+await clickEl(`[...document.querySelectorAll('[role="menuitem"]')].find(b => b.textContent.trim().startsWith('Tasks'))`, 'Tasks item');
+check('picking Tasks from the Work menu navigates there',
+  (await evalJS(`String(window.__navigated)`)) === 'tasks', await evalJS(`String(window.__navigated)`));
+check('the menu closed after navigating', (await evalJS(`document.querySelectorAll('[role="menu"]').length`)) === 0);
+check('the Work group now reads active',
+  await evalJS(`window.__one('button','Work').className.includes('active')`));
+
 check('no errors across the whole run', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,
   pageErrors.join(' || ').slice(0, 400));
 
@@ -1213,6 +1308,7 @@ import ArchiveDashboard from './src/ArchiveDashboard';
 import OpportunitiesAnalytics from './src/OpportunitiesAnalytics';
 import ProjectsDashboard from './src/ProjectsDashboard';
 import AdminDashboard from './src/AdminDashboard';
+import HomeDashboard from './src/HomeDashboard';
 
 const T0 = Math.floor(new Date('2026-08-01T08:00:00Z').getTime() / 1000);
 const ts = s => ({ seconds: T0 + s, nanoseconds: 0, toDate: () => new Date((T0 + s) * 1000) });
@@ -1380,8 +1476,21 @@ const shared = { user, appUser, projectUsers: USERS, users: ADMIN_USERS };
 const VIEWS = {
   tasks: TasksDashboard, corr: CorrespondingsDashboard, overview: OverviewDashboard,
   opps: OpportunitiesDashboard, archive: ArchiveDashboard, bidanalytics: OpportunitiesAnalytics,
-  projects: ProjectsDashboard, admin: AdminDashboard,
+  projects: ProjectsDashboard, admin: AdminDashboard, home: HomeDashboard,
 };
+// UX task 3: Home's "Needs you today" list is fed from App.tsx's listeners, so
+// the harness supplies the rows directly - seven of them, one more than the
+// six-row cap, which is what makes the cap and the "See all" link assertable.
+window.__nav = [];
+window.__ATTENTION = [
+  { id: 'c-a', kind: 'corresponding', label: 'مراسلة متأخرة من الشركة القابضة', serial: 'CR000001', due: '2026-08-20', reason: 'overdue' },
+  { id: 't-a', kind: 'task', label: LONG_AR, serial: 'TK000001', due: '2026-08-25', reason: 'overdue' },
+  { id: 't-b', kind: 'task', label: 'Vibration report for pump P-101', serial: 'TK000002', due: '2026-08-27', reason: 'due-soon' },
+  { id: 'c-b', kind: 'corresponding', label: 'طلب عرض فني', serial: 'CR000002', due: '2026-08-28', reason: 'due-soon' },
+  { id: 'c-c', kind: 'corresponding', label: 'خطاب وارد بانتظار الفرز', serial: 'CR000003', due: '', reason: 'review' },
+  { id: 'c-d', kind: 'corresponding', label: 'تعميم إداري', serial: 'CR000004', due: '', reason: 'review' },
+  { id: 'c-e', kind: 'corresponding', label: 'مذكرة داخلية', serial: 'CR000005', due: '', reason: 'review' },
+];
 
 const root = createRoot(document.getElementById('root'));
 // initialStatusFilter/initialView are forced OFF their defaults on purpose:
@@ -1392,7 +1501,10 @@ window.__mount = (name, opts) => root.render(
   React.createElement('div', { className: 'app-main', style: { padding: 16 } },
     React.createElement(VIEWS[name], {
       ...shared, initialStatusFilter: 'All', initialView: 'all',
-      onNavigate: () => {}, onNavigateTasks: () => {}, onNavigateCorrespondences: () => {},
+      dueSoonCount: 4, announcementCount: 2, unreadNotifications: 3,
+      navCounts: { corrNeedsReview: 3, corrUnread: 1, myActiveTasks: 2, openBids: 2, bidsDueSoon: 1 },
+      attention: window.__ATTENTION,
+      onNavigate: v => { window.__nav.push(v); }, onNavigateTasks: () => {}, onNavigateCorrespondences: () => {},
       ...(opts || {}),
     }),
   ),
@@ -1628,6 +1740,63 @@ await shot('tasks-panel-ar');
 await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
 await sleep(300);
 check('no errors across the tasks-flow checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C11] one primary action per board + the Filters disclosure (task 4) ───
+// The boss's complaint was that every board opens shouting: create + export +
+// analytics in the header, then a wrapping bar of six controls. This asserts
+// the shape task 4 gives every board — ONE primary button up top, one toolbar
+// row, and the rest of the filters folded away — on the REAL tasks board.
+console.log('\n[C11] one primary action + the Filters disclosure (task 4)');
+await sleep(350);
+const c11Collapsed = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const primaries = [...root.querySelectorAll('.btn-primary')].map(b => (b.textContent || '').trim());
+  const filterBtn = [...root.querySelectorAll('button[aria-expanded]')]
+    .find(b => /Filters|عوامل التصفية/.test(b.textContent || ''));
+  return JSON.stringify({
+    primaries,
+    selects: root.querySelectorAll('select').length,
+    dates: root.querySelectorAll('input[type=date]').length,
+    filterLabel: filterBtn ? (filterBtn.textContent || '').trim() : null,
+    expanded: filterBtn ? filterBtn.getAttribute('aria-expanded') : null,
+    searches: root.querySelectorAll('input[type=text], input.input:not([type=date])').length,
+    groupBy: !!root.querySelector('[role=group]'),
+    clearAll: [...root.querySelectorAll('button')].some(b => (b.textContent || '').trim() === 'مسح الكل'),
+  });
+})()`).then(JSON.parse);
+check('★ the board offers exactly ONE primary action', c11Collapsed.primaries.length === 1,
+  c11Collapsed.primaries.join(' | '));
+check('★ and it is "إضافة مهمة" — the create action, not an export',
+  c11Collapsed.primaries[0] === ar['Add Task'], c11Collapsed.primaries[0]);
+check('★★ the filters are FOLDED AWAY by default — no select, no date picker on screen',
+  c11Collapsed.selects === 0 && c11Collapsed.dates === 0,
+  `selects=${c11Collapsed.selects} dates=${c11Collapsed.dates}`);
+check('★ what is left is one row: search + Group by + a Filters disclosure',
+  c11Collapsed.groupBy && c11Collapsed.searches >= 1 && c11Collapsed.filterLabel !== null,
+  `groupBy=${c11Collapsed.groupBy} searches=${c11Collapsed.searches}`);
+check('★ the disclosure is labelled in Arabic and starts closed',
+  c11Collapsed.filterLabel.includes(ar['Filters']) && c11Collapsed.expanded === 'false',
+  `${c11Collapsed.filterLabel} / ${c11Collapsed.expanded}`);
+// ★ A collapsed panel MUST NOT claim a filter is on when none is: the count
+// badge is the only thing that makes a hidden filter honest, so it may not
+// appear until one is actually set. Same for "Clear all".
+check('★★ nothing is filtered, so the disclosure shows no count badge and no "مسح الكل"',
+  !/\d/.test(c11Collapsed.filterLabel) && !c11Collapsed.clearAll, c11Collapsed.filterLabel);
+check('★ opening it is what puts the filters in the DOM', (await openBoardFilters()) === 'opened');
+const c11Open = await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const btn = [...root.querySelectorAll('button[aria-expanded]')]
+    .find(b => /Filters|عوامل التصفية/.test(b.textContent || ''));
+  return JSON.stringify({
+    selects: root.querySelectorAll('select').length,
+    dates: root.querySelectorAll('input[type=date]').length,
+    expanded: btn ? btn.getAttribute('aria-expanded') : null,
+  });
+})()`).then(JSON.parse);
+check('★ the status and department selects are back once it is open',
+  c11Open.selects >= 2 && c11Open.dates === 1 && c11Open.expanded === 'true',
+  `selects=${c11Open.selects} dates=${c11Open.dates} expanded=${c11Open.expanded}`);
+check('no errors across the toolbar checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // ── [C6] the ENUM VALUES themselves are painted in Arabic (task 6) ──────────
 // [A7] proves the words exist and [A8] proves the helpers work; only this
@@ -2050,6 +2219,8 @@ console.log('\n[C7] the Opportunities module renders Arabic (task 6b)');
 await evalJS(`window.__mount('opps')`);
 await sleep(600);
 
+// The stage/sort selects moved behind the `Filters` disclosure in task 4.
+await openBoardFilters();
 const oppAr = await evalJS(`(() => {
   const h1 = document.querySelector('#root h1');
   const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
@@ -2195,6 +2366,7 @@ const alexByDeadline = await oppCardTitles();
 check('★ inside a bucket the default "Submission deadline" sort still rules',
   alexByDeadline.length === 2 && alexByDeadline[0].startsWith('EGPC turnaround'),
   alexByDeadline.slice(0, 3).join(' | '));
+await openBoardFilters();
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'value'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
@@ -2508,6 +2680,8 @@ console.log('\n[C8] the Projects module renders Arabic (task 6c)');
 await evalJS(`window.__mount('projects')`);
 await sleep(650);
 
+// The status/sort selects moved behind the `Filters` disclosure in task 4.
+await openBoardFilters();
 const projAr = await evalJS(`(() => {
   const h1 = document.querySelector('#root h1');
   const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());
@@ -2646,6 +2820,7 @@ check('★ and there is a way back to the grid',
 check('★ inside a bucket the default "Most recent" sort still rules (newest first)',
   projActiveRecent[0].startsWith('Meleiha') && projActiveRecent[1].startsWith('Suez refinery jetty'),
   projActiveRecent.slice(0, 3).join(' | '));
+await openBoardFilters();
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
@@ -3116,6 +3291,265 @@ check('non-vacuous: the same Admin screen reads English under en',
 await evalJS(`window.__setLang('ar')`);
 await sleep(300);
 check('no errors across the Overview + Admin checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// -- [C10] UX task 3: Home's "Needs you today" list --------------------------
+// The point of the task is that every role lands on Home and immediately sees
+// what is waiting on them. A source floor cannot assert an ORDER, a CAP or a
+// click, so this mounts the real HomeDashboard with seven seeded rows and reads
+// the paint: overdue before due-soon before review, six rows max with a "See
+// all 7" escape hatch, badges and heading in Arabic, serials kept LTR, and a
+// row click actually routing to the owning board.
+console.log('\n[C10] Home renders "Needs you today" (UX task 3)');
+await evalJS(`window.__mount('home')`);
+await sleep(500);
+
+const ATTN_ROWS = `[...document.getElementById('root').querySelectorAll('button.card-interactive')]
+  .filter(b => b.querySelector('span[style*="flex: 1"], span[style*="flex:1"]'))`;
+
+const homeAr = JSON.parse(await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const rows = ${ATTN_ROWS};
+  return JSON.stringify({
+    h2s: [...root.querySelectorAll('h2')].map(e => (e.textContent || '').trim()),
+    rowCount: rows.length,
+    rowText: rows.map(r => (r.textContent || '').trim()),
+    badges: rows.map(r => (r.lastElementChild.textContent || '').trim()),
+    ltrSerials: rows.filter(r => r.querySelector('.ltr-data')).length,
+    seeAll: [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim())
+      .find(x => x.indexOf('عرض الكل') === 0) || '',
+  });
+})()`));
+
+check('the "Needs you today" heading is Arabic (يحتاج انتباهك اليوم)',
+  homeAr.h2s.includes('يحتاج انتباهك اليوم'), JSON.stringify(homeAr.h2s));
+check('★ the list is capped at 6 rows even though 7 items need me',
+  homeAr.rowCount === 6, homeAr.rowCount);
+check('★ the 7th is not lost: a "See all 7" link points at the Due Soon board',
+  homeAr.seeAll.indexOf('7') !== -1, homeAr.seeAll);
+check('★ the rows are ordered overdue then due-soon then awaiting review',
+  JSON.stringify(homeAr.badges) === JSON.stringify(
+    ['المتأخرة', 'المتأخرة', 'قرب الموعد', 'قرب الموعد', 'في انتظار المراجعة', 'في انتظار المراجعة']),
+  JSON.stringify(homeAr.badges));
+check('★ no row badge is still an English reason label',
+  !homeAr.badges.some(b => /Overdue|Due Soon|Awaiting/.test(b)), JSON.stringify(homeAr.badges));
+check('★ every row paints its serial as LTR data (.ltr-data)',
+  homeAr.ltrSerials === 6, homeAr.ltrSerials);
+check('the overdue correspondence is the first row',
+  (homeAr.rowText[0] || '').indexOf('CR000001') !== -1, homeAr.rowText[0]);
+await shot('home-needsme-ar');
+
+// A click has to leave Home for the board that owns the record - the row is
+// useless if it only highlights.
+await clickEl(`${ATTN_ROWS}.find(b => (b.textContent||'').indexOf('TK000002') !== -1)`, 'a task row');
+await sleep(300);
+const nav = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
+check('★ clicking a task row navigates to the tasks board', nav[nav.length - 1] === 'tasks', JSON.stringify(nav));
+
+await evalJS(`window.__nav = []`);
+await clickEl(`${ATTN_ROWS}.find(b => (b.textContent||'').indexOf('CR000001') !== -1)`, 'a correspondence row');
+await sleep(300);
+const nav2 = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
+check('★ clicking a correspondence row navigates to the correspondences board',
+  nav2[nav2.length - 1] === 'correspondences', JSON.stringify(nav2));
+
+// Non-vacuous: the SAME DOM in English, so a hard-coded Arabic label fails too.
+await evalJS(`window.__setLang('en')`);
+await sleep(350);
+const homeEn = JSON.parse(await evalJS(`(() => {
+  const root = document.getElementById('root');
+  const rows = ${ATTN_ROWS};
+  return JSON.stringify({
+    h2s: [...root.querySelectorAll('h2')].map(e => (e.textContent || '').trim()),
+    badges: rows.map(r => (r.lastElementChild.textContent || '').trim()),
+  });
+})()`));
+check('non-vacuous: the same list reads English under en',
+  homeEn.h2s.includes('Needs you today') && homeEn.badges[0] === 'Overdue',
+  JSON.stringify(homeEn));
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+
+check('no errors across the Home checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// -- [C12] UX task 5: a record card is quiet until you open it ---------------
+// The boss's complaint was that every card shouts every field at once. Task 5
+// leaves the collapsed card with title / owner / status / due date + ONE
+// action and moves the rest behind the card. A source floor cannot assert
+// "not painted", so this reads the real boards: what the collapsed card does
+// NOT contain, then that opening it brings the same fields back.
+console.log('\n[C12] a record card is quiet until you open it (UX task 5)');
+await evalJS(`window.__mount('tasks', { initialView: 'mine' })`);
+await sleep(550);
+await openFirstGroupCard();
+
+const TASK_CARDS = `[...document.querySelectorAll('#root .card[id^="task-"]')]`;
+const readTasks = `(() => {
+  const cards = ${TASK_CARDS};
+  return JSON.stringify({
+    count: cards.length,
+    text: cards.map(c => c.innerText || '').join(String.fromCharCode(10)),
+  });
+})()`;
+const c12Collapsed = JSON.parse(await evalJS(readTasks));
+check('the tasks board painted its cards', c12Collapsed.count > 0, c12Collapsed.count);
+check('★ a collapsed task card still carries its serial, title and owner',
+  /TK00000/.test(c12Collapsed.text) && /P-10|متابعة أعمال/.test(c12Collapsed.text)
+    && /Tariq Salama|Nevin Anwar|Ahmed Salem/.test(c12Collapsed.text),
+  c12Collapsed.text.slice(0, 160));
+check('★★ but NOT the description, the "بواسطة" line or the linked project',
+  !/Vendor reports high vibration/.test(c12Collapsed.text)
+    && !/بواسطة/.test(c12Collapsed.text)
+    && !/Meleiha Gas Plant/.test(c12Collapsed.text),
+  c12Collapsed.text.slice(0, 300));
+
+// ...and opening the card is what brings them back — the fields moved, they
+// were not deleted.
+await clickEl(`${TASK_CARDS}[0].querySelector('h3')`, 'first task card');
+await sleep(400);
+const c12Open = JSON.parse(await evalJS(readTasks));
+check('★ opening a card puts the description and the "بواسطة" line back',
+  /بواسطة/.test(c12Open.text)
+    && c12Open.text.length > c12Collapsed.text.length,
+  `${c12Collapsed.text.length} -> ${c12Open.text.length}`);
+check('no errors across the task-card checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// The grid boards have no expand — their second action moved into a "···"
+// menu, so the card is left with one visible action: opening the record.
+await evalJS(`window.__mount('projects')`);
+await sleep(650);
+// A group-by choice from [C8b] can still be in localStorage, in which case the
+// board opens on the group grid and the record cards are one drill-in away.
+await openFirstGroupCard();
+const PROJ_CARDS = `[...document.querySelectorAll('#root .card.card-interactive')]`;
+const projCards = JSON.parse(await evalJS(`(() => {
+  const cards = ${PROJ_CARDS};
+  return JSON.stringify({
+    count: cards.length,
+    buttons: cards.map(c => c.querySelectorAll('button').length),
+    menuTriggers: cards.filter(c => c.querySelector('button[aria-haspopup="menu"]')).length,
+    text: cards.map(c => c.innerText || '').join(String.fromCharCode(10)),
+  });
+})()`));
+check('the projects board painted its cards', projCards.count > 0, projCards.count);
+check('★ every project card exposes exactly ONE action button — the "···" menu',
+  projCards.buttons.every(n => n === 1) && projCards.menuTriggers === projCards.count,
+  JSON.stringify(projCards.buttons));
+check('★★ the contract code and the repeated status line are off the card',
+  !/46000029/.test(projCards.text), projCards.text.slice(0, 300));
+check('★ Edit / Delete are not shouting from the card face',
+  !new RegExp(`${ar['Edit']}|${ar['Delete']}`).test(projCards.text), projCards.text.slice(0, 300));
+
+await clickEl(`${PROJ_CARDS}[0].querySelector('button[aria-haspopup="menu"]')`, 'the card menu');
+await sleep(300);
+const menu = JSON.parse(await evalJS(`(() => {
+  const items = [...document.querySelectorAll('#root [role=menu] [role=menuitem]')]
+    .map(b => (b.textContent || '').trim());
+  return JSON.stringify({ items });
+})()`));
+check('★ and opening the menu offers them, in Arabic',
+  menu.items.includes(ar['Edit']) && menu.items.includes(ar['Delete']), JSON.stringify(menu.items));
+await shot('card-menu-ar');
+check('no errors across the card-menu checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// -- [C13] UX task 6: first-run guidance on Home -----------------------------
+// A new user (the boss) lands on Home knowing nothing about what the app is
+// for. Task 6 states the flow once — correspondence -> task -> archive — and
+// then never again: the strip hides itself once the user has opened anything,
+// and a dismissal is permanent. Source cannot assert "shown, then gone", so
+// this drives the real component through both transitions.
+console.log('\n[C13] Home explains the flow once, then gets out of the way (UX task 6)');
+await evalJS(`(() => {
+  localStorage.removeItem('etaske.howitworks.dismissed.v1');
+  localStorage.removeItem('etaske.recents.v1');
+})()`);
+await evalJS(`window.__mount('home')`);
+await sleep(500);
+
+const HINT = `(() => {
+  const h2 = [...document.getElementById('root').querySelectorAll('h2')]
+    .find(e => /\u0643\u064a\u0641 \u064a\u0633\u064a\u0631 \u0627\u0644\u0639\u0645\u0644 \u0647\u0646\u0627|How work flows here/.test(e.textContent || ''));
+  return h2 ? h2.parentElement.parentElement : null;
+})()`;
+const readHint = `(() => {
+  const box = ${HINT};
+  if (!box) return JSON.stringify({ present: false });
+  const steps = [...box.querySelectorAll('.card-grid-sm button')];
+  return JSON.stringify({
+    present: true,
+    heading: (box.querySelector('h2').textContent || '').trim(),
+    steps: steps.map(b => (b.innerText || '').trim()),
+    dismiss: [...box.querySelectorAll('button')].map(b => (b.textContent || '').trim()).filter(Boolean),
+  });
+})()`;
+
+const hintAr = JSON.parse(await evalJS(readHint));
+check('★ a first-run Home carries the "how work flows here" strip', hintAr.present, JSON.stringify(hintAr));
+check('the heading is Arabic (كيف يسير العمل هنا)',
+  hintAr.heading === 'كيف يسير العمل هنا', hintAr.heading);
+check('★ it is exactly three steps, in order', hintAr.steps.length === 3, JSON.stringify(hintAr.steps));
+check('★ each step reads Arabic — no English key text leaked through',
+  hintAr.steps.every(s => /[؀-ۿ]/.test(s))
+    && !hintAr.steps.some(s => /Log it|Assign it|Finish it|correspondence\b/.test(s)),
+  JSON.stringify(hintAr.steps));
+check('★ the step numbers stay Latin digits (the app is -u-nu-latn)',
+  hintAr.steps.every((s, i) => s.indexOf(String(i + 1)) === 0), JSON.stringify(hintAr.steps));
+await shot('home-howitworks-ar');
+
+// Each step is a shortcut to the board it describes, not decoration.
+await evalJS(`window.__nav = []`);
+await clickEl(`${HINT}.querySelectorAll('.card-grid-sm button')[1]`, 'the "assign it" step');
+await sleep(300);
+const hintNav = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
+check('★ clicking step 2 opens the tasks board', hintNav[hintNav.length - 1] === 'tasks', JSON.stringify(hintNav));
+
+// Dismissal has to survive a remount — a hint that returns every visit is an
+// ad, not guidance.
+// A real remount: HomeDashboard reads localStorage on mount, so it has to be
+// unmounted (via another view) or its state simply survives.
+await evalJS(`window.__mount('tasks')`);
+await sleep(300);
+await evalJS(`window.__mount('home')`);
+await sleep(400);
+await clickEl(`[...${HINT}.querySelectorAll('button')].find(b => (b.textContent || '').trim() === 'تمام')`, 'the "Got it" button');
+await sleep(250);
+check('★ dismissing hides the strip immediately',
+  JSON.parse(await evalJS(readHint)).present === false);
+check('★ and the dismissal is remembered',
+  (await evalJS(`localStorage.getItem('etaske.howitworks.dismissed.v1')`)) === '1');
+await evalJS(`window.__mount('tasks')`);
+await sleep(300);
+await evalJS(`window.__mount('home')`);
+await sleep(400);
+check('★★ so a remounted Home does not show it again',
+  JSON.parse(await evalJS(readHint)).present === false);
+
+// Non-vacuous: the same strip reads English, and only appears for a user with
+// no history — one recent record is enough to retire it.
+await evalJS(`(() => { localStorage.removeItem('etaske.howitworks.dismissed.v1'); })()`);
+await evalJS(`window.__setLang('en')`);
+await evalJS(`window.__mount('tasks')`);
+await sleep(300);
+await evalJS(`window.__mount('home')`);
+await sleep(450);
+const hintEn = JSON.parse(await evalJS(readHint));
+check('non-vacuous: the same strip reads English under en',
+  hintEn.present && hintEn.heading === 'How work flows here'
+    && /Log it/.test(hintEn.steps[0] || ''),
+  JSON.stringify(hintEn).slice(0, 200));
+
+await evalJS(`localStorage.setItem('etaske.recents.v1', JSON.stringify([
+  { kind: 'task', id: 't1', label: 'Something I already opened', serial: 'TK000002', at: Date.now() },
+]))`);
+await evalJS(`window.__mount('tasks')`);
+await sleep(300);
+await evalJS(`window.__mount('home')`);
+await sleep(450);
+check('★★ a user who has already opened a record never sees the hint',
+  JSON.parse(await evalJS(readHint)).present === false);
+await evalJS(`localStorage.removeItem('etaske.recents.v1')`);
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+check('no errors across the first-run guidance checks', (await evalJS(`window.__errors.length`)) === 0);
 
 if (fail) {
   try {

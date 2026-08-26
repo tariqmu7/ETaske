@@ -24,7 +24,7 @@ import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
-  TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
+  TrendingUp, ListTodo, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
   Users, ArrowLeft, Lock, Globe, MapPin, Briefcase, ListChecks, User as UserIcon
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -39,6 +39,7 @@ import CreateTaskPanel, { PrivacyToggle, CollaboratorPicker } from './components
 import RecordLinkPicker from './components/RecordLinkPicker';
 import LinkedRecordsBlock from './components/LinkedRecordsBlock';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
@@ -304,6 +305,44 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     setView('mine');
     setFocusedTaskId(null);
     setOpenGroup(null);
+  };
+
+  // Empty-state copy has to tell three different stories, and the old single
+  // "no tasks match your filters" line told the wrong one twice: a board that
+  // has never held a task (first run), a "My Tasks" scope with nothing assigned
+  // to this user, and filters that genuinely hide everything.
+  const hasActiveFilter = search.trim() !== '' || statusFilter !== 'All' || categoryFilter !== 'All'
+    || employeeFilter !== 'All' || subCategoryFilter !== 'All' || deptFilter !== 'All' || dateFilter !== '';
+
+  const renderEmpty = (icon: React.ReactNode) => {
+    if (tasks.length === 0) {
+      return (
+        <div className="empty-state">
+          <div className="empty-state-icon">{icon}</div>
+          <p className="empty-state-title">{t('No tasks yet')}</p>
+          <p className="empty-state-sub">{t('A task is the work itself. Managers create one from a correspondence, or you can add one directly.')}</p>
+          <button className="btn btn-ghost btn-sm" onClick={() => setIsAddingTask(true)}>{t('Add Task')}</button>
+        </div>
+      );
+    }
+    if (!hasActiveFilter && view === 'mine') {
+      return (
+        <div className="empty-state">
+          <div className="empty-state-icon">{icon}</div>
+          <p className="empty-state-title">{t('Nothing assigned to you')}</p>
+          <p className="empty-state-sub">{t('You have no open tasks. Switch to All Tasks to see what the rest of the team is working on.')}</p>
+          <button className="btn btn-ghost btn-sm" onClick={() => setView('all')}>{t('All Tasks')}</button>
+        </div>
+      );
+    }
+    return (
+      <div className="empty-state">
+        <div className="empty-state-icon">{icon}</div>
+        <p className="empty-state-title">{t('No tasks found')}</p>
+        <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
+        <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
+      </div>
+    );
   };
 
   // What a task's group key is, per dimension. Returning an empty string sends
@@ -971,96 +1010,98 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         </button>
       </div>
 
-      <div className="filter-bar">
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
-          {(['mine', 'all'] as const).map(v => (
-            <button
-              key={v}
-              onClick={() => { setView(v); setFocusedTaskId(null); }}
-              style={{
-                padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600,
-                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                background: view === v ? 'var(--accent)' : 'transparent',
-                color: view === v ? '#fff' : 'var(--text-secondary)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {v === 'mine' ? t('My Tasks') : t('All Tasks')}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
-          {['All', 'Project', 'Internal', 'External'].map(cat => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              style={{
-                padding: '6px 12px', borderRadius: 0, fontSize: 13, fontWeight: 600,
-                border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-                background: categoryFilter === cat ? 'var(--accent)' : 'transparent',
-                color: categoryFilter === cat ? '#fff' : 'var(--text-secondary)',
-                transition: 'all 0.15s',
-              }}
-            >
-              {cat === 'All' ? t('All') : label(cat)}
-            </button>
-          ))}
-        </div>
-
-        <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-          <Search style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', width: 15, height: 15, color: 'var(--text-muted)' }} />
-          <input className="input" style={{ paddingInlineStart: 36 }} placeholder={t('Search tasks…')} value={search} onChange={e => setSearch(e.target.value)} />
-        </div>
-
-        <input 
-          type="date" 
-          className="input" 
-          style={{ width: 'auto' }} 
-          value={dateFilter} 
-          onChange={e => setDateFilter(e.target.value)}
-          title={t('Filter by day')}
-        />
-        {dateFilter && (
-          <button className="btn btn-ghost btn-sm" onClick={() => setDateFilter('')}>
-            {t('Clear Date')}
-          </button>
-        )}
-
-        <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
-          <option value="All">{t('All Statuses')}</option>
-          <option value="Active">{t('Active')}</option>
-          <option value="Overdue">{t('Overdue')}</option>
-          {['Pending', 'In Progress', 'Done'].map(s => <option key={s} value={s}>{label(s)}</option>)}
-        </select>
-
-        <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
-          <option value="All">{t('All Departments')}</option>
-          {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{label(d)}</option>)}
-        </select>
-        
-        {isManagerOrAdmin && view === 'all' && (
-          <select className="input" style={{ width: 'auto' }} value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}>
-            <option value="All">{t('All Employees')}</option>
-            {projectUsers.filter(u => u.role === 'Employee' || u.role === 'Manager').map(e => <option key={e.id} value={e.displayName}>{e.displayName}</option>)}
-          </select>
-        )}
-
-        {subCategoryFilter !== 'All' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 0, fontSize: 12, fontWeight: 700 }}>
-            {t('Tag:')} {subCategoryFilter}
-            <button onClick={() => setSubCategoryFilter('All')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
-              <X className="w-3.5 h-3.5" />
-            </button>
+      {/* One toolbar row: the My/All scope (a scope, not a filter — it stays
+          visible), search, Group by, and every remaining filter folded into
+          `Filters`. The header above keeps exactly one action — Add Task. */}
+      <BoardToolbar
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder={t('Search tasks…')}
+        scope={
+          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4, flexShrink: 0 }}>
+            {(['mine', 'all'] as const).map(v => (
+              <button
+                key={v}
+                onClick={() => { setView(v); setFocusedTaskId(null); }}
+                aria-pressed={view === v}
+                style={{
+                  padding: '6px 16px', borderRadius: 0, fontSize: 13, fontWeight: 600,
+                  border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                  background: view === v ? 'var(--accent)' : 'transparent',
+                  color: view === v ? '#fff' : 'var(--text-secondary)',
+                  transition: 'all 0.15s',
+                }}
+              >
+                {v === 'mine' ? t('My Tasks') : t('All Tasks')}
+              </button>
+            ))}
           </div>
-        )}
-      </div>
+        }
+        groupBy={<GroupByBar<TaskGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        activeFilterCount={
+          (categoryFilter !== 'All' ? 1 : 0) + (dateFilter ? 1 : 0) + (statusFilter !== 'All' ? 1 : 0) +
+          (deptFilter !== 'All' ? 1 : 0) + (employeeFilter !== 'All' ? 1 : 0) + (subCategoryFilter !== 'All' ? 1 : 0)
+        }
+        onClearFilters={resetFilters}
+        filters={
+          <>
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4 }}>
+              {['All', 'Project', 'Internal', 'External'].map(cat => (
+                <button
+                  key={cat}
+                  onClick={() => setCategoryFilter(cat)}
+                  style={{
+                    padding: '6px 12px', borderRadius: 0, fontSize: 13, fontWeight: 600,
+                    border: 'none', cursor: 'pointer', fontFamily: 'inherit',
+                    background: categoryFilter === cat ? 'var(--accent)' : 'transparent',
+                    color: categoryFilter === cat ? '#fff' : 'var(--text-secondary)',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  {cat === 'All' ? t('All') : label(cat)}
+                </button>
+              ))}
+            </div>
 
-      {/* Its own row, not another chip in the filter bar: this changes how the
-          list is *arranged*, not which tasks are in it. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
-        <GroupByBar<TaskGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
-      </div>
+            <input
+              type="date"
+              className="input"
+              style={{ width: 'auto' }}
+              value={dateFilter}
+              onChange={e => setDateFilter(e.target.value)}
+              title={t('Filter by day')}
+            />
+
+            <select className="input" style={{ width: 'auto' }} value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
+              <option value="All">{t('All Statuses')}</option>
+              <option value="Active">{t('Active')}</option>
+              <option value="Overdue">{t('Overdue')}</option>
+              {['Pending', 'In Progress', 'Done'].map(s => <option key={s} value={s}>{label(s)}</option>)}
+            </select>
+
+            <select className="input" style={{ width: 'auto' }} value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              <option value="All">{t('All Departments')}</option>
+              {DEPARTMENT_OPTIONS.map(d => <option key={d} value={d}>{label(d)}</option>)}
+            </select>
+
+            {isManagerOrAdmin && view === 'all' && (
+              <select className="input" style={{ width: 'auto' }} value={employeeFilter} onChange={e => setEmployeeFilter(e.target.value)}>
+                <option value="All">{t('All Employees')}</option>
+                {projectUsers.filter(u => u.role === 'Employee' || u.role === 'Manager').map(e => <option key={e.id} value={e.displayName}>{e.displayName}</option>)}
+              </select>
+            )}
+
+            {subCategoryFilter !== 'All' && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 12px', background: 'var(--accent-10)', color: 'var(--accent)', borderRadius: 0, fontSize: 12, fontWeight: 700 }}>
+                {t('Tag:')} {subCategoryFilter}
+                <button onClick={() => setSubCategoryFilter('All')} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', display: 'flex', alignItems: 'center' }}>
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </>
+        }
+      />
 
       {error && (
         <div style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: 0, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', gap: 10, color: '#f87171', fontSize: 14 }}>
@@ -1095,16 +1136,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         <GroupGrid
           cards={groupCards}
           onSelect={setOpenGroup}
-          empty={
-            <div className="empty-state">
-              <div className="empty-state-icon">
-                <Users style={{ width: 28, height: 28 }} />
-              </div>
-              <p className="empty-state-title">{t('No tasks found')}</p>
-              <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
-              <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
-            </div>
-          }
+          empty={renderEmpty(<Users style={{ width: 28, height: 28 }} />)}
         />
       ) : (
       <>
@@ -1215,7 +1247,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   ) : (
                                     <span className={statusBadge(task.status)}>{label(task.status)}</span>
                                   )}
-                                  <span className={priorityBadge(task.priority)}>{label(task.priority)}</span>
+                                  {isExpanded && <span className={priorityBadge(task.priority)}>{label(task.priority)}</span>}
                                   {task.isPrivate && (
                                     <span
                                       className="badge"
@@ -1303,9 +1335,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                 <h3 style={{ fontWeight: 700, fontSize: 15, color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4 }}>
                                   {task.taskName}
                                 </h3>
-                                <p style={{ color: 'var(--text-muted)', fontSize: 13, display: '-webkit-box', WebkitLineClamp: isExpanded ? 999 : 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                                  {task.description}
-                                </p>
+                                {isExpanded && (
+                                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
+                                    {task.description}
+                                  </p>
+                                )}
 
                                 <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
                                   {task.assignedTo && (
@@ -1321,7 +1355,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       {task.assignedTo}
                                     </span>
                                   )}
-                                  {task.assignedBy && (
+                                  {isExpanded && task.assignedBy && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                       {(() => {
                                         const u = projectUsers.find(pu => pu.id === task.assignedById);
@@ -1334,7 +1368,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       {t('By')}{task.assignedBy}
                                     </span>
                                   )}
-                                  {!!(task.collaboratorIds && task.collaboratorIds.length) && (
+                                  {isExpanded && !!(task.collaboratorIds && task.collaboratorIds.length) && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }} title={t('Collaborators: {{names}}', { names: (task.collaborators || []).filter(Boolean).join(', ') })}>
                                       <Users style={{ width: 12, height: 12 }} />
                                       <span style={{ display: 'flex', alignItems: 'center' }}>
@@ -1351,8 +1385,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     </span>
                                   )}
                                   {task.dueDate && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: isOverdue ? '#f87171' : undefined }}><Calendar className="w-3 h-3" /> <span className="ltr-data">{task.dueDate}</span></span>}
-                                  {task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title={t('Creation date')}><Clock className="w-3 h-3" /> <span className="ltr-data">{fmt.date(task.createdAt)}</span></span>}
-                                  {(task.correspondingSerialNumber || task.correspondingSubject) && (
+                                  {isExpanded && task.createdAt && <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: 'var(--text-muted)' }} title={t('Creation date')}><Clock className="w-3 h-3" /> <span className="ltr-data">{fmt.date(task.createdAt)}</span></span>}
+                                  {isExpanded && (task.correspondingSerialNumber || task.correspondingSubject) && (
                                     <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                                       <Link2 className="w-3 h-3" /> 
                                       {(() => {
@@ -1368,7 +1402,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       })()}
                                     </span>
                                   )}
-                                  {task.subCategory && (
+                                  {isExpanded && task.subCategory && (
                                     <span 
                                       onClick={(e) => {
                                         e.stopPropagation();
@@ -1382,11 +1416,12 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                   )}
                                 </div>
 
-                                {/* Queue task 6 — what this task is attached
-                                    to. Always visible, not only when expanded:
-                                    a bid/project link is how a row is told
-                                    apart in a list of similar task names. */}
-                                <LinkedRecordsBlock links={linksOf(task)} />
+                                {/* UX task 5 — the collapsed row is title /
+                                    owner / status / due date only. The bid or
+                                    project a task hangs off is real context but
+                                    it is one more line to scan, so it opens
+                                    with the card. */}
+                                {isExpanded && <LinkedRecordsBlock links={linksOf(task)} />}
 
                                 {isExpanded && task.attachedFile && (
                                   <div style={{ marginTop: 24 }}>
@@ -1737,16 +1772,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         </div>
       )}
 
-      {filtered.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <CheckCircle2 style={{ width: 28, height: 28 }} />
-          </div>
-          <p className="empty-state-title">{t('No tasks found')}</p>
-          <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
-          <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
-        </div>
-      )}
+      {filtered.length === 0 && renderEmpty(<CheckCircle2 style={{ width: 28, height: 28 }} />)}
       </>
       )}
 
