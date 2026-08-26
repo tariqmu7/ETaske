@@ -33,7 +33,6 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
 import { AppView } from './App';
-import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import RecordLinkPicker from './components/RecordLinkPicker';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
@@ -253,11 +252,6 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       (!!appUser.department && departmentByUserId.get(i.userId) === appUser.department)
     );
   }, [items, isAdmin, departmentByUserId, appUser.department, user.uid]);
-
-  const dueSoonItems = useMemo(
-    () => visibleItems.filter(i => i.status !== 'Closed' && isDueSoon(i.deadline)),
-    [visibleItems]
-  );
 
   // Load tasks for linking (privacy-aware: public + own only)
   useEffect(() => {
@@ -945,16 +939,6 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#dc2626' }}><X className="w-4 h-4" /></button>
         </div>
       )}
-
-      <DueSoonBanner
-        items={dueSoonItems.map(i => ({
-          id: i.id,
-          type: 'Correspondence' as const,
-          title: i.subject,
-          due: i.deadline,
-          onClick: () => setSelectedCorrForDetails(i),
-        }))}
-      />
 
       {/* Unified layout: list (left) + team workload panel (right, managers only) */}
       <div className="inbox-grid" style={{ display: 'grid', gridTemplateColumns: isManager ? '1fr 300px' : '1fr', gap: 24, alignItems: 'start' }}>

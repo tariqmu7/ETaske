@@ -26,7 +26,7 @@ const GROUPS: { title: string; rows: [string, string][] }[] = [
       ['g o', 'Overview'],
       ['g p', 'Projects'],
       ['g b', 'Opportunities (bids)'],
-      ['g d', 'Due Soon'],
+      ['g d', 'Needs you today'],
       ['g a', 'Archive'],
       ['g n', 'News'],
       ['g u', 'Users'],

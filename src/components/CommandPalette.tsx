@@ -90,7 +90,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'projects', label: t('Projects'), alias: 'Projects', sub: t('Contracts & financials'), icon: <FolderKanban className="w-4 h-4" /> },
     { kind: 'nav', id: 'opportunities', label: t('Opportunities'), alias: 'Opportunities', sub: t('Tenders, bids & deadlines'), icon: <Target className="w-4 h-4" /> },
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: t('Bid Analytics'), alias: 'Bid Analytics', sub: t('Win rate & loss reasons'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
-    { kind: 'nav', id: 'due-soon', label: t('Due Soon'), alias: 'Due Soon', sub: t('Overdue & due in 48h'), icon: <AlertCircle className="w-4 h-4" /> },
+    { kind: 'nav', id: 'due-soon', label: t('Needs you today'), alias: 'Due Soon Overdue Today Yesterday This Week', sub: t('Everything waiting on you, plus what has just come in.'), icon: <AlertCircle className="w-4 h-4" /> },
     { kind: 'nav', id: 'announcements', label: t('News'), alias: 'News', sub: t('Department announcements'), icon: <Megaphone className="w-4 h-4" /> },
     { kind: 'nav', id: 'archive', label: t('Archive'), alias: 'Archive', sub: t('Closed records'), icon: <Archive className="w-4 h-4" /> },
     { kind: 'nav', id: 'outlook-feed', label: t('Outlook'), alias: 'Outlook', sub: t('Synced email feed'), icon: <Mail className="w-4 h-4" /> },

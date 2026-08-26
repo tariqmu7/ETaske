@@ -21,7 +21,7 @@ const TRAILS: Partial<Record<AppView, Crumb[]>> = {
   opportunities: [{ label: 'Opportunities' }],
   'bid-analytics': [{ label: 'Opportunities', view: 'opportunities' }, { label: 'Bid Analytics' }],
   archive: [{ label: 'Archive' }],
-  'due-soon': [{ label: 'Due Soon' }],
+  'due-soon': [{ label: 'Needs you today' }],
   announcements: [{ label: 'News' }],
   'outlook-feed': [{ label: 'Outlook' }],
   admin: [{ label: 'Users' }],

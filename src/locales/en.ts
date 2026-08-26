@@ -169,11 +169,10 @@ const en = {
   "{{count}} unread notifications": "{{count}} unread notifications",
   "New correspondence": "New correspondence",
   "View my tasks": "View my tasks",
-  "Review {{count}} due soon": "Review {{count}} due soon",
   "Jump back in": "Jump back in",
   "Needs you today": "Needs you today",
+  "Everything waiting on you, plus what has just come in.": "Everything waiting on you, plus what has just come in.",
   "Awaiting review": "Awaiting review",
-  "See all {{count}}": "See all {{count}}",
   "Org analytics, workload and progress at a glance.": "Org analytics, workload and progress at a glance.",
   "Triage incoming letters, then review and assign them as tasks.": "Triage incoming letters, then review and assign them as tasks.",
   "Incoming letters and requests waiting to be triaged.": "Incoming letters and requests waiting to be triaged.",
@@ -190,7 +189,6 @@ const en = {
   "{{count}} deadlines within 7 days": "{{count}} deadlines within 7 days",
   "{{count}} open": "{{count}} open",
   "No open bids": "No open bids",
-  "Items due within 48 hours or already overdue.": "Items due within 48 hours or already overdue.",
   "{{count}} need attention": "{{count}} need attention",
   "All on track": "All on track",
   "Department announcements and updates.": "Department announcements and updates.",
@@ -213,7 +211,6 @@ const en = {
   "Contracts & financials": "Contracts & financials",
   "Tenders, bids & deadlines": "Tenders, bids & deadlines",
   "Win rate & loss reasons": "Win rate & loss reasons",
-  "Overdue & due in 48h": "Overdue & due in 48h",
   "Department announcements": "Department announcements",
   "Closed records": "Closed records",
   "Synced email feed": "Synced email feed",
@@ -233,10 +230,7 @@ const en = {
   "Close dialogs": "Close dialogs",
 
   // ── Due-soon banner ──
-  "Due Soon (Within 48h)": "Due Soon (Within 48h)",
-  "Items that require immediate attention.": "Items that require immediate attention.",
   "Due:": "Due: ",
-  "+ {{count}} more items due soon": "+ {{count}} more items due soon",
 
   // ── Announcements ──
   "Seen by {{count}} of {{total}}": "Seen by {{count}} of {{total}}",
@@ -380,7 +374,6 @@ const en = {
 
   // ── Due Soon page ──
   "Due Soon & Overdue": "Due Soon & Overdue",
-  "All tasks and correspondences that are overdue or due within 48 hours.": "All tasks and correspondences that are overdue or due within 48 hours. Click any item to open it.",
   "Nothing due soon": "Nothing due soon",
   "You're all caught up.": "You're all caught up.",
 
@@ -1148,22 +1141,14 @@ const en = {
   "tasks done": "tasks done",
 
   // ── Overview: the "what's new" recency feed ──
-  "New Today": "New Today",
-  "New Yesterday": "New Yesterday",
-  "New This Week": "New This Week",
-  "New on {{date}}": "New on {{date}}",
-  "Correspondences and tasks that just came in — and who they went to.": "Correspondences and tasks that just came in — and who they went to.",
   "Today": "Today",
   "Yesterday": "Yesterday",
   "This Week": "This Week",
   "Nothing new yet today.": "Nothing new yet today.",
   "Nothing was created yesterday.": "Nothing was created yesterday.",
   "Nothing was created this week.": "Nothing was created this week.",
-  "Nothing was created on this day.": "Nothing was created on this day.",
   // The row-type pill in the feed: "Corr" is the deliberate short form, the
   // column is 96px wide.
-  "Show all {{count}}": "Show all {{count}}",
-  "Show less": "Show less",
 
   // ── Overview: status cards and the drill-in ──
   "Related Tasks": "Related Tasks",
