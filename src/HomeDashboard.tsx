@@ -233,11 +233,7 @@ export default function HomeDashboard({ appUser, onNavigate, dueSoonCount, annou
       )}
 
       {/* Card grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
-        gap: 16,
-      }}>
+      <div className="card-grid-sm">
         {visible.map(tile => (
           <button
             key={tile.id}

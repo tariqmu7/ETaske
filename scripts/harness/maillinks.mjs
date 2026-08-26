@@ -402,7 +402,35 @@ const docOf = (c, id) => evalJS(`JSON.stringify(window.__store.get(${JSON.string
 const writes = () => evalJS('JSON.stringify(window.__writes)').then(JSON.parse);
 const followUps = async id => (await allOf('opportunityFollowUps')).filter(f => f.opportunityId === id);
 const projectUpdates = async id => (await allOf('projectUpdates')).filter(u => u.projectId === id);
+// Grouping is a GRID of group cards now (src/components/GroupGrid.tsx): the
+// intake board opens on one card per bucket and the correspondence ROWS only
+// exist once a card is clicked. Which card holds a given serial depends on its
+// status, so try them in turn, backing out to the grid between attempts.
+// ⚠ Assigning a correspondence MOVES IT between buckets under the default
+// `group by status`, so a row that was on screen a moment ago can vanish — call
+// this again before every row interaction, not just the first.
+const BACK_TO_GRID = `[...document.querySelectorAll('#root button')].find(b => ['All Groups', 'كل المجموعات'].includes((b.textContent || '').trim()))`;
+async function openGroupHolding(serial) {
+  const hasRow = `(() => { ${HELPERS} return !!window.__corrCard('${serial}'); })()`;
+  if (await evalJS(hasRow)) return true;
+  // Already drilled into the wrong bucket: back out, or there are no cards to try.
+  if (await evalJS(`!!(${BACK_TO_GRID})`)) {
+    await clickEl(BACK_TO_GRID, 'back to the group grid');
+    await sleep(350);
+  }
+  const n = await evalJS(`document.querySelectorAll('#root button[data-group-card]').length`);
+  for (let i = 0; i < n; i++) {
+    await clickEl(`document.querySelectorAll('#root button[data-group-card]')[${i}]`, `group card ${i}`);
+    await sleep(350);
+    if (await evalJS(hasRow)) return true;
+    await clickEl(BACK_TO_GRID, 'back to the group grid');
+    await sleep(350);
+  }
+  throw new Error(`no group card holds ${serial}`);
+}
+
 const openEdit = async key => {
+  await openGroupHolding(key);
   // ⚠ Back to the top FIRST. Clicks are dispatched at VIEWPORT coordinates, and
   // after a few modals the list is left scrolled far enough down that
   // `elementFromPoint` on the centred card returns null ("something else is on
@@ -608,7 +636,9 @@ check('★ the other names the TASK and its serial',
 
 console.log('\n[10] the inline quick-assign inherits the link too');
 const fuBeforeQuick = (await followUps('op2')).length;
+await openGroupHolding('CR000042');
 await pickIn('Select employee', 'u-emp1', `window.__corrCard('CR000042')`);
+await openGroupHolding('CR000042');
 await clickEl(`window.__one('button', 'Assign', window.__corrCard('CR000042'))`, 'Assign (quick)');
 await sleep(1000);
 const quickTask = (await allOf('tasks')).find(t => t.correspondingId === 'c-quick');

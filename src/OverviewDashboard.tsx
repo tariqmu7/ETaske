@@ -972,7 +972,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     <span className={fmt.bidiFor(dl(subCat))}>{dl(subCat)}</span>
                   </h3>
                   
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
+                  <div className="card-grid">
                     {viewTab === 'Correspondences' ? (
                       data.corrs.map((item, idx) => (
                         <NewestWrap key={`corr-${item.id}`} isNewest={idx === 0}>
@@ -1025,7 +1025,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
             {kpisExpanded ? <ChevronDown className="w-5 h-5 text-muted" /> : <ChevronRight className="w-5 h-5 text-muted" />}
           </button>
           {kpisExpanded && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16, padding: '0 16px 16px' }}>
+          <div className="card-grid" style={{ padding: '0 16px 16px' }}>
             {employeeKPIs.map((kpi) => (
               <div key={kpi.user.id} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {/* Header: Employee Info */}

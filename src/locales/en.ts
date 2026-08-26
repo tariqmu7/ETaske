@@ -1286,6 +1286,8 @@ const en = {
   // "Assigned to {{name}}" and "{{category}} Tasks" are keys above and are
   // reused — a duplicate key here is a tsc error.
   "Group by": "Group by",
+  // Group-by grid (2026-08-26) — the back button out of a drilled-in group card.
+  "All Groups": "All Groups",
   "Uncategorized": "Uncategorized",
   "No project": "No project",
   "No location": "No location",
@@ -1300,6 +1302,11 @@ const en = {
   "Category: {{name}}": "Category: {{name}}",
   "From {{name}}": "From {{name}}",
   "No sender": "No sender",
+  // Group-by GRID on the correspondences board — the card's count word. The
+  // number is rendered beside it as its own large figure, so the word stands
+  // alone rather than as an interpolated "{{count}} correspondences".
+  "correspondence": "correspondence",
+  "correspondences": "correspondences",
 
   // Group-by queue task 3 — the same control on the projects board.
   // "Status", "Client", "Location", "Uncategorized", "No location" and
@@ -1308,6 +1315,11 @@ const en = {
   "{{status}} Projects": "{{status}} Projects",
   "Client: {{name}}": "Client: {{name}}",
   "Owner: {{name}}": "Owner: {{name}}",
+  // The bare count word on a project group card — needed on its own rather
+  // than as an interpolated "{{count}} projects".
+  "project": "project",
+  "projects": "projects",
+
   "No client": "No client",
   "No owner": "No owner",
   "End date (soonest)": "End date (soonest)",
@@ -1319,6 +1331,17 @@ const en = {
   "{{stage}} Opportunities": "{{stage}} Opportunities",
   "Source: {{name}}": "Source: {{name}}",
   "No source": "No source",
+  // Group-by GRID on the opportunities board (2026-08-26). The bare count word
+  // stands alone beside its own large figure, same as the other three boards.
+  "opportunity": "opportunity",
+  // The chip word for still-open bids inside a card ("2 live"). "open" is
+  // already a key above with a different sense, and "open bids" is too long for
+  // a chip that shares a 240px card with two others.
+  "live": "live",
+  "opportunities": "opportunities",
+  // The card subtitle: what the bucket's still-live bids are worth. "Open" and
+  // "OVERDUE" (the badge) are keys above and are reused.
+  "{{value}} open": "{{value}} open",
 } as const;
 
 export default en;

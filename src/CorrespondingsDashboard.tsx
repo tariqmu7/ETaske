@@ -24,8 +24,9 @@ import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
   Plus, Search, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
-  UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon
+  UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon, ArrowLeft
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
@@ -36,6 +37,7 @@ import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import RecordLinkPicker from './components/RecordLinkPicker';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
@@ -68,6 +70,27 @@ type CorrGroupBy = 'status' | 'category' | 'location' | 'sender' | 'user';
 
 /** Bucket order for `groupBy === 'status'` — the intake workflow order. */
 const CORR_STATUS_GROUP_ORDER: readonly CorrespondingStatus[] = ['Unread', 'Reviewing', 'Assigned', 'Closed'];
+
+/**
+ * Card accent per intake status. Literal hexes matching the four badge classes
+ * the list already uses (`badge-pending` amber, `badge-review` blue,
+ * `badge-assigned` violet, `badge-closed` grey) — the grid must not invent a
+ * second palette for the same four words.
+ */
+const CORR_STATUS_ACCENT: Record<string, string> = {
+  Unread: '#f59e0b',
+  Reviewing: '#3b82f6',
+  Assigned: '#8b5cf6',
+  Closed: '#94a3b8',
+};
+
+/** Avatar glyph for the dimensions that have no person to show a face for. */
+const CORR_GROUP_ICON: Partial<Record<CorrGroupBy, LucideIcon>> = {
+  status: ListChecks,
+  category: Tag,
+  location: MapPin,
+  sender: Send,
+};
 
 // Every history echo describes the correspondence the same way, wherever it is
 // written from (the form, quick-assign, the ManagerInbox conversion).
@@ -156,6 +179,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [pendingOpenCorrId, setPendingOpenCorrId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [groupBy, setGroupBy] = useState<CorrGroupBy>('status');
+  // `null` = the card grid is showing. A key = that bucket is drilled into and
+  // the list below is scoped (and paginated) to it.
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   // Projects are read for ONE reason: a correspondence carries no location of
   // its own (src/types.ts — `location` lives on Project), so "group by location"
   // has to resolve it through the record link `projectId`.
@@ -275,12 +301,6 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     setCurrentPage(1);
   }, [search, statusFilter, deptFilter, dateFilter]);
 
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
-  const paginatedItems = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filtered.slice(startIndex, startIndex + itemsPerPage);
-  }, [filtered, currentPage]);
-
   // What a correspondence's group key is, per dimension. An empty string sends
   // the row to the trailing "no value" bucket (`UNGROUPED`).
   const groupKeyOf = useMemo(() => {
@@ -301,15 +321,55 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
     }
   }, [groupBy, projectLocationById]);
 
-  // Buckets for the current page, sorted soonest-deadline-first inside each one
-  // (undated last; equal dates keep newest-created-first — the listener orders
-  // createdAt desc and `buildGroups` sorts stably).
+  // Buckets over EVERY filtered correspondence, not just the current page: each
+  // card carries a count, and a count taken from one page of 20 would be a lie
+  // ("3 correspondences" on a card holding 40). Pagination moved below, onto
+  // whatever list is actually on screen.
+  //
+  // Sorted soonest-deadline-first inside each bucket (undated last; equal dates
+  // keep newest-created-first — the listener orders createdAt desc and
+  // `buildGroups` sorts stably).
   const groupedItems = useMemo(
-    () => buildGroups(paginatedItems, groupKeyOf, {
+    () => buildGroups(filtered, groupKeyOf, {
       order: groupBy === 'status' ? CORR_STATUS_GROUP_ORDER : undefined,
       sort: byDueDateAsc<Corresponding>(i => i.deadline),
     }),
-    [paginatedItems, groupKeyOf, groupBy],
+    [filtered, groupKeyOf, groupBy],
+  );
+
+  // The open bucket, re-resolved from `groupedItems` every render: a filter (or
+  // someone else's edit arriving over the listener) can empty the bucket the
+  // user drilled into, and then `find` returns undefined and we fall back to the
+  // grid instead of painting a blank list.
+  const activeGroup = useMemo(
+    () => (openGroup ? groupedItems.find(g => g.key === openGroup) : undefined),
+    [openGroup, groupedItems],
+  );
+
+  // Switching dimension re-buckets everything, so the key that was open no
+  // longer means anything.
+  useEffect(() => { setOpenGroup(null); }, [groupBy]);
+
+  // Opening/closing a card swaps the list under the pager, so page 3 of the old
+  // list must not survive into the new one.
+  useEffect(() => { setCurrentPage(1); }, [openGroup]);
+
+  // Grouping IS the grid: no open card means no list at all. Unlike the tasks
+  // board there is no deep-link bypass to build — a shared correspondence opens
+  // the detail modal, which sits above the grid.
+  const showGroupGrid = !activeGroup;
+
+  const listSource = activeGroup ? activeGroup.items : filtered;
+  const totalPages = Math.ceil(listSource.length / itemsPerPage);
+  const paginatedItems = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return listSource.slice(startIndex, startIndex + itemsPerPage);
+  }, [listSource, currentPage]);
+
+  // What the list renders: the open bucket, one page of it.
+  const renderGroups = useMemo(
+    () => (activeGroup ? [{ key: activeGroup.key, value: activeGroup.value, items: paginatedItems }] : []),
+    [activeGroup, paginatedItems],
   );
 
   // Header for one bucket. Each dimension gets its own phrasing because one
@@ -332,6 +392,59 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       default: return t('{{status}} Correspondences', { status: name });
     }
   };
+
+  // The card title is the group's NAME on its own — the "From …" / "Assigned to
+  // …" framing belongs on the drilled-in section header, not under a 44px avatar
+  // that already says who this is.
+  const groupTitle = (group: { key: string; value: string }) =>
+    group.key === UNGROUPED ? groupHeading(group) : label(group.value);
+
+  // What the grid draws. One card per bucket: the count, plus the small status
+  // breakdown that is the whole point of the card — it says what is inside
+  // before you open it. Reviewing gets no chip of its own; three chips is what
+  // fits a 240px card, and Unread/Assigned/Closed are the states an intake
+  // decision actually turns on.
+  const groupCards = useMemo<GroupCard[]>(() => groupedItems.map(group => {
+    const rows = group.items;
+    const unread = rows.filter(i => i.status === 'Unread').length;
+    const assigned = rows.filter(i => i.status === 'Assigned').length;
+    const closed = rows.filter(i => i.status === 'Closed').length;
+    const overdue = rows.filter(i => i.status !== 'Closed' && isOverdue(i.deadline)).length;
+
+    // Resolve the person through `assignedToId`, not by matching the display
+    // name against the directory — the bucket key is a name, and two people can
+    // share one.
+    const isPerson = groupBy === 'user';
+    const assigneeId = isPerson ? rows.find(i => i.assignedToId)?.assignedToId : undefined;
+    const assignee = assigneeId ? projectUsers.find(pu => pu.id === assigneeId) : undefined;
+    const title = groupTitle(group);
+
+    return {
+      key: group.key,
+      title,
+      subtitle: isPerson && assignee?.role ? label(assignee.role) : undefined,
+      accent: groupBy === 'status'
+        ? CORR_STATUS_ACCENT[group.value] || 'var(--accent)'
+        : isPerson
+          ? (assignee?.userColor || getUserColor(assigneeId || group.value || group.key))
+          : getUserColor(group.key),
+      photoURL: isPerson ? assignee?.photoURL : undefined,
+      // A person gets an initial; a status/category/location/sender gets the
+      // dimension's icon, so the card still reads as "a thing of this kind".
+      initial: isPerson ? title.charAt(0).toUpperCase() : undefined,
+      icon: isPerson ? undefined : CORR_GROUP_ICON[groupBy],
+      count: rows.length,
+      countLabel: rows.length === 1 ? t('correspondence') : t('correspondences'),
+      badge: overdue > 0 ? `${overdue} ${t('OVERDUE')}` : undefined,
+      // Grouping BY status already puts the status in the title, so repeating
+      // the same chips under it would be pure noise.
+      stats: groupBy === 'status' ? undefined : [
+        { label: t('Unread'), value: unread, tone: 'neutral' as const },
+        { label: t('Assigned'), value: assigned, tone: 'info' as const },
+        { label: t('Closed'), value: closed, tone: 'success' as const },
+      ],
+    };
+  }), [groupedItems, groupBy, projectUsers, label, t]);
 
   const groupByOptions = useMemo<GroupByOption<CorrGroupBy>[]>(() => [
     { key: 'status', label: t('Status'), icon: ListChecks },
@@ -885,9 +998,36 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         <GroupByBar<CorrGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
       </div>
 
-      {/* Items list, bucketed by the current dimension */}
+      {showGroupGrid ? (
+        // Grouping IS the grid: one card per bucket, and the list only appears
+        // once a card is opened. `groupCards` is built from every filtered
+        // correspondence, so the counts are the real totals, not one page.
+        <GroupGrid
+          cards={groupCards}
+          onSelect={setOpenGroup}
+          empty={
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <MailOpen style={{ width: 28, height: 28 }} />
+              </div>
+              <p className="empty-state-title">{t('No correspondences found')}</p>
+              <p className="empty-state-sub">{t('No items match your filters')}<br />{t('Use the button above to add a new correspondence.')}</p>
+            </div>
+          }
+        />
+      ) : (
+      <>
+      {/* The only way back to the grid. */}
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => setOpenGroup(null)}
+        style={{ marginBottom: 16 }}
+      >
+        <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
+      </button>
+      {/* Items list, scoped to the open bucket */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {groupedItems.map(group => (
+        {renderGroups.map(group => (
         <div key={group.key}>
           <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
             <Layers className="w-4 h-4 text-accent" />
@@ -1139,8 +1279,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         ))}
       </div>
 
-      {/* Pagination Controls */}
-      {Math.ceil(filtered.length / 20) > 1 && (
+      {/* Pagination Controls — over the open bucket, not the whole list */}
+      {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
           <button 
             className="btn btn-ghost btn-sm" 
@@ -1150,7 +1290,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             {t('Previous Page')}
           </button>
           <div style={{ display: 'flex', gap: 6 }}>
-            {Array.from({ length: Math.ceil(filtered.length / 20) }, (_, i) => i + 1).map(p => (
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(p => (
               <button
                 key={p}
                 className={`btn btn-sm ${currentPage === p ? 'btn-primary' : 'btn-ghost'}`}
@@ -1162,7 +1302,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           </div>
           <button 
             className="btn btn-ghost btn-sm" 
-            disabled={currentPage === Math.ceil(filtered.length / 20)}
+            disabled={currentPage === totalPages}
             onClick={() => setCurrentPage(prev => prev + 1)}
           >
             {t('Next Page')}
@@ -1170,14 +1310,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         </div>
       )}
 
-      {filtered.length === 0 && (
-        <div className="empty-state">
-          <div className="empty-state-icon">
-            <MailOpen style={{ width: 28, height: 28 }} />
-          </div>
-          <p className="empty-state-title">{t('No correspondences found')}</p>
-          <p className="empty-state-sub">{t('No items match your filters')}<br />{t('Use the button above to add a new correspondence.')}</p>
-        </div>
+      </>
       )}
       </div>{/* end left column */}
 

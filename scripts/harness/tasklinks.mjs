@@ -131,8 +131,8 @@ root.render(
   React.createElement('div', { className: 'app-main', style: { padding: 16 } },
     React.createElement(TasksDashboard, {
       user, appUser, projectUsers: USERS,
-      // 'mine', not 'all': a manager on "All Tasks" gets the employee GRID
-      // (showEmployeeGrid), and the rows this harness clicks are not on screen.
+      // 'mine', not 'all': keeps the seeded rows in scope. Either way the board
+      // now opens on the GROUP GRID — see openGroupHolding below.
       initialStatusFilter: 'All', initialView: 'mine',
     }),
   ),
@@ -285,6 +285,32 @@ window.__taskCard = key => [...document.querySelectorAll('div')]
 `;
 await waitFor(`document.getElementById('root') && document.getElementById('root').children.length`, 'app mount');
 await evalJS(HELPERS);
+
+// Grouping is a GRID of group cards now (src/components/GroupGrid.tsx): picking
+// a dimension shows one card per bucket and the task ROWS only appear once a
+// card is opened. Which card holds a given serial depends on its status, so try
+// them in turn, backing out to the grid between attempts.
+// ⚠ Advancing a task's status MOVES IT between buckets under the default
+// `group by status`, so a row that was on screen a moment ago can vanish — call
+// this again before every row interaction, not just the first.
+async function openGroupHolding(serial) {
+  const hasRow = `(() => { ${HELPERS} return !!window.__taskCard('${serial}'); })()`;
+  if (await evalJS(hasRow)) return true;
+  // Already drilled into the wrong bucket: back out, or there are no cards to try.
+  if (await evalJS(`!!${`(() => { ${HELPERS} return window.__one('button', 'All Groups'); })()`}`)) {
+    await clickEl(`window.__one('button', 'All Groups')`, 'back to the group grid');
+    await sleep(350);
+  }
+  const n = await evalJS(`document.querySelectorAll('#root button[data-group-card]').length`);
+  for (let i = 0; i < n; i++) {
+    await clickEl(`document.querySelectorAll('#root button[data-group-card]')[${i}]`, `group card ${i}`);
+    await sleep(350);
+    if (await evalJS(hasRow)) return true;
+    await clickEl(`window.__one('button', 'All Groups')`, 'back to the group grid');
+    await sleep(350);
+  }
+  throw new Error(`no group card holds ${serial}`);
+}
 
 async function clickEl(finderJS, label) {
   // ⚠ Three attempts, not one — the same fix maillinks.mjs carries. A card the
@@ -453,6 +479,7 @@ check('no follow-up was written', (await allOf('opportunityFollowUps')).length =
 check('no project update was written', (await allOf('projectUpdates')).length === puBefore);
 
 console.log('\n[4] the edit form opens on the links the task already has');
+await openGroupHolding('TK000005');
 await clickEl(`window.__one('button', '···', window.__taskCard('TK000005'))`, 'row actions (TK000005)');
 await clickEl(`window.__one('button', 'Edit Task')`, 'Edit Task');
 await waitFor(`window.__editRoot()`, 'edit panel');
@@ -543,6 +570,7 @@ console.log('\n[8] a status move is echoed, and "done" reads as done');
 // The task now carries only the project link, so the project is where its
 // progress lands.
 const puBeforeStatus = (await projectUpdates('p1')).length;
+await openGroupHolding('TK000005');
 await clickEl(`window.__one('button', 'In Progress', window.__taskCard('TK000005'))`, 'In Progress');
 await sleep(700);
 const puStatus = await projectUpdates('p1');
@@ -550,6 +578,7 @@ check('the status move posted one entry', puStatus.length === puBeforeStatus + 1
 check('it names the new status', (puStatus[puStatus.length - 1].text || '').includes('is now In Progress'), puStatus[puStatus.length - 1].text);
 check('the task really moved', (await docOf('tasks', 't-linked')).status === 'In Progress');
 
+await openGroupHolding('TK000005');
 await clickEl(`window.__one('button', 'Done', window.__taskCard('TK000005'))`, 'Done');
 await sleep(700);
 const puDone = await projectUpdates('p1');
@@ -561,6 +590,7 @@ check('the project summary line followed', (await docOf('projects', 'p1')).lastU
 
 console.log('\n[9] an UNLINKED task moving status writes nothing');
 const allBefore = (await allOf('projectUpdates')).length + (await allOf('opportunityFollowUps')).length;
+await openGroupHolding('TK000006');
 await clickEl(`window.__one('button', 'In Progress', window.__taskCard('TK000006'))`, 'In Progress (unlinked task)');
 await sleep(600);
 check('the unlinked task moved', (await docOf('tasks', 't-plain')).status === 'In Progress');

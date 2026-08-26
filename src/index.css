@@ -416,6 +416,35 @@ body {
   transform: translateY(-1px);
 }
 
+/* ─── Record card grid (max 3 per row) ─────────────
+   Every board that lists record cards (tasks, correspondences,
+   opportunities, projects, archive, group buckets) uses this one
+   track instead of its own `repeat(auto-fill, minmax(300px,1fr))`.
+   The floor is `max(<min card>, (100% - 2*gap)/3)`, so the browser
+   can never fit a 4th column: at wide widths the track is exactly
+   one third of the row, at narrow widths it falls back to the min
+   width and wraps to 2 then 1. KPI/stat strips are NOT this class —
+   they are meant to pack more tiles per row.
+   ------------------------------------------------- */
+.card-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(max(300px, (100% - 2 * 16px) / 3), 1fr));
+  align-items: start;
+}
+
+/* Denser variant for the smaller group/bucket cards. */
+.card-grid-sm {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(max(240px, (100% - 2 * 16px) / 3), 1fr));
+  align-items: start;
+}
+
+@media (max-width: 700px) {
+  .card-grid, .card-grid-sm { grid-template-columns: 1fr; }
+}
+
 /* ─── Badges ─────────────────────────────────────── */
 .badge {
   display: inline-flex;
