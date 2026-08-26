@@ -243,10 +243,9 @@ const SHELL_FILES = {
   'src/App.tsx': 3,
   'src/components/Sidebar.tsx': 25,
   'src/components/Breadcrumbs.tsx': 3,
-  'src/HomeDashboard.tsx': 40,
+  'src/HomeDashboard.tsx': 32,
   'src/components/CommandPalette.tsx': 38,
   'src/components/KeyboardHelp.tsx': 1,
-  'src/components/DueSoonBanner.tsx': 4,
   'src/components/Announcements.tsx': 22,
   'src/LoginScreen.tsx': 12,
   'src/PendingScreen.tsx': 3,
@@ -259,7 +258,7 @@ const TASK_FILES = {
   'src/TasksDashboard.tsx': 100,
   'src/components/CreateTaskPanel.tsx': 40,
   'src/components/ComboBox.tsx': 6,
-  'src/DueSoonDashboard.tsx': 7,
+  'src/NeedsYouDashboard.tsx': 14,
 };
 // Task 5 added the correspondence flow. `CorrespondenceInbox.tsx` is NOT here:
 // it is a 27-line wrapper that renders CorrespondingsDashboard and contains no
@@ -393,9 +392,10 @@ const REVERT_CANARIES = [
     /^\s*Advanced\s*$/m,
     /label: 'Public'/,
   ]],
-  ['src/DueSoonDashboard.tsx', [
+  ['src/NeedsYouDashboard.tsx', [
     />Due Soon & Overdue</,
     />Nothing due soon</,
+    />Needs you today</,
     /^\s*Due: \{fmt/m,
   ]],
   // ── task 5 ──
@@ -671,7 +671,7 @@ const T6_CANARIES = [
   ['src/components/Sidebar.tsx', [/^\s*\{appUser\.role\}\s*$/m, /toLocaleString\('en-GB'/]],
   ['src/components/ChatBox.tsx', [/\{u\.role\} ·/, /toLocaleTimeString/]],
   ['src/components/Announcements.tsx', [/timeAgo\(/]],
-  ['src/DueSoonDashboard.tsx', [/toLocaleString\('en-GB'/]],
+  ['src/NeedsYouDashboard.tsx', [/toLocaleString\('en-GB'/]],
   ['src/OutlookFeed.tsx', [/toLocaleString\(\)/]],
   // ── task 6b: the Opportunities module's own raw-enum / raw-date shapes ──
   ['src/OpportunitiesDashboard.tsx', [/\{o\.stage\}\s*$/m, /\{s\}<\/option>/, /toLocaleDateString/]],
@@ -1309,9 +1309,30 @@ import OpportunitiesAnalytics from './src/OpportunitiesAnalytics';
 import ProjectsDashboard from './src/ProjectsDashboard';
 import AdminDashboard from './src/AdminDashboard';
 import HomeDashboard from './src/HomeDashboard';
+import NeedsYouDashboard from './src/NeedsYouDashboard';
 
-const T0 = Math.floor(new Date('2026-08-01T08:00:00Z').getTime() / 1000);
+// ★ RELATIVE, not a fixed calendar date. The "Needs you today" page buckets
+// records by the LOCAL DAY they were created, so a hard-coded 2026-08-01 would
+// drop every seeded record outside every window and make [C10]'s feed tabs
+// assert nothing. Yesterday NOON (not 00:00) so no timezone can drag it into
+// today or the day before.
+const T0 = (() => {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  d.setHours(12, 0, 0, 0);
+  return Math.floor(d.getTime() / 1000);
+})();
 const ts = s => ({ seconds: T0 + s, nanoseconds: 0, toDate: () => new Date((T0 + s) * 1000) });
+
+// Deadlines, same reason: [C10] needs one blown deadline and one inside the
+// 48h window, and both have to stay that way whenever the harness is run.
+const dayOffset = n => {
+  const d = new Date();
+  d.setDate(d.getDate() + n);
+  return d.toLocaleDateString('en-CA');
+};
+// index 0 = overdue, 1 = due within 48h, 2 = long past (its record is closed).
+const DUE = [dayOffset(-1), dayOffset(1), dayOffset(-60)];
 
 const USERS = [
   { id: 'u-mgr',  displayName: 'Tariq Salama', email: 't@x.com', photoURL: '', status: 'Approved', role: 'Manager',  teamId: 'T1', department: 'Maintenance Planning', userColor: '#2563eb' },
@@ -1338,7 +1359,7 @@ __seed('correspondences', '--stats--', { value: 4 });
     // the project's Linked tab has a row to paint. ⚠ No task is attached to a
     // BID — [C7] asserts the bid Tasks tab's empty state.
     ...(i === 0 ? { projectId: 'p-a', projectName: 'Meleiha Gas Plant operations & maintenance contract' } : {}),
-    deadline: ['2026-08-16', '2026-12-31', '2026-07-01'][i],
+    dueDate: DUE[i],
     userId: 'u-mgr', teamId: 'T1', createdAt: ts(100 * i), updatedAt: ts(100 * i),
   });
   __seed('correspondences', 'c-' + k, {
@@ -1347,7 +1368,7 @@ __seed('correspondences', '--stats--', { value: 4 });
     sentFrom: ['EGPC', 'الشركة المصرية للتكرير', 'Stores'][i],
     department: 'Maintenance Planning', subCategory: 'Refinery Upgrade',
     category: ['Project', 'Administrative', 'Project'][i], priority: ['High', 'Medium', 'Low'][i],
-    dateReceived: '2026-08-1' + i, deadline: ['2026-08-16', '2026-12-31', '2026-07-01'][i],
+    dateReceived: '2026-08-1' + i, deadline: DUE[i],
     serialNumber: 'CR00000' + (i + 1), status: ['Unread', 'Assigned', 'Closed'][i],
     assignedTo: USERS[i].displayName, assignedToId: USERS[i].id,
     // Cross-linking task 6: each correspondence is attached to the bid of the
@@ -1477,20 +1498,9 @@ const VIEWS = {
   tasks: TasksDashboard, corr: CorrespondingsDashboard, overview: OverviewDashboard,
   opps: OpportunitiesDashboard, archive: ArchiveDashboard, bidanalytics: OpportunitiesAnalytics,
   projects: ProjectsDashboard, admin: AdminDashboard, home: HomeDashboard,
+  needsyou: NeedsYouDashboard,
 };
-// UX task 3: Home's "Needs you today" list is fed from App.tsx's listeners, so
-// the harness supplies the rows directly - seven of them, one more than the
-// six-row cap, which is what makes the cap and the "See all" link assertable.
 window.__nav = [];
-window.__ATTENTION = [
-  { id: 'c-a', kind: 'corresponding', label: 'مراسلة متأخرة من الشركة القابضة', serial: 'CR000001', due: '2026-08-20', reason: 'overdue' },
-  { id: 't-a', kind: 'task', label: LONG_AR, serial: 'TK000001', due: '2026-08-25', reason: 'overdue' },
-  { id: 't-b', kind: 'task', label: 'Vibration report for pump P-101', serial: 'TK000002', due: '2026-08-27', reason: 'due-soon' },
-  { id: 'c-b', kind: 'corresponding', label: 'طلب عرض فني', serial: 'CR000002', due: '2026-08-28', reason: 'due-soon' },
-  { id: 'c-c', kind: 'corresponding', label: 'خطاب وارد بانتظار الفرز', serial: 'CR000003', due: '', reason: 'review' },
-  { id: 'c-d', kind: 'corresponding', label: 'تعميم إداري', serial: 'CR000004', due: '', reason: 'review' },
-  { id: 'c-e', kind: 'corresponding', label: 'مذكرة داخلية', serial: 'CR000005', due: '', reason: 'review' },
-];
 
 const root = createRoot(document.getElementById('root'));
 // initialStatusFilter/initialView are forced OFF their defaults on purpose:
@@ -1503,7 +1513,6 @@ window.__mount = (name, opts) => root.render(
       ...shared, initialStatusFilter: 'All', initialView: 'all',
       dueSoonCount: 4, announcementCount: 2, unreadNotifications: 3,
       navCounts: { corrNeedsReview: 3, corrUnread: 1, myActiveTasks: 2, openBids: 2, bidsDueSoon: 1 },
-      attention: window.__ATTENTION,
       onNavigate: v => { window.__nav.push(v); }, onNavigateTasks: () => {}, onNavigateCorrespondences: () => {},
       ...(opts || {}),
     }),
@@ -3163,9 +3172,12 @@ check('the Overview header is Arabic (النظرة العامة)',
 check('the four summary stat cards are Arabic (المراسلات / مهام نشطة / المتأخرة / نسبة الإنجاز)',
   ['المراسلات', 'مهام نشطة', 'المتأخرة', 'نسبة الإنجاز'].every(w => ov.body.includes(w)),
   ov.body.slice(0, 200));
-check('the recency feed and its range tabs are Arabic (الوارد اليوم / أمس / هذا الأسبوع)',
-  ov.h2s.some(h => h.includes('الوارد اليوم')) &&
-  ['اليوم', 'أمس', 'هذا الأسبوع'].every(w => ov.btns.some(b => b === w)),
+// ★ Overview is the analytics read, not a second work queue: the recency feed
+// and the due-soon banner it used to duplicate now live ONLY on the
+// "Needs you today" page, and [C10] is what asserts them.
+check('★ Overview does not paint a second recency feed or due-soon banner',
+  !ov.h2s.some(h => h.includes('الوارد اليوم') || h.includes('خلال 48'))
+  && !['أمس', 'هذا الأسبوع'].some(w => ov.btns.some(b => b === w)),
   ov.h2s.join(' | '));
 // ★ The status BUCKET cards paint stored enum values through the display layer.
 check('★ the three status cards paint the stored enums in Arabic (قيد الانتظار / قيد التنفيذ / منجزة)',
@@ -3292,84 +3304,129 @@ await evalJS(`window.__setLang('ar')`);
 await sleep(300);
 check('no errors across the Overview + Admin checks', (await evalJS(`window.__errors.length`)) === 0);
 
-// -- [C10] UX task 3: Home's "Needs you today" list --------------------------
-// The point of the task is that every role lands on Home and immediately sees
-// what is waiting on them. A source floor cannot assert an ORDER, a CAP or a
-// click, so this mounts the real HomeDashboard with seven seeded rows and reads
-// the paint: overdue before due-soon before review, six rows max with a "See
-// all 7" escape hatch, badges and heading in Arabic, serials kept LTR, and a
-// row click actually routing to the owning board.
-console.log('\n[C10] Home renders "Needs you today" (UX task 3)');
-await evalJS(`window.__mount('home')`);
+// -- [C10] the "Needs you today" feed page ----------------------------------
+// The UX pass put an attention list on Home, a Due Soon page, a DueSoonBanner
+// on two boards and a "New Today" feed on Overview - five copies of the same
+// answer. They are now ONE page (src/NeedsYouDashboard.tsx) with four tabs, so
+// this block mounts the real page against the real seed and reads the paint:
+// the tab strip and its counts, the deadline ordering, the overdue/awaiting
+// tie-break, serials kept LTR, a click that actually routes, and the feed tabs
+// bucketing by the local day the record was created.
+console.log('\n[C10] the "Needs you today" feed page');
+await evalJS(`window.__mount('needsyou')`);
 await sleep(500);
 
-const ATTN_ROWS = `[...document.getElementById('root').querySelectorAll('button.card-interactive')]
-  .filter(b => b.querySelector('span[style*="flex: 1"], span[style*="flex:1"]'))`;
+const NY_ROWS = `[...document.getElementById('root').querySelectorAll('div.card')]`;
+const NY_TABS = `[...document.getElementById('root').querySelectorAll('button')]`;
 
-const homeAr = JSON.parse(await evalJS(`(() => {
+const nyRead = `(() => {
   const root = document.getElementById('root');
-  const rows = ${ATTN_ROWS};
+  const rows = ${NY_ROWS};
   return JSON.stringify({
-    h2s: [...root.querySelectorAll('h2')].map(e => (e.textContent || '').trim()),
+    h1: (root.querySelector('h1') || {}).textContent || '',
+    tabs: ${NY_TABS}.map(b => (b.textContent || '').trim()),
     rowCount: rows.length,
     rowText: rows.map(r => (r.textContent || '').trim()),
-    badges: rows.map(r => (r.lastElementChild.textContent || '').trim()),
+    reasons: rows.map(r => {
+      const sp = r.querySelector(':scope > span');
+      return sp ? (sp.textContent || '').trim() : '';
+    }),
     ltrSerials: rows.filter(r => r.querySelector('.ltr-data')).length,
-    seeAll: [...root.querySelectorAll('button')].map(b => (b.textContent || '').trim())
-      .find(x => x.indexOf('عرض الكل') === 0) || '',
+    empty: (root.textContent || '').indexOf('لا شيء') !== -1 ? 'empty' : '',
+    body: (root.textContent || '').trim(),
   });
-})()`));
+})()`;
 
-check('the "Needs you today" heading is Arabic (يحتاج انتباهك اليوم)',
-  homeAr.h2s.includes('يحتاج انتباهك اليوم'), JSON.stringify(homeAr.h2s));
-check('★ the list is capped at 6 rows even though 7 items need me',
-  homeAr.rowCount === 6, homeAr.rowCount);
-check('★ the 7th is not lost: a "See all 7" link points at the Due Soon board',
-  homeAr.seeAll.indexOf('7') !== -1, homeAr.seeAll);
-check('★ the rows are ordered overdue then due-soon then awaiting review',
-  JSON.stringify(homeAr.badges) === JSON.stringify(
-    ['المتأخرة', 'المتأخرة', 'قرب الموعد', 'قرب الموعد', 'في انتظار المراجعة', 'في انتظار المراجعة']),
-  JSON.stringify(homeAr.badges));
-check('★ no row badge is still an English reason label',
-  !homeAr.badges.some(b => /Overdue|Due Soon|Awaiting/.test(b)), JSON.stringify(homeAr.badges));
+const nyAr = JSON.parse(await evalJS(nyRead));
+
+check('the page title is Arabic (يحتاج انتباهك اليوم)',
+  nyAr.h1.indexOf('يحتاج انتباهك اليوم') !== -1, nyAr.h1);
+check('★ all four tabs are painted, each in Arabic',
+  nyAr.tabs.length === 4 && nyAr.tabs.every(x => AR_RANGE.test(x)), JSON.stringify(nyAr.tabs));
+check('★ every tab carries its own count',
+  nyAr.tabs.every(x => /\d/.test(x)), JSON.stringify(nyAr.tabs));
+// 2 tasks + 2 correspondences: index 0 is overdue, index 1 is inside the 48h
+// window, index 2 is closed/done and must not appear at all.
+check('★ the deadline tab lists exactly the 4 open records that are due or overdue',
+  nyAr.rowCount === 4, nyAr.rowCount + ' — ' + JSON.stringify(nyAr.rowText).slice(0, 200));
+check('★ overdue is painted before due-soon',
+  JSON.stringify(nyAr.reasons) === JSON.stringify(
+    ['المتأخرة', 'المتأخرة', 'قرب الموعد', 'قرب الموعد']), JSON.stringify(nyAr.reasons));
+check('★ no reason badge is still an English label',
+  !nyAr.reasons.some(b => /Overdue|Due Soon|Awaiting/.test(b)), JSON.stringify(nyAr.reasons));
+// CR000001 is Unread AND overdue. A date can be missed, a queue cannot, so the
+// deadline reason has to win and the row must not also appear as triage.
+const nyLetter = nyAr.rowText.findIndex(x => x.indexOf('CR000001') !== -1);
+check('★ the unreviewed OVERDUE letter appears once, badged overdue not awaiting-review',
+  (nyAr.rowText.join(' ').match(/CR000001/g) || []).length === 1
+  && nyLetter !== -1 && nyAr.reasons[nyLetter] === 'المتأخرة',
+  nyLetter + ' — ' + JSON.stringify(nyAr.reasons));
+check('★ the closed/done records are not on the list',
+  nyAr.rowText.join(' ').indexOf('TK000003') === -1
+  && nyAr.rowText.join(' ').indexOf('CR000003') === -1);
 check('★ every row paints its serial as LTR data (.ltr-data)',
-  homeAr.ltrSerials === 6, homeAr.ltrSerials);
-check('the overdue correspondence is the first row',
-  (homeAr.rowText[0] || '').indexOf('CR000001') !== -1, homeAr.rowText[0]);
-await shot('home-needsme-ar');
+  nyAr.ltrSerials === 4, nyAr.ltrSerials);
+await shot('needsyou-due-ar');
 
-// A click has to leave Home for the board that owns the record - the row is
-// useless if it only highlights.
-await clickEl(`${ATTN_ROWS}.find(b => (b.textContent||'').indexOf('TK000002') !== -1)`, 'a task row');
+// A click has to leave the page for the board that owns the record - the row
+// is useless if it only highlights.
+await evalJS(`window.__nav = []`);
+await clickEl(`${NY_ROWS}.find(b => (b.textContent||'').indexOf('TK000001') !== -1)`, 'a task row');
 await sleep(300);
-const nav = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
-check('★ clicking a task row navigates to the tasks board', nav[nav.length - 1] === 'tasks', JSON.stringify(nav));
+const nyNav = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
+check('★ clicking a task row navigates to the tasks board',
+  nyNav[nyNav.length - 1] === 'tasks', JSON.stringify(nyNav));
 
 await evalJS(`window.__nav = []`);
-await clickEl(`${ATTN_ROWS}.find(b => (b.textContent||'').indexOf('CR000001') !== -1)`, 'a correspondence row');
+await clickEl(`${NY_ROWS}.find(b => (b.textContent||'').indexOf('CR000001') !== -1)`, 'a correspondence row');
 await sleep(300);
-const nav2 = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
+const nyNav2 = JSON.parse(await evalJS(`JSON.stringify(window.__nav)`));
 check('★ clicking a correspondence row navigates to the correspondences board',
-  nav2[nav2.length - 1] === 'correspondences', JSON.stringify(nav2));
+  nyNav2[nyNav2.length - 1] === 'correspondences', JSON.stringify(nyNav2));
+
+// ── the three recency tabs ──────────────────────────────────────────────────
+// Every seeded record was created YESTERDAY (see T0), so the three windows are
+// the assertion: today empty, yesterday all six, this week the same six. A
+// bucket that ignored the day would show six everywhere.
+const nyTab = async (idx) => {
+  await clickEl(`${NY_TABS}[${idx}]`, 'tab ' + idx);
+  await sleep(300);
+  return JSON.parse(await evalJS(nyRead));
+};
+
+const nyToday = await nyTab(1);
+check('★ Today is empty - nothing was created today',
+  nyToday.rowCount === 0 && nyToday.body.indexOf('لا يوجد جديد اليوم حتى الآن.') !== -1,
+  nyToday.rowCount + ' — ' + nyToday.body.slice(0, 120));
+
+const nyYest = await nyTab(2);
+check('★ Yesterday lists all six seeded records (3 tasks + 3 correspondences)',
+  nyYest.rowCount === 6, nyYest.rowCount);
+check('★ the recency feed does NOT filter by deadline: the closed records are in it',
+  nyYest.rowText.join(' ').indexOf('TK000003') !== -1
+  && nyYest.rowText.join(' ').indexOf('CR000003') !== -1);
+check('★ a feed row carries no reason badge - nothing there is overdue-by-definition',
+  nyYest.reasons.every(x => x === ''), JSON.stringify(nyYest.reasons));
+
+const nyWeek = await nyTab(3);
+check('★ This Week is the rolling 7 days and so contains yesterday\'s six',
+  nyWeek.rowCount === 6, nyWeek.rowCount);
+await shot('needsyou-week-ar');
 
 // Non-vacuous: the SAME DOM in English, so a hard-coded Arabic label fails too.
 await evalJS(`window.__setLang('en')`);
 await sleep(350);
-const homeEn = JSON.parse(await evalJS(`(() => {
-  const root = document.getElementById('root');
-  const rows = ${ATTN_ROWS};
-  return JSON.stringify({
-    h2s: [...root.querySelectorAll('h2')].map(e => (e.textContent || '').trim()),
-    badges: rows.map(r => (r.lastElementChild.textContent || '').trim()),
-  });
-})()`));
-check('non-vacuous: the same list reads English under en',
-  homeEn.h2s.includes('Needs you today') && homeEn.badges[0] === 'Overdue',
-  JSON.stringify(homeEn));
+const nyEn = JSON.parse(await evalJS(nyRead));
+check('non-vacuous: the same page reads English under en',
+  nyEn.h1.indexOf('Needs you today') !== -1
+  && nyEn.tabs.some(x => x.indexOf('Due Soon & Overdue') === 0)
+  && nyEn.tabs.some(x => x.indexOf('This Week') === 0),
+  JSON.stringify([nyEn.h1, nyEn.tabs]));
 await evalJS(`window.__setLang('ar')`);
 await sleep(300);
 
-check('no errors across the Home checks', (await evalJS(`window.__errors.length`)) === 0);
+check('no errors across the "Needs you today" checks', (await evalJS(`window.__errors.length`)) === 0);
+
 
 // -- [C12] UX task 5: a record card is quiet until you open it ---------------
 // The boss's complaint was that every card shouts every field at once. Task 5

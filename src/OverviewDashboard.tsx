@@ -21,7 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useTranslation } from 'react-i18next';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_NUMERIC } from './lib/format';
-import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath } from './utils';
+import { globalSearch, getUserColor, isOverdue, openOrCopyPath } from './utils';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Overview Firestore:', { e, op, path });
@@ -238,9 +238,6 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
   const [dateFilter, setDateFilter] = useState('');
   const [viewTab, setViewTab] = useState<'Correspondences' | 'Tasks'>('Correspondences');
   const [kpisExpanded, setKpisExpanded] = useState(false);
-  const [newCollapsed, setNewCollapsed] = useState(false);
-  const [showAllNew, setShowAllNew] = useState(false);
-  const [newRange, setNewRange] = useState<'today' | 'yesterday' | 'week'>('today');
 
   // Load data
   useEffect(() => {
@@ -312,60 +309,9 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
     return { totalCorrs, openCorrs, activeTasks, doneTasks, overdue, rate };
   }, [correspondences, tasks]);
 
-  // ─── Due Soon Alerts ───────────────────────────────────────────────────
-  const dueSoonItems = useMemo(() => {
-    const corrs = correspondences
-      .filter(c => c.status !== 'Closed' && isDueSoon(c.deadline))
-      .map(c => ({ ...c, type: 'Correspondence' as const }));
-    
-    const tks = tasks
-      .filter(tk => tk.status !== 'Done' && tk.status !== 'Archived' && isDueSoon(tk.dueDate))
-      .map(tk => ({ ...tk, type: 'Task' as const }));
-
-    return [...corrs, ...tks].sort((a, b) => {
-      const dateA = new Date((a as any).deadline || (a as any).dueDate || 0);
-      const dateB = new Date((b as any).deadline || (b as any).dueDate || 0);
-      return dateA.getTime() - dateB.getTime();
-    });
-  }, [correspondences, tasks]);
-
-  // ─── New feed (recency) ───────────────────────────────────────────────────
-  // Correspondences + tasks created within the focused window. When a manager
-  // picks an explicit date in the filter, that day wins; otherwise the
-  // Today / Yesterday / This Week tabs control the window. Answers "what's new?".
-  const todayStr = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD, local
-  const yesterdayStr = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toLocaleDateString('en-CA');
-  })();
-  const weekStartStr = (() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 6); // rolling last 7 days, inclusive of today
-    return d.toLocaleDateString('en-CA');
-  })();
-  const newTodayItems = useMemo(() => {
-    const dayOf = (x: any): string =>
-      x.createdAt?.toDate?.()?.toLocaleDateString('en-CA') || x.dateReceived || '';
-
-    // YYYY-MM-DD strings compare correctly lexicographically.
-    const inRange = (day: string): boolean => {
-      if (!day) return false;
-      if (dateFilter) return day === dateFilter;
-      if (newRange === 'today') return day === todayStr;
-      if (newRange === 'yesterday') return day === yesterdayStr;
-      return day >= weekStartStr && day <= todayStr; // 'week'
-    };
-
-    const corrs = correspondences
-      .filter(c => c.id !== '--stats--' && inRange(dayOf(c)))
-      .map(c => ({ kind: 'Correspondence' as const, item: c, ts: c.createdAt?.toDate?.()?.getTime() || 0 }));
-    const tks = tasks
-      .filter(tk => tk.id !== '--stats--' && inRange(dayOf(tk)))
-      .map(tk => ({ kind: 'Task' as const, item: tk, ts: tk.createdAt?.toDate?.()?.getTime() || 0 }));
-
-    return [...corrs, ...tks].sort((a, b) => b.ts - a.ts);
-  }, [correspondences, tasks, dateFilter, newRange, todayStr, yesterdayStr, weekStartStr]);
+  // Due dates and the recency feed both live on the "Needs you today" page
+  // (src/NeedsYouDashboard.tsx) — this dashboard is the analytics read, not a
+  // second work queue. Deliberately not duplicated here.
 
   // ─── Employee KPIs ──────────────────────────────────────────────────────────
   const getWeight = (priority?: string) => {
@@ -639,188 +585,6 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
         <StatCard label={t('Overdue')} value={summaryStats.overdue} sub={t('need attention')} color="#ef4444" onClick={onNavigateTasks ? () => onNavigateTasks('Overdue') : undefined} />
         <StatCard label={t('Completion')} value={fmt.percent(summaryStats.rate)} sub={t('tasks done')} color="var(--teal-500)" onClick={onNavigateTasks ? () => onNavigateTasks('Done') : undefined} />
       </div>
-
-      {/* ── New Today (recency feed) ── */}
-      {selectedCategory === null && (
-        <div className="card" style={{ marginBottom: 24, padding: 0, overflow: 'hidden' }}>
-          <button
-            onClick={() => setNewCollapsed(v => !v)}
-            style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 12, padding: 16, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'start' }}
-          >
-            <div style={{ padding: 10, background: 'rgba(59,130,246,0.12)', color: '#3b82f6' }}>
-              <MailOpen className="w-5 h-5" />
-            </div>
-            <div style={{ flex: 1 }}>
-              <h2 style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-                {dateFilter
-                  ? t('New on {{date}}', { date: fmt.date(dateFilter, DATE_NUMERIC) })
-                  : newRange === 'today'
-                    ? t('New Today')
-                    : newRange === 'yesterday'
-                      ? t('New Yesterday')
-                      : t('New This Week')}
-              </h2>
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
-                {t('Correspondences and tasks that just came in — and who they went to.')}
-              </p>
-            </div>
-            <span style={{ fontSize: 13, fontWeight: 800, color: newTodayItems.length ? '#3b82f6' : 'var(--text-muted)', padding: '2px 10px', background: 'var(--surface-3)', borderRadius: 0 }}>{newTodayItems.length}</span>
-            {newCollapsed ? <ChevronRight className="w-5 h-5 text-muted" /> : <ChevronDown className="w-5 h-5 text-muted" />}
-          </button>
-
-          {!newCollapsed && !dateFilter && (
-            <div style={{ display: 'flex', gap: 6, padding: '0 16px 12px' }}>
-              {([
-                ['today', t('Today')],
-                ['yesterday', t('Yesterday')],
-                ['week', t('This Week')],
-              ] as const).map(([key, label]) => {
-                const active = newRange === key;
-                return (
-                  <button
-                    key={key}
-                    onClick={() => { setNewRange(key); setShowAllNew(false); }}
-                    style={{
-                      padding: '6px 14px',
-                      fontSize: 12,
-                      fontWeight: 800,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.04em',
-                      cursor: 'pointer',
-                      border: '1px solid var(--border)',
-                      borderRadius: 0,
-                      background: active ? '#3b82f6' : 'var(--surface-3)',
-                      color: active ? '#fff' : 'var(--text-secondary)',
-                    }}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {!newCollapsed && (
-            newTodayItems.length === 0 ? (
-              <div style={{ padding: '0 16px 20px', color: 'var(--text-muted)', fontSize: 13, fontWeight: 600 }}>
-                {dateFilter
-                  ? t('Nothing was created on this day.')
-                  : newRange === 'today'
-                    ? t('Nothing new yet today.')
-                    : newRange === 'yesterday'
-                      ? t('Nothing was created yesterday.')
-                      : t('Nothing was created this week.')}
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', padding: '0 16px 16px' }}>
-                {(showAllNew ? newTodayItems : newTodayItems.slice(0, 8)).map(({ kind, item }) => {
-                  const isTask = kind === 'Task';
-                  const c = item as any;
-                  const ov = isTask
-                    ? (isOverdue(c.dueDate) && c.status !== 'Done')
-                    : (isOverdue(c.deadline) && c.status !== 'Closed');
-                  return (
-                    <div
-                      key={`${kind}-${item.id}`}
-                      onClick={() => isTask ? setSelectedTask(item as Task) : setSelectedCorr(item as Corresponding)}
-                      style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 8px', borderTop: '1px solid var(--border)', cursor: 'pointer', transition: 'background 0.15s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-3)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                    >
-                      <span style={{ flexShrink: 0, width: 96, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.04em', color: isTask ? '#16a34a' : '#3b82f6' }}>
-                        {isTask ? <CheckSquare className="w-3.5 h-3.5" /> : <MailOpen className="w-3.5 h-3.5" />}
-                        {isTask ? t('Task') : t('Corr')}
-                      </span>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {c.serialNumber && <span style={{ color: 'var(--text-muted)', fontWeight: 800, marginInlineEnd: 6 }} className="ltr-data">#{c.serialNumber}</span>}
-                          {isTask ? c.taskName : c.subject}
-                        </div>
-                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                          {isTask
-                            ? <>{t('Due:')}<span className="ltr-data">{c.dueDate || '—'}</span></>
-                            : <>{t('From:')}<span className={fmt.bidiFor(c.sentFrom)}>{c.sentFrom || '—'}</span></>}
-                          {ov && <span style={{ color: '#dc2626', fontWeight: 700, marginInlineStart: 8 }}>⚠ {t('Overdue')}</span>}
-                        </div>
-                      </div>
-                      <div style={{ flexShrink: 0 }}>
-                        <AssigneeChip id={c.assignedToId} name={c.assignedTo} />
-                      </div>
-                      <ArrowRight className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--text-muted)' }} />
-                    </div>
-                  );
-                })}
-                {newTodayItems.length > 8 && (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    style={{ marginTop: 12, alignSelf: 'center', fontWeight: 700 }}
-                    onClick={() => setShowAllNew(v => !v)}
-                  >
-                    {showAllNew ? t('Show less') : t('Show all {{count}}', { count: newTodayItems.length })}
-                  </button>
-                )}
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      {/* ── Due Soon Alerts Section ── */}
-      {dueSoonItems.length > 0 && selectedCategory === null && (
-        <motion.div
-          className="ov-duesoon"
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          style={{ marginBottom: 32, background: 'var(--surface-3)', border: '1px solid #f97316', padding: '20px', borderRadius: 0 }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-            <div style={{ background: '#f97316', padding: 6, borderRadius: 0 }}>
-              <AlertCircle className="w-4 h-4" style={{ color: '#fff' }} />
-            </div>
-            <div>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t("Due Soon (Within 48h)")}</h2>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: 0 }}>{t("Items that require immediate attention.")}</p>
-            </div>
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12 }}>
-            {dueSoonItems.slice(0, 4).map((item: any) => (
-              <div 
-                key={`${item.type}-${item.id}`} 
-                className="card"
-                style={{ 
-                  padding: '12px 16px', 
-                  background: 'var(--surface)',
-                  borderInlineStart: `4px solid #f97316`,
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  cursor: 'pointer'
-                }}
-                onClick={() => {
-                  if (item.type === 'Task') {
-                    setSelectedTask(item);
-                  } else {
-                    setSelectedCorr(item);
-                  }
-                }}
-              >
-                <div style={{ flex: 1, marginInlineEnd: 12 }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: '#f97316', textTransform: 'uppercase', marginBottom: 2 }}>{item.type === 'Task' ? t('Task') : t('Correspondence')}</div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.3 }}>{item.subject || item.taskName}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>{t("Due:")}<span className="ltr-data">{item.deadline || item.dueDate}</span></div>
-                </div>
-                <ArrowRight className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
-              </div>
-            ))}
-            {dueSoonItems.length > 4 && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 600, color: '#9a3412', background: 'rgba(249, 115, 22, 0.05)', padding: 12 }}>
-                {t('+ {{count}} more items due soon', { count: dueSoonItems.length - 4 })}
-              </div>
-            )}
-          </div>
-        </motion.div>
-      )}
 
       
       {selectedCategory === null ? (

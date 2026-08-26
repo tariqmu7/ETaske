@@ -33,7 +33,6 @@ import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueS
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
-import DueSoonBanner from './components/DueSoonBanner';
 import ComboBox from './components/ComboBox';
 import CreateTaskPanel, { PrivacyToggle, CollaboratorPicker } from './components/CreateTaskPanel';
 import RecordLinkPicker from './components/RecordLinkPicker';
@@ -503,14 +502,9 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     { key: 'user', label: t('Assignee'), icon: UserIcon },
   ], [t]);
 
-  const dueSoonTasks = useMemo(
-    () => tasks.filter(t => t.status !== 'Done' && t.status !== 'Archived' && isDueSoon(t.dueDate)),
-    [tasks]
-  );
-
   const getMilestonesForTask = (taskId: string) => milestones.filter(m => m.taskId === taskId);
 
-  // Open a specific task from anywhere (e.g. the Due Soon banner). The task may
+  // Open a specific task from anywhere (e.g. the "Needs you today" feed). The task may
   // be hidden behind the "My Tasks" view, an active filter, or another page, so
   // clear everything that could hide it, jump to its page, expand it, and
   // scroll it into view once rendered.
@@ -1109,16 +1103,6 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
           <button onClick={() => setError(null)} style={{ marginInlineStart: 'auto', background: 'none', border: 'none', cursor: 'pointer', color: '#f87171' }}><X className="w-4 h-4" /></button>
         </div>
       )}
-
-      <DueSoonBanner
-        items={dueSoonTasks.map(t => ({
-          id: t.id,
-          type: 'Task' as const,
-          title: t.taskName,
-          due: t.dueDate,
-          onClick: () => handleOpenTask(t.id),
-        }))}
-      />
 
       <CreateTaskPanel
         open={isAddingTask}

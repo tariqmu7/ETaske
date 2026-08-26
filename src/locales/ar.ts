@@ -174,11 +174,10 @@ const ar: Record<keyof typeof en, string> = {
   "{{count}} unread notifications": "{{count}} إشعارات غير مقروءة",
   "New correspondence": "مراسلة جديدة",
   "View my tasks": "عرض مهامي",
-  "Review {{count}} due soon": "مراجعة {{count}} قرب الموعد",
   "Jump back in": "متابعة ما بدأته",
   "Needs you today": "يحتاج انتباهك اليوم",
+  "Everything waiting on you, plus what has just come in.": "كل ما ينتظر تصرفك، ومعه ما ورد حديثًا.",
   "Awaiting review": "في انتظار المراجعة",
-  "See all {{count}}": "عرض الكل ({{count}})",
   "Org analytics, workload and progress at a glance.": "تحليلات المؤسسة وحجم العمل والتقدم في لمحة.",
   "Triage incoming letters, then review and assign them as tasks.": "افرز المراسلات الواردة، ثم راجعها وأسندها كمهام.",
   "Incoming letters and requests waiting to be triaged.": "المراسلات والطلبات الواردة في انتظار الفرز.",
@@ -195,7 +194,6 @@ const ar: Record<keyof typeof en, string> = {
   "{{count}} deadlines within 7 days": "{{count}} مواعيد نهائية خلال 7 أيام",
   "{{count}} open": "{{count}} مفتوحة",
   "No open bids": "لا توجد عطاءات مفتوحة",
-  "Items due within 48 hours or already overdue.": "عناصر مستحقة خلال 48 ساعة أو متأخرة بالفعل.",
   "{{count}} need attention": "{{count}} تحتاج إلى انتباه",
   "All on track": "كل شيء في موعده",
   "Department announcements and updates.": "إعلانات الإدارة وتحديثاتها.",
@@ -218,7 +216,6 @@ const ar: Record<keyof typeof en, string> = {
   "Contracts & financials": "العقود والبيانات المالية",
   "Tenders, bids & deadlines": "المناقصات والعطاءات والمواعيد",
   "Win rate & loss reasons": "نسبة الفوز وأسباب الخسارة",
-  "Overdue & due in 48h": "المتأخرة والمستحقة خلال 48 ساعة",
   "Department announcements": "إعلانات الإدارة",
   "Closed records": "السجلات المغلقة",
   "Synced email feed": "موجز البريد المتزامن",
@@ -238,10 +235,7 @@ const ar: Record<keyof typeof en, string> = {
   "Close dialogs": "إغلاق النوافذ",
 
   // ── Due-soon banner ──
-  "Due Soon (Within 48h)": "قرب الموعد (خلال 48 ساعة)",
-  "Items that require immediate attention.": "عناصر تتطلب انتباهًا فوريًا.",
   "Due:": "الاستحقاق: ",
-  "+ {{count}} more items due soon": "+ {{count}} عناصر أخرى قرب الموعد",
 
   // ── Announcements ──
   "Seen by {{count}} of {{total}}": "شاهدها {{count}} من {{total}}",
@@ -386,7 +380,6 @@ const ar: Record<keyof typeof en, string> = {
 
   // ── Due Soon page ──
   "Due Soon & Overdue": "قرب الموعد والمتأخر",
-  "All tasks and correspondences that are overdue or due within 48 hours.": "كل المهام والمراسلات المتأخرة أو المستحقة خلال 48 ساعة. اضغط على أي عنصر لفتحه.",
   "Nothing due soon": "لا شيء قرب موعده",
   "You're all caught up.": "أنجزت كل ما عليك.",
 
@@ -1120,20 +1113,12 @@ const ar: Record<keyof typeof en, string> = {
   "need attention": "تحتاج متابعة",
   "tasks done": "مهام منجزة",
 
-  "New Today": "الوارد اليوم",
-  "New Yesterday": "الوارد أمس",
-  "New This Week": "الوارد هذا الأسبوع",
-  "New on {{date}}": "الوارد في {{date}}",
-  "Correspondences and tasks that just came in — and who they went to.": "المراسلات والمهام التي وردت للتو — ولمن أُسندت.",
   "Today": "اليوم",
   "Yesterday": "أمس",
   "This Week": "هذا الأسبوع",
   "Nothing new yet today.": "لا يوجد جديد اليوم حتى الآن.",
   "Nothing was created yesterday.": "لم يُنشأ أي شيء أمس.",
   "Nothing was created this week.": "لم يُنشأ أي شيء هذا الأسبوع.",
-  "Nothing was created on this day.": "لم يُنشأ أي شيء في هذا اليوم.",
-  "Show all {{count}}": "عرض الكل ({{count}})",
-  "Show less": "عرض أقل",
 
   "Related Tasks": "المهام المرتبطة",
   "Overdue Correspondences": "مراسلات متأخرة",
