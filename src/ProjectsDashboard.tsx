@@ -11,17 +11,19 @@ import {
   AppUser, Project, ProjectStatus, PROJECT_STATUS_OPTIONS,
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor, isOverdue } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_SHORT } from './lib/format';
 import {
   Plus, Search, X, FolderKanban, Building2, Hash, Calendar,
-  Trash2, Edit2, ChevronRight, AlertCircle,
+  Trash2, Edit2, ChevronRight, AlertCircle, ArrowLeft,
   Layers, ListChecks, MapPin, User as UserIcon,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetail from './ProjectDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 import type { AppView } from './App';
 
@@ -63,6 +65,25 @@ type ProjectGroupBy = 'status' | 'client' | 'location' | 'owner';
  */
 const PROJECT_STATUS_GROUP_ORDER: readonly ProjectStatus[] = PROJECT_STATUS_OPTIONS;
 
+/**
+ * Card accent per project status — the SAME four literals the summary tiles at
+ * the top of this board already use, so a status never reads as one colour in
+ * the tile row and another on the group card.
+ */
+const PROJECT_STATUS_ACCENT: Record<string, string> = {
+  Active: '#3b82f6',
+  'On Hold': '#f59e0b',
+  Completed: '#16a34a',
+  Cancelled: '#94a3b8',
+};
+
+/** Avatar glyph for the dimensions that have no person to show a face for. */
+const PROJECT_GROUP_ICON: Partial<Record<ProjectGroupBy, LucideIcon>> = {
+  status: ListChecks,
+  client: Building2,
+  location: MapPin,
+};
+
 /** "Soonest end date first, undated last" — the optional in-bucket sort. */
 const byEndDate = byDueDateAsc<Project>(p => p.endDate);
 
@@ -91,6 +112,8 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status' | 'end'>('recent');
   const [groupBy, setGroupBy] = useState<ProjectGroupBy>('status');
+  /** `null` = the group grid is showing; a key = that bucket is drilled into. */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -171,6 +194,31 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
     [visible, groupKeyOf, groupBy],
   );
 
+  // The open bucket, re-resolved from `groupedProjects` every render: a filter
+  // (or someone else's edit arriving over the listener) can empty the bucket the
+  // user drilled into, and then `find` returns undefined and we fall back to the
+  // grid instead of painting a blank section.
+  const activeGroup = useMemo(
+    () => (openGroup ? groupedProjects.find(g => g.key === openGroup) : undefined),
+    [openGroup, groupedProjects],
+  );
+
+  // Switching dimension re-buckets everything, so the key that was open no
+  // longer means anything.
+  useEffect(() => { setOpenGroup(null); }, [groupBy]);
+
+  // Grouping IS the grid: no open card means no project cards at all. There is
+  // no deep-link bypass to build here — a selected project returns the
+  // full-page `ProjectDetail` above, before any of this renders.
+  const showGroupGrid = !activeGroup;
+
+  // What the list renders: the open bucket only. This board has no pager, so
+  // unlike the tasks/correspondences boards there is nothing else to re-scope.
+  const renderGroups = useMemo(
+    () => (activeGroup ? [activeGroup] : []),
+    [activeGroup],
+  );
+
   // Header for one bucket. Each dimension gets its own phrasing because a single
   // "{{x}} Projects" template reads wrong for half of them ("Ahmed Projects").
   const groupHeading = (group: { key: string; value: string }) => {
@@ -190,6 +238,61 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
       default: return t('{{status}} Projects', { status: name });
     }
   };
+
+  // The card title is the group's NAME on its own — the "Client: …" / "Owner: …"
+  // framing belongs on the drilled-in section header, not under a 44px avatar
+  // that already says whose card this is.
+  const groupTitle = (group: { key: string; value: string }) =>
+    group.key === UNGROUPED ? groupHeading(group) : dl(group.value);
+
+  // What the grid draws. One card per bucket: the count, plus the small status
+  // breakdown that is the whole point of the card — it says what is inside
+  // before you open it. Cancelled gets no chip of its own; three chips is what
+  // fits a 240px card, and Active / On Hold / Completed are the states a
+  // portfolio read actually turns on.
+  const groupCards = useMemo<GroupCard[]>(() => groupedProjects.map(group => {
+    const rows = group.items;
+    const active = rows.filter(p => p.status === 'Active').length;
+    const onHold = rows.filter(p => p.status === 'On Hold').length;
+    const completed = rows.filter(p => p.status === 'Completed').length;
+    // "Late" = the end date has passed on a project still meant to be running.
+    // A Completed or Cancelled project is not late, it is finished.
+    const late = rows.filter(p => p.status !== 'Completed' && p.status !== 'Cancelled' && isOverdue(p.endDate)).length;
+
+    // Resolve the owner through a project's `userId`, not by matching the
+    // bucket key against the directory — the key is a display name, and two
+    // people can share one.
+    const isPerson = groupBy === 'owner';
+    const ownerId = isPerson ? rows.find(p => p.userId)?.userId : undefined;
+    const owner = ownerId ? projectUsers.find(pu => pu.id === ownerId) : undefined;
+    const title = groupTitle(group);
+
+    return {
+      key: group.key,
+      title,
+      subtitle: isPerson && owner?.role ? dl(owner.role) : undefined,
+      accent: groupBy === 'status'
+        ? PROJECT_STATUS_ACCENT[group.value] || 'var(--accent)'
+        : isPerson
+          ? (owner?.userColor || getUserColor(ownerId || group.value || group.key))
+          : getUserColor(group.key),
+      photoURL: isPerson ? owner?.photoURL : undefined,
+      // A person gets an initial; a status/client/location gets the dimension's
+      // icon, so the card still reads as "a thing of this kind".
+      initial: isPerson ? title.charAt(0).toUpperCase() : undefined,
+      icon: isPerson ? undefined : PROJECT_GROUP_ICON[groupBy],
+      count: rows.length,
+      countLabel: rows.length === 1 ? t('project') : t('projects'),
+      badge: late > 0 ? `${late} ${t('OVERDUE')}` : undefined,
+      // Grouping BY status already puts the status in the title, so repeating
+      // the same chips under it would be pure noise.
+      stats: groupBy === 'status' ? undefined : [
+        { label: dl('Active'), value: active, tone: 'info' as const },
+        { label: dl('On Hold'), value: onHold, tone: 'warn' as const },
+        { label: dl('Completed'), value: completed, tone: 'success' as const },
+      ],
+    };
+  }), [groupedProjects, groupBy, projectUsers, dl, t]);
 
   const groupByOptions = useMemo<GroupByOption<ProjectGroupBy>[]>(() => [
     { key: 'status', label: t('Status'), icon: ListChecks },
@@ -397,38 +500,55 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
 
       {/* Grid */}
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div className="card-grid">
           {[0, 1, 2].map(i => <div key={i} className="card skeleton" style={{ height: 170 }} />)}
         </div>
-      ) : visible.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon"><FolderKanban className="w-8 h-8" /></div>
-          <div className="empty-state-title">{isFiltering ? t('No matching projects') : t('No projects yet')}</div>
-          <div className="empty-state-sub">
-            {isFiltering
-              ? t('No projects match your search or filter. Try clearing them.')
-              : t('Create your first project to start tracking contracts, financials and updates.')}
-          </div>
-          {isFiltering ? (
-            <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStatusFilter('All'); }}>
-              {t('Clear filters')}
-            </button>
-          ) : (
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
-              <Plus className="w-4 h-4" /> {t('New Project')}
-            </button>
-          )}
-        </div>
+      ) : showGroupGrid ? (
+        // Grouping IS the grid: one card per bucket, and the project cards only
+        // appear once a card is opened. `groupCards` is built from every visible
+        // project, so the counts are the real totals.
+        <GroupGrid
+          cards={groupCards}
+          onSelect={setOpenGroup}
+          empty={
+            <div className="empty-state">
+              <div className="empty-state-icon"><FolderKanban className="w-8 h-8" /></div>
+              <div className="empty-state-title">{isFiltering ? t('No matching projects') : t('No projects yet')}</div>
+              <div className="empty-state-sub">
+                {isFiltering
+                  ? t('No projects match your search or filter. Try clearing them.')
+                  : t('Create your first project to start tracking contracts, financials and updates.')}
+              </div>
+              {isFiltering ? (
+                <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStatusFilter('All'); }}>
+                  {t('Clear filters')}
+                </button>
+              ) : (
+                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
+                  <Plus className="w-4 h-4" /> {t('New Project')}
+                </button>
+              )}
+            </div>
+          }
+        />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {groupedProjects.map(group => (
+          {/* The only way back to the grid. */}
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpenGroup(null)}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
+          </button>
+          {renderGroups.map(group => (
           <div key={group.key}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
               {groupHeading(group)}
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            <div className="card-grid">
           <AnimatePresence>
             {group.items.map(p => (
               <motion.div

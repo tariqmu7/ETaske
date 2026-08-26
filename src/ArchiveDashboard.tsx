@@ -120,7 +120,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
       )}
 
       {/* Grid */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16 }}>
+      <div className="card-grid">
         <AnimatePresence>
           {filtered.map(task => {
             const taskMilestones = getTaskMilestones(task.id);

@@ -180,7 +180,7 @@ export default function ProjectSubcontractsTab({ project, user }: Props) {
           {visible.length === 0 ? (
             <div className="empty-state"><div className="empty-state-title">{t('No subcontracts match')}</div></div>
           ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 14 }}>
+          <div className="card-grid">
           {visible.map(s => {
             const left = daysLeftLabel(s.expiryDate, t);
             return (

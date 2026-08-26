@@ -13,7 +13,7 @@ import {
   OPEN_OPPORTUNITY_STAGES, CURRENCY_OPTIONS, isOpportunityOpen,
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
-import { globalSearch } from './utils';
+import { globalSearch, getUserColor } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import { consumePending, subscribeOpen } from './lib/deepLink';
@@ -22,12 +22,14 @@ import { exportOpportunities } from './lib/exportData';
 import {
   Plus, Search, X, Target, Building2, Hash, CalendarClock,
   Trash2, Edit2, AlertCircle, User as UserIcon, Percent, MessageSquare, BarChart3,
-  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox,
+  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ArrowLeft,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import type { AppView } from './App';
 import { motion, AnimatePresence } from 'motion/react';
 import OpportunityDetail from './OpportunityDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, UNGROUPED } from './lib/grouping';
 import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
 
@@ -56,6 +58,18 @@ type OpportunityGroupBy = 'stage' | 'location' | 'source' | 'owner';
  * restated — the same reason the projects board reuses its status options.
  */
 const OPPORTUNITY_STAGE_GROUP_ORDER: readonly OpportunityStage[] = OPPORTUNITY_STAGE_OPTIONS;
+
+/**
+ * Avatar glyph for the dimensions that have no person to show a face for. Same
+ * three-of-four shape as the other boards: only `owner` draws a photo/initial.
+ * The glyphs are the ones `groupByOptions` already puts on the control, so a
+ * dimension reads the same in the picker and on its cards.
+ */
+const OPPORTUNITY_GROUP_ICON: Partial<Record<OpportunityGroupBy, LucideIcon>> = {
+  stage: ListChecks,
+  location: MapPin,
+  source: Inbox,
+};
 
 const emptyForm = () => ({
   title: '',
@@ -90,6 +104,8 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const [stageFilter, setStageFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'deadline' | 'value' | 'recent' | 'stage'>('deadline');
   const [groupBy, setGroupBy] = useState<OpportunityGroupBy>('stage');
+  /** `null` = the group grid is showing; a key = that bucket is drilled into. */
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editing, setEditing] = useState<Opportunity | null>(null);
@@ -211,6 +227,32 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     [visible, groupKeyOf, groupBy],
   );
 
+  // The open bucket, re-resolved from `groupedOpportunities` every render: a
+  // filter (or someone else's edit arriving over the listener) can empty the
+  // bucket the user drilled into, and then `find` returns undefined and we fall
+  // back to the grid instead of painting a blank section.
+  const activeGroup = useMemo(
+    () => (openGroup ? groupedOpportunities.find(g => g.key === openGroup) : undefined),
+    [openGroup, groupedOpportunities],
+  );
+
+  // Switching dimension re-buckets everything, so the key that was open no
+  // longer means anything.
+  useEffect(() => { setOpenGroup(null); }, [groupBy]);
+
+  // Grouping IS the grid: no open card means no bid cards at all. There is no
+  // deep-link bypass to build here — an opened opportunity (including one
+  // arriving through `pendingOpenId`) renders `OpportunityDetail` in place of
+  // the whole board, above any of this.
+  const showGroupGrid = !activeGroup;
+
+  // What the list renders: the open bucket only. This board has no pager, so
+  // unlike the tasks/correspondences boards there is nothing else to re-scope.
+  const renderGroups = useMemo(
+    () => (activeGroup ? [activeGroup] : []),
+    [activeGroup],
+  );
+
   // Header for one bucket. Each dimension gets its own phrasing because a single
   // "{{x}} Opportunities" template reads wrong for half of them.
   const groupHeading = (group: { key: string; value: string }) => {
@@ -230,6 +272,68 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       default: return t('{{stage}} Opportunities', { stage: name });
     }
   };
+
+  // The card title is the group's NAME on its own — the "Source: …" / "Owner: …"
+  // framing belongs on the drilled-in section header, not under a 44px avatar
+  // that already says whose card this is.
+  const groupTitle = (group: { key: string; value: string }) =>
+    group.key === UNGROUPED ? groupHeading(group) : dl(group.value);
+
+  // What the grid draws. One card per bucket. The "small info" a bid pipeline
+  // actually turns on is MONEY, so unlike the projects board the subtitle is the
+  // bucket's open value rather than a role — a card that says "4 opportunities"
+  // without saying what they are worth tells a bid manager nothing.
+  const groupCards = useMemo<GroupCard[]>(() => groupedOpportunities.map(group => {
+    const rows = group.items;
+    const open = rows.filter(o => isOpportunityOpen(o.stage));
+    const won = rows.filter(o => o.stage === 'Won').length;
+    const lost = rows.filter(o => o.stage === 'Lost').length;
+    // Value of what is still live in this bucket. Mixed currencies are summed
+    // naively and labelled with `mainCurrency`, exactly as the KPI tiles at the
+    // top of this board already do.
+    const openValue = open.reduce((sum, o) => sum + toNumber(o.estimatedValue), 0);
+    // "Late" = the submission deadline has passed on a bid still open. A Won,
+    // Lost, No Bid or Cancelled record cannot miss a deadline any more.
+    const late = open.filter(o => {
+      const d = daysUntil(o.submissionDeadline);
+      return d !== null && d < 0;
+    }).length;
+
+    // The bucket key for `owner` is `ownerName` (the module's denormalised
+    // label), so no lookup is needed to LABEL the card — but a face still is.
+    // Resolve it through a row's `ownerId`, not by matching the display name:
+    // two people can share one name.
+    const isPerson = groupBy === 'owner';
+    const ownerId = isPerson ? rows.find(o => o.ownerId)?.ownerId : undefined;
+    const owner = ownerId ? projectUsers.find(pu => pu.id === ownerId) : undefined;
+    const title = groupTitle(group);
+
+    return {
+      key: group.key,
+      title,
+      subtitle: open.length > 0 ? t('{{value}} open', { value: money(openValue, mainCurrency) }) : undefined,
+      accent: groupBy === 'stage'
+        ? STAGE_COLORS[group.value as OpportunityStage] || 'var(--accent)'
+        : isPerson
+          ? (owner?.userColor || getUserColor(ownerId || group.value || group.key))
+          : getUserColor(group.key),
+      photoURL: isPerson ? owner?.photoURL : undefined,
+      // A person gets an initial; a stage/location/source gets the dimension's
+      // icon, so the card still reads as "a thing of this kind".
+      initial: isPerson ? title.charAt(0).toUpperCase() : undefined,
+      icon: isPerson ? undefined : OPPORTUNITY_GROUP_ICON[groupBy],
+      count: rows.length,
+      countLabel: rows.length === 1 ? t('opportunity') : t('opportunities'),
+      badge: late > 0 ? `${late} ${t('OVERDUE')}` : undefined,
+      // Grouping BY stage already puts the stage in the title, so repeating the
+      // outcome chips under it would be pure noise.
+      stats: groupBy === 'stage' ? undefined : [
+        { label: t('live'), value: open.length, tone: 'info' as const },
+        { label: dl('Won'), value: won, tone: 'success' as const },
+        { label: dl('Lost'), value: lost, tone: 'warn' as const },
+      ],
+    };
+  }), [groupedOpportunities, groupBy, projectUsers, mainCurrency, dl, t]);
 
   const groupByOptions = useMemo<GroupByOption<OpportunityGroupBy>[]>(() => [
     { key: 'stage', label: t('Stage'), icon: ListChecks },
@@ -558,38 +662,55 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
 
       {/* Grid */}
       {loading ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+        <div className="card-grid">
           {[0, 1, 2].map(i => <div key={i} className="card skeleton" style={{ height: 190 }} />)}
         </div>
-      ) : visible.length === 0 ? (
-        <div className="empty-state">
-          <div className="empty-state-icon"><Target className="w-8 h-8" /></div>
-          <div className="empty-state-title">{isFiltering ? t('No matching opportunities') : t('No opportunities yet')}</div>
-          <div className="empty-state-sub">
-            {isFiltering
-              ? t('No opportunities match your search or filter. Try clearing them.')
-              : t('Add your first tender or bid to start tracking the pipeline, deadlines and win rate.')}
-          </div>
-          {isFiltering ? (
-            <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStageFilter('All'); }}>
-              {t('Clear filters')}
-            </button>
-          ) : (
-            <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
-              <Plus className="w-4 h-4" /> {t('New Opportunity')}
-            </button>
-          )}
-        </div>
+      ) : showGroupGrid ? (
+        // Grouping IS the grid: one card per bucket, and the bid cards only
+        // appear once a card is opened. `groupCards` is built from every visible
+        // opportunity, so the counts and values are the real totals.
+        <GroupGrid
+          cards={groupCards}
+          onSelect={setOpenGroup}
+          empty={
+            <div className="empty-state">
+              <div className="empty-state-icon"><Target className="w-8 h-8" /></div>
+              <div className="empty-state-title">{isFiltering ? t('No matching opportunities') : t('No opportunities yet')}</div>
+              <div className="empty-state-sub">
+                {isFiltering
+                  ? t('No opportunities match your search or filter. Try clearing them.')
+                  : t('Add your first tender or bid to start tracking the pipeline, deadlines and win rate.')}
+              </div>
+              {isFiltering ? (
+                <button className="btn btn-ghost" style={{ marginTop: 16 }} onClick={() => { setSearch(''); setStageFilter('All'); }}>
+                  {t('Clear filters')}
+                </button>
+              ) : (
+                <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={openCreate}>
+                  <Plus className="w-4 h-4" /> {t('New Opportunity')}
+                </button>
+              )}
+            </div>
+          }
+        />
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {groupedOpportunities.map(group => (
+          {/* The only way back to the grid. */}
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => setOpenGroup(null)}
+            style={{ alignSelf: 'flex-start' }}
+          >
+            <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
+          </button>
+          {renderGroups.map(group => (
           <div key={group.key}>
             <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
               {groupHeading(group)}
               <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
             </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: 16 }}>
+            <div className="card-grid">
           <AnimatePresence>
             {group.items.map(o => {
               const dLeft = daysUntil(o.submissionDeadline);

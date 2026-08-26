@@ -1238,6 +1238,8 @@ const ar: Record<keyof typeof en, string> = {
 
   // Group-by queue task 1 — the shared "Group by (X)" control on the tasks board.
   "Group by": "التجميع حسب",
+  // Group-by grid (2026-08-26) — the back button out of a drilled-in group card.
+  "All Groups": "كل المجموعات",
   "Uncategorized": "غير مصنّفة",
   "No project": "بدون مشروع",
   "No location": "بدون موقع",
@@ -1252,6 +1254,8 @@ const ar: Record<keyof typeof en, string> = {
   "Category: {{name}}": "تصنيف: {{name}}",
   "From {{name}}": "من {{name}}",
   "No sender": "بدون مُرسِل",
+  "correspondence": "مراسلة",
+  "correspondences": "مراسلات",
 
   // Group-by queue task 3 — the same control on the projects board. Same colon
   // form as the correspondences headings, and for the same reason: the status
@@ -1261,6 +1265,11 @@ const ar: Record<keyof typeof en, string> = {
   "{{status}} Projects": "مشروعات: {{status}}",
   "Client: {{name}}": "عميل: {{name}}",
   "Owner: {{name}}": "مسؤول: {{name}}",
+  // كلمة العدد المجردة على بطاقة مجموعة المشروعات — مطلوبة وحدها لا داخل
+  // صيغة "{{count}} مشروعات".
+  "project": "مشروع",
+  "projects": "مشروعات",
+
   "No client": "بدون عميل",
   "No owner": "بدون مسؤول",
   "End date (soonest)": "تاريخ الانتهاء (الأقرب)",
@@ -1271,6 +1280,12 @@ const ar: Record<keyof typeof en, string> = {
   "{{stage}} Opportunities": "فرص: {{stage}}",
   "Source: {{name}}": "مصدر: {{name}}",
   "No source": "بدون مصدر",
+  // كلمة العدد المجردة على بطاقة مجموعة الفرص، ثم سطر القيمة تحت الاسم:
+  // قيمة العطاءات المفتوحة داخل المجموعة.
+  "opportunity": "فرصة",
+  "live": "جارية",
+  "opportunities": "فرص",
+  "{{value}} open": "{{value}} مفتوحة",
 };
 
 export default ar;

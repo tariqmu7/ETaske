@@ -358,6 +358,7 @@ check('★ every t(\'…\') literal in the translated files is a real key in en.
 // allowed; a file that renders English words is not.
 const NO_COPY_OK = new Set([
   'src/main.tsx',              // the bootstrap, renders no text
+  'src/components/GroupGrid.tsx', // every card string arrives already translated
   'src/CorrespondenceInbox.tsx', // a 27-line deep-link wrapper
   'src/FollowUpDashboard.tsx',   // the dead stub (superseded by Correspondings)
   'src/ErrorBoundary.tsx',       // checked above — i18n.t, not the hook
@@ -907,6 +908,20 @@ window.__box = el => { const r = el.getBoundingClientRect(); return { x: r.x + r
 `;
 await waitFor(`document.getElementById('root') && document.getElementById('root').children.length`, 'TopNav mount');
 await evalJS(HELPERS);
+
+// Grouping is a GRID of group cards now (see components/GroupGrid.tsx): picking
+// a dimension shows one card per bucket and the RECORD ROWS only exist after a
+// card is opened. Every row-level check below therefore has to drill in first.
+// A board with nothing to group renders no cards, so this is a no-op then.
+// Not tasks-only: `button[data-group-card]` is GroupGrid's own markup, so this drills into
+// the correspondences board the same way.
+async function openFirstGroupCard() {
+  const has = await evalJS(`!!document.querySelector('#root button[data-group-card]')`);
+  if (!has) return false;
+  await clickEl(`document.querySelector('#root button[data-group-card]')`, 'first group card');
+  await sleep(400);
+  return true;
+}
 
 async function clickEl(finderJS, label) {
   const info = await evalJS(`(() => {
@@ -1460,10 +1475,11 @@ check('no page errors while mounting all eight dashboards in RTL',
 // Measured in BOTH directions from the same DOM: an assertion that only holds
 // in RTL could be true of a hard-coded layout too.
 console.log('\n[C2] the search icon and the card accent, measured both ways');
-// "All Tasks" renders per-employee summary cards; the task ROWS (accent stripe,
-// serial number) only exist in the default "My Tasks" view.
+// The task ROWS (accent stripe, serial number) live behind a group card — see
+// openFirstGroupCard. "My Tasks" is still the view under test.
 await evalJS(`window.__mount('tasks', { initialView: 'mine' })`);
 await sleep(500);
+await openFirstGroupCard();
 
 const sideOf = `(() => {
   const icon = document.querySelector('.lucide-search');
@@ -1536,6 +1552,9 @@ await shot('dash-ar');
 console.log('\n[C3] the literal arrow in the copy');
 await evalJS(`window.__mount('corr')`);
 await sleep(500);
+// The arrow is painted on a correspondence ROW ("assigned → Nevin"), and rows
+// now live behind a group card — drill in or there is nothing to measure.
+await openFirstGroupCard();
 const arrow = `(() => {
   const a = document.querySelector('#root .dir-arrow');
   return a ? getComputedStyle(a).transform : 'not rendered';
@@ -1555,6 +1574,7 @@ await evalJS(`document.documentElement.setAttribute('dir','rtl')`);
 console.log('\n[C4] the tasks flow renders Arabic (task 4)');
 await evalJS(`window.__mount('tasks', { initialView: 'mine' })`);
 await sleep(500);
+await openFirstGroupCard();
 
 const tasksText = `(() => {
   const h1 = document.querySelector('#root h1');
@@ -1666,6 +1686,95 @@ await evalJS(`window.__setLang('ar')`);
 await sleep(300);
 await shot('tasks-enums-ar');
 check('no errors across the enum checks', (await evalJS(`window.__errors.length`)) === 0);
+
+// ── [C6b] "Group by" is a GRID of group cards, and it drills in ─────────────
+// The follow-up to the group-by queue (2026-08-26): picking a dimension no
+// longer stacks sections down the page, it paints ONE CARD PER BUCKET carrying
+// the group's name and a summary of what is inside, and the records appear only
+// after a card is clicked. Every assertion here reads the PAINTED cards after a
+// real click, because "the same rows, arranged differently" is the whole
+// feature — a props-level test would prove nothing about it.
+console.log('\n[C6b] the tasks group-by GRID + drill-in (grid-first grouping)');
+await evalJS(`window.__mount('tasks', { initialView: 'all' })`);
+await sleep(600);
+// ⚠ `root.render` re-renders the SAME TasksDashboard instance, so remounting
+// does NOT reset its state — [C6] left a group card open (see
+// openFirstGroupCard) and it is still open here. Back out explicitly.
+const backToGrid = async () => {
+  const has = await evalJS(`(() => { ${HELPERS} return !!window.__one('button', ${JSON.stringify(ar['All Groups'])}); })()`);
+  if (!has) return false;
+  await clickEl(`window.__one('button', ${JSON.stringify(ar['All Groups'])})`, 'back to the group grid');
+  await sleep(420);
+  return true;
+};
+await backToGrid();
+const gridCards = () => evalJS(
+  `JSON.stringify([...document.querySelectorAll('#root button[data-group-card]')].map(b => (b.innerText || '').trim().replace(/\\s+/g, ' ')))`,
+).then(JSON.parse);
+const taskRows = () => evalJS(`document.querySelectorAll('#root .card[id^="task-"]').length`);
+const pickDim = async (labelAr) => {
+  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  await sleep(420);
+  return gridCards();
+};
+
+const statusCards = await gridCards();
+check('★ the board OPENS on the grid — cards, and not one task row',
+  statusCards.length === 3 && (await taskRows()) === 0,
+  `${statusCards.length} cards / ${await taskRows()} rows`);
+check('★ by status: one card per bucket, in WORKFLOW order (not alphabetical)',
+  statusCards[0].includes(ar['Pending']) && statusCards[1].includes(ar['In Progress']) && statusCards[2].includes(ar['Done']),
+  statusCards.join(' | '));
+// Grouping BY status already names the status in the title, so repeating the
+// three-way breakdown under it would be noise — the card omits it on purpose.
+check('★ a status card carries its count but NOT a status breakdown',
+  statusCards.every(c => c.includes(ar['task'])) && !statusCards[0].includes(ar['Active']),
+  statusCards[0]);
+
+const assigneeCards = await pickDim(ar['Assignee']);
+check('★ by assignee: one card per person, titled with the bare NAME',
+  assigneeCards.length === 3
+  && assigneeCards.some(c => c.includes('Tariq Salama')) && assigneeCards.some(c => c.includes('Ahmed Salem'))
+  // The "Assigned to {{name}}" framing belongs on a section header, not under
+  // the avatar that already says who this is.
+  && !assigneeCards.some(c => c.includes(ar['Assigned to {{name}}'].replace('{{name}}', '').trim())),
+  assigneeCards.join(' | '));
+check('★ each card summarises what is INSIDE it (count + the status breakdown)',
+  assigneeCards.every(c => c.includes(ar['task']) && c.includes(ar['Pending']) && c.includes(ar['Active']) && c.includes(ar['Done'])),
+  assigneeCards[0]);
+check('the person’s role is the card subtitle',
+  assigneeCards.some(c => c.includes(ar['Manager'])) && assigneeCards.some(c => c.includes(ar['Employee'])),
+  assigneeCards.join(' | '));
+
+// ★ The drill-in: this is the half that makes the grid a navigation and not a
+// dashboard. Ahmed Salem owns exactly one of the three seeded tasks.
+await clickEl(`[...document.querySelectorAll('#root button[data-group-card]')].find(b => (b.innerText||'').includes('Ahmed Salem'))`, 'the Ahmed Salem card');
+await sleep(450);
+const drilled = await evalJS(`document.getElementById('root').innerText || ''`);
+check('★ clicking a card opens THAT group’s records, and only those',
+  (await taskRows()) === 1 && (await gridCards()).length === 0 && drilled.includes('TK000003'),
+  `${await taskRows()} rows / ${(await gridCards()).length} cards`);
+check('★ the drilled-in list still names the group it came from',
+  drilled.includes('Ahmed Salem'), drilled.slice(0, 160).replace(/\n/g, ' / '));
+check('★ and there is a way back to the grid',
+  drilled.includes(ar['All Groups']), drilled.slice(0, 160).replace(/\n/g, ' / '));
+await backToGrid();
+check('★ back returns to the full grid, unchanged',
+  (await gridCards()).length === 3 && (await taskRows()) === 0);
+
+// Non-vacuous: the SAME DOM flipped to English. The bucket KEYS are the stored
+// values — only the card's title is translated.
+await evalJS(`window.__setLang('en')`);
+await sleep(450);
+const assigneeEn = await gridCards();
+check('non-vacuous: the same cards read English under en',
+  assigneeEn.length === 3 && assigneeEn.some(c => /Pending/.test(c) && /Active/.test(c) && /Done/.test(c))
+  && !assigneeEn.some(c => c.includes(ar['Pending'])),
+  assigneeEn.join(' | '));
+await shot('tasks-groupby-grid-en');
+await evalJS(`window.__setLang('ar')`);
+await sleep(300);
+check('no errors across the group-by grid checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // ── [C5] the correspondence flow really renders Arabic (task 5) ─────────────
 // Same contract as [C4]: mount the real screens, read the PAINTED text, then
@@ -1795,12 +1904,15 @@ await shot('corr-modal-ar');
 await clickEl(`[...document.querySelectorAll('button')].find(b => (b.textContent||'').trim() === 'إلغاء')`, 'Cancel');
 await sleep(300);
 
-// ── [C5b] the "Group by (X)" control really re-buckets the intake list ──────
-// Group-by queue task 2. Assertions read the PAINTED headings after a REAL
-// click on the segmented control, because the whole feature is "the same rows,
-// arranged differently" — a props-level test would prove nothing about that.
-console.log('\n[C5b] the correspondences group-by control (group-by task 2)');
-const groupBar = await evalJS(`(() => {
+// ── [C5b] "Group by (X)" is a GRID of group cards here too ──────────────────
+// Group-by queue task 2 of the GRID rollout (2026-08-26): the intake board no
+// longer stacks a section per bucket, it paints ONE CARD PER BUCKET (the group's
+// name + a summary of what is inside) and the correspondence rows appear only
+// after a card is clicked. Every assertion reads the PAINTED cards after a REAL
+// click on the segmented control — "the same rows, arranged differently" is the
+// whole feature, and a props-level test would prove nothing about it.
+console.log('\n[C5b] the correspondences group-by GRID + drill-in (grid task 2)');
+const corrGroupBar = await evalJS(`(() => {
   const g = document.querySelector('#root [role="group"][aria-label]');
   if (!g) return JSON.stringify({ err: 'no group-by bar' });
   return JSON.stringify({ aria: g.getAttribute('aria-label'),
@@ -1808,59 +1920,116 @@ const groupBar = await evalJS(`(() => {
     pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
 })()`).then(JSON.parse);
 check('the group-by bar renders its five dimensions in Arabic',
-  ['الحالة', 'الفئة', 'الموقع', 'الجهة المرسِلة', 'المسؤول'].every(o => (groupBar.opts || []).includes(o)),
-  JSON.stringify(groupBar));
-check('★ "الحالة" is the pressed default', (groupBar.pressed || [])[0] === 'الحالة', JSON.stringify(groupBar.pressed));
+  ['الحالة', 'الفئة', 'الموقع', 'الجهة المرسِلة', 'المسؤول'].every(o => (corrGroupBar.opts || []).includes(o)),
+  JSON.stringify(corrGroupBar));
+check('★ "الحالة" is the pressed default', (corrGroupBar.pressed || [])[0] === 'الحالة', JSON.stringify(corrGroupBar.pressed));
 
-// `innerText` is the transformed, rendered text — the same read [C5] uses.
-const bodyText = () => evalJS(`document.getElementById('root').innerText || ''`);
-const pickGroup = async (labelAr) => {
+// ⚠ `root.render` re-renders the SAME CorrespondingsDashboard instance, so an
+// earlier block could have left a card open — back out before reading the grid.
+const corrBackToGrid = async () => {
+  const has = await evalJS(`(() => { ${HELPERS} return !!window.__one('button', ${JSON.stringify(ar['All Groups'])}); })()`);
+  if (!has) return false;
+  await clickEl(`window.__one('button', ${JSON.stringify(ar['All Groups'])})`, 'back to the group grid');
+  await sleep(420);
+  return true;
+};
+await corrBackToGrid();
+
+const corrCards = () => evalJS(
+  `JSON.stringify([...document.querySelectorAll('#root button[data-group-card]')].map(b => (b.innerText || '').trim().replace(/\\s+/g, ' ')))`,
+).then(JSON.parse);
+// Rows are counted by the serial they paint, not by `.card`: the manager
+// workload panel is a `.card` too and would inflate every count.
+const corrRows = () => evalJS(
+  `((document.getElementById('root').innerText || '').match(/CR0000\\d/g) || []).length`,
+);
+const corrPickDim = async (labelAr) => {
   await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
-  await sleep(320);
-  return bodyText();
+  await sleep(420);
+  return corrCards();
 };
 
-const byStatus = await bodyText();
-check('★ by status: the three seeded buckets are painted, in WORKFLOW order (not alphabetical)',
-  byStatus.includes('مراسلات: غير مقروء')
-  && byStatus.indexOf('مراسلات: غير مقروء') < byStatus.indexOf('مراسلات: مُسنَد')
-  && byStatus.indexOf('مراسلات: مُسنَد') < byStatus.indexOf('مراسلات: مغلق'),
-  byStatus.slice(0, 200).replace(/\n/g, ' / '));
+const corrStatusCards = await corrCards();
+check('★ the board OPENS on the grid — cards, and not one correspondence row',
+  corrStatusCards.length === 3 && (await corrRows()) === 0,
+  `${corrStatusCards.length} cards / ${await corrRows()} rows`);
+// Only three of the four statuses are seeded, and an empty bucket is dropped —
+// so this also proves the fixed order is the INTAKE workflow, not alphabetical.
+check('★ by status: one card per bucket, in WORKFLOW order (not alphabetical)',
+  corrStatusCards[0].includes(ar['Unread']) && corrStatusCards[1].includes(ar['Assigned']) && corrStatusCards[2].includes(ar['Closed']),
+  corrStatusCards.join(' | '));
+// Grouping BY status already names the status in the title, so repeating the
+// breakdown chips under it would be noise — the card omits them on purpose.
+check('★ a status card carries its count but NOT a status breakdown',
+  corrStatusCards.every(c => c.includes(ar['correspondence']) || c.includes(ar['correspondences']))
+  && !corrStatusCards[2].includes(ar['Unread']),
+  corrStatusCards[2]);
 
-const bySender = await pickGroup('الجهة المرسِلة');
-check('★ by sender: the buckets became the senders, and the status buckets are gone',
-  bySender.includes('من EGPC') && bySender.includes('من Stores') && !bySender.includes('مراسلات: مغلق'),
-  bySender.slice(0, 200).replace(/\n/g, ' / '));
+const corrSenderCards = await corrPickDim('الجهة المرسِلة');
+check('★ by sender: the cards became the senders, titled with the bare NAME',
+  corrSenderCards.length === 3
+  && corrSenderCards.some(c => c.startsWith('EGPC')) && corrSenderCards.some(c => c.startsWith('Stores'))
+  // The "من {{name}}" framing belongs on the drilled-in section header.
+  && !corrSenderCards.some(c => c.startsWith('من '))
+  // …and the status buckets are gone.
+  && !corrSenderCards.some(c => c.startsWith(ar['Closed'])),
+  corrSenderCards.join(' | '));
+check('★ each card summarises what is INSIDE it (count + the status breakdown)',
+  corrSenderCards.every(c => c.includes(ar['Unread']) && c.includes(ar['Assigned']) && c.includes(ar['Closed'])),
+  corrSenderCards[0]);
 
 // The location dimension is the one with no field of its own: it is resolved
 // through the record link `projectId` → projects/{id}.location. Only c-a carries
 // a project, so this also proves the UNGROUPED bucket sorts LAST.
-const byLocation = await pickGroup('الموقع');
+const corrLocationCards = await corrPickDim('الموقع');
 check('★ by location: resolved through the linked project (only c-a has one)',
-  byLocation.includes('موقع: Alexandria') && byLocation.includes('بدون موقع'),
-  byLocation.slice(0, 200).replace(/\n/g, ' / '));
-check('★ the "no value" bucket is LAST, never leading the page',
-  byLocation.indexOf('بدون موقع') > byLocation.indexOf('موقع: Alexandria'),
-  `${byLocation.indexOf('موقع: Alexandria')} vs ${byLocation.indexOf('بدون موقع')}`);
+  corrLocationCards.some(c => c.startsWith('Alexandria')) && corrLocationCards.some(c => c.startsWith('بدون موقع')),
+  corrLocationCards.join(' | '));
+check('★ the "no value" card is LAST, never leading the grid',
+  corrLocationCards.findIndex(c => c.startsWith('بدون موقع')) === corrLocationCards.length - 1,
+  corrLocationCards.join(' | '));
 
-const byAssignee = await pickGroup('المسؤول');
-check('★ by assignee: one bucket per person',
-  byAssignee.includes('مُسندة إلى Tariq Salama') && byAssignee.includes('مُسندة إلى Ahmed Salem'),
-  byAssignee.slice(0, 200).replace(/\n/g, ' / '));
+const corrAssigneeCards = await corrPickDim('المسؤول');
+check('★ by assignee: one card per person, titled with the bare NAME',
+  corrAssigneeCards.length === 3
+  && corrAssigneeCards.some(c => c.includes('Tariq Salama')) && corrAssigneeCards.some(c => c.includes('Ahmed Salem'))
+  && !corrAssigneeCards.some(c => c.startsWith(ar['Assigned to {{name}}'].replace('{{name}}', '').trim())),
+  corrAssigneeCards.join(' | '));
+check('the person’s role is the card subtitle',
+  corrAssigneeCards.some(c => c.includes(ar['Manager'])) && corrAssigneeCards.some(c => c.includes(ar['Employee'])),
+  corrAssigneeCards.join(' | '));
 
-// Non-vacuous: the SAME DOM, flipped, must read English — the group keys are the
-// stored values, only the heading is translated.
+// ★ The drill-in: the half that makes the grid a navigation and not a dashboard.
+// Ahmed Salem owns exactly one of the three seeded correspondences (CR000003).
+await clickEl(`[...document.querySelectorAll('#root button[data-group-card]')].find(b => (b.innerText||'').includes('Ahmed Salem'))`, 'the Ahmed Salem card');
+await sleep(450);
+const corrDrilled = await evalJS(`document.getElementById('root').innerText || ''`);
+check('★ clicking a card opens THAT group’s records, and only those',
+  (await corrRows()) === 1 && (await corrCards()).length === 0 && corrDrilled.includes('CR000003'),
+  `${await corrRows()} rows / ${(await corrCards()).length} cards`);
+check('★ the corrDrilled-in list still names the group it came from',
+  corrDrilled.includes('مُسندة إلى Ahmed Salem'), corrDrilled.slice(0, 200).replace(/\n/g, ' / '));
+check('★ and there is a way back to the grid',
+  corrDrilled.includes(ar['All Groups']), corrDrilled.slice(0, 200).replace(/\n/g, ' / '));
+await corrBackToGrid();
+check('★ back returns to the full grid, unchanged',
+  (await corrCards()).length === 3 && (await corrRows()) === 0);
+
+// Non-vacuous: the SAME DOM flipped to English. The bucket KEYS are the stored
+// values — only the card's title and chips are translated.
 await evalJS(`window.__setLang('en')`);
-await sleep(400);
-const byAssigneeEn = await bodyText();
-check('non-vacuous: the same buckets read English under en',
-  byAssigneeEn.includes('Assigned to Tariq Salama') && !byAssigneeEn.includes('مُسندة إلى'),
-  byAssigneeEn.slice(0, 200).replace(/\n/g, ' / '));
+await sleep(450);
+const corrAssigneeEn = await corrCards();
+check('non-vacuous: the same cards read English under en',
+  corrAssigneeEn.length === 3
+  && corrAssigneeEn.some(c => /Unread/.test(c) && /Assigned/.test(c) && /Closed/.test(c))
+  && !corrAssigneeEn.some(c => c.includes(ar['Unread'])),
+  corrAssigneeEn.join(' | '));
 await shot('corr-groupby-en');
 await evalJS(`window.__setLang('ar')`);
 await sleep(300);
-await pickGroup('الحالة');
-check('no errors across the group-by checks', (await evalJS(`window.__errors.length`)) === 0);
+await corrPickDim('الحالة');
+check('no errors across the group-by grid checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // The archive is the other screen of this pass that owns its own copy.
 await evalJS(`window.__mount('archive')`);
@@ -1901,68 +2070,131 @@ check('the stage filter <option>s are Arabic (كل المراحل / مُحدَّ
 const oppArabicValues = oppAr.opts.filter(o => /[؀-ۿ]/.test(o.v));
 check('★★ no stage <option> VALUE is Arabic — the stored stage stays English',
   oppArabicValues.length === 0, oppArabicValues.map(o => `${o.v} (${o.t})`).join(' | '));
+// Grouping IS the grid now (grid task 4), so a bid card — and therefore its
+// stage badge — only exists behind a group card. These four helpers are what
+// every opportunities block from here down uses to move between the two views.
+const oppGridCards = () => evalJS(
+  `JSON.stringify([...document.querySelectorAll('#root button[data-group-card]')].map(b => (b.innerText || '').trim().replace(/\\s+/g, ' ')))`,
+).then(JSON.parse);
+const oppRows = () => evalJS(`document.querySelectorAll('#root .card.card-interactive').length`);
+/** Open a bucket by a substring of its card. Defaults to the first card. */
+const openOppGroup = async (match) => {
+  const finder = match
+    ? `[...document.querySelectorAll('#root button[data-group-card]')].find(b => (b.innerText||'').includes(${JSON.stringify(match)}))`
+    : `document.querySelector('#root button[data-group-card]')`;
+  await clickEl(finder, `the ${match || 'first'} group card`);
+  await sleep(420);
+};
+/** Back out to the grid if a bucket is open; false when it already was. */
+const oppBackToGrid = async () => {
+  const has = await evalJS(`(() => { ${HELPERS} return !!window.__one('button', ${JSON.stringify(ar['All Groups'])}); })()`);
+  if (!has) return false;
+  await clickEl(`window.__one('button', ${JSON.stringify(ar['All Groups'])})`, 'back to the bid group grid');
+  await sleep(420);
+  return true;
+};
+
 // The stage badge on the card paints the seeded value through the same layer.
+await openOppGroup();
 const cardStages = await evalJS(`(() => {
-  const spans = [...document.querySelectorAll('#root .card span')].map(s => (s.textContent || '').trim());
+  const spans = [...document.querySelectorAll('#root .card.card-interactive span')].map(s => (s.textContent || '').trim());
   return JSON.stringify(spans.filter(Boolean).slice(0, 40));
 })()`).then(JSON.parse);
+// ⚠ Non-vacuous on purpose: with the grid showing there are no bid cards at
+// all, and "no Latin badge" would pass on an empty array.
 check('★ a card stage badge paints the enum in Arabic (مُحدَّد / مُقدَّم / فوز)',
-  ['مُحدَّد', 'مُقدَّم', 'فوز'].some(w => cardStages.includes(w)), cardStages.slice(0, 14).join(' | '));
+  cardStages.length > 0 && ['مُحدَّد', 'مُقدَّم', 'فوز'].some(w => cardStages.includes(w)),
+  cardStages.slice(0, 14).join(' | '));
 check('★ no card badge is still a Latin stage value',
   !cardStages.some(x => /^(Identified|Prequalification|Bid Preparation|Submitted|Under Evaluation|Won|Lost|No Bid|Cancelled)$/.test(x)),
   cardStages.filter(x => /[A-Za-z]{3}/.test(x)).join(' | '));
+await oppBackToGrid();
 
-// ── [C7b] the "Group by (X)" control really re-buckets the bid grid ─────────
-// Group-by queue task 4, the last board. Same contract as [C5b]/[C8b]: REAL
-// clicks on the segmented control, assertions on the PAINTED headings.
-console.log('\n[C7b] the opportunities group-by control (group-by task 4)');
-const oppBar = await evalJS(`(() => {
-  const g = document.querySelector('#root [role="group"][aria-label]');
-  if (!g) return JSON.stringify({ err: 'no group-by bar' });
-  return JSON.stringify({ opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
-    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
-})()`).then(JSON.parse);
-check('the opportunities group-by bar renders its four dimensions in Arabic',
-  ['المرحلة', 'الموقع', 'المصدر', 'المسؤول'].every(o => (oppBar.opts || []).includes(o)),
-  JSON.stringify(oppBar));
-check('★ "المرحلة" is the pressed default', (oppBar.pressed || [])[0] === 'المرحلة', JSON.stringify(oppBar.pressed));
-
+// ── [C7b] "Group by (X)" is a GRID of group cards here too ─────────────────
+// Grid task 4 (2026-08-26), the last of the four boards. The stacked-section
+// version of this block is gone: picking a dimension now paints ONE CARD PER
+// BUCKET (its name, what its live bids are worth, and how they split) and the
+// bid cards appear only after a card is clicked. Every assertion reads the
+// PAINTED cards after a real click.
+console.log('\n[C7b] the opportunities group-by GRID + drill-in (grid task 4)');
 const oppText = () => evalJS(`document.getElementById('root').innerText || ''`);
 const pickOppGroup = async (labelAr) => {
   await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
-  await sleep(320);
-  return oppText();
+  await sleep(420);
+  return oppGridCards();
 };
+// The bid-card titles are how a bucket's CONTENT is read back once it is
+// drilled into — a group card's count says how many, never which.
 const oppCardTitles = () => evalJS(`(() => {
   const h = [...document.querySelectorAll('#root .card.card-interactive h3')].map(x => (x.textContent || '').trim());
   return JSON.stringify(h);
 })()`).then(JSON.parse);
 
-const oppByStage = await oppText();
-check('★ by stage: the buckets are painted in PIPELINE order (not alphabetical)',
-  oppByStage.includes('فرص: مُحدَّد')
-  && oppByStage.indexOf('فرص: مُحدَّد') < oppByStage.indexOf('فرص: مُقدَّم')
-  && oppByStage.indexOf('فرص: مُقدَّم') < oppByStage.indexOf('فرص: فوز'),
-  oppByStage.slice(0, 200).replace(/\n/g, ' / '));
+const oppStageCards = await oppGridCards();
+check('★ the board OPENS on the grid — group cards, and not one bid card',
+  oppStageCards.length === 3 && (await oppRows()) === 0,
+  `${oppStageCards.length} cards / ${await oppRows()} bid cards`);
+check('★ by stage: one card per bucket, in PIPELINE order (not alphabetical)',
+  oppStageCards[0].includes('مُحدَّد') && oppStageCards[1].includes('مُقدَّم') && oppStageCards[2].includes('فوز'),
+  oppStageCards.join(' | '));
+// Grouping BY stage already names the stage on the card, so repeating the
+// live/won/lost breakdown under it would be noise — the card omits it.
+check('★ a stage card carries its count but NOT an outcome breakdown',
+  oppStageCards.every(c => c.includes(ar['opportunities']) || c.includes(ar['opportunity']))
+  && !oppStageCards[0].includes('فوز'),
+  oppStageCards[0]);
+
+// ★ The drill-in: this is the half that makes the grid a navigation and not a
+// dashboard. 'مُحدَّد' holds exactly o-a.
+await openOppGroup('مُحدَّد');
+const oppIdentified = await oppCardTitles();
+check('★ clicking a card opens THAT bucket’s bids, and only those',
+  oppIdentified.length === 1 && (await oppGridCards()).length === 0,
+  `${oppIdentified.length} bid cards / ${(await oppGridCards()).length} group cards`);
+const oppDrilled = await oppText();
+check('★ the drilled-in list still names the bucket it came from',
+  oppDrilled.includes('فرص: مُحدَّد'), oppDrilled.slice(0, 160).replace(/\n/g, ' / '));
+check('★ and there is a way back to the grid',
+  oppDrilled.includes(ar['All Groups']), oppDrilled.slice(0, 160).replace(/\n/g, ' / '));
+await oppBackToGrid();
+check('★ back returns to the full grid, unchanged',
+  (await oppGridCards()).length === 3 && (await oppRows()) === 0);
 
 // Like the projects board and unlike tasks/correspondences, an Opportunity OWNS
 // its location — no listener, no link to resolve. o-c carries none, which is
 // what proves the "no value" bucket sorts LAST.
-const oppByLocation = await pickOppGroup('الموقع');
+const oppLocationCards = await pickOppGroup('الموقع');
 check('★ by location: read straight off the bid, and the stage buckets are gone',
-  oppByLocation.includes('موقع: Alexandria') && !oppByLocation.includes('فرص: مُحدَّد'),
-  oppByLocation.slice(0, 200).replace(/\n/g, ' / '));
-check('★ the "no location" bucket is LAST, never leading the grid',
-  oppByLocation.includes('بدون موقع')
-  && oppByLocation.indexOf('بدون موقع') > oppByLocation.indexOf('موقع: Alexandria'),
-  `${oppByLocation.indexOf('موقع: Alexandria')} vs ${oppByLocation.indexOf('بدون موقع')}`);
+  oppLocationCards.length === 2 && oppLocationCards[0].includes('Alexandria')
+  // The "Location: {{name}}" framing belongs on the drilled-in section header,
+  // not under the icon that already says what kind of card this is.
+  && !oppLocationCards.some(c => c.includes('موقع:')),
+  oppLocationCards.join(' | '));
+check('★ the "no location" card is LAST, never leading the grid',
+  oppLocationCards[1].includes('بدون موقع'), oppLocationCards.join(' | '));
+check('★ each card summarises what is INSIDE it (live / won / lost)',
+  oppLocationCards.every(c => c.includes(ar['live']) && c.includes('فوز') && c.includes('خسارة')),
+  oppLocationCards[0]);
+// ★★ A bid board's summary is MONEY. "2 opportunities" tells a bid manager
+// nothing; the subtitle is what the bucket's still-open bids are worth, and it
+// must survive the RTL flip as digits-then-currency, not "EGP 37.5M".
+check('★★ a card says what its live bids are WORTH, not just how many',
+  /37\.5M EGP/.test(oppLocationCards[0]) && oppLocationCards[0].includes(ar['{{value}} open'].replace('{{value}} ', '')),
+  oppLocationCards[0]);
+// o-a and o-b are both still open and both past their submission deadline, so
+// the bucket that holds them is the one that must be badged.
+check('★ a bucket whose open bids missed the deadline is badged, the closed one is not',
+  oppLocationCards[0].includes(ar['OVERDUE']) && !oppLocationCards[1].includes(ar['OVERDUE']),
+  oppLocationCards.join(' | '));
 
 // ★ The in-bucket order is the board's OWN sort select — this board has one, so
 // the grouping deliberately forces no order of its own. The Alexandria bucket
 // holds two bids: o-a is due first, o-b is worth twice as much.
+await openOppGroup('Alexandria');
 const alexByDeadline = await oppCardTitles();
 check('★ inside a bucket the default "Submission deadline" sort still rules',
-  alexByDeadline[0].startsWith('EGPC turnaround'), alexByDeadline.slice(0, 3).join(' | '));
+  alexByDeadline.length === 2 && alexByDeadline[0].startsWith('EGPC turnaround'),
+  alexByDeadline.slice(0, 3).join(' | '));
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'value'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
@@ -1971,7 +2203,7 @@ await evalJS(`(() => {
 })()`);
 await sleep(320);
 const alexByValue = await oppCardTitles();
-check('★★ switching the sort to "Value (high → low)" reorders INSIDE the bucket',
+check('★★ switching the sort to "Value (high → low)" reorders INSIDE the open bucket',
   !alexByValue[0].startsWith('EGPC turnaround') && alexByValue[1].startsWith('EGPC turnaround'),
   alexByValue.slice(0, 3).join(' | '));
 await evalJS(`(() => {
@@ -1981,35 +2213,41 @@ await evalJS(`(() => {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 })()`);
 await sleep(320);
+await oppBackToGrid();
 
 // The source enum goes through the SAME display layer as the stage badge — a
-// heading holding "Public Tender" would mean the layer was bypassed.
-const oppBySource = await pickOppGroup('المصدر');
+// card titled "Public Tender" would mean the layer was bypassed.
+const oppSourceCards = await pickOppGroup('المصدر');
 check('★ by source: the enum is painted through the display layer, not raw',
-  oppBySource.includes('مصدر: مناقصة عامة') && oppBySource.includes('مصدر: اتفاقية إطارية')
-  && !/مصدر: (Public Tender|Framework)/.test(oppBySource),
-  oppBySource.slice(0, 200).replace(/\n/g, ' / '));
-check('★ the "no source" bucket is LAST', oppBySource.includes('بدون مصدر')
-  && oppBySource.indexOf('بدون مصدر') > oppBySource.indexOf('مصدر: مناقصة عامة'),
-  `${oppBySource.indexOf('مصدر: مناقصة عامة')} vs ${oppBySource.indexOf('بدون مصدر')}`);
+  oppSourceCards.length === 3
+  && oppSourceCards.some(c => c.includes('مناقصة عامة')) && oppSourceCards.some(c => c.includes('اتفاقية إطارية'))
+  && !oppSourceCards.some(c => /(Public Tender|Framework)/.test(c)),
+  oppSourceCards.join(' | '));
+check('★ the "no source" card is LAST', oppSourceCards[2].includes('بدون مصدر'),
+  oppSourceCards.join(' | '));
 
 // ★ Unlike a project, an Opportunity STORES `ownerName` beside `ownerId`, so the
-// bucket needs no user lookup — and a uid must still never reach a heading.
-const oppByOwner = await pickOppGroup('المسؤول');
-check('★ by owner: the stored ownerName is the bucket, one per person',
-  oppByOwner.includes('مسؤول: Tariq Salama') && oppByOwner.includes('مسؤول: Nevin Anwar'),
-  oppByOwner.slice(0, 200).replace(/\n/g, ' / '));
-check('★★ no bucket heading leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(oppByOwner),
-  (oppByOwner.match(/u-\w+/g) || []).join(' | '));
+// bucket key needs no user lookup — but the FACE on the card still does, and it
+// is resolved through `ownerId`, never by matching the display name.
+const oppOwnerCards = await pickOppGroup('المسؤول');
+check('★ by owner: the stored ownerName is the bucket, one card per person',
+  oppOwnerCards.length === 3
+  && oppOwnerCards.some(c => c.includes('Tariq Salama')) && oppOwnerCards.some(c => c.includes('Nevin Anwar'))
+  && oppOwnerCards.some(c => c.includes('Ahmed Salem')),
+  oppOwnerCards.join(' | '));
+check('★★ no card leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(oppOwnerCards.join(' ')),
+  (oppOwnerCards.join(' ').match(/u-\w+/g) || []).join(' | '));
 
 // Non-vacuous: the SAME DOM, flipped — the group keys are the stored values,
-// only the heading is translated.
+// only the card title is translated.
 await evalJS(`window.__setLang('en')`);
-await sleep(400);
-const oppByOwnerEn = await oppText();
-check('non-vacuous: the same buckets read English under en',
-  oppByOwnerEn.includes('Owner: Tariq Salama') && !oppByOwnerEn.includes('مسؤول:'),
-  oppByOwnerEn.slice(0, 200).replace(/\n/g, ' / '));
+await sleep(450);
+const oppOwnerCardsEn = await oppGridCards();
+check('non-vacuous: the same cards read English under en',
+  oppOwnerCardsEn.length === 3
+  && oppOwnerCardsEn.some(c => /opportunit/.test(c) && /Won/.test(c) && /live/.test(c))
+  && !oppOwnerCardsEn.some(c => c.includes(ar['live'])),
+  oppOwnerCardsEn.join(' | '));
 await shot('opps-groupby-en');
 await evalJS(`window.__setLang('ar')`);
 await sleep(300);
@@ -2056,6 +2294,10 @@ await sleep(300);
 // Two thirds of this pass's copy lives behind a card click: the follow-ups,
 // bid-gates and outcome tabs are separate components, and a floor of t() calls
 // on the list page says nothing about them.
+// Grid task 4: a bid card lives behind a group card now. The board is grouped
+// by stage and 'مُحدَّد' holds o-a — a bid with a linked correspondence, which
+// the "Linked records" checks further down need.
+await openOppGroup('مُحدَّد');
 await clickEl(`document.querySelector('#root .card.card-interactive')`, 'open a bid');
 await sleep(600);
 const detail = await evalJS(`(() => {
@@ -2285,12 +2527,39 @@ check('the status filter <option>s are Arabic (كل الحالات / نشط)',
 const projArabicValues = projAr.opts.filter(o => /[؀-ۿ]/.test(o.v));
 check('★★ no status <option> VALUE is Arabic — the stored status stays English',
   projArabicValues.length === 0, projArabicValues.map(o => `${o.v} (${o.t})`).join(' | '));
+// Grouping IS the grid now (grid task 3), so a project card — and therefore its
+// status badge — only exists behind a group card. These three helpers are what
+// every project block from here down uses to move between the two views.
+const projGridCards = () => evalJS(
+  `JSON.stringify([...document.querySelectorAll('#root button[data-group-card]')].map(b => (b.innerText || '').trim().replace(/\s+/g, ' ')))`,
+).then(JSON.parse);
+const projRows = () => evalJS(`document.querySelectorAll('#root .card.card-interactive').length`);
+/** Open a bucket by a substring of its card. Defaults to the first card. */
+const openProjGroup = async (match) => {
+  const finder = match
+    ? `[...document.querySelectorAll('#root button[data-group-card]')].find(b => (b.innerText||'').includes(${JSON.stringify(match)}))`
+    : `document.querySelector('#root button[data-group-card]')`;
+  await clickEl(finder, `the ${match || 'first'} group card`);
+  await sleep(420);
+};
+/** Back out to the grid if a bucket is open; false when it already was. */
+const projBackToGrid = async () => {
+  const has = await evalJS(`(() => { ${HELPERS} return !!window.__one('button', ${JSON.stringify(ar['All Groups'])}); })()`);
+  if (!has) return false;
+  await clickEl(`window.__one('button', ${JSON.stringify(ar['All Groups'])})`, 'back to the project group grid');
+  await sleep(420);
+  return true;
+};
+
+await openProjGroup();
 const projLatinBadges = await evalJS(`(() => {
-  const spans = [...document.querySelectorAll('#root .card .badge')].map(s => (s.textContent || '').trim());
+  const spans = [...document.querySelectorAll('#root .card.card-interactive .badge')].map(s => (s.textContent || '').trim());
   return JSON.stringify(spans.filter(Boolean));
 })()`).then(JSON.parse);
 check('★ no project card badge is still a Latin status value',
-  !projLatinBadges.some(x => /^(Active|On Hold|Completed|Cancelled)$/.test(x)), projLatinBadges.join(' | '));
+  projLatinBadges.length > 0
+  && !projLatinBadges.some(x => /^(Active|On Hold|Completed|Cancelled)$/.test(x)), projLatinBadges.join(' | '));
+await projBackToGrid();
 
 // ★★ The defect this pass found by LOOKING: the search icon is placed with
 // `insetInlineStart`, so under RTL it crosses to the right — but the room made
@@ -2313,11 +2582,14 @@ check("★★ the search box reserves its room on the icon's side, not on a fixe
   searchPad.iconOnRight === true && searchPad.padRight >= searchPad.iconWidth + 8 && searchPad.padRight > searchPad.padLeft,
   JSON.stringify(searchPad));
 
-// ── [C8b] the "Group by (X)" control really re-buckets the projects grid ────
-// Group-by queue task 3. Same contract as [C5b]: REAL clicks on the segmented
-// control, assertions on the PAINTED headings — the feature is "the same
-// projects, arranged differently", which a props-level test cannot show.
-console.log('\n[C8b] the projects group-by control (group-by task 3)');
+// ── [C8b] "Group by (X)" is a GRID of group cards here too ─────────────────
+// Grid task 3 (2026-08-26). The stacked-section version of this block is gone:
+// picking a dimension now paints ONE CARD PER BUCKET (its name plus a summary
+// of what is inside) and the project cards appear only after a card is clicked.
+// Every assertion reads the PAINTED cards after a real click — "the same
+// projects, arranged differently" is the feature, and a props-level test proves
+// nothing about it.
+console.log('\n[C8b] the projects group-by GRID + drill-in (grid task 3)');
 const projBar = await evalJS(`(() => {
   const g = document.querySelector('#root [role="group"][aria-label]');
   if (!g) return JSON.stringify({ err: 'no group-by bar' });
@@ -2332,30 +2604,48 @@ check('★ "الحالة" is the pressed default', (projBar.pressed || [])[0] ==
 const projText = () => evalJS(`document.getElementById('root').innerText || ''`);
 const pickProjGroup = async (labelAr) => {
   await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
-  await sleep(320);
-  return projText();
+  await sleep(420);
+  return projGridCards();
 };
-// The card titles are how a bucket's CONTENT is read back — a heading alone
-// says nothing about which projects landed under it.
-const cardTitles = () => evalJS(`(() => {
+// The project-card titles are how a bucket's CONTENT is read back once it is
+// drilled into — a group card's count says how many, never which.
+const projCardTitles = () => evalJS(`(() => {
   const h = [...document.querySelectorAll('#root .card.card-interactive h3')].map(x => (x.textContent || '').trim());
   return JSON.stringify(h);
 })()`).then(JSON.parse);
 
-const projByStatus = await projText();
-check('★ by status: the buckets are painted in LIFECYCLE order (not alphabetical)',
-  projByStatus.includes('مشروعات: نشط')
-  && projByStatus.indexOf('مشروعات: نشط') < projByStatus.indexOf('مشروعات: معلّق')
-  && projByStatus.indexOf('مشروعات: معلّق') < projByStatus.indexOf('مشروعات: مكتمل'),
-  projByStatus.slice(0, 200).replace(/\n/g, ' / '));
+const projStatusCards = await projGridCards();
+check('★ the board OPENS on the grid — group cards, and not one project card',
+  projStatusCards.length === 3 && (await projRows()) === 0,
+  `${projStatusCards.length} cards / ${await projRows()} project cards`);
+check('★ by status: one card per bucket, in LIFECYCLE order (not alphabetical)',
+  projStatusCards[0].includes('نشط') && projStatusCards[1].includes('معلّق') && projStatusCards[2].includes('مكتمل'),
+  projStatusCards.join(' | '));
+// Grouping BY status already names the status on the card, so repeating the
+// three-way breakdown under it would be noise — the card omits it on purpose.
+check('★ a status card carries its count but NOT a status breakdown',
+  projStatusCards.every(c => c.includes(ar['projects']) || c.includes(ar['project']))
+  && !projStatusCards[2].includes('نشط'),
+  projStatusCards[2]);
 
+// ★ The drill-in: this is the half that makes the grid a navigation and not a
+// dashboard. Two Active projects also make the in-bucket order provable — p-a
+// is the newest, p-d ends 15 months earlier.
+await openProjGroup('نشط');
+const projActiveRecent = await projCardTitles();
+check('★ clicking a card opens THAT bucket’s projects, and only those',
+  projActiveRecent.length === 2 && (await projGridCards()).length === 0,
+  `${projActiveRecent.length} project cards / ${(await projGridCards()).length} group cards`);
+const projDrilled = await projText();
+check('★ the drilled-in list still names the bucket it came from',
+  projDrilled.includes('مشروعات: نشط'), projDrilled.slice(0, 160).replace(/\n/g, ' / '));
+check('★ and there is a way back to the grid',
+  projDrilled.includes(ar['All Groups']), projDrilled.slice(0, 160).replace(/\n/g, ' / '));
 // ★ The in-bucket order is the board's OWN sort select — this board has one, so
-// the grouping deliberately does not force an order of its own. Two Active
-// projects make that provable: p-a is the newest, p-d ends 15 months earlier.
-const activeRecent = await cardTitles();
+// the grouping deliberately does not force an order of its own.
 check('★ inside a bucket the default "Most recent" sort still rules (newest first)',
-  activeRecent[0].startsWith('Meleiha') && activeRecent[1].startsWith('Suez refinery jetty'),
-  activeRecent.slice(0, 3).join(' | '));
+  projActiveRecent[0].startsWith('Meleiha') && projActiveRecent[1].startsWith('Suez refinery jetty'),
+  projActiveRecent.slice(0, 3).join(' | '));
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
@@ -2363,10 +2653,10 @@ await evalJS(`(() => {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 })()`);
 await sleep(320);
-const activeByEnd = await cardTitles();
-check('★★ switching the sort to "End date (soonest)" reorders INSIDE the bucket',
-  activeByEnd[0].startsWith('Suez refinery jetty') && activeByEnd[1].startsWith('Meleiha'),
-  activeByEnd.slice(0, 3).join(' | '));
+const projActiveByEnd = await projCardTitles();
+check('★★ switching the sort to "End date (soonest)" reorders INSIDE the open bucket',
+  projActiveByEnd[0].startsWith('Suez refinery jetty') && projActiveByEnd[1].startsWith('Meleiha'),
+  projActiveByEnd.slice(0, 3).join(' | '));
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
@@ -2374,46 +2664,60 @@ await evalJS(`(() => {
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 })()`);
 await sleep(320);
+await projBackToGrid();
+check('★ back returns to the full grid, unchanged',
+  (await projGridCards()).length === 3 && (await projRows()) === 0);
 
-const projByClient = await pickProjGroup('العميل');
+const projClientCards = await pickProjGroup('العميل');
 check('★ by client: the buckets became the clients, and the status buckets are gone',
-  projByClient.includes('عميل: AGIBA') && projByClient.includes('عميل: EGPC') && !projByClient.includes('مشروعات: نشط'),
-  projByClient.slice(0, 200).replace(/\n/g, ' / '));
+  projClientCards.length === 3
+  && projClientCards.some(c => c.includes('AGIBA')) && projClientCards.some(c => c.includes('EGPC'))
+  // The "Client: {{name}}" framing belongs on the drilled-in section header,
+  // not under the icon that already says what kind of card this is.
+  && !projClientCards.some(c => c.includes('عميل:')),
+  projClientCards.join(' | '));
+check('★ each card summarises what is INSIDE it (count + the status breakdown)',
+  projClientCards.every(c => c.includes('نشط') && c.includes('معلّق') && c.includes('مكتمل')),
+  projClientCards[0]);
 
 // Unlike the tasks and correspondences boards, a Project OWNS its location —
 // no listener, no link to resolve. p-c carries none, which is what proves the
 // "no value" bucket sorts LAST.
-const projByLocation = await pickProjGroup('الموقع');
+const projLocationCards = await pickProjGroup('الموقع');
 check('★ by location: read straight off the project, no linked record needed',
-  projByLocation.includes('موقع: Alexandria') && projByLocation.includes('موقع: Suez'),
-  projByLocation.slice(0, 200).replace(/\n/g, ' / '));
-check('★ the "no location" bucket is LAST, never leading the grid',
-  projByLocation.includes('بدون موقع')
-  && projByLocation.indexOf('بدون موقع') > projByLocation.indexOf('موقع: Suez'),
-  `${projByLocation.indexOf('موقع: Suez')} vs ${projByLocation.indexOf('بدون موقع')}`);
+  projLocationCards.some(c => c.includes('Alexandria')) && projLocationCards.some(c => c.includes('Suez')),
+  projLocationCards.join(' | '));
+check('★ the "no location" card is LAST, never leading the grid',
+  projLocationCards.length === 3 && projLocationCards[2].includes('بدون موقع'),
+  projLocationCards.join(' | '));
 
 // The owner dimension is the one with no name of its own: a project stores only
 // `userId`, so the bucket is keyed by the resolved display name.
-const projByOwner = await pickProjGroup('المسؤول');
-check('★ by owner: the creator uid is resolved to a person, one bucket each',
-  projByOwner.includes('مسؤول: Tariq Salama') && projByOwner.includes('مسؤول: Nevin Anwar'),
-  projByOwner.slice(0, 200).replace(/\n/g, ' / '));
-check('★★ no bucket heading leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(projByOwner),
-  (projByOwner.match(/u-\w+/g) || []).join(' | '));
+const projOwnerCards = await pickProjGroup('المسؤول');
+check('★ by owner: the creator uid is resolved to a person, one card each',
+  projOwnerCards.length === 2
+  && projOwnerCards.some(c => c.includes('Tariq Salama')) && projOwnerCards.some(c => c.includes('Nevin Anwar')),
+  projOwnerCards.join(' | '));
+check('the person’s role is the card subtitle',
+  projOwnerCards.some(c => c.includes(ar['Manager'])) && projOwnerCards.some(c => c.includes(ar['Employee'])),
+  projOwnerCards.join(' | '));
+check('★★ no card leaked a raw uid', !/u-(mgr|emp1|emp2)/.test(projOwnerCards.join(' ')),
+  (projOwnerCards.join(' ').match(/u-\w+/g) || []).join(' | '));
 
 // Non-vacuous: the SAME DOM, flipped — the group keys are the stored values,
-// only the heading is translated.
+// only the card title is translated.
 await evalJS(`window.__setLang('en')`);
-await sleep(400);
-const projByOwnerEn = await projText();
-check('non-vacuous: the same buckets read English under en',
-  projByOwnerEn.includes('Owner: Tariq Salama') && !projByOwnerEn.includes('مسؤول:'),
-  projByOwnerEn.slice(0, 200).replace(/\n/g, ' / '));
+await sleep(450);
+const projOwnerCardsEn = await projGridCards();
+check('non-vacuous: the same cards read English under en',
+  projOwnerCardsEn.length === 2 && projOwnerCardsEn.some(c => /Manager/.test(c) && /Active/.test(c))
+  && !projOwnerCardsEn.some(c => c.includes(ar['Manager'])),
+  projOwnerCardsEn.join(' | '));
 await shot('projects-groupby-en');
 await evalJS(`window.__setLang('ar')`);
 await sleep(300);
 await pickProjGroup('الحالة');
-check('no errors across the projects group-by checks', (await evalJS(`window.__errors.length`)) === 0);
+check('no errors across the projects group-by grid checks', (await evalJS(`window.__errors.length`)) === 0);
 
 // Into the create modal.
 await clickEl(`[...document.querySelectorAll('#root button')].find(b => (b.textContent||'').trim() === 'مشروع جديد')`, 'New Project');
@@ -2437,6 +2741,10 @@ await clickEl(`[...document.querySelectorAll('.modal button')].find(b => (b.text
 await sleep(300);
 
 // ── the detail page and its four tabs ───────────────────────────────────────
+// Grid task 3: a project card lives behind a group card now. The board is
+// grouped by status and 'نشط' is the first bucket, whose newest project is p-a
+// — the one every child collection below is keyed to.
+await openProjGroup('نشط');
 await clickEl(`document.querySelector('#root .card.card-interactive')`, 'open a project');
 await sleep(650);
 const projDetail = await evalJS(`(() => {

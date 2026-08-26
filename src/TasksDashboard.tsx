@@ -27,6 +27,7 @@ import {
   TrendingUp, ListTodo, Search, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
   Users, ArrowLeft, Lock, Globe, MapPin, Briefcase, ListChecks, User as UserIcon
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
@@ -38,6 +39,7 @@ import CreateTaskPanel, { PrivacyToggle, CollaboratorPicker } from './components
 import RecordLinkPicker from './components/RecordLinkPicker';
 import LinkedRecordsBlock from './components/LinkedRecordsBlock';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
@@ -80,6 +82,24 @@ type TaskGroupBy = 'status' | 'project' | 'location' | 'user';
 
 /** Bucket order for `groupBy === 'status'` — the workflow order, not alphabetical. */
 const STATUS_GROUP_ORDER: readonly TaskStatus[] = ['Pending', 'In Progress', 'Done'];
+
+/**
+ * Card accent per status. Literal hexes, not CSS vars, because these are the
+ * same three colours the status icons in the list already use (`#4ade80` for
+ * Done) — the grid must not invent a second palette for the same three words.
+ */
+const STATUS_ACCENT: Record<string, string> = {
+  Pending: '#94a3b8',
+  'In Progress': '#3b82f6',
+  Done: '#4ade80',
+};
+
+/** Avatar glyph for the dimensions that have no person to show a face for. */
+const GROUP_ICON: Partial<Record<TaskGroupBy, LucideIcon>> = {
+  status: ListChecks,
+  project: Briefcase,
+  location: MapPin,
+};
 
 interface Props {
   user: User;
@@ -144,6 +164,10 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [employeeFilter, setEmployeeFilter] = useState('All');
   const [subCategoryFilter, setSubCategoryFilter] = useState('All');
   const [groupBy, setGroupBy] = useState<TaskGroupBy>('status');
+  // Which group card is open. `null` = the grid itself is showing. Grouping is
+  // ALWAYS a grid of cards now (Tariq, 2026-08-26) — the task list is what a
+  // card drills into, so this doubles as "grid or list?".
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [deptFilter, setDeptFilter] = useState('All');
   const [dateFilter, setDateFilter] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -279,14 +303,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     setDateFilter('');
     setView('mine');
     setFocusedTaskId(null);
+    setOpenGroup(null);
   };
-
-  const paginatedTasks = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filtered.slice(startIndex, startIndex + itemsPerPage);
-  }, [filtered, currentPage]);
-
-  const totalPages = Math.ceil(filtered.length / itemsPerPage);
 
   // What a task's group key is, per dimension. Returning an empty string sends
   // the task to the trailing "no value" bucket (`UNGROUPED`).
@@ -307,16 +325,51 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     }
   }, [groupBy, projectLocationById]);
 
-  // Buckets for the current page, sorted soonest-due-first inside each one
-  // (undated last; equal dates keep newest-created-first — the listener already
-  // sorts createdAt desc and `buildGroups` sorts stably).
+  // Buckets over EVERY filtered task, not just the current page. The grid puts
+  // a count on each card, and a count taken from one page of 20 would be a lie
+  // ("3 tasks" on a card holding 40). Pagination moved below, onto whatever
+  // list is actually being shown.
+  //
+  // Sorted soonest-due-first inside each bucket (undated last; equal dates keep
+  // newest-created-first — the listener already sorts createdAt desc and
+  // `buildGroups` sorts stably).
   const groupedTasks = useMemo(
-    () => buildGroups(paginatedTasks, groupKeyOf, {
+    () => buildGroups(filtered, groupKeyOf, {
       order: groupBy === 'status' ? STATUS_GROUP_ORDER : undefined,
       sort: byDueDateAsc<Task>(t => t.dueDate),
     }),
-    [paginatedTasks, groupKeyOf, groupBy],
+    [filtered, groupKeyOf, groupBy],
   );
+
+  // The open bucket, re-resolved from `groupedTasks` every render: a filter (or
+  // someone else's edit landing over the listener) can empty the bucket the
+  // user drilled into, and then `find` returns undefined and we fall back to
+  // the grid instead of showing a blank list.
+  const activeGroup = useMemo(
+    () => (openGroup ? groupedTasks.find(g => g.key === openGroup) : undefined),
+    [openGroup, groupedTasks],
+  );
+
+  // Switching dimension re-buckets everything, so the key that was open no
+  // longer means anything — go back to the grid.
+  useEffect(() => { setOpenGroup(null); }, [groupBy]);
+
+  // Opening/closing a card swaps the list under the pager, so page 3 of the old
+  // list must not survive into the new one.
+  useEffect(() => { setCurrentPage(1); }, [openGroup]);
+
+  // A deep link (`handleOpenTask`) targets one task, so it has to bypass the
+  // grid entirely — otherwise the shared task is hidden behind a card.
+  const showGroupGrid = !focusedTaskId && !activeGroup;
+
+  const listSource = activeGroup ? activeGroup.items : filtered;
+
+  const paginatedTasks = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return listSource.slice(startIndex, startIndex + itemsPerPage);
+  }, [listSource, currentPage]);
+
+  const totalPages = Math.ceil(listSource.length / itemsPerPage);
 
   // Header for one bucket. Each dimension gets its own phrasing because a single
   // "{{x}} Tasks" template reads wrong for half of them ("Ahmed Tasks").
@@ -338,24 +391,65 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     }
   };
 
-  // When viewing "All Tasks" with no specific employee picked, the task list is
-  // replaced by a grid of employee cards. Group the (otherwise-filtered) tasks
-  // by assignee so each card can show that person's task counts. Clicking a card
-  // sets `employeeFilter`, which falls through to the normal filtered list.
-  // "Group by user" is that same question asked of the list, so it skips the
-  // grid — otherwise picking it would show a grid of one-person cards instead of
-  // the per-person buckets the user just asked for.
-  const showEmployeeGrid = view === 'all' && employeeFilter === 'All' && !focusedTaskId && groupBy !== 'user';
+  // The card title is the group's NAME on its own — the "Assigned to …" /
+  // "Project: …" framing above belongs on a section header, not under a
+  // 44px avatar that already says who this is.
+  const groupTitle = (group: { key: string; value: string }) =>
+    group.key === UNGROUPED ? groupHeading(group) : label(group.value);
 
-  const employeeGroups = useMemo(() => {
-    const map = new Map<string, { name: string; id?: string; tasks: Task[] }>();
-    filtered.forEach(tsk => {
-      const key = tsk.assignedToId || tsk.assignedTo || 'Unassigned';
-      if (!map.has(key)) map.set(key, { name: tsk.assignedTo || 'Unassigned', id: tsk.assignedToId, tasks: [] });
-      map.get(key)!.tasks.push(tsk);
+  // What the grid draws. One card per bucket, carrying the count plus the small
+  // status breakdown — that breakdown is the whole point of the card: it says
+  // what is inside before you open it.
+  const groupCards = useMemo<GroupCard[]>(() => groupedTasks.map(group => {
+    const items = group.items;
+    const pending = items.filter(tk => tk.status === 'Pending').length;
+    const inProgress = items.filter(tk => tk.status === 'In Progress').length;
+    const done = items.filter(tk => tk.status === 'Done').length;
+    const overdue = items.filter(tk => tk.status !== 'Done' && isOverdue(tk.dueDate)).length;
+
+    // Resolve the person through a task's `assignedToId`, not by matching the
+    // display name against the directory — the bucket key is a name, and two
+    // people can share one.
+    const assigneeId = groupBy === 'user' ? items.find(tk => tk.assignedToId)?.assignedToId : undefined;
+    const assignee = assigneeId ? projectUsers.find(pu => pu.id === assigneeId) : undefined;
+    const title = groupTitle(group);
+
+    return {
+      key: group.key,
+      title,
+      subtitle: groupBy === 'user' && assignee?.role ? label(assignee.role) : undefined,
+      accent: groupBy === 'status'
+        ? STATUS_ACCENT[group.value] || 'var(--accent)'
+        : groupBy === 'user'
+          ? (assignee?.userColor || getUserColor(assigneeId || group.value || group.key))
+          : getUserColor(group.key),
+      photoURL: groupBy === 'user' ? assignee?.photoURL : undefined,
+      // A person gets an initial; a project/location/status gets the dimension's
+      // icon, so the card still reads as "a thing of this kind".
+      initial: groupBy === 'user' ? title.charAt(0).toUpperCase() : undefined,
+      icon: groupBy === 'user' ? undefined : GROUP_ICON[groupBy],
+      count: items.length,
+      countLabel: items.length === 1 ? t('task') : t('tasks'),
+      badge: overdue > 0 ? `${overdue} ${t('OVERDUE')}` : undefined,
+      // Grouping BY status already puts the status in the title, so repeating
+      // the same three chips under it would be pure noise.
+      stats: groupBy === 'status' ? undefined : [
+        { label: t('Pending'), value: pending, tone: 'neutral' as const },
+        { label: t('Active'), value: inProgress, tone: 'info' as const },
+        { label: t('Done'), value: done, tone: 'success' as const },
+      ],
+    };
+  }), [groupedTasks, groupBy, projectUsers, label, t]);
+
+  // What the LIST renders. Drilled in = the open bucket, one page of it. Not
+  // drilled in = the deep-link case, where the page is re-bucketed as before.
+  const renderGroups = useMemo(() => {
+    if (activeGroup) return [{ key: activeGroup.key, value: activeGroup.value, items: paginatedTasks }];
+    return buildGroups(paginatedTasks, groupKeyOf, {
+      order: groupBy === 'status' ? STATUS_GROUP_ORDER : undefined,
+      sort: byDueDateAsc<Task>(t => t.dueDate),
     });
-    return Array.from(map.values()).sort((a, b) => b.tasks.length - a.tasks.length);
-  }, [filtered]);
+  }, [activeGroup, paginatedTasks, groupKeyOf, groupBy]);
 
   const stats = useMemo(() => ({
     pending: tasks.filter(t => t.status === 'Pending' && (view === 'all' || t.assignedTo === appUser.displayName)).length,
@@ -390,8 +484,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     setDeptFilter('All');
     setDateFilter('');
     setView('all');
-    // "All Tasks" + "All Employees" normally renders the employee card grid
-    // instead of the list, which would hide the task we are opening.
+    // Grouping normally renders the card grid instead of the list, which would
+    // hide the task we are opening. `focusedTaskId` forces the list; clearing
+    // `openGroup` matters just as much, because a still-open bucket would keep
+    // narrowing the list (and break the page math computed just below).
+    setOpenGroup(null);
     setFocusedTaskId(taskId);
 
     // With all filters cleared + "All Tasks", `filtered` is just the
@@ -991,82 +1088,37 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         tasks={tasks}
       />
 
-      {showEmployeeGrid ? (
-        employeeGroups.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-state-icon">
-              <Users style={{ width: 28, height: 28 }} />
+      {showGroupGrid ? (
+        // Grouping IS the grid: one card per bucket, and the list only appears
+        // once a card is opened. `groupCards` is built from every filtered task,
+        // so the counts on the cards are the real totals, not one page of them.
+        <GroupGrid
+          cards={groupCards}
+          onSelect={setOpenGroup}
+          empty={
+            <div className="empty-state">
+              <div className="empty-state-icon">
+                <Users style={{ width: 28, height: 28 }} />
+              </div>
+              <p className="empty-state-title">{t('No tasks found')}</p>
+              <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
+              <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
             </div>
-            <p className="empty-state-title">{t('No tasks found')}</p>
-            <p className="empty-state-sub">{t('No tasks match your current filters.')}<br />{t('Try clearing them or create a new task.')}</p>
-            <button className="btn btn-ghost btn-sm" onClick={resetFilters}>{t('Clear All Filters')}</button>
-          </div>
-        ) : (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 16 }}>
-            {employeeGroups.map(emp => {
-              const u = emp.id ? projectUsers.find(pu => pu.id === emp.id) : undefined;
-              const color = u?.userColor || getUserColor(emp.id || emp.name);
-              const pending = emp.tasks.filter(tk => tk.status === 'Pending').length;
-              const inProgress = emp.tasks.filter(tk => tk.status === 'In Progress').length;
-              const done = emp.tasks.filter(tk => tk.status === 'Done').length;
-              const overdue = emp.tasks.filter(tk => tk.status !== 'Done' && isOverdue(tk.dueDate)).length;
-              return (
-                <button
-                  key={emp.id || emp.name}
-                  onClick={() => setEmployeeFilter(emp.name)}
-                  className="card"
-                  style={{
-                    textAlign: 'start', cursor: 'pointer', padding: 20, borderInlineStart: `4px solid ${color}`,
-                    display: 'flex', flexDirection: 'column', gap: 16, fontFamily: 'inherit',
-                    background: 'var(--surface)', transition: 'transform 0.15s, box-shadow 0.15s',
-                  }}
-                  onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(15,23,42,0.1)'; }}
-                  onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    {u?.photoURL ? (
-                      <img src={u.photoURL} className="avatar" style={{ width: 44, height: 44, objectFit: 'cover', flexShrink: 0 }} alt="" />
-                    ) : (
-                      <span style={{ width: 44, height: 44, flexShrink: 0, background: color, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800 }}>
-                        {emp.name.charAt(0).toUpperCase()}
-                      </span>
-                    )}
-                    <div style={{ minWidth: 0, flex: 1 }}>
-                      <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{emp.name}</div>
-                      {u?.role && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{label(u.role)}</div>}
-                    </div>
-                    <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', flexShrink: 0 }} />
-                  </div>
-
-                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-                    <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{emp.tasks.length}</span>
-                    <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{emp.tasks.length === 1 ? t('task') : t('tasks')}</span>
-                    {overdue > 0 && <span className="badge badge-urgent" style={{ marginInlineStart: 'auto' }}>{overdue} {t('OVERDUE')}</span>}
-                  </div>
-
-                  <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700 }}>
-                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--surface-2)', color: 'var(--text-muted)' }}>{pending} Pending</span>
-                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--blue-50)', color: 'var(--blue-400)' }}>{inProgress} Active</span>
-                    <span style={{ flex: 1, textAlign: 'center', padding: '6px 4px', background: 'var(--green-100)', color: 'var(--green-400)' }}>{done} Done</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        )
+          }
+        />
       ) : (
       <>
-      {view === 'all' && (employeeFilter !== 'All' || focusedTaskId) && (
-        <button
-          className="btn btn-ghost btn-sm"
-          onClick={() => { setEmployeeFilter('All'); setFocusedTaskId(null); }}
-          style={{ marginBottom: 16 }}
-        >
-          <ArrowLeft className="w-4 h-4" /> {t('All Employees')}
-        </button>
-      )}
+      {/* The only way back to the grid — from a drilled-in card, or from the
+          deep link that skipped the grid in the first place. */}
+      <button
+        className="btn btn-ghost btn-sm"
+        onClick={() => { setOpenGroup(null); setFocusedTaskId(null); }}
+        style={{ marginBottom: 16 }}
+      >
+        <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
+      </button>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-        {groupedTasks.map(group => {
+        {renderGroups.map(group => {
           const catTasks = group.items;
           return (
             <div key={group.key}>
