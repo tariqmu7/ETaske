@@ -15,7 +15,7 @@ import { globalSearch, getUserColor, isOverdue } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_SHORT } from './lib/format';
 import {
-  Plus, Search, X, FolderKanban, Building2, Hash, Calendar,
+  Plus, X, FolderKanban, Building2,
   Trash2, Edit2, ChevronRight, AlertCircle, ArrowLeft,
   Layers, ListChecks, MapPin, User as UserIcon,
 } from 'lucide-react';
@@ -23,7 +23,9 @@ import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import ProjectDetail from './ProjectDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
+import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
+import CardMenu from './components/CardMenu';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 import type { AppView } from './App';
 
@@ -453,50 +455,42 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
         </div>
       )}
 
-      {/* Filters */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-        <div style={{ position: 'relative', flex: '1 1 240px' }}>
-          <Search className="w-4 h-4" style={{ position: 'absolute', insetInlineStart: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-          <input
-            type="text"
-            placeholder={t('Search projects…')}
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            // ★ The icon is positioned with `insetInlineStart`, so the room made
-            // for it must be logical too — a physical `padding-left` leaves the
-            // text running under the icon in RTL.
-            style={{ width: '100%', paddingBlock: 10, paddingInlineStart: 36, paddingInlineEnd: 12, background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
-          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-        >
-          <option value="All">{t('All statuses')}</option>
-          {/* An <option> with no `value` takes its TEXT as its value, which would
-              write the Arabic label into the filter state — every one carries an
-              explicit English value. */}
-          {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
-        </select>
-        <select
-          value={sortBy}
-          onChange={e => setSortBy(e.target.value as typeof sortBy)}
-          style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
-          title={t('Sort projects')}
-        >
-          <option value="recent">{t('Most recent')}</option>
-          <option value="name">{t('Name (A–Z)')}</option>
-          <option value="status">{t('Status')}</option>
-          <option value="end">{t('End date (soonest)')}</option>
-        </select>
-      </div>
-
-      {/* Its own row, not another control in the filter bar: this changes how the
-          grid is *arranged*, not which projects are in it. */}
-      <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: 20, maxWidth: '100%', minWidth: 0 }}>
-        <GroupByBar<ProjectGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />
-      </div>
+      {/* One toolbar row: search + Group by + the rest folded into `Filters`.
+          The header above it keeps exactly one action — New Project. */}
+      <BoardToolbar
+        search={search}
+        onSearch={setSearch}
+        searchPlaceholder={t('Search projects…')}
+        groupBy={<GroupByBar<ProjectGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        activeFilterCount={(statusFilter !== 'All' ? 1 : 0) + (sortBy !== 'recent' ? 1 : 0)}
+        onClearFilters={() => { setStatusFilter('All'); setSortBy('recent'); }}
+        filters={
+          <>
+            <select
+              value={statusFilter}
+              onChange={e => setStatusFilter(e.target.value)}
+              style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+            >
+              <option value="All">{t('All statuses')}</option>
+              {/* An <option> with no `value` takes its TEXT as its value, which would
+                  write the Arabic label into the filter state — every one carries an
+                  explicit English value. */}
+              {PROJECT_STATUS_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
+            </select>
+            <select
+              value={sortBy}
+              onChange={e => setSortBy(e.target.value as typeof sortBy)}
+              style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
+              title={t('Sort projects')}
+            >
+              <option value="recent">{t('Most recent')}</option>
+              <option value="name">{t('Name (A–Z)')}</option>
+              <option value="status">{t('Status')}</option>
+              <option value="end">{t('End date (soonest)')}</option>
+            </select>
+          </>
+        }
+      />
 
       {/* Grid */}
       {loading ? (
@@ -563,14 +557,10 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
               >
                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
                   <span className={statusBadgeClass(p.status)}>{dl(p.status)}</span>
-                  <div style={{ display: 'flex', gap: 4 }} onClick={e => e.stopPropagation()}>
-                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Edit')} onClick={() => openEdit(p)}>
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                    <button className="btn btn-ghost btn-icon btn-sm" title={t('Delete')} onClick={() => setDeleteTarget(p)}>
-                      <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
-                    </button>
-                  </div>
+                  <CardMenu items={[
+                    { label: t('Edit'), icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => openEdit(p) },
+                    { label: t('Delete'), icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => setDeleteTarget(p), danger: true },
+                  ]} />
                 </div>
 
                 <div>
@@ -582,8 +572,6 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
                   {p.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.client}{p.operator ? ` · ${p.operator}` : ''}</div>}
-                  {p.code && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Hash className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.code}</div>}
-                  {p.currentStatus && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {dl(p.currentStatus)}</div>}
                 </div>
 
                 <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6 }}>

@@ -48,6 +48,18 @@ export interface NavCounts {
   bidsDueSoon: number;      // open bids due within 7 days or already past deadline
 }
 
+// One row of the Home "Needs you today" list: the records that are actually
+// waiting on this user right now. Built from the same listeners that drive the
+// due-soon count, so Home adds no extra Firestore reads.
+export interface AttentionItem {
+  id: string;
+  kind: 'task' | 'corresponding';
+  label: string;
+  serial?: string;
+  due?: string;
+  reason: 'overdue' | 'due-soon' | 'review';
+}
+
 export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics';
 
 export default function App() {
@@ -64,6 +76,10 @@ export default function App() {
   const [dueSoonCount, setDueSoonCount] = useState(0);
   const [navCounts, setNavCounts] = useState<NavCounts>({ corrNeedsReview: 0, corrUnread: 0, myActiveTasks: 0, openBids: 0, bidsDueSoon: 0 });
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  // Kept as two arrays, one per listener, so each snapshot replaces only its
+  // own half instead of racing the other listener's rows.
+  const [attentionTasks, setAttentionTasks] = useState<AttentionItem[]>([]);
+  const [attentionCorr, setAttentionCorr] = useState<AttentionItem[]>([]);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
@@ -244,6 +260,14 @@ export default function App() {
       const myActiveTasks = rows.filter(t =>
         isMine(t) && !['Done', 'Archived'].includes(t.status)).length;
       setNavCounts(prev => ({ ...prev, myActiveTasks }));
+
+      setAttentionTasks(mine(rows)
+        .filter(t => isDueItem(t, t.dueDate))
+        .map(t => ({
+          id: t.id, kind: 'task' as const, label: t.taskName,
+          serial: t.serialNumber, due: t.dueDate,
+          reason: isOverdue(t.dueDate) ? 'overdue' as const : 'due-soon' as const,
+        })));
     });
 
     const unsubC = onSnapshot(collection(db, 'correspondences'), snap => {
@@ -267,6 +291,27 @@ export default function App() {
         corrNeedsReview: rows.filter(c => ['Unread', 'Reviewing'].includes(c.status)).length,
         corrUnread: rows.filter(c => c.status === 'Unread').length,
       }));
+
+      // A correspondence needs me if it is mine and due, or — for the people who
+      // actually triage — if it is still sitting unreviewed. A record that is both
+      // keeps the deadline reason: a date can be missed, a queue cannot.
+      const due: AttentionItem[] = mine(rows)
+        .filter(c => isDueItem(c, c.deadline))
+        .map(c => ({
+          id: c.id, kind: 'corresponding' as const, label: c.subject,
+          serial: c.serialNumber, due: c.deadline,
+          reason: isOverdue(c.deadline) ? 'overdue' as const : 'due-soon' as const,
+        }));
+      const dueIds = new Set(due.map(d => d.id));
+      const review: AttentionItem[] = isManagerRef.current
+        ? rows
+          .filter(c => ['Unread', 'Reviewing'].includes(c.status) && !dueIds.has(c.id))
+          .map(c => ({
+            id: c.id, kind: 'corresponding' as const, label: c.subject,
+            serial: c.serialNumber, due: c.deadline, reason: 'review' as const,
+          }))
+        : [];
+      setAttentionCorr([...due, ...review]);
     });
 
     // Bid submission deadlines. A separate listener (and a separate alert
@@ -446,6 +491,7 @@ export default function App() {
             announcementCount={unreadAnnouncements}
             unreadNotifications={notifications.filter(n => !n.read).length}
             navCounts={navCounts}
+            attention={[...attentionTasks, ...attentionCorr]}
           />
         )}
         {activeView === 'overview' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
