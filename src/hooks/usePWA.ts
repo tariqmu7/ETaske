@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { requestFCMToken } from '../lib/fcm';
-import { doc, setDoc } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { saveMyPushToken } from '../lib/userContact';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt(): Promise<void>;
@@ -65,7 +64,7 @@ export function usePWA(uid: string | null) {
     if ('Notification' in window) setNotificationPermission(Notification.permission);
 
     if (token && uid) {
-      await setDoc(doc(db, 'users', uid), { fcmToken: token }, { merge: true });
+      await saveMyPushToken(uid, token);
     }
 
     return !!token;

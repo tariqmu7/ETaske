@@ -3,7 +3,8 @@ import {
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
   Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target,
-  Languages
+  Languages, Building2, Hourglass, CalendarDays, Users2, Handshake,
+  FolderOpen, Files, FileText,
 } from 'lucide-react';
 import { AppUser, AppNotification } from '../types';
 import { AppView, NavCounts } from '../App';
@@ -12,6 +13,7 @@ import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
 import { usePWA } from '../hooks/usePWA';
 import { connectTelegram, disconnectTelegram } from '../lib/telegram';
+import { watchMyContact } from '../lib/userContact';
 import { useTranslation } from 'react-i18next';
 import { useLanguage } from '../hooks/useLanguage';
 import { LANGUAGES } from '../i18n';
@@ -39,6 +41,9 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   // One open nav group at a time; null = all closed.
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [tgConnecting, setTgConnecting] = useState(false);
+  // Own Telegram link, from the owner-only contact doc (queue A3b).
+  const [tgLinked, setTgLinked] = useState(false);
+  useEffect(() => watchMyContact(appUser.id, (c) => setTgLinked(!!c.telegramChatId)), [appUser.id]);
   const userMenuRef = useRef<HTMLDivElement>(null);
   const moreRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
@@ -82,12 +87,12 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   const handleConnectTelegram = async () => {
     setTgConnecting(true);
     try {
-      const result = await connectTelegram(appUser.id);
+      const result = await connectTelegram();
       if (result === 'timeout') {
         alert(t('Telegram not linked yet.'));
       }
-      // On success the users listener updates appUser.telegramChatId and the
-      // button flips to “connected” automatically.
+      // On success the Apps Script saves the chat id on the private contact
+      // doc; watchMyContact sees it and the button flips to “connected”.
     } catch (e) {
       console.error(e);
       alert(t('Could not connect Telegram. Please try again.'));
@@ -106,12 +111,16 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     // notification points at a correspondence doc. relatedId is that doc id.
     const isTask = n.type.includes('task') || n.type.includes('milestone');
     const isCorr = n.type.includes('correspond');
+    // Bid notifications (deadline, handed over) point at an opportunity doc —
+    // tested first, as in refTypeForNotification.
+    const isOpp = n.type.includes('opportunit');
 
     // Ask the target dashboard to open the specific record (deep-link bus,
     // src/lib/deepLink.ts). The dashboard picks this up when it mounts or, if
     // already mounted, reacts live.
     if (n.relatedId) {
-      if (isTask) requestOpen({ type: 'task', id: n.relatedId });
+      if (isOpp) requestOpen({ type: 'opportunity', id: n.relatedId });
+      else if (isTask) requestOpen({ type: 'task', id: n.relatedId });
       else if (isCorr) requestOpen({ type: 'corresponding', id: n.relatedId });
     }
 
@@ -121,8 +130,11 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
       else if (n.link === '#manager-inbox') onNavigate('manager-inbox');
       else if (n.link === '#archive') onNavigate('archive');
       else if (n.link === '#overview') onNavigate('overview');
+      else if (n.link === '#calendar') onNavigate('calendar');
+      else if (n.link === '#handover') onNavigate('handover');
     } else {
-      if (isTask) onNavigate('tasks');
+      if (isOpp) onNavigate('opportunities');
+      else if (isTask) onNavigate('tasks');
       else if (isCorr) onNavigate('correspondences');
     }
   };
@@ -163,10 +175,22 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     // its own — listing it here puts the review queue one click away instead
     // of two, which is the point of the group.
     { id: 'manager-inbox', label: 'Manager Inbox', icon: <MailOpen className="w-4 h-4" />, show: isManagerOrAdmin },
+    // Queue D2 — whose move it is on every open item, with its age in days.
+    { id: 'waiting', label: 'Waiting', icon: <Hourglass className="w-4 h-4" />, show: true },
+    // Queue D3 — tender deadlines, contract ends and due dates on one month view.
+    { id: 'calendar', label: 'Calendar', icon: <CalendarDays className="w-4 h-4" />, show: true },
+    // Queue D5 — agenda before, minutes after, action points that become tasks.
+    { id: 'meetings', label: 'Meetings', icon: <Users2 className="w-4 h-4" />, show: true },
+    // Queue D7 — everything open in one person's name, handed over in a click.
+    { id: 'handover', label: 'Handover', icon: <Handshake className="w-4 h-4" />, show: true },
   ];
 
   const portfolioItems: NavItem[] = [
     { id: 'projects', label: 'Projects', icon: <FolderKanban className="w-4 h-4" />, show: true },
+    // Queue D1 — one page per client, built from the client name on projects and bids.
+    { id: 'clients', label: 'Clients', icon: <Building2 className="w-4 h-4" />, show: true },
+    // Queue D4 — every project document in one Arabic-aware search.
+    { id: 'documents', label: 'Documents', icon: <FolderOpen className="w-4 h-4" />, show: true },
     // Badge counts bids at their submission deadline (7 days out or already
     // past), not the whole pipeline — the deadline is the part that can be
     // missed, and it now sits one level down, so the count rides the group too.
@@ -176,6 +200,10 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
   const insightsItems: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
     { id: 'bid-analytics', label: 'Bid Analytics', icon: <BarChart3 className="w-4 h-4" />, show: isManagerOrAdmin },
+    // Queue D8 — the same tender / letter / task entered twice, and two people on one client.
+    { id: 'duplicates', label: 'Duplicates', icon: <Files className="w-4 h-4" />, show: isManagerOrAdmin },
+    // Queue D9 — the department's week as a ready-to-send Arabic report.
+    { id: 'weekly-report', label: 'Weekly report', icon: <FileText className="w-4 h-4" />, show: isManagerOrAdmin },
   ];
 
   const moreItems: NavItem[] = [
@@ -312,9 +340,10 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           <Search className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
         </button>
 
-        {/* Theme toggle */}
+        {/* Theme toggle — on a phone it lives in the avatar menu instead (E2):
+            eight glyphs in a 390px bar read as noise, not as choices. */}
         <button
-          className="btn btn-ghost btn-icon"
+          className="btn btn-ghost btn-icon topnav-phone-hide"
           onClick={onToggleTheme}
           title={isDark ? t('Switch to light mode') : t('Switch to dark mode')}
         >
@@ -346,7 +375,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
         {/* Enable / notifications granted indicator */}
         {pwa.notificationPermission !== 'granted' && !pwa.canInstall && (
           <button
-            className="btn btn-ghost btn-icon"
+            className="btn btn-ghost btn-icon topnav-phone-hide"
             onClick={pwa.enableNotifications}
             title={pwa.isIOS && !pwa.isInstalled ? t('Install app first to enable notifications') : t('Enable push notifications')}
           >
@@ -354,14 +383,14 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           </button>
         )}
         {pwa.notificationPermission === 'granted' && (
-          <span title={t('Push notifications enabled')}>
+          <span className="topnav-phone-hide" title={t('Push notifications enabled')}>
             <BellRing className="w-5 h-5" style={{ color: '#22c55e' }} />
           </span>
         )}
 
-        {/* Announcements */}
+        {/* Announcements — phone: "News" in the More sheet. */}
         <button
-          className="btn btn-ghost btn-icon"
+          className="btn btn-ghost btn-icon topnav-phone-hide"
           onClick={() => onNavigate('announcements')}
           title={t('Announcements')}
           style={{ position: 'relative', color: activeView === 'announcements' ? 'var(--accent)' : undefined }}
@@ -374,10 +403,10 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           )}
         </button>
 
-        {/* Due Soon Alert */}
+        {/* Due Soon Alert — phone: Home's first sentences + "Needs you today" in the More sheet. */}
         {dueSoonCount > 0 && (
           <button
-            className="btn btn-ghost btn-icon"
+            className="btn btn-ghost btn-icon topnav-phone-hide"
             onClick={() => onNavigate('due-soon')}
             title={t('{{count}} items due soon — view list', { count: dueSoonCount })}
             style={{ position: 'relative' }}
@@ -478,7 +507,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
           )}
 
           {showUserMenu && (
-            <div style={{
+            <div className="user-menu" style={{
               position: 'absolute', top: 'calc(100% + 10px)', insetInlineEnd: 0,
               background: 'var(--surface)', border: '1px solid var(--border)',
               boxShadow: '0 8px 32px rgba(0,0,0,0.14)',
@@ -552,7 +581,31 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
                     </span>
                   </div>
                 )}
-                {appUser.telegramChatId ? (
+                {/* Phone only (E2): the theme and push buttons leave the 390px top bar
+                    and live here. `.phone-only` is display:none above 768px. */}
+                <button
+                  className="phone-only"
+                  data-menu="theme"
+                  onClick={() => { setShowUserMenu(false); onToggleTheme(); }}
+                  style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                >
+                  {isDark
+                    ? <Sun className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                    : <Moon className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />}
+                  {isDark ? t('Switch to light mode') : t('Switch to dark mode')}
+                </button>
+                {pwa.notificationPermission !== 'granted' && !pwa.canInstall && (
+                  <button
+                    className="phone-only"
+                    data-menu="push"
+                    onClick={() => { setShowUserMenu(false); void pwa.enableNotifications(); }}
+                    style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}
+                  >
+                    <BellOff className="w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+                    {pwa.isIOS && !pwa.isInstalled ? t('Install app first to enable notifications') : t('Enable push notifications')}
+                  </button>
+                )}
+                {tgLinked ? (
                   <button
                     onClick={() => { disconnectTelegram(appUser.id).catch(console.error); }}
                     style={{ width: '100%', textAlign: 'start', display: 'flex', alignItems: 'center', gap: 8, padding: '9px 12px', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-primary)', fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'background 0.15s' }}

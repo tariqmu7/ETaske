@@ -11,6 +11,7 @@ import {
   AppUser, Project, ProjectStatus, PROJECT_STATUS_OPTIONS,
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
+import { buildChecklist, templatesFor, localToday } from './lib/checklists';
 import { globalSearch, getUserColor, isOverdue } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_SHORT } from './lib/format';
@@ -28,6 +29,7 @@ import GroupGrid, { GroupCard } from './components/GroupGrid';
 import CardMenu from './components/CardMenu';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
 import type { AppView } from './App';
+import { consumePending, subscribeOpen, takeConsumedTab } from './lib/deepLink';
 
 interface Props {
   user: User;
@@ -123,6 +125,9 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   const [formData, setFormData] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Queue C3 — the standard checklist a NEW project starts with ('none' = empty).
+  // Kept out of formData on purpose: handleSave spreads formData into the doc.
+  const [checklistKey, setChecklistKey] = useState<string>('contract');
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
 
   useEffect(() => {
@@ -137,6 +142,27 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
     });
     return () => unsub();
   }, []);
+
+  // Deep link — the client file (queue D1) or a command-palette hit opens one
+  // project. Same two-step as OpportunitiesDashboard: park the id until the
+  // snapshot carrying it has arrived, so a cold load still lands on the project.
+  const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
+  // Queue D4: a link may also name the tab to land on (the Documents page does).
+  const [openTab, setOpenTab] = useState<string | null>(null);
+  useEffect(() => {
+    const initial = consumePending('project');
+    if (initial) { setPendingOpenId(initial); setOpenTab(takeConsumedTab()); }
+    return subscribeOpen(ref => {
+      if (ref.type === 'project') { setPendingOpenId(ref.id); setOpenTab(ref.tab ?? null); }
+    });
+  }, []);
+  useEffect(() => {
+    if (!pendingOpenId) return;
+    if (projects.some(p => p.id === pendingOpenId)) setSelectedId(pendingOpenId);
+    // Still loading — wait; once loaded and absent the project is gone.
+    else if (loading) return;
+    setPendingOpenId(null);
+  }, [pendingOpenId, projects, loading]);
 
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = { Active: 0, 'On Hold': 0, Completed: 0, Cancelled: 0 };
@@ -308,6 +334,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   const openCreate = () => {
     setEditing(null);
     setFormData(emptyForm());
+    setChecklistKey('contract');
     setFormError(null);
     setIsModalOpen(true);
   };
@@ -355,6 +382,8 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
         const serialNumber = await getNextSerialNumber('projects');
         await addDoc(collection(db, 'projects'), {
           ...cleaned,
+          // Written once, at birth; afterwards the Checklist tab owns it.
+          checklist: buildChecklist(checklistKey, cleaned.startDate, localToday()),
           serialNumber,
           userId: user.uid,
           teamId: appUser.teamId || '',
@@ -387,11 +416,13 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   if (selected) {
     return (
       <ProjectDetail
+        key={`${selected.id}:${openTab || ''}`}
         project={selected}
         user={user}
         appUser={appUser}
         projectUsers={projectUsers}
-        onBack={() => setSelectedId(null)}
+        initialTab={openTab || undefined}
+        onBack={() => { setSelectedId(null); setOpenTab(null); }}
         onEdit={() => openEdit(selected)}
         onNavigate={onNavigate}
       />
@@ -399,15 +430,15 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   }
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="board-page" style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+      <div className="board-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 10, background: 'rgba(59,130,246,0.1)', color: 'var(--accent)' }}>
+          <div className="board-head-icon" style={{ padding: 10, background: 'rgba(59,130,246,0.1)', color: 'var(--accent)' }}>
             <FolderKanban className="w-6 h-6" />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Projects')}</h1>
+            <h1 className="board-head-title" style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Projects')}</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
               {projects.length === 1
                 ? t('{{count}} project', { count: 1 })
@@ -415,8 +446,8 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
             </p>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> {t('New Project')}
+        <button className="btn btn-primary board-head-action" onClick={openCreate} aria-label={t('New Project')} title={t('New Project')}>
+          <Plus className="w-4 h-4" /> <span className="board-head-label">{t('New Project')}</span>
         </button>
       </div>
 
@@ -428,7 +459,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
 
       {/* Summary stats */}
       {projects.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
+        <div className="board-kpis board-kpis--three" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: 12, marginBottom: 18 }}>
           {/* The four status tiles are labelled through the display layer, so the
               tile and the badge on the card below can never disagree. "Total" is
               the only one that is UI copy rather than a stored value. */}
@@ -444,11 +475,11 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
               <button
                 key={s.filter}
                 onClick={() => setStatusFilter(active && s.filter !== 'All' ? 'All' : s.filter)}
-                className="card"
+                className="card board-kpi"
                 style={{ padding: '12px 14px', textAlign: 'start', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
               >
-                <div style={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 4 }}>{s.label}</div>
+                <div className="board-kpi-value" style={{ fontSize: 22, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.value}</div>
+                <div className="board-kpi-label" style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginTop: 4 }}>{s.label}</div>
               </button>
             );
           })}
@@ -628,6 +659,22 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
                 <Field label={t('Rev.')}><input value={formData.rev} onChange={e => setFormData({ ...formData, rev: e.target.value })} className="proj-input" placeholder="0" /></Field>
               </div>
               <Field label={t('Description')}><textarea value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} className="proj-input" rows={3} /></Field>
+
+              {!editing && (
+                <Field label={t('Starting checklist')}>
+                  <select value={checklistKey} onChange={e => setChecklistKey(e.target.value)} className="proj-input" data-testid="proj-checklist-template">
+                    {templatesFor('project').map(tp => (
+                      <option key={tp.key} value={tp.key}>{t('{{name}} — {{count}} steps', { name: t(tp.label), count: tp.steps.length })}</option>
+                    ))}
+                    <option value="none">{t('No checklist')}</option>
+                  </select>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    {formData.startDate
+                      ? t('Each step is dated from the start date. You can edit them later on the Checklist tab.')
+                      : t('Add the start date and each step gets its own date.')}
+                  </span>
+                </Field>
+              )}
             </div>
 
             {formError && (

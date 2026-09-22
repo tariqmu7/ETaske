@@ -19,12 +19,21 @@ import NeedsYouDashboard from './NeedsYouDashboard';
 import OutlookFeed from './OutlookFeed';
 import ProjectsDashboard from './ProjectsDashboard';
 import OpportunitiesDashboard from './OpportunitiesDashboard';
+import ClientsDashboard from './ClientsDashboard';
+import DocumentsDashboard from './DocumentsDashboard';
+import WaitingDashboard from './WaitingDashboard';
+import HandoverDashboard from './HandoverDashboard';
+import DuplicatesDashboard from './DuplicatesDashboard';
+import WeeklyReportDashboard from './WeeklyReportDashboard';
+import CalendarDashboard from './CalendarDashboard';
+import MeetingsDashboard from './MeetingsDashboard';
 import OpportunitiesAnalytics from './OpportunitiesAnalytics';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
 import {
-  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home, Target
+  BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home, Target, Building2, Hourglass, CalendarDays, Handshake,
+  FolderOpen, Users2, Files, FileText, AlertCircle,
 } from 'lucide-react';
 import { usePWA } from './hooks/usePWA';
 import { isOverdue, isDueSoon, daysUntil } from './utils';
@@ -32,7 +41,11 @@ import { fullMoney } from './components/opportunities/opportunityUi';
 import { useTheme } from './hooks/useTheme';
 import { onForegroundMessage } from './lib/fcm';
 import { useHashRoute } from './hooks/useHashRoute';
-import { runDueAlerts, DueCandidate, runBidDeadlineAlerts } from './lib/dueAlerts';
+import { runDueAlerts, DueCandidate, runBidDeadlineAlerts, runContractExpiryAlerts } from './lib/dueAlerts';
+import { buildDeadlines, localDate } from './lib/deadlineCalendar';
+import { fmtDate, DATE_MEDIUM } from './lib/format';
+import { runDailyBriefing, BriefItem } from './lib/dailyBriefing';
+import { runEscalations, EscalationItem } from './lib/followUp';
 import { readHashOpenRef, requestOpen } from './lib/deepLink';
 import { useKeyboardNav } from './hooks/useKeyboardNav';
 import CommandPalette from './components/CommandPalette';
@@ -48,10 +61,10 @@ export interface NavCounts {
   bidsDueSoon: number;      // open bids due within 7 days or already past deadline
 }
 
-export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics';
+export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics' | 'clients' | 'waiting' | 'calendar' | 'documents' | 'meetings' | 'handover' | 'duplicates' | 'weekly-report';
 
 export default function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [user, setUser] = useState<User | null>(null);
   const [appUser, setAppUser] = useState<AppUser | null>(null);
   const [projectUsers, setProjectUsers] = useState<AppUser[]>([]);
@@ -227,6 +240,43 @@ export default function App() {
     const mine = <T extends { assignedToId?: string; collaboratorIds?: string[] }>(rows: T[]) =>
       isManagerRef.current ? rows : rows.filter(isMine);
 
+    // Daily briefing (lib/dailyBriefing.ts) — ONE message a day, in place of a
+    // board to open. It describes all three boards at once, so it waits until
+    // every listener has reported; the once-a-day ledger lives in the module.
+    let briefTasks: BriefItem[] | null = null;
+    let briefCorrs: BriefItem[] | null = null;
+    let briefBids: BriefItem[] | null = null;
+    const maybeBrief = () => {
+      if (!briefTasks || !briefCorrs || !briefBids) return;
+      void runDailyBriefing({
+        uid,
+        isManager: isManagerRef.current,
+        users: projectUsersRef.current,
+        items: [...briefTasks, ...briefCorrs, ...briefBids],
+      });
+    };
+
+    // Escalation (lib/followUp.ts) — a record that passed its date and then sat
+    // through a second grace window with nobody touching it is raised to the
+    // manager. The scan runs ONLY in a manager's browser and notifies that
+    // manager: running it in the owner's tab would have every employee's
+    // browser telling every manager about the same task.
+    let escTasks: EscalationItem[] | null = null;
+    let escCorrs: EscalationItem[] | null = null;
+    const maybeEscalate = () => {
+      if (!escTasks || !escCorrs) return;
+      void runEscalations({
+        uid,
+        isManager: isManagerRef.current,
+        users: projectUsersRef.current,
+        items: [...escTasks, ...escCorrs],
+      });
+    };
+
+    // Firestore hands back a Timestamp; the escalation clock wants epoch ms.
+    const millis = (v: any): number | undefined =>
+      typeof v?.toMillis === 'function' ? v.toMillis() : undefined;
+
     // Privacy-aware: count only tasks this user may read (public + own).
     const unsubT = subscribeVisibleTasks(uid, rows => {
       taskCount = checkDueSoon(rows, 'dueDate');
@@ -240,6 +290,20 @@ export default function App() {
           description: t.description, priority: t.priority, status: t.status,
           assignedTo: t.assignedTo, ownerId: t.assignedToId,
         })));
+
+      briefTasks = rows.map(t => ({
+        id: t.id, kind: 'task' as const, label: t.taskName, serial: t.serialNumber,
+        due: t.dueDate, status: t.status, priority: t.priority,
+        ownerId: t.assignedToId, ownerName: t.assignedTo, mine: isMine(t),
+      }));
+      maybeBrief();
+
+      escTasks = rows.map(t => ({
+        id: t.id, kind: 'task' as const, label: t.taskName, serial: t.serialNumber,
+        due: t.dueDate, status: t.status, priority: t.priority,
+        ownerId: t.assignedToId, ownerName: t.assignedTo, updatedAt: millis(t.updatedAt),
+      }));
+      maybeEscalate();
 
       const myActiveTasks = rows.filter(t =>
         isMine(t) && !['Done', 'Archived'].includes(t.status)).length;
@@ -261,6 +325,20 @@ export default function App() {
           description: c.body, priority: c.priority, status: c.status,
           assignedTo: c.assignedTo, ownerId: c.assignedToId,
         })));
+
+      briefCorrs = rows.map(c => ({
+        id: c.id, kind: 'corresponding' as const, label: c.subject, serial: c.serialNumber,
+        due: c.deadline, status: c.status, priority: c.priority,
+        ownerId: c.assignedToId, ownerName: c.assignedTo, mine: isMine(c),
+      }));
+      maybeBrief();
+
+      escCorrs = rows.map(c => ({
+        id: c.id, kind: 'corresponding' as const, label: c.subject, serial: c.serialNumber,
+        due: c.deadline, status: c.status, priority: c.priority,
+        ownerId: c.assignedToId, ownerName: c.assignedTo, updatedAt: millis(c.updatedAt),
+      }));
+      maybeEscalate();
 
       setNavCounts(prev => ({
         ...prev,
@@ -290,6 +368,16 @@ export default function App() {
       const mineBids = isManagerRef.current
         ? near
         : near.filter(o => o.ownerId === uid || (o.collaboratorIds || []).includes(uid));
+
+      // The briefing takes EVERY open bid, not just the near ones — the manager
+      // digest reports the size of the pipeline as well as what closes this week.
+      briefBids = rows.map(o => ({
+        id: o.id, kind: 'opportunity' as const, label: o.title, serial: o.serialNumber,
+        due: o.submissionDeadline, status: o.stage,
+        ownerId: o.ownerId, ownerName: o.ownerName,
+        mine: o.ownerId === uid || (o.collaboratorIds || []).includes(uid),
+      }));
+      maybeBrief();
 
       void runBidDeadlineAlerts(uid, projectUsersRef.current, mineBids.map(o => ({
         opportunity: o,
@@ -348,6 +436,34 @@ export default function App() {
     );
     return () => unsub();
   }, [user, appUser?.status, appUser?.department]);
+
+  // Contract expiry watch (queue D3). Contracts have no owner uid — `inCharge`
+  // is free text — so only a manager's/admin's browser reads the contract
+  // collections and raises the alert, to that manager. Each countdown step
+  // fires once per contract (lib/dueAlerts.ts → runContractExpiryAlerts).
+  useEffect(() => {
+    if (!user || !appUser || appUser.status !== 'Approved') return;
+    if (appUser.role !== 'Admin' && appUser.role !== 'Manager') return;
+    let projects: any[] | null = null;
+    let contracts: any[] | null = null;
+    let subcontracts: any[] | null = null;
+    const check = () => {
+      // Wait for all three: a contract read before its project would miss the
+      // "project finished" test and warn about a closed job.
+      if (!projects || !contracts || !subcontracts) return;
+      const events = buildDeadlines({ projects, contracts, subcontracts });
+      void runContractExpiryAlerts(user.uid, projectUsersRef.current, events,
+        d => fmtDate(localDate(d), 'en', DATE_MEDIUM));
+    };
+    const rows = (snap: any) => snap.docs.map((d: any) => ({ id: d.id, ...d.data() }));
+    const listen = (name: string, set: (v: any[]) => void) => onSnapshot(collection(db, name),
+      snap => { set(rows(snap)); check(); },
+      err => console.warn(`Contract watch — ${name} listener:`, err.code));
+    const u1 = listen('projects', v => { projects = v; });
+    const u2 = listen('projectContracts', v => { contracts = v; });
+    const u3 = listen('projectSubcontracts', v => { subcontracts = v; });
+    return () => { u1(); u2(); u3(); };
+  }, [user?.uid, appUser?.status, appUser?.role]);
 
   // Deep link from an out-of-app notification ("…#/tasks?open=<id>"). The view
   // itself comes from useHashRoute; this hands the record id to the dashboard
@@ -421,7 +537,7 @@ export default function App() {
   const sharedProps = { user, appUser, projectUsers };
 
   return (
-    <div className="app-shell">
+    <div className={`app-shell${showMoreMenu ? ' more-open' : ''}`}>
       <TopNav
         appUser={appUser}
         activeView={activeView}
@@ -440,7 +556,9 @@ export default function App() {
         <Breadcrumbs view={activeView} onNavigate={setActiveView} />
         {activeView === 'home' && (
           <HomeDashboard
+            user={user}
             appUser={appUser}
+            projectUsers={projectUsers}
             onNavigate={setActiveView}
             dueSoonCount={dueSoonCount}
             announcementCount={unreadAnnouncements}
@@ -482,6 +600,32 @@ export default function App() {
         {activeView === 'opportunities' && (
           <OpportunitiesDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
+        {activeView === 'clients' && (
+          <ClientsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {activeView === 'documents' && (
+          <DocumentsDashboard user={user} appUser={appUser} onNavigate={setActiveView} />
+        )}
+        {activeView === 'waiting' && (
+          <WaitingDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {activeView === 'handover' && (
+          <HandoverDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {activeView === 'meetings' && (
+          <MeetingsDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {activeView === 'calendar' && (
+          <CalendarDashboard user={user} appUser={appUser} onNavigate={setActiveView} />
+        )}
+        {/* Queue D8 — records entered twice + clients two people bid to. Managers clean up. */}
+        {activeView === 'duplicates' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
+          <DuplicatesDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
+        {/* Queue D9 — the department's week, written in Arabic from the records. */}
+        {activeView === 'weekly-report' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
+          <WeeklyReportDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
+        )}
         {/* Management read of the bid pipeline — gated like Overview. */}
         {activeView === 'bid-analytics' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
           <OpportunitiesAnalytics appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
@@ -503,25 +647,27 @@ export default function App() {
           <AdminDashboard users={projectUsers} />
         )}
         {activeView === 'outlook-feed' && (
-          <OutlookFeed user={user} appUser={appUser} projectUsers={projectUsers} />
+          <OutlookFeed user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
         )}
       </main>
 
-      {/* Mobile Bottom Navigation — limited to core tabs, plus a More menu. */}
+      {/* Mobile Bottom Navigation — five fixed tabs, every one labelled (E2).
+          A 390px phone gives each tab 78px: "Correspondences" / "Opportunities"
+          do not fit at a readable size, so English uses the short words the app
+          already speaks elsewhere ("Letters", "Bids"). Arabic keeps the page
+          titles, which do fit — the tab must read the same as the page it opens. */}
       <nav className="bottom-nav">
         {([
           { id: 'home',            label: 'Home',            icon: <Home />,       show: true },
           { id: 'tasks',           label: 'Tasks',           icon: <CheckSquare />, show: true },
-          { id: 'correspondences', label: 'Correspondences', icon: <MailOpen />,    show: true },
-          // Promoted out of the More sheet to match the desktop top nav. The
-          // narrow bottom nav is icon-only and scrolls, so a 5th tab costs
-          // 56px, not a squeezed label — see .bottom-tab in index.css.
-          { id: 'opportunities',   label: 'Opportunities',   icon: <Target />,      show: true },
+          { id: 'correspondences', label: i18n.language === 'ar' ? 'Correspondences' : 'Letters', icon: <MailOpen />, show: true },
+          { id: 'opportunities',   label: i18n.language === 'ar' ? 'Opportunities' : 'Bids',      icon: <Target />,   show: true },
         ] as { id: AppView; label: string; icon: React.ReactNode; show: boolean }[])
           .filter(item => item.show)
           .map(item => (
             <button
               key={item.id}
+              aria-current={activeView === item.id && !showMoreMenu ? 'page' : undefined}
               className={`bottom-tab${activeView === item.id && !showMoreMenu ? ' active' : ''}`}
               onClick={() => { setActiveView(item.id); setShowMoreMenu(false); }}
             >
@@ -546,22 +692,36 @@ export default function App() {
             style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 90 }}
             onClick={() => setShowMoreMenu(false)}
           />
-          <div style={{
+          {/* Up to 16 destinations for a manager: the sheet is capped below the
+              top bar and scrolls inside itself, or its top rows run off the screen. */}
+          <div data-more-sheet style={{
             position: 'fixed', bottom: 'calc(var(--bottomnav-h) + var(--safe-area-bottom))', left: 0, right: 0,
+            maxHeight: 'calc(100dvh - var(--topnav-h) - var(--bottomnav-h) - var(--safe-area-bottom) - 16px)',
+            overflowY: 'auto', overscrollBehavior: 'contain',
             background: 'var(--surface)', borderRadius: '16px 16px 0 0', borderTop: '1px solid var(--border)',
-            padding: 16, zIndex: 95, boxShadow: '0 -4px 20px rgba(0,0,0,0.12)'
+            padding: '12px 16px 16px', zIndex: 95, boxShadow: '0 -4px 20px rgba(0,0,0,0.12)'
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
               <h3 style={{ fontSize: 16, fontWeight: 700, margin: 0, color: 'var(--text-primary)' }}>{t('More Options')}</h3>
               <button className="btn btn-ghost btn-icon" onClick={() => setShowMoreMenu(false)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
               {([
+                // The top bar's orange "due soon" icon is hidden on a phone (E2) — this is its way in.
+                { id: 'due-soon',        label: 'Needs you today', icon: <AlertCircle />, show: true },
                 { id: 'overview',        label: 'Overview',        icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'projects',        label: 'Projects',        icon: <FolderKanban />,show: true },
+                { id: 'waiting',         label: 'Waiting',         icon: <Hourglass />,   show: true },
+                { id: 'calendar',        label: 'Calendar',        icon: <CalendarDays />, show: true },
+                { id: 'meetings',        label: 'Meetings',        icon: <Users2 />,      show: true },
+                { id: 'handover',        label: 'Handover',        icon: <Handshake />,   show: true },
+                { id: 'clients',         label: 'Clients',         icon: <Building2 />,   show: true },
+                { id: 'documents',       label: 'Documents',       icon: <FolderOpen />,  show: true },
                 { id: 'bid-analytics',   label: 'Bid Analytics',   icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
+                { id: 'duplicates',      label: 'Duplicates',      icon: <Files />,       show: appUser.role === 'Admin' || appUser.role === 'Manager' },
+                { id: 'weekly-report',   label: 'Weekly report',   icon: <FileText />,    show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'announcements',   label: 'News',            icon: <Megaphone />,   show: true },
                 { id: 'archive',         label: 'Archive',         icon: <Archive />,     show: true },
                 { id: 'outlook-feed',    label: 'Outlook',         icon: <Mail />,        show: true },
@@ -573,15 +733,18 @@ export default function App() {
                     key={item.id}
                     onClick={() => { setActiveView(item.id); setShowMoreMenu(false); }}
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 10, padding: 12,
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '12px 12px', minHeight: 48,
                       background: activeView === item.id ? 'var(--blue-50)' : 'var(--surface-2)',
-                      border: '1px solid var(--border)', borderRadius: 8,
+                      border: 'none', borderRadius: 8, textAlign: 'start',
                       color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-primary)',
                       fontWeight: 600, fontSize: 14, fontFamily: 'inherit', cursor: 'pointer'
                     }}
                   >
-                    {item.icon}
-                    {t(item.label)}
+                    <span style={{ display: 'inline-flex', color: activeView === item.id ? 'var(--blue-600)' : 'var(--text-muted)' }}>{item.icon}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>{t(item.label)}</span>
+                    {item.id === 'due-soon' && dueSoonCount > 0 && (
+                      <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--surface-warn-text)' }}>{dueSoonCount}</span>
+                    )}
                   </button>
                 ))}
             </div>

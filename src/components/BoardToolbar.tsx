@@ -73,6 +73,9 @@ export default function BoardToolbar({
 
         {groupBy}
 
+        {/* `display: contents` leaves the desktop row exactly as it was; on a
+            phone this wrapper becomes one row of equal buttons (index.css). */}
+        <div className="board-toolbar-actions" style={{ display: 'contents' }}>
         {filters && (
           <button
             type="button"
@@ -99,6 +102,7 @@ export default function BoardToolbar({
         )}
 
         {secondary}
+        </div>
       </div>
 
       {filters && open && (

@@ -14,6 +14,7 @@ import { getUserColor } from '../../utils';
 import { useDisplayLabel } from '../../lib/displayLabel';
 import { useFormat } from '../../lib/format';
 import { Send, Clock, CalendarClock, Trash2, MessageSquare } from 'lucide-react';
+import { checkGate } from '../../lib/offerApproval';
 
 interface Props {
   opportunity: Opportunity;
@@ -70,6 +71,15 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
 
   const post = async () => {
     if (!text.trim()) return;
+    // Queue D10 — moving the stage here is the same "offer went out" as on the
+    // edit form, so it passes the same sign-off gate (checked BEFORE the
+    // follow-up is written, so a refused stage leaves nothing half-saved).
+    const gate = checkGate(opportunity, { ...opportunity, stage },
+      { id: appUser.id, name: appUser.displayName || appUser.email || '—', role: appUser.role }, Date.now());
+    if ('problem' in gate) {
+      setError(t('This offer needs a manager’s sign-off before it can be marked as sent. Save it at its current stage and use “Ask for sign-off” on the bid page.'));
+      return;
+    }
     setPosting(true);
     setError(null);
     try {
@@ -90,6 +100,7 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         lastFollowUpAt: serverTimestamp(),
         nextActionDate,
         stage,
+        ...('approval' in gate && gate.approval ? { approval: gate.approval } : {}),
         updatedAt: serverTimestamp(),
       });
       setText('');

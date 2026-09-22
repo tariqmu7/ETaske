@@ -9,7 +9,11 @@ const db = admin.firestore();
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// The token lives in the owner-only users/{uid}/private/contact (queue A3b);
+// an old copy may still sit on users/{uid} until moveContactsToPrivate() runs.
 async function getFcmToken(uid: string): Promise<string | null> {
+  const priv = await db.doc(`users/${uid}/private/contact`).get();
+  if (priv.data()?.fcmToken) return priv.data()!.fcmToken as string;
   const snap = await db.collection('users').doc(uid).get();
   return (snap.data()?.fcmToken as string) ?? null;
 }
@@ -33,9 +37,11 @@ async function sendPush(token: string, title: string, body: string): Promise<voi
       code === 'messaging/invalid-registration-token'
     ) {
       // Fire-and-forget cleanup; ignore failure
-      db.collection('users').where('fcmToken', '==', token).get().then((q) => {
-        q.forEach((d) => d.ref.update({ fcmToken: admin.firestore.FieldValue.delete() }));
-      }).catch(() => undefined);
+      for (const q of [db.collectionGroup('private').where('fcmToken', '==', token), db.collection('users').where('fcmToken', '==', token)]) {
+        q.get().then((r) => {
+          r.forEach((d) => d.ref.update({ fcmToken: admin.firestore.FieldValue.delete() }));
+        }).catch(() => undefined);
+      }
     } else {
       console.error('FCM send error:', err);
     }

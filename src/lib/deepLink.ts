@@ -9,13 +9,16 @@
 import { recordRecent } from './recents';
 
 export type DeepLinkRef = {
-  type: 'task' | 'corresponding' | 'opportunity';
+  // 'project' since queue D1: the client file opens a project page directly.
+  type: 'task' | 'corresponding' | 'opportunity' | 'project';
   id: string;
   // Optional display metadata. When present it feeds the "Jump back in"
   // recents list (src/lib/recents.ts); callers without it (e.g. a bare
   // notification) simply don't contribute a label.
   label?: string;
   serial?: string;
+  /** Which tab of the record's page to land on (queue D4: a project's 'documents'). */
+  tab?: string;
 };
 
 let pending: DeepLinkRef | null = null;
@@ -36,10 +39,20 @@ export function requestOpen(ref: DeepLinkRef) {
 export function consumePending(type: DeepLinkRef['type']): string | null {
   if (pending && pending.type === type) {
     const { id } = pending;
+    consumedTab = pending.tab ?? null;
     pending = null;
     return id;
   }
   return null;
+}
+
+let consumedTab: string | null = null;
+
+/** The `tab` of the request `consumePending` just handed out (once). */
+export function takeConsumedTab(): string | null {
+  const tab = consumedTab;
+  consumedTab = null;
+  return tab;
 }
 
 /** Subscribe to live open requests while a dashboard is already mounted. */
@@ -62,7 +75,8 @@ export function refTypeForNotification(type: string): DeepLinkRef['type'] | null
 const viewForType = (type: DeepLinkRef['type']) =>
   type === 'task' ? 'tasks'
     : type === 'opportunity' ? 'opportunities'
-      : 'correspondences';
+      : type === 'project' ? 'projects'
+        : 'correspondences';
 
 /**
  * Absolute URL that opens one record. Shared out of the app (Telegram DMs,
@@ -78,10 +92,12 @@ export function buildDeepLinkUrl(type: DeepLinkRef['type'], id: string): string 
 export function readHashOpenRef(): DeepLinkRef | null {
   const [view, qs] = window.location.hash.replace(/^#\/?/, '').split('?');
   if (!qs) return null;
-  const id = new URLSearchParams(qs).get('open');
+  const params = new URLSearchParams(qs);
+  const id = params.get('open');
   if (!id) return null;
   if (view === 'tasks' || view === 'archive') return { type: 'task', id };
   if (view === 'correspondences' || view === 'manager-inbox') return { type: 'corresponding', id };
   if (view === 'opportunities') return { type: 'opportunity', id };
+  if (view === 'projects') return { type: 'project', id, ...(params.get('tab') ? { tab: params.get('tab')! } : {}) };
   return null;
 }

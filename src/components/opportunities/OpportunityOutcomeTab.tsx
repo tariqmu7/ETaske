@@ -14,6 +14,7 @@ import { STAGE_COLORS, fullMoney, toNumber } from './opportunityUi';
 import { useDisplayLabel } from '../../lib/displayLabel';
 import { useFormat } from '../../lib/format';
 import { Trophy, Save, Trash2, Edit2, X, AlertTriangle, Percent } from 'lucide-react';
+import { checkGate } from '../../lib/offerApproval';
 
 interface Props {
   opportunity: Opportunity;
@@ -130,6 +131,14 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
       setError(t('Pick at least one reason — the win/loss analysis is built from these.'));
       return;
     }
+    // Queue D10 — "Won" straight from Bid Preparation means the offer went out,
+    // so it passes the same sign-off gate as the edit form.
+    const gate = checkGate(opportunity, { ...opportunity, stage: outcome },
+      { id: appUser.id, name: appUser.displayName || appUser.email || '—', role: appUser.role }, Date.now());
+    if (!gate.ok) {
+      setError(t('This offer never had a manager’s sign-off. Ask for sign-off on the bid page first, or record it as sent by a manager.'));
+      return;
+    }
     setBusy(true);
     setError(null);
     const payload = {
@@ -162,6 +171,7 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
       // outcome fields so the list card and analytics never read this
       // collection.
       await updateDoc(doc(db, 'opportunities', opportunity.id), {
+        ...('approval' in gate && gate.approval ? { approval: gate.approval } : {}),
         stage: outcome as OpportunityStage,
         decisionDate: decisionDate || today(),
         awardedTo: competitorName.trim(),

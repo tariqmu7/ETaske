@@ -9,7 +9,9 @@ service cloud.firestore {
       return request.auth != null;
     }
     function isAdminEmail() {
-      // Matches the hardcoded admin in src/App.tsx — keep both in sync.
+      // The BOOTSTRAP admin only — matches src/App.tsx, keep both in sync. It
+      // lets the first account in and self-heals that account's Admin role on
+      // every login, so the app can never be left with nobody to approve users.
       return isSignedIn() && request.auth.token.email == 'tarekmoh123@gmail.com';
     }
     function userData() {
@@ -18,6 +20,13 @@ service cloud.firestore {
     function isApproved() {
       // Missing user doc -> userData() errors -> denies (intended: not approved).
       return isAdminEmail() || (isSignedIn() && userData().status == 'Approved');
+    }
+    function isAdmin() {
+      // Any Approved user whose role is Admin (set in the Users screen by an
+      // existing admin), plus the bootstrap email. Queue A3a: a second admin
+      // must be able to manage accounts, not just see the Users screen.
+      return isAdminEmail() ||
+        (isSignedIn() && userData().status == 'Approved' && userData().role == 'Admin');
     }
     function isManagerOrAdmin() {
       return isAdminEmail() ||
@@ -39,23 +48,50 @@ service cloud.firestore {
       // Self-signup is only allowed as a Pending Employee. The hardcoded admin
       // may bootstrap its own Admin/Approved doc. This blocks an attacker from
       // self-granting Admin/Approved at create time.
-      allow create: if isSignedIn() && request.auth.uid == userId && (
+      allow create: if isSignedIn() && request.auth.uid == userId &&
+        !request.resource.data.keys().hasAny(['telegramChatId', 'fcmToken']) && (
         isAdminEmail() ||
         (request.resource.data.status == 'Pending' &&
          request.resource.data.role == 'Employee')
       );
 
-      // Admin may change anything (approve/reject/promote). A user may edit their
+      // An admin (bootstrap email or an Approved role-Admin) may change anything
+      // (approve/reject/promote). Creating a doc as Admin stays email-only. A user may edit their
       // own profile but may NOT change their own role or status — closes the
       // self-escalation hole (a Pending user promoting itself to Admin/Approved).
       allow update: if isSignedIn() && (
-        isAdminEmail() ||
+        isAdmin() ||
         (request.auth.uid == userId &&
          request.resource.data.role == resource.data.role &&
-         request.resource.data.status == resource.data.status)
+         request.resource.data.status == resource.data.status &&
+         keepsOrDrops('telegramChatId') && keepsOrDrops('fcmToken'))
       );
 
-      allow delete: if isAdminEmail();
+      // The contact ids moved to private/contact (queue A3b). An old copy on
+      // this public doc may be kept or removed by its owner, never set/changed.
+      function keepsOrDrops(field) {
+        return !(field in request.resource.data) ||
+          request.resource.data[field] == resource.data.get(field, null);
+      }
+
+      allow delete: if isAdmin();
+
+      // Private contact ids (queue A3b): { telegramChatId?, fcmToken? }. The
+      // directory above is readable by everyone, so these live here, readable
+      // by the OWNER only; the Apps Script reads them as the script owner to
+      // send pushes/Telegram. The owner may set their push token, but may only
+      // REMOVE the chat id — the script writes it when a Telegram link
+      // completes, so nobody can attach someone else's chat to their account.
+      match /private/{docId} {
+        allow read, delete: if isSignedIn() && request.auth.uid == userId;
+        allow create, update: if isSignedIn() && request.auth.uid == userId &&
+          docId == 'contact' &&
+          request.resource.data.keys().hasOnly(['telegramChatId', 'fcmToken']) &&
+          (!('fcmToken' in request.resource.data) ||
+            (request.resource.data.fcmToken is string && request.resource.data.fcmToken.size() <= 4096)) &&
+          (!('telegramChatId' in request.resource.data) ||
+            (resource != null && resource.data.get('telegramChatId', null) == request.resource.data.telegramChatId));
+      }
     }
 
     // ─── Serial-number counters ───────────────────────────────────────────────
@@ -199,11 +235,29 @@ service cloud.firestore {
     // read and manage opportunities and their follow-ups, milestones and
     // outcome feedback. Deleting an opportunity is manager/admin only — a lost
     // bid and its loss analysis are the record the analytics view is built on.
+    //
+    // Offer sign-off (queue D10, src/lib/offerApproval.ts — keep the two in
+    // step): only a manager may write an "approved" sign-off, and an employee
+    // may not move a bid from a pre-send stage to Submitted / Under Evaluation /
+    // Won unless it carries an approval for the bid's price as saved.
+    function passesOfferSignOff() {
+      let before = resource.data;
+      let after = request.resource.data;
+      let a = after.get('approval', {});
+      let noSelfApproval = a.get('status', '') != 'approved' || a == before.get('approval', {});
+      let gated = before.get('stage', '') in ['Identified', 'Prequalification', 'Bid Preparation'] &&
+        after.get('stage', '') in ['Submitted', 'Under Evaluation', 'Won'];
+      let signedOff = a.get('status', '') == 'approved' &&
+        a.get('amount', null) == after.get('estimatedValue', null) &&
+        a.get('currency', '') == after.get('currency', '');
+      return isManagerOrAdmin() || (noSelfApproval && (!gated || signedOff));
+    }
     match /opportunities/{id} {
       allow read: if isApproved();
       allow create: if isApproved() && id != '--stats--' &&
-        request.resource.data.userId == request.auth.uid;
-      allow update: if isApproved() && id != '--stats--';
+        request.resource.data.userId == request.auth.uid &&
+        (isManagerOrAdmin() || request.resource.data.get('approval', {}).get('status', '') != 'approved');
+      allow update: if isApproved() && id != '--stats--' && passesOfferSignOff();
       allow delete: if isManagerOrAdmin() && id != '--stats--';
     }
     match /opportunityFollowUps/{id} {
@@ -229,18 +283,40 @@ service cloud.firestore {
       );
     }
 
+    // ─── Meetings (queue D5) ───────────────────────────────────────────────────
+    // Agenda, minutes and action points, one doc per meeting. Readable by any
+    // Approved member (same shared-org trust boundary as projects — see
+    // RULES-NOTES.md). The person who sets it up must be the writer; the
+    // creator, anyone attending, or a manager/admin may edit it, and nobody may
+    // re-assign who created it. Delete: the creator or a manager/admin. Tasks
+    // made from action points are ordinary tasks under the tasks rules.
+    match /meetings/{id} {
+      allow read: if isApproved();
+      allow create: if isApproved() &&
+        request.resource.data.createdById == request.auth.uid;
+      allow update: if isApproved() &&
+        request.resource.data.createdById == resource.data.createdById && (
+          isManagerOrAdmin() ||
+          resource.data.createdById == request.auth.uid ||
+          request.auth.uid in resource.data.get('attendeeIds', [])
+        );
+      allow delete: if isApproved() && (
+        isManagerOrAdmin() || resource.data.createdById == request.auth.uid
+      );
+    }
+
     // ─── Notifications ────────────────────────────────────────────────────────
     // Readable only by the recipient (or admin). Any approved user may create a
     // notification addressed to another user. The recipient may only flip `read`.
     match /notifications/{id} {
       allow read: if isApproved() && (
-        isAdminEmail() || resource.data.forUserId == request.auth.uid
+        isAdmin() || resource.data.forUserId == request.auth.uid
       );
       allow create: if isApproved();
       allow update: if isApproved() &&
         resource.data.forUserId == request.auth.uid &&
         request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
-      allow delete: if isAdminEmail();
+      allow delete: if isAdmin();
     }
 
     // ─── Announcements ────────────────────────────────────────────────────────

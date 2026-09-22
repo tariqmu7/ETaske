@@ -27,6 +27,7 @@ import {
   setDoc,
   updateDoc,
   deleteDoc,
+  deleteField,
 } from 'firebase/firestore';
 
 const ADMIN_EMAIL = 'tarekmoh123@gmail.com'; // mirrors src/App.tsx + firestore.rules
@@ -65,6 +66,11 @@ async function main() {
     await setDoc(doc(db, 'users/rejected'), { status: 'Rejected', role: 'Employee', name: 'R' });
     await setDoc(doc(db, 'users/emp'), { status: 'Approved', role: 'Employee', name: 'E' });
     await setDoc(doc(db, 'users/mgr'), { status: 'Approved', role: 'Manager', name: 'M' });
+    // Queue A3a: a second admin promoted in the Users screen (no special email),
+    // and one whose account was later suspended.
+    await setDoc(doc(db, 'users/admin2'), { status: 'Approved', role: 'Admin', name: 'A2' });
+    await setDoc(doc(db, 'users/exadmin'), { status: 'Rejected', role: 'Admin', name: 'XA' });
+    await setDoc(doc(db, 'users/pending2'), { status: 'Pending', role: 'Employee', name: 'P2' });
     await setDoc(doc(db, 'tasks/T1'), { assignedById: 'mgr', assignedToId: 'emp', title: 't' });
     // Privacy fixtures: TPRIV is a private task owned by emp; TPUB is public.
     await setDoc(doc(db, 'tasks/TPRIV'), { assignedById: 'mgr', assignedToId: 'emp', isPrivate: true, title: 'secret' });
@@ -83,6 +89,8 @@ async function main() {
   const emp = env.authenticatedContext('emp').firestore();
   const mgr = env.authenticatedContext('mgr').firestore();
   const admin = env.authenticatedContext('admin', { email: ADMIN_EMAIL }).firestore();
+  const admin2 = env.authenticatedContext('admin2', { email: 'second@example.com' }).firestore();
+  const exadmin = env.authenticatedContext('exadmin', { email: 'former@example.com' }).firestore();
 
   // ── 1. Approved Employee: normal work is UNAFFECTED (the core question) ────
   console.log('\n[Approved Employee — must keep working normally]');
@@ -134,6 +142,31 @@ async function main() {
   await check('admin can approve a pending user', 'ok',
     updateDoc(doc(admin, 'users/pending'), { status: 'Approved' }));
 
+  // ── 3b. Second admin (queue A3a) — the role, not the email, is what counts ─
+  console.log('\n[Second admin]');
+  await check('second admin can approve a pending user', 'ok',
+    updateDoc(doc(admin2, 'users/pending2'), { status: 'Approved' }));
+  await check('second admin can promote a user to Manager', 'ok',
+    updateDoc(doc(admin2, 'users/emp'), { role: 'Manager' }));
+  await check('second admin can hand the Admin role on', 'ok',
+    updateDoc(doc(admin2, 'users/emp'), { role: 'Admin' }));
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'users/emp'), { status: 'Approved', role: 'Employee', name: 'E' });
+  });
+  await check("second admin can read someone else's notification", 'ok',
+    getDoc(doc(admin2, 'notifications/N1')));
+  await check('suspended admin (Rejected) cannot approve anyone', 'deny',
+    updateDoc(doc(exadmin, 'users/rejected'), { status: 'Approved' }));
+  await check('suspended admin cannot re-approve itself', 'deny',
+    updateDoc(doc(exadmin, 'users/exadmin'), { status: 'Approved' }));
+  await check('manager cannot approve users (admin only)', 'deny',
+    updateDoc(doc(mgr, 'users/rejected'), { status: 'Approved' }));
+  await check('new signup cannot create itself as Admin without the email', 'deny',
+    setDoc(doc(env.authenticatedContext('sneak', { email: 'sneak@example.com' }).firestore(), 'users/sneak'),
+      { status: 'Pending', role: 'Admin' }));
+  await check("second admin still CANNOT read emp's private task", 'deny',
+    getDoc(doc(admin2, 'tasks/TPRIV')));
+
   // ── 4. Counter integrity (--stats--) ──────────────────────────────────────
   console.log('\n[Counter integrity]');
   await env.withSecurityRulesDisabled(async (ctx) => {
@@ -182,6 +215,44 @@ async function main() {
     updateDoc(doc(emp, 'tasks/TPRIV'), { status: 'In Progress' }));
   await check('emp can make own task private', 'ok',
     updateDoc(doc(emp, 'tasks/TPUB'), { isPrivate: true }));
+
+  // ── Private contact ids (queue A3b) ───────────────────────────────────────
+  console.log('\n[Private contact ids]');
+  await env.withSecurityRulesDisabled(async (ctx) => {
+    const db = ctx.firestore();
+    await setDoc(doc(db, 'users/emp/private/contact'), { telegramChatId: '111', fcmToken: 'fcm-emp' });
+    // An old copy still on the public doc (before moveContactsToPrivate runs).
+    await setDoc(doc(db, 'users/mgr'), { status: 'Approved', role: 'Manager', name: 'M', telegramChatId: '222' });
+  });
+  await check('emp reads OWN private contact', 'ok', getDoc(doc(emp, 'users/emp/private/contact')));
+  await check("mgr CANNOT read emp's private contact", 'deny', getDoc(doc(mgr, 'users/emp/private/contact')));
+  await check("admin CANNOT read emp's private contact", 'deny', getDoc(doc(admin, 'users/emp/private/contact')));
+  await check("pending CANNOT read emp's private contact", 'deny', getDoc(doc(pending, 'users/emp/private/contact')));
+  await check('emp saves own push token', 'ok',
+    setDoc(doc(emp, 'users/emp/private/contact'), { fcmToken: 'fcm-new' }, { merge: true }));
+  await check('emp removes own Telegram link', 'ok',
+    setDoc(doc(emp, 'users/emp/private/contact'), { telegramChatId: deleteField() }, { merge: true }));
+  await check("emp CANNOT set a Telegram chat id (only the script links)", 'deny',
+    setDoc(doc(emp, 'users/emp/private/contact'), { telegramChatId: '222' }, { merge: true }));
+  await check("emp CANNOT write mgr's private contact", 'deny',
+    setDoc(doc(emp, 'users/mgr/private/contact'), { fcmToken: 'hijack' }));
+  await check('emp CANNOT add other fields to the contact doc', 'deny',
+    setDoc(doc(emp, 'users/emp/private/contact'), { role: 'Admin' }, { merge: true }));
+  await check('emp CANNOT use another doc name under private/', 'deny',
+    setDoc(doc(emp, 'users/emp/private/other'), { fcmToken: 'x' }));
+  await check('emp CANNOT put a chat id back on the public doc', 'deny',
+    updateDoc(doc(emp, 'users/emp'), { telegramChatId: '999' }));
+  await check('emp CANNOT put a push token back on the public doc', 'deny',
+    updateDoc(doc(emp, 'users/emp'), { fcmToken: 'x' }));
+  await check('mgr can still edit own profile with an old chat id on it', 'ok',
+    updateDoc(doc(mgr, 'users/mgr'), { name: 'M2' }));
+  await check('mgr can drop the old chat id from the public doc', 'ok',
+    updateDoc(doc(mgr, 'users/mgr'), { telegramChatId: deleteField(), fcmToken: deleteField() }));
+  await check('mgr CANNOT change the old chat id on the public doc', 'deny',
+    updateDoc(doc(mgr, 'users/mgr'), { telegramChatId: '333' }));
+  await check('signup cannot bring a chat id on the public doc', 'deny',
+    setDoc(doc(env.authenticatedContext('tgnew').firestore(), 'users/tgnew'),
+      { status: 'Pending', role: 'Employee', telegramChatId: '1' }));
 
   await env.cleanup();
 

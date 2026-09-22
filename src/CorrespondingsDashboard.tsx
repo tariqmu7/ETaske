@@ -21,6 +21,7 @@ import {
 } from './lib/recordLinks';
 import { getNextSerialNumber } from './lib/counters';
 import { consumePending, subscribeOpen } from './lib/deepLink';
+import { consumeCreateIntent, subscribeCreate, type CorrespondingPrefill } from './lib/createIntent';
 import {
   Plus, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
@@ -28,7 +29,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
+import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath, toUncPath } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
@@ -39,6 +40,11 @@ import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
+import FollowUpLetterModal from './components/FollowUpLetterModal';
+import { waitingSince, type FollowUpInfo } from './lib/followUp';
+import { uploadToDrive } from './lib/driveUpload';
+import { attachmentClick } from './lib/driveFiles';
+import DriveImage from './components/DriveImage';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -176,6 +182,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const itemsPerPage = 20;
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
+  // The ready-made chaser for a correspondence that has gone quiet (queue task B4).
+  const [letterFor, setLetterFor] = useState<FollowUpInfo | null>(null);
   const [pendingOpenCorrId, setPendingOpenCorrId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [groupBy, setGroupBy] = useState<CorrGroupBy>('status');
@@ -510,39 +518,36 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
   const closeModal = () => { setIsModalOpen(false); setEditing(null); };
 
+  // Outlook Feed → "yes, log that letter" (src/lib/createIntent.ts). Two-step,
+  // like the deep link above: an intent parked before the view switched, plus a
+  // live subscription. The form opens filled in; nothing is written until Save.
+  useEffect(() => {
+    const apply = (p: CorrespondingPrefill) => {
+      setIsViewing(false);
+      setEditing(null);
+      setSelectedCorrForDetails(null);
+      setFormData({
+        ...emptyForm(),
+        subject: p.subject || '',
+        body: p.body || '',
+        sentFrom: p.sentFrom || '',
+        category: p.category || 'External',
+        priority: p.priority || 'Medium',
+        deadline: p.deadline || '',
+        dateReceived: p.dateReceived || new Date().toISOString().split('T')[0],
+      });
+      setFormLinks({});
+      setIsModalOpen(true);
+    };
+    const initial = consumeCreateIntent('corresponding');
+    if (initial) apply(initial);
+    return subscribeCreate(intent => {
+      if (intent.type === 'corresponding') apply(intent.prefill);
+    });
+  }, []);
+
   const set = (f: string, v: any) => setFormData(p => ({ ...p, [f]: v }));
 
-  const uploadToGoogleDrive = async (file: File): Promise<string> => {
-    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
-    if (!scriptUrl) {
-      throw new Error('Google Script URL (VITE_GOOGLE_SCRIPT_URL) is not configured in environment variables.');
-    }
-
-    // Read file as base64
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        secret: import.meta.env.VITE_GOOGLE_SCRIPT_SECRET,
-        filename: file.name,
-        mimeType: file.type,
-        base64: base64
-      })
-    });
-
-    if (!response.ok) throw new Error('Network response was not ok');
-    const result = await response.json();
-    if (result.status === 'success') return result.url;
-    throw new Error(result.message || 'Upload failed');
-  };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -556,7 +561,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
     setIsUploading(true);
     try {
-      const driveUrl = await uploadToGoogleDrive(file);
+      const driveUrl = await uploadToDrive(file);
       setFormData(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
     } catch (err: any) {
       console.error('Upload error:', err);
@@ -885,24 +890,24 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   return (
     <div style={{ padding: '20px 0', minHeight: '60vh' }}>
       {/* Header — exactly one action: New Correspondence. */}
-      <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+      <div className="board-head" style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+          <h1 className="board-head-title" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
             {t('Correspondences')}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+          <p className="board-head-desc" style={{ color: 'var(--text-muted)', fontSize: 14 }}>
             {isManager
               ? t('Log, review, and assign incoming documents as tasks — all in one place.')
               : t('Log incoming documents — managers will review and assign them as tasks.')}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => openModal()}>
-          <Plus className="w-4 h-4" /> {t('New Correspondence')}
+        <button className="btn btn-primary board-head-action" onClick={() => openModal()} aria-label={t('New Correspondence')} title={t('New Correspondence')}>
+          <Plus className="w-4 h-4" /> <span className="board-head-label">{t('New Correspondence')}</span>
         </button>
       </div>
 
       {/* Segmented status filter (doubles as the stats row) */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 24 }}>
+      <div className="board-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 16, marginBottom: 24 }}>
         {[
           { key: 'Unassigned',  label: 'Unassigned',   value: stats.unassigned,  cls: 'stat-red' },
           { key: 'All',         label: 'Total',        value: stats.total,       cls: 'stat-indigo' },
@@ -915,7 +920,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
               key={s.key}
               type="button"
               onClick={() => setStatusFilter(s.key)}
-              className={`card ${s.cls} card-interactive`}
+              className={`card ${s.cls} card-interactive board-kpi`}
               aria-pressed={active}
               style={{
                 padding: '20px 24px', textAlign: 'start', cursor: 'pointer',
@@ -925,7 +930,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 opacity: active || statusFilter === 'All' ? 1 : 0.7,
               }}
             >
-              <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
+              <div className="board-kpi-value" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
               <div style={{ fontSize: 12, color: active ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
             </button>
           );
@@ -1185,7 +1190,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     {/* Attachment link */}
                     {item.attachedFile && (
                       <a
-                        href={item.attachedFile}
+                        href={item.attachedFile} onClick={attachmentClick(item.attachedFile, item.attachedFileName)}
                         target="_blank"
                         rel="noopener noreferrer"
                         style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--blue-50)', border: '1px solid var(--blue-200)', color: 'var(--blue-400)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}
@@ -1821,8 +1826,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                         }}>
                           {(formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) ? (
                             <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                              <img 
-                                src={getGoogleDrivePreviewUrl(formData.attachedFile)} 
+                              <DriveImage 
+                                url={formData.attachedFile} 
                                 alt={t('Attachment')} 
                                 style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                                 onError={(e) => {
@@ -1844,7 +1849,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                               }}>
                                 <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{formData.attachedFileName || t('Attached Image')}</span>
                                 <a 
-                                  href={formData.attachedFile} 
+                                  href={formData.attachedFile} onClick={attachmentClick(formData.attachedFile, formData.attachedFileName)} 
                                   target="_blank" 
                                   rel="noopener noreferrer" 
                                   className="btn btn-sm"
@@ -1864,7 +1869,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                                 <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                               </div>
                               <a 
-                                href={formData.attachedFile} 
+                                href={formData.attachedFile} onClick={attachmentClick(formData.attachedFile, formData.attachedFileName)} 
                                 target="_blank" 
                                 rel="noopener noreferrer" 
                                 className="btn btn-ghost btn-sm"
@@ -1900,7 +1905,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                             </div>
                             {formData.attachedFile && (formData.attachedFile.includes('image') || formData.attachedFile.includes('google.com')) && (
                               <div style={{ borderRadius: 0, overflow: 'hidden', border: '1px solid var(--border)', background: 'var(--surface-2)', padding: 8 }}>
-                                <img src={getGoogleDrivePreviewUrl(formData.attachedFile)} alt={t('Preview')} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 0, display: 'block' }} />
+                                <DriveImage url={formData.attachedFile} alt={t('Preview')} style={{ width: '100%', maxHeight: 300, objectFit: 'contain', borderRadius: 0, display: 'block' }} />
                               </div>
                             )}
                           </div>
@@ -2159,7 +2164,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Attachment')}</h3>
                     </div>
                     <a 
-                      href={selectedCorrForDetails.attachedFile} 
+                      href={selectedCorrForDetails.attachedFile} onClick={attachmentClick(selectedCorrForDetails.attachedFile, selectedCorrForDetails.attachedFileName)} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       style={{ 
@@ -2201,6 +2206,32 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     <Edit2 className="w-4 h-4" /> {t('View Linked Task')}
                   </button>
                 )}
+                {/* The ready-made chaser (queue task B4). Offered on any open
+                    correspondence: the wait decides how firmly it is worded, so
+                    one that is not late yet simply produces the polite version. */}
+                {selectedCorrForDetails.status !== 'Closed' && (
+                  <button
+                    className="btn btn-ghost"
+                    style={{ gap: 8, height: 44, flex: 1 }}
+                    onClick={() => setLetterFor({
+                      subject: selectedCorrForDetails.subject,
+                      counterparty: selectedCorrForDetails.sentFrom,
+                      ourName: appUser.displayName,
+                      reference: selectedCorrForDetails.serialNumber,
+                      lastContact: selectedCorrForDetails.dateReceived
+                        ? fmt.date(selectedCorrForDetails.dateReceived)
+                        : undefined,
+                      needBy: selectedCorrForDetails.deadline
+                        ? fmt.date(selectedCorrForDetails.deadline)
+                        : undefined,
+                      waitingDays: waitingSince(
+                        selectedCorrForDetails.deadline || selectedCorrForDetails.dateReceived,
+                      ),
+                    })}
+                  >
+                    <Send className="w-4 h-4" /> {t('Follow-up letter')}
+                  </button>
+                )}
                 <button
                   className="btn btn-ghost"
                   style={{ height: 44, flex: 1 }}
@@ -2217,6 +2248,9 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Drafted here, read and sent by the user (queue task B4). */}
+      <FollowUpLetterModal info={letterFor} onClose={() => setLetterFor(null)} />
     </div>
   );
 }

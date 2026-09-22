@@ -6,16 +6,20 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import {
   ArrowLeft, Activity, DollarSign, FileText, Truck, Edit2,
-  Building2, Hash, MapPin, CalendarRange, Link2,
+  Building2, Hash, MapPin, CalendarRange, Link2, ListChecks, FolderOpen,
 } from 'lucide-react';
 import LinkedRecordsPanel from './components/LinkedRecordsPanel';
+import ChecklistPanel from './components/ChecklistPanel';
+import ProjectDocumentsPanel from './components/DocumentsPanel';
+import { clientFileHash } from './lib/clientFile';
 import type { AppView } from './App';
 import ProjectTrackingTab from './components/projects/ProjectTrackingTab';
 import ProjectFinancialsTab from './components/projects/ProjectFinancialsTab';
 import ProjectContractsTab from './components/projects/ProjectContractsTab';
 import ProjectSubcontractsTab from './components/projects/ProjectSubcontractsTab';
 
-type Tab = 'tracking' | 'financials' | 'contracts' | 'subcontracts' | 'linked';
+type Tab = 'tracking' | 'checklist' | 'documents' | 'financials' | 'contracts' | 'subcontracts' | 'linked';
+const TAB_IDS: Tab[] = ['tracking', 'checklist', 'documents', 'financials', 'contracts', 'subcontracts', 'linked'];
 
 function statusColors(status: string): { bg: string; fg: string } {
   switch (status) {
@@ -36,19 +40,24 @@ interface Props {
   onEdit: () => void;
   /** Lets the Linked tab jump into the task / correspondence it lists. */
   onNavigate?: (v: AppView) => void;
+  /** Tab to open on (a deep link from the Documents page lands on 'documents'). */
+  initialTab?: string;
 }
 
-export default function ProjectDetail({ project, user, appUser, projectUsers, onBack, onEdit, onNavigate }: Props) {
+export default function ProjectDetail({ project, user, appUser, projectUsers, onBack, onEdit, onNavigate, initialTab }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
-  const [tab, setTab] = useState<Tab>('tracking');
+  const [tab, setTab] = useState<Tab>(() => (TAB_IDS.includes(initialTab as Tab) ? (initialTab as Tab) : 'tracking'));
 
   // The tab table lives inside the component so each label is a literal t()
   // call — a module-level table would only ever call t(variable), which the
   // harness's key audit cannot see.
   const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
     { id: 'tracking', label: t('Tracking'), icon: <Activity className="w-4 h-4" /> },
+    { id: 'checklist', label: t('Checklist'), icon: <ListChecks className="w-4 h-4" /> },
+    // Queue D4: letters, offers, minutes filed against the project.
+    { id: 'documents', label: t('Documents'), icon: <FolderOpen className="w-4 h-4" /> },
     { id: 'financials', label: t('Financials'), icon: <DollarSign className="w-4 h-4" /> },
     { id: 'contracts', label: t('Contracts'), icon: <FileText className="w-4 h-4" /> },
     { id: 'subcontracts', label: t('Subcontracts'), icon: <Truck className="w-4 h-4" /> },
@@ -84,7 +93,7 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
           {project.serialNumber && <span className="ltr-data" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{project.serialNumber}</span>}
         </div>
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>
-          {(project.client || project.operator) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Building2 className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{[project.client, project.operator].filter(Boolean).join(' · ')}</span>}
+          {(project.client || project.operator) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Building2 className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{[project.client, project.operator].filter(Boolean).join(' · ')}{project.client && <>{' '}<a href={clientFileHash(project.client)} data-clients="link" style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue-600)', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t('Client file')} <span className="dir-arrow">→</span></a></>}</span>}
           {project.code && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Hash className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.code}</span>}
           {project.location && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><MapPin className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{project.location}</span>}
           {(project.startDate || project.endDate) && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><CalendarRange className="w-4 h-4" style={{ color: 'var(--text-muted)' }} /><span className="ltr-data">{[project.startDate, project.endDate].filter(Boolean).map(d => fmt.date(d)).join(' → ')}</span></span>}
@@ -116,6 +125,10 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
 
       {/* Tab panels */}
       {tab === 'tracking' && <ProjectTrackingTab project={project} user={user} appUser={appUser} />}
+      {tab === 'checklist' && (
+        <ChecklistPanel target="project" recordId={project.id} items={project.checklist} anchorDate={project.startDate} appUser={appUser} />
+      )}
+      {tab === 'documents' && <ProjectDocumentsPanel project={project} user={user} appUser={appUser} onNavigate={onNavigate} />}
       {tab === 'financials' && <ProjectFinancialsTab project={project} user={user} />}
       {tab === 'contracts' && <ProjectContractsTab project={project} user={user} />}
       {tab === 'subcontracts' && <ProjectSubcontractsTab project={project} user={user} />}

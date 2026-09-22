@@ -13,9 +13,11 @@ import {
   Link2, Target, X, AlertCircle, Eye, TrendingUp, Paperclip, Download
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getGoogleDrivePreviewUrl } from './utils';
+import { globalSearch } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
+import { attachmentClick } from './lib/driveFiles';
+import DriveImage from './components/DriveImage';
 
 interface Props {
   user: User;
@@ -162,7 +164,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                   {task.attachedFile && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--accent)', marginTop: 4 }}>
                       <Paperclip className="w-3 h-3" />
-                      <a href={task.attachedFile} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600 }}>
+                      <a href={task.attachedFile} onClick={attachmentClick(task.attachedFile, task.attachedFileName)} target="_blank" rel="noopener noreferrer" style={{ color: 'inherit', fontWeight: 600 }}>
                         {task.attachedFileName || t('Attachment')}
                       </a>
                     </div>
@@ -262,8 +264,8 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                   }}>
                     {(viewingTask.attachedFile.includes('image') || viewingTask.attachedFile.includes('google.com')) ? (
                       <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                        <img 
-                          src={getGoogleDrivePreviewUrl(viewingTask.attachedFile)} 
+                        <DriveImage 
+                          url={viewingTask.attachedFile} 
                           alt={t('Attachment')} 
                           style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                           onError={(e) => {
@@ -285,7 +287,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                         }}>
                           <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{viewingTask.attachedFileName || t('Attached Image')}</span>
                           <a 
-                            href={viewingTask.attachedFile} 
+                            href={viewingTask.attachedFile} onClick={attachmentClick(viewingTask.attachedFile, viewingTask.attachedFileName)} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="btn btn-sm"
@@ -305,7 +307,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                           <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                         </div>
                         <a 
-                          href={viewingTask.attachedFile} 
+                          href={viewingTask.attachedFile} onClick={attachmentClick(viewingTask.attachedFile, viewingTask.attachedFileName)} 
                           target="_blank" 
                           rel="noopener noreferrer" 
                           className="btn btn-ghost btn-sm"

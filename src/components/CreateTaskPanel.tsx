@@ -18,6 +18,7 @@ import ComboBox from './ComboBox';
 import RecordLinkPicker from './RecordLinkPicker';
 import { announceNewRecord, actorFrom, hasAnyLink, MirrorResult } from '../lib/recordLinks';
 import { useDisplayLabel } from '../lib/displayLabel';
+import { uploadToDrive } from '../lib/driveUpload';
 
 // Public / Private segmented control. Private tasks are visible & editable only
 // to their owner (the assignee) — enforced in firestore.rules.
@@ -265,36 +266,6 @@ export default function CreateTaskPanel({
   // values inline, so it is no longer offered as a category.
   const categoryOptions = useMemo(() => CATEGORY_OPTIONS.filter(c => c !== 'Other...'), []);
 
-  const uploadToGoogleDrive = async (file: File): Promise<string> => {
-    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
-    if (!scriptUrl) {
-      throw new Error('Google Script URL not configured.');
-    }
-
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        secret: import.meta.env.VITE_GOOGLE_SCRIPT_SECRET,
-        filename: file.name,
-        mimeType: file.type,
-        base64: base64
-      })
-    });
-
-    if (!response.ok) throw new Error('Network response was not ok');
-    const result = await response.json();
-    if (result.status === 'success') return result.url;
-    throw new Error(result.message || 'Upload failed');
-  };
 
   const handleNewFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -302,7 +273,7 @@ export default function CreateTaskPanel({
 
     setIsUploading(true);
     try {
-      const driveUrl = await uploadToGoogleDrive(file);
+      const driveUrl = await uploadToDrive(file);
       setNewTask(p => ({ ...p, attachedFile: driveUrl, attachedFileName: file.name }));
     } catch (err: any) {
       alert(t('Upload failed: {{message}}', { message: err.message }));

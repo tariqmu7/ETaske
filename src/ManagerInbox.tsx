@@ -21,6 +21,7 @@ import { AppView } from './App';
 import { globalSearch, getUserColor } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
+import { attachmentClick } from './lib/driveFiles';
 
 function handleFirestoreError(error: unknown, op: OperationType, path: string | null) {
   console.error('Firestore Error:', { error, op, path, uid: auth.currentUser?.uid });
@@ -598,7 +599,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
               {selectedCorr.attachedFile && (
                 <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border)' }}>
                   <a
-                    href={selectedCorr.attachedFile}
+                    href={selectedCorr.attachedFile} onClick={attachmentClick(selectedCorr.attachedFile, selectedCorr.attachedFileName)}
                     target="_blank"
                     rel="noopener noreferrer"
                     style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--accent)', fontWeight: 600, textDecoration: 'none' }}

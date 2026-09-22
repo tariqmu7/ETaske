@@ -65,6 +65,21 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // On a phone the bubble floats over the board cards. While the page is
+  // scrolling it steps aside (index.css, `.chat-fab-away`, phones only) and
+  // comes back a moment after the scrolling stops.
+  const [scrolling, setScrolling] = useState(false);
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      setScrolling(true);
+      clearTimeout(timer);
+      timer = setTimeout(() => setScrolling(false), 700);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true, capture: true });
+    return () => { window.removeEventListener('scroll', onScroll, { capture: true }); clearTimeout(timer); };
+  }, []);
+
   // Emoji + share-attachment UI state
   const [showEmoji, setShowEmoji] = useState(false);
   const [sharePickerOpen, setSharePickerOpen] = useState(false);
@@ -332,7 +347,7 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
         .slice(0, 50);
 
   return (
-    <div className="chat-fab-wrap" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+    <div className={`chat-fab-wrap${scrolling && !isOpen ? ' chat-fab-away' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -946,6 +961,8 @@ export default function ChatBox({ currentUser, allUsers, onNavigate }: ChatBoxPr
       </AnimatePresence>
 
       <motion.button
+        className="chat-fab"
+        aria-label={t('Messages')}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => {

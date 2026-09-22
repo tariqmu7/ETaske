@@ -46,7 +46,7 @@ import { FIRESTORE_STUB } from './fakeFirestore.mjs';
 const FIREBASE_STUB = `
 export const app = {};
 export const db = { __fake: true };
-export const auth = { currentUser: { uid: 'u-mgr' } };
+export const auth = { currentUser: { uid: 'u-mgr', getIdToken: async () => 'harness-id-token' } };
 `;
 
 const stubPlugin = {
@@ -80,8 +80,8 @@ const ts = s => ({ seconds: T0 + s, toDate: () => new Date((T0 + s) * 1000) });
 
 const USERS = [
   { id: 'u-mgr',  displayName: 'Tariq Salama', email: 't@x.com', photoURL: '', status: 'Approved', role: 'Manager',  teamId: 'T1', department: 'Maintenance Planning' },
-  { id: 'u-emp1', displayName: 'Nevin Anwar',  email: 'n@x.com', photoURL: '', status: 'Approved', role: 'Employee', teamId: 'T1', department: 'Maintenance Planning', fcmToken: 'FCM-NEVIN' },
-  { id: 'u-emp2', displayName: 'Ahmed Salem',  email: 'a@x.com', photoURL: '', status: 'Approved', role: 'Employee', teamId: 'T1', department: 'Maintenance Planning', telegramChatId: '5551' },
+  { id: 'u-emp1', displayName: 'Nevin Anwar',  email: 'n@x.com', photoURL: '', status: 'Approved', role: 'Employee', teamId: 'T1', department: 'Maintenance Planning' },
+  { id: 'u-emp2', displayName: 'Ahmed Salem',  email: 'a@x.com', photoURL: '', status: 'Approved', role: 'Employee', teamId: 'T1', department: 'Maintenance Planning' },
   { id: 'u-out',  displayName: 'Mona Fouad',   email: 'm@x.com', photoURL: '', status: 'Approved', role: 'Employee', teamId: 'T9', department: 'Finance' },
   { id: 'u-adm',  displayName: 'Admin One',    email: 'd@x.com', photoURL: '', status: 'Approved', role: 'Admin',    teamId: 'T1', department: 'Maintenance Planning' },
 ];
@@ -486,10 +486,13 @@ check('notifications carry the task detail block',
 check('notifications deep-link to the task', (byUser('u-emp1')[0] || {}).relatedId === task.id);
 
 const pushes = await evalJS('JSON.stringify(window.__pushes)').then(JSON.parse);
-check('the assignee\'s FCM token was pushed to',
-  pushes.some(p => p.body.action === 'fcm' && p.body.token === 'FCM-NEVIN'), JSON.stringify(pushes.map(p => p.body.action)));
-check('the collaborator\'s Telegram chat was pushed to',
-  pushes.some(p => p.body.action === 'telegram' && p.body.chatId === '5551'));
+// Since A3b the app names the PERSON; the script looks up their device / chat.
+check('the assignee was pushed to (by uid)',
+  pushes.some(p => p.body.action === 'notify' && p.body.toUid === 'u-emp1'), JSON.stringify(pushes.map(p => p.body.action)));
+check('the collaborator was pushed to (by uid)',
+  pushes.some(p => p.body.action === 'notify' && p.body.toUid === 'u-emp2'));
+check('every push carries the ID token and no raw device / chat id',
+  pushes.length > 0 && pushes.every(p => p.body.idToken === 'harness-id-token' && !('token' in p.body) && !('chatId' in p.body)));
 check('pushes carry a deep link',
   pushes.every(p => typeof p.body.url === 'string' && p.body.url.includes('#/tasks?open=')), JSON.stringify(pushes.map(p => p.body.url)));
 

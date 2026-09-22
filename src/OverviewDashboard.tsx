@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_NUMERIC } from './lib/format';
 import { globalSearch, getUserColor, isOverdue, openOrCopyPath } from './utils';
+import { attachmentClick } from './lib/driveFiles';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Overview Firestore:', { e, op, path });
@@ -1149,7 +1150,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                       <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Attachment")}</h3>
                     </div>
                     <a 
-                      href={selectedCorr.attachedFile} 
+                      href={selectedCorr.attachedFile} onClick={attachmentClick(selectedCorr.attachedFile, selectedCorr.attachedFileName)} 
                       target="_blank" 
                       rel="noopener noreferrer"
                       style={{

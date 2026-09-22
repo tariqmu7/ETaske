@@ -2,14 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
 import {
   Search, CheckSquare, MailOpen, FolderKanban, CornerDownLeft,
-  ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target,
+  ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target, Building2, Hourglass, CalendarDays, Handshake,
+  FolderOpen, Users2, Files, FileText,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { getVisibleTasks } from '../lib/taskVisibility';
 import { globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
-import { recordRecent } from '../lib/recents';
 import type { AppView } from '../App';
 import type { AppUser } from '../types';
 
@@ -88,7 +88,15 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'correspondences', label: t('Correspondences'), alias: 'Correspondences', sub: t('Intake & review'), icon: <MailOpen className="w-4 h-4" /> },
     { kind: 'nav', id: 'tasks', label: t('Tasks'), alias: 'Tasks', sub: t('Work & milestones'), icon: <CheckSquare className="w-4 h-4" /> },
     { kind: 'nav', id: 'projects', label: t('Projects'), alias: 'Projects', sub: t('Contracts & financials'), icon: <FolderKanban className="w-4 h-4" /> },
+    { kind: 'nav', id: 'clients', label: t('Clients'), alias: 'Clients Client file', sub: t('One page per client'), icon: <Building2 className="w-4 h-4" /> },
+    { kind: 'nav', id: 'documents', label: t('Documents'), alias: 'Documents Files Letters Offers Minutes Search documents Archive of papers', sub: t('Search every project document'), icon: <FolderOpen className="w-4 h-4" /> },
+    { kind: 'nav', id: 'meetings', label: t('Meetings'), alias: 'Meetings Meeting Agenda Minutes MOM Action points Invitation', sub: t('Agenda, minutes and action points'), icon: <Users2 className="w-4 h-4" /> },
+    { kind: 'nav', id: 'handover', label: t('Handover'), alias: 'Handover Handover file Reassign Hand over Leaving Leave Vacation Transfer work', sub: t('Everything open in one person’s name'), icon: <Handshake className="w-4 h-4" /> },
+    { kind: 'nav', id: 'waiting', label: t('Waiting'), alias: 'Waiting on us them Waiting board Chase Ball in court', sub: t('Whose move it is, and for how long'), icon: <Hourglass className="w-4 h-4" /> },
+    { kind: 'nav', id: 'calendar', label: t('Calendar'), alias: 'Calendar Deadlines Deadline calendar Tender deadlines Contract expiry Renewals Month', sub: t('Tender deadlines, contract ends and due dates by month'), icon: <CalendarDays className="w-4 h-4" /> },
     { kind: 'nav', id: 'opportunities', label: t('Opportunities'), alias: 'Opportunities', sub: t('Tenders, bids & deadlines'), icon: <Target className="w-4 h-4" /> },
+    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'duplicates', label: t('Duplicates'), alias: 'Duplicates Duplicate Twice Double entry Same tender Clash Conflict', sub: t('Records entered twice, and two people on one client'), icon: <Files className="w-4 h-4" /> } as Hit] : []),
+    ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'weekly-report', label: t('Weekly report'), alias: 'Weekly report Week Report Arabic report Department report Summary التقرير الأسبوعي تقرير', sub: t('The department’s week, written in Arabic'), icon: <FileText className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: t('Bid Analytics'), alias: 'Bid Analytics', sub: t('Win rate & loss reasons'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
     { kind: 'nav', id: 'due-soon', label: t('Needs you today'), alias: 'Due Soon Overdue Today Yesterday This Week', sub: t('Everything waiting on you, plus what has just come in.'), icon: <AlertCircle className="w-4 h-4" /> },
     { kind: 'nav', id: 'announcements', label: t('News'), alias: 'News', sub: t('Department announcements'), icon: <Megaphone className="w-4 h-4" /> },
@@ -164,7 +172,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
       requestOpen({ type: 'opportunity', id: hit.id, label: hit.label, serial: hit.serial });
       onNavigate('opportunities');
     } else {
-      recordRecent({ kind: 'project', id: hit.id, label: hit.label, serial: hit.serial });
+      requestOpen({ type: 'project', id: hit.id, label: hit.label, serial: hit.serial });
       onNavigate('projects');
     }
     onClose();

@@ -16,13 +16,17 @@ import { getNextSerialNumber } from './lib/counters';
 import { globalSearch, getUserColor } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
-import { consumePending, subscribeOpen } from './lib/deepLink';
+import { consumePending, subscribeOpen, takeConsumedTab } from './lib/deepLink';
+import { consumeCreateIntent, subscribeCreate, type OpportunityPrefill } from './lib/createIntent';
 import { recordRecent } from './lib/recents';
 import { exportOpportunities } from './lib/exportData';
+import { buildChecklist, checklistProgress, defaultTemplateForSource, templatesFor, localToday } from './lib/checklists';
+import { findSimilarBids } from './lib/duplicates';
+import { checkGate, crossesGate, approvalState, waitingForSignOff, isManagerRole, type GateProblem, type GateResult } from './lib/offerApproval';
 import {
   Plus, X, Target, Building2, CalendarClock,
   Trash2, Edit2, AlertCircle, User as UserIcon, BarChart3,
-  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ArrowLeft,
+  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ArrowLeft, ShieldCheck, Clock,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AppView } from './App';
@@ -114,15 +118,38 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const [formData, setFormData] = useState(emptyForm());
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // Queue C3 — which standard checklist a NEW bid starts with. `null` = follow
+  // the source (tender → full list, direct order → quick quotation) until the
+  // user picks one; 'none' = start empty.
+  const [checklistChoice, setChecklistChoice] = useState<string | null>(null);
+  const checklistKey = checklistChoice ?? defaultTemplateForSource(formData.source);
   const [deleteTarget, setDeleteTarget] = useState<Opportunity | null>(null);
   // Detail page is keyed by id, not by the object, so the open page keeps
   // following the live snapshot instead of freezing on a stale copy.
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [pendingOpenId, setPendingOpenId] = useState<string | null>(null);
+  // Queue D6: a link may name the tab to land on (an earlier bid opens on 'decisions').
+  const [openTab, setOpenTab] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
 
   const canDelete = appUser.role === 'Admin' || appUser.role === 'Manager';
+
+  // Queue D8 — "this looks like a bid we already have", read as the form is typed.
+  const similarBids = useMemo(
+    () => (isModalOpen
+      ? findSimilarBids({
+          title: formData.title, client: formData.client,
+          tenderNumber: formData.tenderNumber, submissionDeadline: formData.submissionDeadline,
+        }, opportunities, editing?.id)
+      : []),
+    [isModalOpen, formData.title, formData.client, formData.tenderNumber, formData.submissionDeadline, opportunities, editing?.id],
+  );
+  const today = localToday();
+
+  // Queue D10 — offers waiting for a manager, shown to managers above the board.
+  const isManager = isManagerRole(appUser.role);
+  const waiting = useMemo(() => (isManager ? waitingForSignOff(opportunities, Date.now()) : []), [isManager, opportunities]);
 
   useEffect(() => {
     const q = query(collection(db, 'opportunities'), orderBy('createdAt', 'desc'));
@@ -348,8 +375,38 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     setEditing(null);
     setFormData({ ...emptyForm(), ownerId: appUser.id, currency: mainCurrency });
     setFormError(null);
+    setChecklistChoice(null);
     setIsModalOpen(true);
   };
+
+  // Outlook Feed → "yes, make that bid" (src/lib/createIntent.ts). Same two-step
+  // as the deep link above: take the intent parked before the view switched, and
+  // also listen while mounted. It only ever OPENS the form prefilled — the user
+  // still presses Save, so a wrong guess costs nothing.
+  useEffect(() => {
+    const apply = (p: OpportunityPrefill) => {
+      setEditing(null);
+      setFormError(null);
+      setSelectedId(null);
+      setFormData({
+        ...emptyForm(),
+        ownerId: appUser.id,
+        currency: mainCurrency,
+        title: p.title || '',
+        client: p.client || '',
+        tenderNumber: p.tenderNumber || '',
+        submissionDeadline: p.submissionDeadline || '',
+        scope: p.scope || '',
+      });
+      setChecklistChoice(null);
+      setIsModalOpen(true);
+    };
+    const initial = consumeCreateIntent('opportunity');
+    if (initial) apply(initial);
+    return subscribeCreate(intent => {
+      if (intent.type === 'opportunity') apply(intent.prefill);
+    });
+  }, [appUser.id, mainCurrency]);
 
   const openEdit = (o: Opportunity) => {
     setEditing(o);
@@ -403,6 +460,13 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       return;
     }
     const owner = projectUsers.find(u => u.id === formData.ownerId);
+    // Queue D10 — an offer does not go out without a manager's sign-off. A
+    // manager is never stopped: the save records them as the approver.
+    const gate: GateResult = editing
+      ? checkGate(editing, { stage: formData.stage, estimatedValue, currency: formData.currency },
+          { id: appUser.id, name: appUser.displayName || appUser.email || '—', role: appUser.role }, Date.now())
+      : { ok: true };
+    if ('problem' in gate) { setFormError(gateMessage(gate.problem)); return; }
     const payload = {
       title,
       client: formData.client.trim(),
@@ -432,12 +496,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       if (editing) {
         await updateDoc(doc(db, 'opportunities', editing.id), {
           ...payload,
+          ...('approval' in gate && gate.approval ? { approval: gate.approval } : {}),
           updatedAt: serverTimestamp(),
         });
       } else {
         const serialNumber = await getNextSerialNumber('opportunities');
         await addDoc(collection(db, 'opportunities'), {
           ...payload,
+          // Written once, at birth; afterwards the Checklist tab owns it.
+          checklist: buildChecklist(checklistKey, payload.submissionDeadline, localToday()),
           serialNumber,
           userId: user.uid,
           teamId: appUser.teamId || '',
@@ -469,6 +536,27 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
 
   const closedOutcome = formData.stage === 'Lost' || formData.stage === 'Won';
 
+  function gateMessage(p: GateProblem) {
+    switch (p) {
+      case 'pending': return t('This offer is still waiting for a manager’s sign-off. It can be marked as sent once a manager approves it.');
+      case 'returned': return t('A manager sent this offer back. Fix it and ask for sign-off again on the bid page.');
+      case 'price-changed': return t('The price changed after the manager approved it. Ask for sign-off again on the bid page.');
+      default: return t('This offer needs a manager’s sign-off before it can be marked as sent. Save it at its current stage and use “Ask for sign-off” on the bid page.');
+    }
+  }
+  // Shown under the Stage select while it points past the gate.
+  const stageNote = (() => {
+    if (!editing || !crossesGate(editing.stage, formData.stage)) return null;
+    const next = {
+      approval: editing.approval,
+      estimatedValue: formData.estimatedValue === '' ? null : Number(formData.estimatedValue),
+      currency: formData.currency,
+    };
+    if (approvalState(next) === 'approved') return { ok: true, text: t('Signed off by {{name}} — it can go out.', { name: editing.approval?.decidedByName || '—' }) };
+    if (isManagerRole(appUser.role)) return { ok: true, text: t('No sign-off on it yet — saving records you as the approver.') };
+    return { ok: false, text: t('Needs a manager’s sign-off first.') };
+  })();
+
   // Export is deliberately the WHOLE pipeline, not the filtered view: the
   // workbook is a record of the bid book, and a sheet that silently reflected a
   // search box would be misread as complete. Filtering belongs in Excel.
@@ -493,6 +581,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   // a correspondence.
   const openOpportunity = (o: Opportunity) => {
     setSelectedId(o.id);
+    setOpenTab(null);
     recordRecent({ kind: 'opportunity', id: o.id, label: o.title, serial: o.serialNumber });
   };
 
@@ -501,9 +590,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   // the snapshot carrying it has arrived, so a cold load still lands on the bid.
   useEffect(() => {
     const initial = consumePending('opportunity');
-    if (initial) setPendingOpenId(initial);
+    if (initial) { setPendingOpenId(initial); setOpenTab(takeConsumedTab()); }
     return subscribeOpen(ref => {
-      if (ref.type === 'opportunity') setPendingOpenId(ref.id);
+      if (ref.type === 'opportunity') { setPendingOpenId(ref.id); setOpenTab(ref.tab ?? null); }
     });
   }, []);
 
@@ -528,27 +617,29 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   }, [selectedId, opportunities, loading]);
 
   return (
-    <div style={selected ? { maxWidth: 'none', margin: 0, padding: 0 } : { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+    <div className={selected ? undefined : 'board-page'} style={selected ? { maxWidth: 'none', margin: 0, padding: 0 } : { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
       {selected ? (
         <OpportunityDetail
+          key={`${selected.id}:${openTab || ''}`}
           opportunity={selected}
           user={user}
           appUser={appUser}
           projectUsers={projectUsers}
-          onBack={() => setSelectedId(null)}
+          initialTab={openTab || undefined}
+          onBack={() => { setSelectedId(null); setOpenTab(null); }}
           onEdit={() => openEdit(selected)}
           onNavigate={onNavigate}
         />
       ) : (
       <>
       {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+      <div className="board-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div style={{ padding: 10, background: 'rgba(59,130,246,0.1)', color: 'var(--accent)' }}>
+          <div className="board-head-icon" style={{ padding: 10, background: 'rgba(59,130,246,0.1)', color: 'var(--accent)' }}>
             <Target className="w-6 h-6" />
           </div>
           <div>
-            <h1 style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Opportunities')}</h1>
+            <h1 className="board-head-title" style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Opportunities')}</h1>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', margin: 0 }}>
               {opportunities.length === 1
                 ? t('{{count}} opportunity · {{open}} open', { count: 1, open: stats.open })
@@ -556,8 +647,8 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
             </p>
           </div>
         </div>
-        <button className="btn btn-primary" onClick={openCreate}>
-          <Plus className="w-4 h-4" /> {t('New Opportunity')}
+        <button className="btn btn-primary board-head-action" onClick={openCreate} aria-label={t('New Opportunity')} title={t('New Opportunity')}>
+          <Plus className="w-4 h-4" /> <span className="board-head-label">{t('New Opportunity')}</span>
         </button>
       </div>
 
@@ -577,9 +668,38 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
         </div>
       )}
 
+      {waiting.length > 0 && (
+        <div className="card" data-approval="waiting" style={{ padding: '12px 14px', marginBottom: 16, borderInlineStart: '3px solid #f59e0b', background: 'rgba(245,158,11,0.06)' }}>
+          <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 8px' }}>
+            <ShieldCheck className="w-4 h-4" style={{ color: '#b45309' }} />
+            {waiting.length === 1 ? t('1 offer waiting for your sign-off') : t('{{count}} offers waiting for your sign-off', { count: waiting.length })}
+          </h2>
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {waiting.map(w => (
+              <li key={w.id}>
+                <button
+                  type="button"
+                  data-approval="waiting-row"
+                  onClick={() => { const o = opportunities.find(x => x.id === w.id); if (o) openOpportunity(o); }}
+                  style={{ display: 'flex', flexWrap: 'wrap', gap: '2px 10px', alignItems: 'baseline', width: '100%', textAlign: 'start', background: 'none', border: 'none', padding: '6px 0', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, color: 'var(--text-secondary)', borderTop: '1px solid var(--border)' }}
+                >
+                  {w.serial && <span className="ltr-data" style={{ fontWeight: 700, color: 'var(--text-muted)' }}>{w.serial}</span>}
+                  <bdi style={{ fontWeight: 700, color: 'var(--text-primary)', overflowWrap: 'anywhere' }}>{w.title}</bdi>
+                  <span className="ltr-data" style={{ fontWeight: 700 }}>{w.amount === null ? '—' : money(toNumber(w.amount), w.currency)}</span>
+                  <span>
+                    <bdi>{w.requestedByName}</bdi>{' · '}
+                    {w.ageDays === 0 ? t('asked today') : w.ageDays === 1 ? t('asked yesterday') : t('asked {{count}} days ago', { count: w.ageDays })}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* KPI strip */}
       {opportunities.length > 0 && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
+        <div className="board-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 18 }}>
           {[
             { key: 'open', label: t('Open'), value: String(stats.open), sub: t('in pipeline'), filter: 'Open', color: 'var(--text-primary)' },
             { key: 'value', label: t('Pipeline value'), value: money(stats.openValue, mainCurrency), sub: t('open bids'), filter: 'Open', color: '#3b82f6' },
@@ -592,12 +712,12 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
               <button
                 key={s.key}
                 onClick={() => setStageFilter(active ? 'All' : s.filter)}
-                className="card"
+                className="card board-kpi"
                 style={{ padding: '12px 14px', textAlign: 'start', cursor: 'pointer', border: active ? '1px solid var(--accent)' : '1px solid var(--border)', background: active ? 'rgba(59,130,246,0.08)' : 'var(--surface)' }}
               >
-                <div className={fmt.bidiFor(s.value)} style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.sub}</div>
+                <div className={`${fmt.bidiFor(s.value)} board-kpi-value`} style={{ fontSize: 20, fontWeight: 800, color: s.color, lineHeight: 1.1 }}>{s.value}</div>
+                <div className="board-kpi-label" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', marginTop: 4 }}>{s.label}</div>
+                <div className="board-kpi-sub" style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.sub}</div>
               </button>
             );
           })}
@@ -715,6 +835,8 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
               const showCountdown = isOpportunityOpen(o.stage) && dLeft !== null;
               const late = showCountdown && (dLeft as number) < 0;
               const soon = showCountdown && (dLeft as number) >= 0 && (dLeft as number) <= 7;
+              // Read off the bid itself (settled rule 1) — no extra query per card.
+              const steps = isOpportunityOpen(o.stage) ? checklistProgress(o.checklist, today) : null;
               return (
                 <motion.div
                   key={o.id}
@@ -730,6 +852,11 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                     <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', color: '#fff', background: STAGE_COLORS[o.stage] || '#64748b' }}>
                       {dl(o.stage)}
                     </span>
+                    {o.approval?.status === 'requested' && isOpportunityOpen(o.stage) && (
+                      <span data-approval="card-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#b45309', marginInlineStart: 'auto' }}>
+                        <Clock className="w-3.5 h-3.5" /> {t('Awaiting sign-off')}
+                      </span>
+                    )}
                     <CardMenu items={[
                       { label: t('Edit'), icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => openEdit(o) },
                       ...(canDelete ? [{ label: t('Delete'), icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => setDeleteTarget(o), danger: true }] : []),
@@ -752,6 +879,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                         {late
                           ? t('{{count}}d past deadline', { count: Math.abs(dLeft as number) })
                           : (dLeft === 0 ? t('Due today') : t('{{count}}d to deadline', { count: dLeft as number }))}
+                      </div>
+                    )}
+                    {steps && steps.total > 0 && (
+                      <div data-testid="opp-card-checklist" style={{ display: 'flex', alignItems: 'center', gap: 6, color: steps.late > 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: steps.late > 0 ? 700 : 400 }}>
+                        <ListChecks className="w-3.5 h-3.5" />
+                        <span>
+                          {t('{{done}}/{{total}} steps', { done: steps.done, total: steps.total })}
+                          {steps.late > 0 && ` · ${steps.late === 1 ? t('{{count}} step overdue', { count: 1 }) : t('{{count}} steps overdue', { count: steps.late })}`}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -802,11 +938,45 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                   </select>
                 </Field>
               </div>
+              {similarBids.length > 0 && (
+                <div role="status" data-testid="opp-similar" style={{ padding: '10px 12px', background: '#fef3c7', border: '1px solid #fcd34d', color: '#78350f', fontSize: 12.5 }}>
+                  <p style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, margin: '0 0 6px' }}>
+                    <AlertCircle className="w-4 h-4" style={{ flexShrink: 0 }} />
+                    {similarBids.some(h => h.strength === 'certain')
+                      ? t('This tender is already on the board:')
+                      : t('This may already be on the board:')}
+                  </p>
+                  <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    {similarBids.map(h => (
+                      <li key={h.record.id} data-testid="opp-similar-row" style={{ display: 'flex', gap: 8, alignItems: 'baseline', flexWrap: 'wrap', minWidth: 0 }}>
+                        {h.record.serial && <span className="ltr-data" style={{ fontWeight: 700 }}>{h.record.serial}</span>}
+                        <bdi style={{ fontWeight: 600, overflowWrap: 'anywhere' }}>{h.record.title}</bdi>
+                        <span style={{ opacity: 0.85 }}>
+                          {[h.record.party, h.record.ownerName, h.record.status ? dl(h.record.status) : '']
+                            .filter(Boolean).map((part, i) => <React.Fragment key={i}>{i > 0 && ' · '}<bdi>{part}</bdi></React.Fragment>)}
+                        </span>
+                        <button
+                          type="button"
+                          data-testid="opp-similar-open"
+                          onClick={() => { setIsModalOpen(false); setEditing(null); setSelectedId(h.record.id); }}
+                          style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 12.5, fontWeight: 700, color: 'var(--blue-600)' }}
+                        >
+                          {t('Open it')}
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                  <p style={{ margin: '6px 0 0', opacity: 0.85 }}>{t('If it is the same tender, open it instead of creating a second copy. If it is a new one, carry on.')}</p>
+                </div>
+              )}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                 <Field label={t('Stage')}>
                   <select value={formData.stage} onChange={e => setFormData({ ...formData, stage: e.target.value as OpportunityStage })} className="opp-input">
                     {OPPORTUNITY_STAGE_OPTIONS.map(s => <option key={s} value={s}>{dl(s)}</option>)}
                   </select>
+                  {stageNote && (
+                    <span data-approval="stage-note" style={{ display: 'block', marginTop: 4, fontSize: 11.5, fontWeight: 700, color: stageNote.ok ? '#15803d' : '#b45309' }}>{stageNote.text}</span>
+                  )}
                 </Field>
                 <Field label={t('Bid owner')}>
                   <select value={formData.ownerId} onChange={e => setFormData({ ...formData, ownerId: e.target.value })} className="opp-input">
@@ -841,6 +1011,24 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
               </div>
               <Field label={t('Location')}><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
               <Field label={t('Scope')}><textarea value={formData.scope} onChange={e => setFormData({ ...formData, scope: e.target.value })} className="opp-input" rows={3} /></Field>
+
+              {!editing && (
+                <Field label={t('Starting checklist')}>
+                  <select value={checklistKey} onChange={e => setChecklistChoice(e.target.value)} className="opp-input" data-testid="opp-checklist-template">
+                    {templatesFor('opportunity').map(tp => (
+                      <option key={tp.key} value={tp.key}>
+                        {t('{{name}} — {{count}} steps', { name: t(tp.label), count: tp.steps.length })}
+                      </option>
+                    ))}
+                    <option value="none">{t('No checklist')}</option>
+                  </select>
+                  <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
+                    {formData.submissionDeadline
+                      ? t('Each step is dated back from the submission deadline. You can edit them later on the Checklist tab.')
+                      : t('Add the submission deadline and each step gets its own date.')}
+                  </span>
+                </Field>
+              )}
 
               {closedOutcome && (
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)' }}>

@@ -6,17 +6,21 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import {
   ArrowLeft, Edit2, MessageSquare, FileText, Building2, Hash, MapPin,
-  CalendarClock, User as UserIcon, Percent, Trophy, Flag, CheckSquare,
+  CalendarClock, User as UserIcon, Percent, Trophy, Flag, CheckSquare, ListChecks, Gavel,
 } from 'lucide-react';
 import OpportunityFollowUpsTab from './components/opportunities/OpportunityFollowUpsTab';
 import OpportunityMilestonesTab from './components/opportunities/OpportunityMilestonesTab';
 import OpportunityOutcomeTab from './components/opportunities/OpportunityOutcomeTab';
 import OpportunityTasksTab from './components/opportunities/OpportunityTasksTab';
+import OpportunityDecisionsTab from './components/opportunities/OpportunityDecisionsTab';
 import LinkedRecordsPanel from './components/LinkedRecordsPanel';
+import ChecklistPanel from './components/ChecklistPanel';
+import OfferApprovalCard from './components/opportunities/OfferApprovalCard';
+import { clientFileHash } from './lib/clientFile';
 import { STAGE_COLORS, fullMoney, daysUntil } from './components/opportunities/opportunityUi';
 import type { AppView } from './App';
 
-type Tab = 'overview' | 'followups' | 'tasks' | 'milestones' | 'outcome';
+type Tab = 'overview' | 'followups' | 'checklist' | 'tasks' | 'milestones' | 'decisions' | 'outcome';
 
 interface Props {
   opportunity: Opportunity;
@@ -27,21 +31,26 @@ interface Props {
   onEdit: () => void;
   /** Lets the Tasks tab jump into the tasks dashboard on a linked task. */
   onNavigate?: (v: AppView) => void;
+  /** Which tab to land on (a deep link may name one — queue D6 opens 'decisions'). */
+  initialTab?: string;
 }
 
 const TABS: { id: Tab; label: string; icon: React.ReactNode }[] = [
   { id: 'overview', label: 'Overview', icon: <FileText className="w-4 h-4" /> },
   { id: 'followups', label: 'Follow-ups', icon: <MessageSquare className="w-4 h-4" /> },
+  { id: 'checklist', label: 'Checklist', icon: <ListChecks className="w-4 h-4" /> },
   { id: 'tasks', label: 'Tasks', icon: <CheckSquare className="w-4 h-4" /> },
   { id: 'milestones', label: 'Milestones', icon: <Flag className="w-4 h-4" /> },
+  { id: 'decisions', label: 'Decisions', icon: <Gavel className="w-4 h-4" /> },
   { id: 'outcome', label: 'Outcome', icon: <Trophy className="w-4 h-4" /> },
 ];
+const TAB_IDS = TABS.map(x => x.id);
 
-export default function OpportunityDetail({ opportunity, user, appUser, projectUsers, onBack, onEdit, onNavigate }: Props) {
+export default function OpportunityDetail({ opportunity, user, appUser, projectUsers, onBack, onEdit, onNavigate, initialTab }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
-  const [tab, setTab] = useState<Tab>('followups');
+  const [tab, setTab] = useState<Tab>(() => (TAB_IDS.includes(initialTab as Tab) ? (initialTab as Tab) : 'followups'));
 
   const o = opportunity;
   const stageColor = STAGE_COLORS[o.stage] || 'var(--border)';
@@ -78,6 +87,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
               <Building2 className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />
               {[o.client, o.sector].filter(Boolean).join(' · ')}
+              {o.client && <>{' '}<a href={clientFileHash(o.client)} data-clients="link" style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue-600)', textDecoration: 'none', whiteSpace: 'nowrap' }}>{t('Client file')} <span className="dir-arrow">→</span></a></>}
             </span>
           )}
           {o.tenderNumber && <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Hash className="w-4 h-4" style={{ color: 'var(--text-muted)' }} />{o.tenderNumber}</span>}
@@ -110,6 +120,9 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
           <Metric label={t('Next action')} value={fmt.date(o.nextActionDate) || '—'} />
         </div>
       </div>
+
+      {/* Queue D10 — manager sign-off before the offer goes out. */}
+      <OfferApprovalCard opportunity={o} appUser={appUser} projectUsers={projectUsers} />
 
       {/* Tab bar */}
       <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', marginBottom: 20, overflowX: 'auto' }}>
@@ -198,6 +211,16 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
         <OpportunityFollowUpsTab opportunity={o} user={user} appUser={appUser} />
       )}
 
+      {tab === 'checklist' && (
+        <ChecklistPanel
+          target="opportunity"
+          recordId={o.id}
+          items={o.checklist}
+          anchorDate={o.submissionDeadline}
+          appUser={appUser}
+        />
+      )}
+
       {tab === 'tasks' && (
         <OpportunityTasksTab
           opportunity={o}
@@ -210,6 +233,10 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
 
       {tab === 'milestones' && (
         <OpportunityMilestonesTab opportunity={o} user={user} appUser={appUser} />
+      )}
+
+      {tab === 'decisions' && (
+        <OpportunityDecisionsTab opportunity={o} user={user} appUser={appUser} onNavigate={onNavigate} />
       )}
 
       {tab === 'outcome' && (

@@ -169,3 +169,42 @@ assigned it. Public tasks keep the shared-board behaviour. **Requires a fresh
 - **Tests:** `scripts/firestore-rules.test.ts` gained a "Private-task isolation"
   block (owner reads; manager/admin denied read, flip, and delete) — run
   `npm run rules:test`.
+
+## Second admin (queue A3a, 22 Sep 2026)
+
+User management (approve / promote / remove users, read or delete any
+notification) used to need the one hardcoded admin e-mail. It now needs
+`isAdmin()`: the bootstrap e-mail **or** an Approved user whose `role` is
+`Admin`. So Tariq can promote a deputy in the Users screen and that person can
+actually approve people — before, the screen showed but every save was refused.
+
+- A suspended (Rejected/Pending) Admin loses the power at once — the rule checks
+  `status == 'Approved'` on every request.
+- Nobody can create their own user doc as Admin except the bootstrap e-mail.
+- Private tasks stay owner-only, admins included.
+- The bootstrap e-mail cannot be locked out: App.tsx re-grants its Admin role at
+  each login.
+- Covered by `npm run rules:test` (section "Second admin", 10 checks; 50/50).
+- **Needs a rules deploy** (`firebase deploy --only firestore:rules`, named DB)
+  — can go in the same deploy as D5 meetings / D10 sign-off.
+
+## Private contact ids (queue A3b, 22 Sep 2026)
+
+The user directory is readable by every signed-in account (even Pending), and it
+used to carry each person's `telegramChatId` and `fcmToken`. Both now live in
+`users/{uid}/private/contact`:
+
+- **Read / delete:** the owner only — not managers, not admins.
+- **Write:** the owner, only that one doc name, only those two fields. The owner
+  may set `fcmToken` but may only keep or REMOVE `telegramChatId`; the Apps Script
+  (as the script owner, outside the rules) writes it when a Telegram link
+  completes — so nobody can attach someone else's chat to their account.
+- **Public doc:** a self-update may keep or drop an old `telegramChatId` /
+  `fcmToken`, never set or change one; a signup may not carry either.
+- Old ids are moved by hand once with `moveContactsToPrivate()` in the Apps
+  Script (TELEGRAM-NOTES.md → Security notes). Until then the script falls back
+  to the old ids so alerts keep working.
+- Covered by `npm run rules:test` (section "Private contact ids", 16 checks; 66/66).
+- **Needs the same rules deploy** as D5 / D10 / A3a.
+
+Still open (queue A3c): per-person / per-team READ scoping of the boards.

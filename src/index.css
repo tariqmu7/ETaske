@@ -357,6 +357,11 @@ body {
   }
 }
 
+/* Shown only on a phone (the avatar menu's theme / push rows, E2). */
+@media (min-width: 769px) {
+  .phone-only { display: none !important; }
+}
+
 /* ─── Bottom Navigation (Mobile Only) ────────────── */
 .bottom-nav {
   position: fixed;
@@ -1012,60 +1017,77 @@ h1, h2, h3, h4, p, span, div {
     flex-shrink: 0;
   }
 
-  /* ── Bottom nav: scrollable, clear active state ── */
-  /* flex:1 lets tabs fill the bar when they fit; the
-     min-width + no-shrink makes the bar scroll instead
-     of squashing labels once Archive/Users are added. */
+  /* ── Bottom nav: five equal, labelled tabs (E2) ──
+     Every tab shows its word, not only the active one — an unlabelled row of
+     glyphs made people guess which one was Letters and which was Bids. Five
+     tabs fit a 320px phone at 64px each, so the bar no longer scrolls. */
   .bottom-nav {
-    overflow-x: auto;
-    overflow-y: hidden;
-    justify-content: flex-start;
-    scrollbar-width: none;
+    justify-content: stretch;
+    overflow: hidden;
   }
-  .bottom-nav::-webkit-scrollbar { display: none; }
 
   .bottom-tab {
-    flex: 1 0 auto;
-    min-width: 56px;
-    gap: 2px;
-    padding: 8px 4px;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 3px;
+    padding: 8px 2px 6px;
     position: relative;
   }
   .bottom-tab svg { width: 22px; height: 22px; }
   .bottom-tab span {
+    display: block;
+    max-width: 100%;
     white-space: nowrap;
-    font-size: 9px;
-    line-height: 1.1;
-    opacity: 0;
-    max-height: 0;
     overflow: hidden;
-    transition: opacity 0.2s, max-height 0.2s;
+    text-overflow: ellipsis;
+    font-size: 11px;
+    line-height: 1.2;
+    font-weight: 600;
   }
-  .bottom-tab.active span {
-    opacity: 1;
-    max-height: 14px;
-    font-size: 10px;
-    font-weight: 700;
-    color: var(--blue-600);
-  }
-  .bottom-tab.active {
-    background: linear-gradient(to bottom, rgba(37,99,235,0.08), transparent);
-    min-width: 78px;
-  }
+  .bottom-tab.active span { font-weight: 700; }
   .bottom-tab.active::before {
     content: '';
     position: absolute;
     top: 0;
-    inset-inline: 18%;
-    height: 3px;
+    inset-inline: 28%;
+    height: 2px;
     background: var(--blue-600);
   }
+
+  /* ── Top bar on a phone (E2): search, bell and the avatar only. Theme and
+     push move into the avatar menu; News and "Needs you today" into More. ── */
+  .topnav-phone-hide { display: none !important; }
+  .topnav-avatar,
+  .topnav-avatar-placeholder { width: 40px; height: 40px; }
+  .topnav-logo { min-width: 40px; min-height: 40px; }
+  .topnav-logo-icon { width: 40px; height: 40px; }
+  .topnav-user { gap: 8px !important; }
+  .topnav-user .btn-icon { min-width: 40px; min-height: 40px; }
+  /* The avatar menu hangs from a 40px avatar: anchored to it, a 220px panel
+     ran off the screen edge in Arabic (the avatar sits on the other side).
+     On a phone it spans the width under the bar, like the bell's panel. */
+  .user-menu {
+    position: fixed !important;
+    top: calc(var(--topnav-h) + 4px) !important;
+    inset-inline: 12px !important;
+    min-width: 0 !important;
+    max-height: calc(100dvh - var(--topnav-h) - var(--bottomnav-h) - 24px);
+    overflow-y: auto;
+  }
+  /* The chat bubble floats over everything — but not over the More sheet. */
+  .more-open .chat-fab-wrap { display: none !important; }   /* ChatBox sets display inline */
 
   /* ── Chat: lift clear of the bottom nav, fit screen ── */
   .chat-fab-wrap {
     bottom: calc(var(--bottomnav-h) + var(--safe-area-bottom) + 16px);
     inset-inline-end: 16px;
+    transition: transform 0.2s ease, opacity 0.2s ease;
   }
+  .chat-fab { width: 48px !important; height: 48px !important; }
+  /* While the page scrolls the bubble slides off the side so it never sits on
+     the cards being read; it returns once scrolling stops (ChatBox). */
+  .chat-fab-away { transform: translateX(96px); opacity: 0; pointer-events: none; }
+  [dir="rtl"] .chat-fab-away { transform: translateX(-96px); }
   .chat-panel {
     width: min(360px, calc(100vw - 24px)) !important;
     /* Clears the FAB + bottom nav below and the sticky top bar above. */
@@ -1216,4 +1238,79 @@ h1, h2, h3, h4, p, span, div {
    10-12px labels lose their diacritics without a touch more leading. */
 [dir="rtl"] body {
   line-height: 1.65;
+}
+
+/* Group by (GroupByBar): the button strip on wide screens, a native select on
+   a phone — the strip was cut mid-word there with nothing to say it scrolls. */
+.groupby-select { display: none; }
+
+/* ── The four boards on a phone (E2b) ──────────────────────────────────
+   Tasks, Letters, Bids and Projects share one header / tiles / toolbar
+   shape; the component inline styles are the desktop look, so the phone
+   overrides need !important. */
+@media (max-width: 768px) {
+  /* The outer 16px page padding on Bids / Projects doubled the 12px the
+     main area already gives — boards now line up with Tasks and Letters. */
+  .board-page { padding: 4px 0 !important; }
+
+  /* Header: one line — title (and its count) with a square "+" button.
+     The long description is desktop-only. */
+  .board-head {
+    flex-wrap: nowrap !important;
+    gap: 12px !important;
+    margin-bottom: 14px !important;
+  }
+  .board-head > :first-child { min-width: 0; }
+  .board-head-icon, .board-head-desc, .board-head-label { display: none !important; }
+  .board-head-title { font-size: 22px !important; margin-bottom: 0 !important; line-height: 1.25; }
+  .board-head-action {
+    flex-shrink: 0;
+    width: 44px; height: 44px; min-height: 44px;
+    padding: 0 !important;
+    justify-content: center;
+  }
+  .board-head-action svg { width: 22px !important; height: 22px !important; }
+
+  /* Number tiles: two even columns, compact, readable labels; an odd last
+     tile takes the whole row instead of sitting alone on the left. */
+  .board-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 8px !important;
+    margin-bottom: 14px !important;
+  }
+  .board-kpis--three { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .board-kpis > :last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .board-kpis--three > :last-child:nth-child(odd) { grid-column: auto; }
+  .board-kpi { padding: 10px 12px !important; min-width: 0; }
+  .board-kpi-value { font-size: 20px !important; }
+  .board-kpi-label { font-size: 13px !important; }
+  .board-kpi-sub { font-size: 12px !important; }
+
+  /* Toolbar: search, then Group by, then Filters / Export / Analytics as one
+     row of equal buttons instead of a ragged wrap. */
+  .board-toolbar { gap: 10px !important; }
+  .board-toolbar > div:has(> .input) { flex-basis: 100% !important; }
+  .board-toolbar-actions {
+    display: flex !important;
+    width: 100%;
+    gap: 8px;
+  }
+  .board-toolbar-actions > .btn {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding-inline: 8px;
+    white-space: nowrap;
+  }
+
+  .groupby-strip { display: none !important; }
+  .groupby-select { display: block; flex: 1 1 160px; min-width: 0; min-height: 44px; }
+}
+
+/* Deadline calendar (queue D3): the month grid on wide screens, a day-by-day
+   list below 720 px — seven columns do not fit a phone. */
+.cal-agenda { display: none; }
+@media (max-width: 719px) {
+  .cal-grid { display: none !important; }
+  .cal-agenda { display: block; }
 }

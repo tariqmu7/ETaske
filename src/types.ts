@@ -1,4 +1,8 @@
 import { Timestamp } from 'firebase/firestore';
+import type { ChecklistItem } from './lib/checklists';
+import type { ProjectDocument } from './lib/projectDocuments';
+import type { BidDecision } from './lib/decisionMemory';
+import type { OfferApproval } from './lib/offerApproval';
 
 // ─── Users ───────────────────────────────────────────────────────────────────
 
@@ -17,11 +21,9 @@ export interface AppUser {
   phoneNumber?: string;
   userColor?: string;
   lastSeen?: Timestamp;
-  fcmToken?: string;
-  // Telegram notifications (t.me/E_TASK_bot). Set once the user links their
-  // account via the Connect Telegram flow (src/lib/telegram.ts): the bot reports
-  // their chat id through the Apps Script webhook and the client stores it here.
-  telegramChatId?: string;
+  // The push-device token and Telegram chat id are NOT here: this doc is readable
+  // by every signed-in user, so they live in the owner-only
+  // users/{uid}/private/contact (src/lib/userContact.ts, queue task A3b).
 }
 
 // ─── Cross-record links ───────────────────────────────────────────────────────
@@ -205,6 +207,10 @@ export interface Project {
   rev?: string;
   startDate?: string;
   endDate?: string;
+  // Standard steps (queue C3) — see src/lib/checklists.ts
+  checklist?: ChecklistItem[];
+  // Filed letters, offers, minutes… (queue D4) — see src/lib/projectDocuments.ts
+  documents?: ProjectDocument[];
   // Ownership
   userId: string;
   teamId?: string;
@@ -373,6 +379,12 @@ export interface Opportunity {
   lastFollowUpText?: string;
   lastFollowUpAt?: Timestamp;
   nextActionDate?: string;
+  // Standard steps (queue C3) — see src/lib/checklists.ts
+  checklist?: ChecklistItem[];
+  // Decision memory (queue D6) — see src/lib/decisionMemory.ts
+  decisions?: BidDecision[];
+  // Offer sign-off (queue D10) — see src/lib/offerApproval.ts
+  approval?: OfferApproval;
   userId: string;
   teamId?: string;
   createdAt: Timestamp;
@@ -456,9 +468,35 @@ export type NotificationType =
   | 'task_done'
   | 'task_overdue'
   | 'corresponding_overdue'
+  // Late twice over with nobody touching it, raised to the manager
+  // (src/lib/followUp.ts). Both keep the stem the deep link routes on, so an
+  // escalation opens the record it is about.
+  | 'task_escalated'
+  | 'corresponding_escalated'
   // Bid submission deadline approaching / passed. The 'opportunit' stem is what
   // refTypeForNotification keys the deep link on — keep it in any new type here.
-  | 'opportunity_deadline';
+  | 'opportunity_deadline'
+  // The once-a-day briefing (src/lib/dailyBriefing.ts). It is about the day,
+  // not about one record, so the stem must stay clear of the ones
+  // refTypeForNotification routes on ('task', 'correspond', 'opportunit',
+  // 'milestone') — otherwise it would deep-link into a dashboard.
+  | 'daily_briefing'
+  // A contract / sub-contract running out (queue D3, lib/dueAlerts.ts). Same
+  // rule as the briefing: its stem matches none of the routed ones, and its
+  // link opens the Calendar page.
+  | 'contract_expiry'
+  // Handover file (queue D7, HandoverDashboard). A bid handed over keeps the
+  // 'opportunit' stem so it deep-links to the bid; a batch handover or a
+  // contract line is not one record, so it links to the Handover page.
+  | 'opportunity_assigned'
+  | 'handover_received'
+  // Duplicates page (queue D8): "others are bidding to this client too". Keeps
+  // the 'opportunit' stem so it opens the other person's bid.
+  | 'opportunity_client_shared'
+  // Offer sign-off (queue D10): asked → every manager; approved / sent back →
+  // the person who asked. Both keep the 'opportunit' stem so they open the bid.
+  | 'opportunity_approval_requested'
+  | 'opportunity_approval_decided';
 
 export interface AppNotification {
   id: string;

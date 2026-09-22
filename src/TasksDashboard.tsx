@@ -29,7 +29,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { globalSearch, getUserColor, getGoogleDrivePreviewUrl, isOverdue, isDueSoon, openOrCopyPath } from './utils';
+import { globalSearch, getUserColor, isOverdue, isDueSoon, openOrCopyPath } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import { Copy, Check } from 'lucide-react';
@@ -41,6 +41,9 @@ import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
 import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
+import { uploadToDrive } from './lib/driveUpload';
+import { attachmentClick } from './lib/driveFiles';
+import DriveImage from './components/DriveImage';
 
 function handleFirestoreError(e: unknown, op: OperationType, path: string | null) {
   console.error('Firestore:', { e, op, path });
@@ -787,36 +790,6 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     }
   };
 
-  const uploadToGoogleDrive = async (file: File): Promise<string> => {
-    const scriptUrl = import.meta.env.VITE_GOOGLE_SCRIPT_URL;
-    if (!scriptUrl) {
-      throw new Error('Google Script URL not configured.');
-    }
-
-    const base64 = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      mode: 'cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        secret: import.meta.env.VITE_GOOGLE_SCRIPT_SECRET,
-        filename: file.name,
-        mimeType: file.type,
-        base64: base64
-      })
-    });
-
-    if (!response.ok) throw new Error('Network response was not ok');
-    const result = await response.json();
-    if (result.status === 'success') return result.url;
-    throw new Error(result.message || 'Upload failed');
-  };
 
   const handleEditFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -824,7 +797,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     
     setIsUploading(true);
     try {
-      const driveUrl = await uploadToGoogleDrive(file);
+      const driveUrl = await uploadToDrive(file);
       setEditingTask({ ...editingTask, attachedFile: driveUrl, attachedFileName: file.name });
     } catch (err: any) {
       alert(t('Upload failed: {{message}}', { message: err.message }));
@@ -990,17 +963,17 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
   return (
     <div style={{ padding: '4px 0', minHeight: '60vh' }}>
-      <div style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
+      <div className="board-head" style={{ marginBottom: 32, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
+          <h1 className="board-head-title" style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em', marginBottom: 4 }}>
             {t('Tasks')}
           </h1>
-          <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>
+          <p className="board-head-desc" style={{ color: 'var(--text-muted)', fontSize: 14 }}>
             {t('Track your assigned tasks')}
           </p>
         </div>
-        <button className="btn btn-primary" onClick={() => setIsAddingTask(true)}>
-          <Plus className="w-4 h-4" /> {t('Add Task')}
+        <button className="btn btn-primary board-head-action" onClick={() => setIsAddingTask(true)} aria-label={t('Add Task')} title={t('Add Task')}>
+          <Plus className="w-4 h-4" /> <span className="board-head-label">{t('Add Task')}</span>
         </button>
       </div>
 
@@ -1418,8 +1391,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     }}>
                                       {(task.attachedFile.includes('image') || task.attachedFile.includes('google.com')) ? (
                                         <div style={{ position: 'relative', background: 'var(--surface-3)', minHeight: 120, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-                                              <img 
-                                                src={getGoogleDrivePreviewUrl(task.attachedFile)} 
+                                              <DriveImage 
+                                                url={task.attachedFile} 
                                                 alt={t('Attachment')} 
                                                 style={{ width: '100%', maxHeight: 500, objectFit: 'contain', display: 'block', margin: '0 auto' }} 
                                                 onLoad={(e) => (e.target as HTMLImageElement).style.opacity = '1'}
@@ -1442,7 +1415,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                               }}>
                                                 <span style={{ color: '#fff', fontSize: 13, fontWeight: 600 }}>{task.attachedFileName || t('Attached Image')}</span>
                                                 <a 
-                                                  href={task.attachedFile} 
+                                                  href={task.attachedFile} onClick={attachmentClick(task.attachedFile, task.attachedFileName)} 
                                                   target="_blank" 
                                                   rel="noopener noreferrer" 
                                                   className="btn btn-sm"
@@ -1462,7 +1435,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{t('Click to view or download')}</div>
                                           </div>
                                           <a 
-                                            href={task.attachedFile} 
+                                            href={task.attachedFile} onClick={attachmentClick(task.attachedFile, task.attachedFileName)} 
                                             target="_blank" 
                                             rel="noopener noreferrer" 
                                             className="btn btn-ghost btn-sm"

@@ -361,6 +361,7 @@ const NO_COPY_OK = new Set([
   'src/CorrespondenceInbox.tsx', // a 27-line deep-link wrapper
   'src/FollowUpDashboard.tsx',   // the dead stub (superseded by Correspondings)
   'src/ErrorBoundary.tsx',       // checked above — i18n.t, not the hook
+  'src/components/DriveImage.tsx', // an <img> only; its alt text comes in already translated
 ]);
 const noTranslator = [];
 for (const f of fs.readdirSync(path.join(ROOT, 'src'), { recursive: true })) {
@@ -1764,7 +1765,7 @@ const c11Collapsed = await evalJS(`(() => {
     .find(b => /Filters|عوامل التصفية/.test(b.textContent || ''));
   return JSON.stringify({
     primaries,
-    selects: root.querySelectorAll('select').length,
+    selects: root.querySelectorAll('select:not(.groupby-select)').length,  // the phone Group by select (E2b) is not a filter,
     dates: root.querySelectorAll('input[type=date]').length,
     filterLabel: filterBtn ? (filterBtn.textContent || '').trim() : null,
     expanded: filterBtn ? filterBtn.getAttribute('aria-expanded') : null,

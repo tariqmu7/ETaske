@@ -47,6 +47,7 @@ export default function GroupByBar<K extends string>({ value, onChange, options 
         <Layers style={{ width: 13, height: 13 }} /> {t('Group by')}
       </span>
       <div
+        className="groupby-strip"
         role="group"
         aria-label={t('Group by')}
         // `minWidth: 0` is load-bearing — without it a flex item refuses to
@@ -82,6 +83,17 @@ export default function GroupByBar<K extends string>({ value, onChange, options 
           );
         })}
       </div>
+      {/* On a phone the strip above was cut mid-word with nothing to say it
+          scrolls; the same choice as a native select shows the current value
+          and every option (index.css swaps the two below 769 px). */}
+      <select
+        className="groupby-select input"
+        aria-label={t('Group by')}
+        value={value}
+        onChange={e => onChange(e.target.value as K)}
+      >
+        {options.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+      </select>
     </div>
   );
 }

@@ -12,6 +12,18 @@ const GO_MAP: Record<string, AppView> = {
   p: 'projects',
   // "b" for bids — "o" is already Overview.
   b: 'opportunities',
+  // "k" for clients — "c" is already Correspondences.
+  k: 'clients',
+  // "w" for the Waiting board (queue D2).
+  w: 'waiting',
+  // "l" for the calendar (queue D3) — "c" and "d" are taken.
+  l: 'calendar',
+  // "f" for files — the Documents page (queue D4).
+  f: 'documents',
+  // "m" for meetings (queue D5).
+  m: 'meetings',
+  // "r" for reassign — the Handover file (queue D7).
+  r: 'handover',
   a: 'archive',
   n: 'announcements',
   d: 'due-soon',

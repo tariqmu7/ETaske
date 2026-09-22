@@ -2,35 +2,21 @@ import { addDoc, collection, WithFieldValue } from 'firebase/firestore';
 import { db } from './firebase';
 import { AppNotification, AppUser } from '../types';
 import { buildDeepLinkUrl, refTypeForNotification } from './deepLink';
+import { SCRIPT_URL, callScript } from './scriptProxy';
 
-const SCRIPT_URL = import.meta.env.VITE_GOOGLE_SCRIPT_URL as string | undefined;
-const SCRIPT_SECRET = import.meta.env.VITE_GOOGLE_SCRIPT_SECRET as string | undefined;
-
-/** Fire-and-forget push to one FCM token via the Apps Script proxy.
- *  `url` (when given) becomes the notification's click-through target. */
-async function pushToToken(token: string, title: string, body: string, url?: string): Promise<void> {
-  if (!SCRIPT_URL || !token) return;
+/** Fire-and-forget push + Telegram DM to one PERSON via the Apps Script proxy.
+ *  The app names the uid; the script looks up their device token and chat id
+ *  (owner-only, users/{uid}/private/contact — queue task A3b) and sends to
+ *  whichever they have. `url` (when given) is the click-through target and the
+ *  "Open in ETaske" link. `replyHint` adds the "reply done / delay to Sunday"
+ *  line — the bot reads such a reply back and updates the record
+ *  (google-apps-script.js → REPLY-TO-UPDATE). */
+async function pushToUser(
+  toUid: string, title: string, body: string, url?: string, replyHint?: boolean,
+): Promise<void> {
+  if (!SCRIPT_URL || !toUid) return;
   try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'fcm', secret: SCRIPT_SECRET, token, title, body, url }),
-    });
-  } catch {
-    // Non-critical — in-app notification already written
-  }
-}
-
-/** Fire-and-forget Telegram DM to one chat id via the Apps Script proxy.
- *  `url` (when given) is rendered as an "Open in ETaske" link under the body. */
-export async function pushTelegram(chatId: string, title: string, body: string, url?: string): Promise<void> {
-  if (!SCRIPT_URL || !chatId) return;
-  try {
-    await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'telegram', secret: SCRIPT_SECRET, chatId, title, body, url }),
-    });
+    await callScript({ action: 'notify', toUid, title, body, url, replyHint });
   } catch {
     // Non-critical — in-app notification already written
   }
@@ -38,30 +24,31 @@ export async function pushTelegram(chatId: string, title: string, body: string, 
 
 /**
  * Ask the proxy whether a pending Telegram link code has been claimed yet (the
- * user tapped Start in the bot). Returns the chat id once linked, else null.
+ * user tapped Start in the bot). True once linked — by then the script has
+ * saved the chat id on the caller's private contact doc.
  */
-export async function checkTelegramLink(code: string): Promise<string | null> {
-  if (!SCRIPT_URL) return null;
+export async function checkTelegramLink(code: string): Promise<boolean> {
+  if (!SCRIPT_URL) return false;
   try {
-    const res = await fetch(SCRIPT_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ action: 'checkLink', secret: SCRIPT_SECRET, code }),
-    });
-    const data = (await res.json()) as { chatId?: string | null };
-    return data.chatId ?? null;
+    const data = await callScript<{ linked?: boolean }>({ action: 'checkLink', code });
+    return data.linked === true;
   } catch {
-    return null;
+    return false;
   }
 }
 
 /**
- * Write a notification doc to Firestore and send a push to the recipient
- * if they have an FCM token in the projectUsers list.
+ * Write a notification doc to Firestore and push it (device + Telegram) to the
+ * recipient, when they are in the projectUsers list.
+ *
+ * `urlOverride` is for notifications that are not about a single record — the
+ * daily briefing points at "Needs you today", not at a row on a board — and
+ * wins over the deep link derived from relatedId below.
  */
 export async function createNotification(
   data: WithFieldValue<Omit<AppNotification, 'id'>>,
   projectUsers: AppUser[],
+  urlOverride?: string,
 ): Promise<void> {
   await addDoc(collection(db, 'notifications'), data);
 
@@ -74,15 +61,21 @@ export async function createNotification(
   // push is actionable instead of just dropping the user on the dashboard.
   const relatedId = data.relatedId as string | undefined;
   const refType = refTypeForNotification(data.type as string);
-  const url = relatedId && refType ? buildDeepLinkUrl(refType, relatedId) : undefined;
+  const url = urlOverride ?? (relatedId && refType ? buildDeepLinkUrl(refType, relatedId) : undefined);
 
-  if (recipient?.fcmToken) {
-    pushToToken(recipient.fcmToken, title, message, url);
-  }
-  if (recipient?.telegramChatId) {
-    pushTelegram(recipient.telegramChatId, title, message, url);
+  if (recipient) {
+    // Only the "this is late / due" nudges invite a reply. Any task or
+    // correspondence message can still be answered — the hint is just noise
+    // on the rest.
+    const replyHint = !!url && !urlOverride && REPLYABLE_TYPES.has(data.type as string);
+    pushToUser(recipient.id, title, message, url, replyHint);
   }
 }
+
+// Reminders the Telegram bot invites a "done" / "delay to Sunday" reply on.
+const REPLYABLE_TYPES = new Set<string>([
+  'task_overdue', 'corresponding_overdue', 'task_escalated', 'corresponding_escalated',
+]);
 
 /**
  * Fan a notification out to every approved Manager/Admin so the management side
@@ -128,8 +121,5 @@ export function pushAnnouncement(
   if (!SCRIPT_URL) return;
   const title = `إعلان من ${authorName}`;
   const body = text.slice(0, 200);
-  for (const user of targetUsers) {
-    if (user.fcmToken) pushToToken(user.fcmToken, title, body);
-    if (user.telegramChatId) pushTelegram(user.telegramChatId, title, body);
-  }
+  for (const user of targetUsers) pushToUser(user.id, title, body);
 }

@@ -17,6 +17,7 @@ import { DeepLinkRef } from './deepLink';
 import { taskDetails, corrDetails, opportunityDetails } from './notifyDetails';
 import { AppUser, Opportunity } from '../types';
 import { isOverdue, isDueSoon, daysUntil } from '../utils';
+import { contractBucket, contractAlertText, type DeadlineEvent } from './deadlineCalendar';
 
 type Bucket = 'overdue' | 'soon';
 
@@ -279,5 +280,100 @@ export async function runBidDeadlineAlerts(
       relatedId: o.id,
       createdAt: serverTimestamp(),
     }, projectUsers);
+  }
+}
+
+// ── Contract expiries (queue D3) ─────────────────────────────────────────────
+//
+// A contract that runs out with nobody noticing is work carried on without a
+// contract. The countdown is long (60 days) so each step fires ONCE per
+// contract per end date — not daily like the bid buckets above, which would be
+// two months of noise. That needs a ledger that outlives the day, so contracts
+// keep their own localStorage key rather than the daily-pruned one above.
+// Contracts have no owner uid (`inCharge` is free text), so the caller runs
+// this for managers/admins only.
+
+const CONTRACT_LEDGER_PREFIX = 'etaske:contractalert:';
+const MAX_CONTRACTS_PER_RUN = 3;
+const MAX_CONTRACTS_PER_DAY = 8;
+const CONTRACT_COUNT_KEY = '__count';
+// Entries older than this are dropped: every bucket is inside -30..60 days of
+// the end date, so a 120-day-old stamp can never block a live alert.
+const CONTRACT_LEDGER_KEEP_DAYS = 120;
+
+function readContractLedger(uid: string): Ledger {
+  try {
+    return JSON.parse(localStorage.getItem(CONTRACT_LEDGER_PREFIX + uid) || '{}') as Ledger;
+  } catch {
+    return {};
+  }
+}
+
+function writeContractLedger(uid: string, ledger: Ledger): void {
+  const cutoff = new Date(Date.now() - CONTRACT_LEDGER_KEEP_DAYS * 86_400_000).toISOString().slice(0, 10);
+  const pruned: Ledger = {};
+  for (const [k, v] of Object.entries(ledger)) if (v.slice(0, 10) >= cutoff) pruned[k] = v;
+  try {
+    localStorage.setItem(CONTRACT_LEDGER_PREFIX + uid, JSON.stringify(pruned));
+  } catch {
+    // Storage full / disabled — worst case the step fires again.
+  }
+}
+
+/**
+ * Raise contract / sub-contract expiry alerts for `recipientId` (a manager).
+ * `events` are the calendar's contract rows (lib/deadlineCalendar.ts →
+ * buildDeadlines, group 'contract'); only those on the watch are considered.
+ * The alert opens the Calendar page, where the "Running out" box lists them.
+ */
+export async function runContractExpiryAlerts(
+  recipientId: string,
+  projectUsers: AppUser[],
+  events: DeadlineEvent[],
+  fmtDay: (isoDay: string) => string,
+): Promise<void> {
+  const ledger = readContractLedger(recipientId);
+  const stamp = today();
+  const [countDate, countValue] = (ledger[CONTRACT_COUNT_KEY] ?? '').split(':');
+  let dailyTotal = countDate === stamp ? Number(countValue) || 0 : 0;
+
+  // Nearest end first, so a small budget is spent on what runs out soonest.
+  const watched = events
+    .filter(e => e.group === 'contract' && e.watch)
+    .sort((a, b) => Math.abs(a.daysLeft) - Math.abs(b.daysLeft));
+
+  const batch: DeadlineEvent[] = [];
+  for (const e of watched) {
+    if (batch.length >= MAX_CONTRACTS_PER_RUN || dailyTotal >= MAX_CONTRACTS_PER_DAY) break;
+    const bucket = contractBucket(e.daysLeft);
+    if (!bucket) continue;
+    // The end date is in the key: an extension moves it and re-arms the countdown.
+    const key = `${e.key}:${e.date}:${bucket}`;
+    if (ledger[key]) continue;
+    ledger[key] = stamp;
+    dailyTotal += 1;
+    batch.push(e);
+  }
+  if (!batch.length) return;
+
+  ledger[CONTRACT_COUNT_KEY] = `${stamp}:${dailyTotal}`;
+  writeContractLedger(recipientId, ledger);
+
+  const url = typeof window === 'undefined' ? undefined
+    : `${window.location.origin}${window.location.pathname}#/calendar`;
+
+  for (const e of batch) {
+    const { title, message } = contractAlertText(e, fmtDay);
+    await createNotification({
+      // 'contract' matches none of refTypeForNotification's stems, so the bell
+      // opens the Calendar (link below) rather than a board.
+      type: 'contract_expiry',
+      title,
+      message,
+      forUserId: recipientId,
+      read: false,
+      link: '#calendar',
+      createdAt: serverTimestamp(),
+    }, projectUsers, url);
   }
 }
