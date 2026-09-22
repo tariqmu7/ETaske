@@ -20,7 +20,7 @@ import {
   LinkSource, mirrorRecordEvent, newlyLinked, recordLinksPatch,
 } from './lib/recordLinks';
 import { getNextSerialNumber } from './lib/counters';
-import { consumePending, subscribeOpen } from './lib/deepLink';
+import { consumePending, subscribeOpen, requestOpen } from './lib/deepLink';
 import { consumeCreateIntent, subscribeCreate, type CorrespondingPrefill } from './lib/createIntent';
 import {
   Plus, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
@@ -2198,6 +2198,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     onClick={() => {
                       const t = tasks.find(t => t.correspondingId === selectedCorrForDetails.id || t.id === selectedCorrForDetails.convertedToTaskId);
                       if (t) {
+                        // Open THIS task on the Tasks board, not just the board.
+                        requestOpen({ type: 'task', id: t.id, label: t.taskName, serial: t.serialNumber });
                         setSelectedCorrForDetails(null);
                         onNavigate('tasks');
                       }
