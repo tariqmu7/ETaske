@@ -1314,3 +1314,108 @@ h1, h2, h3, h4, p, span, div {
   .cal-grid { display: none !important; }
   .cal-agenda { display: block; }
 }
+
+/* ─── Home: section grid + floating tools ─────────── */
+/* All sections: four groups side by side on a wide screen; on a phone each
+   group's pages sit two to a row so the grid stays short. */
+.home-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 20px;
+}
+.home-section-items { display: flex; flex-direction: column; }
+.home-section-btn {
+  display: flex; align-items: center; gap: 8px;
+  width: 100%; min-height: 40px; padding: 8px;
+  background: none; border: 1px solid transparent;
+  cursor: pointer; font-family: inherit; font-size: 14px;
+  color: var(--text-primary); text-align: start;
+}
+.home-section-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-section-btn:hover { background: var(--surface-2); border-color: var(--border); }
+.home-section-btn:focus-visible { outline: 2px solid var(--accent, var(--blue-600)); outline-offset: 1px; }
+
+/* The two tool buttons ride the side of the screen, half-way down. */
+.home-tools-rail {
+  position: fixed;
+  top: 50%;
+  inset-inline-end: 0;
+  transform: translateY(-50%);
+  display: flex; flex-direction: column; gap: 8px;
+  z-index: 900;          /* under the chat bubble (1000) and every modal */
+}
+/* With a panel open the rail rises over the dimmed page, so the other box
+   is still one click away. */
+.home-tools-rail.has-open { z-index: 1350; }
+.home-tool-btn {
+  width: 48px; height: 48px;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--blue-600); color: #fff;
+  border: none; cursor: pointer;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.25);
+  transition: width .15s ease, background .15s ease;
+}
+.home-tool-btn:hover, .home-tool-btn.is-open { width: 56px; background: var(--blue-700, var(--blue-600)); }
+.home-tool-btn:focus-visible { outline: 2px solid #fff; outline-offset: -4px; }
+
+.home-tool-backdrop {
+  position: fixed; inset: 0; z-index: 1300;
+  background: rgba(15,23,42,0.35);
+}
+/* A side panel on a wide screen… */
+.home-tool-panel {
+  position: fixed;
+  top: calc(var(--topnav-h) + 12px);
+  inset-inline-end: 64px;
+  width: min(560px, calc(100vw - 88px));
+  max-height: calc(100dvh - var(--topnav-h) - 24px);
+  overflow-y: auto;
+  padding: 10px 14px 4px;
+  background: var(--surface);
+  border: 1px solid var(--border-md, var(--border));
+  box-shadow: 0 16px 48px rgba(15,23,42,0.28);
+  z-index: 1400;         /* under the create-task panel (1500) it opens */
+}
+.home-tool-panel[hidden] { display: none; }
+/* The boxes bring their own card; inside the panel the panel is the card. */
+.home-tool-panel > .card {
+  border: none !important; padding: 0 !important; margin-bottom: 12px !important;
+  box-shadow: none !important; background: transparent !important;
+}
+.home-tool-close {
+  width: 32px; height: 32px;
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 1px solid var(--border); cursor: pointer;
+  color: var(--text-muted);
+}
+.home-tool-close:hover { color: var(--text-primary); background: var(--surface-2); }
+
+/* …a bottom sheet on a phone, with the buttons lower down the side so they
+   sit under the thumb and clear of the briefing text. */
+@media (max-width: 768px) {
+  .home-sections { grid-template-columns: 1fr; gap: 12px; }
+  .home-section-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; }
+  .home-section-btn {
+    min-height: 44px; font-size: 13px;
+    background: var(--surface-2); border-color: var(--border);
+  }
+  /* Two to a row is narrow: let a long name wrap rather than cut it off. */
+  .home-section-label { white-space: normal; line-height: 1.25; overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto; }
+  .home-section-btn { padding: 6px; gap: 6px; }
+  [data-sections].card { padding: 12px !important; }
+  .home-tools-rail {
+    top: auto; transform: none;
+    bottom: calc(var(--bottomnav-h) + var(--safe-area-bottom) + 84px);   /* above the chat bubble */
+  }
+  .home-tool-btn { width: 44px; height: 44px; }
+  .home-tool-btn:hover, .home-tool-btn.is-open { width: 48px; }
+  .home-tool-panel {
+    top: auto; bottom: 0; inset-inline: 0;
+    width: auto;
+    max-height: 85dvh;
+    padding: 8px 14px calc(12px + var(--safe-area-bottom));
+    border-inline: none; border-bottom: none;
+  }
+  .more-open .home-tools-rail { display: none; }
+  .home-section-btn .phone-hide { display: none; }
+}

@@ -27,6 +27,8 @@ export type Tone = 'alert' | 'warn' | 'info';
 /** The record a sentence names as its example ("longest: TK000012 …"). */
 export interface LeadRecord {
   label: string;
+  /** The exact record a click on the name opens (queue H2); absent = no link. */
+  open?: { type: 'task' | 'corresponding' | 'opportunity' | 'project'; id: string };
   serial?: string;
   /** Whole days from today; negative = late. */
   days?: number;
@@ -72,7 +74,10 @@ const real = (rows: any[]) => rows.filter(r => r && r.id !== '--stats--');
 const byUrgency = (a: BriefItem, b: BriefItem) => (daysUntil(a.due) ?? 9999) - (daysUntil(b.due) ?? 9999);
 
 const leadOf = (item: BriefItem | undefined): LeadRecord | undefined =>
-  item ? { label: item.label, serial: item.serial, days: daysUntil(item.due) ?? undefined, owner: item.ownerName } : undefined;
+  item ? {
+    label: item.label, serial: item.serial, days: daysUntil(item.due) ?? undefined, owner: item.ownerName,
+    open: { type: item.kind, id: item.id },
+  } : undefined;
 
 function topPersonOf(items: BriefItem[], userNames: Record<string, string>) {
   const counts = new Map<string, number>();
@@ -133,7 +138,10 @@ export function buildHomeBriefing(input: BriefingInput): BriefLine[] {
       const oldest = waiting[0];
       lines.push({
         key: 'signoff', count: waiting.length, tone: 'warn', view: 'opportunities',
-        lead: { label: oldest.title, serial: oldest.serial, days: -oldest.ageDays, owner: oldest.requestedByName },
+        lead: {
+          label: oldest.title, serial: oldest.serial, days: -oldest.ageDays, owner: oldest.requestedByName,
+          open: { type: 'opportunity', id: oldest.id },
+        },
       });
     }
   }
@@ -168,7 +176,11 @@ export function buildHomeBriefing(input: BriefingInput): BriefLine[] {
       const e = ending[0];
       lines.push({
         key: 'contracts', count: ending.length, tone: 'info', view: 'calendar',
-        lead: { label: e.context ? `${e.context} — ${e.title}` : e.title, serial: e.serial, days: e.daysLeft },
+        lead: {
+          label: e.context ? `${e.context} — ${e.title}` : e.title, serial: e.serial, days: e.daysLeft,
+          // A contract has no page of its own — its project does.
+          open: e.open ? { type: e.open.type, id: e.open.id } : undefined,
+        },
       });
     }
   }

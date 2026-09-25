@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   BarChart3, MailOpen, CheckSquare, FolderKanban, Archive, Megaphone, Mail, Users,
   AlertCircle, ArrowRight, Clock, Target, Hourglass, CalendarDays, Users2, Handshake,
-  Building2, FolderOpen, Files, FileText, ChevronDown, CheckCircle2, LayoutGrid,
+  Building2, FolderOpen, Files, FileText, CheckCircle2, LayoutGrid, Sparkles,
+  MessageCircleQuestion, X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot } from 'firebase/firestore';
@@ -47,19 +48,26 @@ const TONE_COLOR: Record<BriefLine['tone'], string> = {
   info: 'var(--blue-600)',
 };
 
-// "All sections" stays open or closed per browser — a convenience, not state.
-const SECTIONS_KEY = 'etaske.home.sections.open.v1';
-const readSectionsOpen = () => { try { return localStorage.getItem(SECTIONS_KEY) === '1'; } catch { return false; } };
+type HomeTool = 'capture' | 'ask';
+
+/** The board that opens each kind of record (the deep link picks it up there). */
+const VIEW_FOR_TYPE: Record<NonNullable<LeadRecord['open']>['type'], AppView> = {
+  task: 'tasks', corresponding: 'correspondences', opportunity: 'opportunities', project: 'projects',
+};
 
 /**
  * Home (queue task E1) — a briefing, not a menu.
  *
- * The page opens with a few sentences built from the live records
- * (lib/homeBriefing.ts): what is late, what is due today, which tenders close
- * this week, which e-mails wait for a reply, and — for a manager — what waits
- * on them. Each sentence opens the one page that deals with it. The section
- * tiles that used to fill the page now sit one level down, behind "All
- * sections"; the top menu still reaches every one of them.
+ * The page opens on "All sections" — every page this person can reach, always
+ * open, so choosing where to go is one tap — and then the briefing: a few
+ * sentences built from the live records (lib/homeBriefing.ts) about what is
+ * late, due today, closing this week, waiting for a reply, and — for a manager
+ * — what waits on them. Each sentence opens the one page that deals with it.
+ *
+ * "Add anything" (QuickCapture) and "Ask ETaske" (AskBox) are not on the page
+ * itself: two buttons float on the side of the screen and open them in a
+ * panel (a bottom sheet on a phone). Both stay mounted once opened, so a
+ * half-typed sentence survives closing the panel.
  */
 export default function HomeDashboard({ user, appUser, projectUsers, onNavigate, dueSoonCount, announcementCount, navCounts }: Props) {
   const { t } = useTranslation();
@@ -186,11 +194,28 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
     return days <= 10 ? t('in {{count}} days', { count: days }) : t('{{count}} days from now', { count: days });
   };
 
-  const record = (r: LeadRecord) => (
-    <span className={fmt.bidiFor(r.label)} style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>
-      {r.serial && <span className="ltr-data">{r.serial}</span>}{r.serial ? ' ' : ''}{r.label}
-    </span>
-  );
+  // A named record opens ITSELF, not just its board (queue H2) — its own
+  // click inside the line, so the rest of the line still opens the page.
+  const openLead = (r: LeadRecord) => {
+    if (!r.open) return;
+    requestOpen({ type: r.open.type, id: r.open.id, label: r.label, serial: r.serial });
+    onNavigate(VIEW_FOR_TYPE[r.open.type]);
+  };
+
+  const record = (r: LeadRecord) => {
+    const text = <>{r.serial && <span className="ltr-data">{r.serial}</span>}{r.serial ? ' ' : ''}{r.label}</>;
+    if (!r.open) return <span className={fmt.bidiFor(r.label)} style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{text}</span>;
+    return (
+      <button
+        type="button"
+        data-lead
+        className={fmt.bidiFor(r.label)}
+        title={t('Open it')}
+        onClick={e => { e.stopPropagation(); openLead(r); }}
+        style={{ color: 'var(--accent)', fontWeight: 600, background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontFamily: 'inherit', fontSize: 'inherit', textAlign: 'start', textDecoration: 'underline', textUnderlineOffset: 2 }}
+      >{text}</button>
+    );
+  };
 
   const detailParts = (l: BriefLine): React.ReactNode[] => {
     const parts: React.ReactNode[] = [];
@@ -214,22 +239,41 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
 
   const today = fmt.date(new Date(), { weekday: 'long', day: 'numeric', month: 'long' });
 
-  // ── Everything else, one level down ────────────────────────────────────────
-  const [sectionsOpen, setSectionsOpen] = useState(readSectionsOpen);
-  const toggleSections = () => {
-    const next = !sectionsOpen;
-    setSectionsOpen(next);
-    try { localStorage.setItem(SECTIONS_KEY, next ? '1' : '0'); } catch { /* per-browser only */ }
+  // ── The floating tools ─────────────────────────────────────────────────────
+  const [tool, setTool] = useState<HomeTool | null>(null);
+  // Mounted on first open and kept, so a draft survives closing the panel.
+  const [mounted, setMounted] = useState<Record<HomeTool, boolean>>({ capture: false, ask: false });
+  const openTool = (k: HomeTool) => {
+    setMounted(m => ({ ...m, [k]: true }));
+    setTool(cur => (cur === k ? null : k));
   };
+  useEffect(() => {
+    if (!tool) return;
+    // Put the cursor in the box, as the page used to on a click into it.
+    const id = tool === 'capture' ? 'quick-capture' : 'ask-box';
+    const timer = window.setTimeout(() => (document.getElementById(id) as HTMLElement | null)?.focus(), 60);
+    const onKey = (e: KeyboardEvent) => {
+      // The boxes use a first Escape to clear their text; the next one closes.
+      if (e.key === 'Escape' && !e.defaultPrevented) setTool(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => { window.clearTimeout(timer); window.removeEventListener('keydown', onKey); };
+  }, [tool]);
 
-  type Section = { id: AppView; label: string; icon: React.ReactNode; badge?: number; show: boolean };
+  const tools: { key: HomeTool; label: string; icon: React.ReactNode }[] = [
+    { key: 'capture', label: t('Add anything'), icon: <Sparkles className="w-5 h-5" /> },
+    { key: 'ask', label: t('Ask ETaske'), icon: <MessageCircleQuestion className="w-5 h-5" /> },
+  ];
+
+  // `short` is the phone name (two tiles to a row), as the bottom bar says it.
+  type Section = { id: AppView; label: string; short?: string; icon: React.ReactNode; badge?: number; show: boolean };
   // Same four groups, same role gating as the top menu (settled rule 11).
   const groups: { key: string; label: string; items: Section[] }[] = [
     {
       key: 'work', label: t('Work'), items: [
         { id: 'due-soon', label: t('Needs you today'), icon: <AlertCircle className="w-4 h-4" />, badge: dueSoonCount, show: true },
         { id: 'tasks', label: t('Tasks'), icon: <CheckSquare className="w-4 h-4" />, badge: navCounts.myActiveTasks, show: true },
-        { id: 'correspondences', label: t('Correspondences'), icon: <MailOpen className="w-4 h-4" />, badge: isManagerOrAdmin ? navCounts.corrNeedsReview : navCounts.corrUnread, show: true },
+        { id: 'correspondences', label: t('Correspondences'), short: t('Letters'), icon: <MailOpen className="w-4 h-4" />, badge: isManagerOrAdmin ? navCounts.corrNeedsReview : navCounts.corrUnread, show: true },
         { id: 'waiting', label: t('Waiting'), icon: <Hourglass className="w-4 h-4" />, show: true },
         { id: 'calendar', label: t('Calendar'), icon: <CalendarDays className="w-4 h-4" />, show: true },
         { id: 'meetings', label: t('Meetings'), icon: <Users2 className="w-4 h-4" />, show: true },
@@ -266,7 +310,7 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
     if (r.kind === 'task') { requestOpen({ type: 'task', id: r.id, label: r.label, serial: r.serial }); onNavigate('tasks'); }
     else if (r.kind === 'corresponding') { requestOpen({ type: 'corresponding', id: r.id, label: r.label, serial: r.serial }); onNavigate('correspondences'); }
     else if (r.kind === 'opportunity') { requestOpen({ type: 'opportunity', id: r.id, label: r.label, serial: r.serial }); onNavigate('opportunities'); }
-    else onNavigate('projects');
+    else { requestOpen({ type: 'project', id: r.id, label: r.label, serial: r.serial }); onNavigate('projects'); }
   };
 
   const sectionHeading: React.CSSProperties = { fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)', margin: 0 };
@@ -282,6 +326,42 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 6 }}>{today}</p>
       </div>
+
+      {/* All sections — every page this person can reach, always open, so the
+          first thing on Home is where to go. Same groups and role gating as
+          the top menu (settled rule 11). */}
+      <section data-sections aria-labelledby="home-sections-h" className="card" style={{ background: 'var(--surface)', padding: '14px 18px', marginBottom: 20 }}>
+        <h2 id="home-sections-h" style={{ ...sectionHeading, display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+          <LayoutGrid className="w-4 h-4" />{t('All sections')}
+        </h2>
+        <div className="home-sections">
+          {groups.map(g => (
+            <div key={g.key} data-group={g.key}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>{g.label}</div>
+              <div className="home-section-items">
+                {g.items.map(s => (
+                  <button
+                    key={s.id}
+                    data-section={s.id}
+                    className="home-section-btn"
+                    onClick={() => onNavigate(s.id)}
+                  >
+                    <span style={{ color: 'var(--blue-600)', display: 'flex', flexShrink: 0 }}>{s.icon}</span>
+                    {s.short
+                      ? <><span className="home-section-label phone-hide">{s.label}</span><span className="home-section-label phone-only">{s.short}</span></>
+                      : <span className="home-section-label">{s.label}</span>}
+                    {!!s.badge && (
+                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 7px', flexShrink: 0 }}>
+                        {s.badge > 99 ? '99+' : s.badge}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
 
       {/* The briefing — sentences, each one a door to the page that handles it */}
       <section className="card" data-briefing aria-labelledby="home-briefing-h" style={{ background: 'var(--surface)', padding: '16px 18px', marginBottom: 20 }}>
@@ -300,15 +380,19 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
             {lines.map((l, i) => {
               const parts = detailParts(l);
               return (
-                <li key={l.key} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
-                  <button
-                    data-line={l.key}
+                <li key={l.key} data-line={l.key} style={{ borderTop: i ? '1px solid var(--border)' : 'none' }}>
+                  {/* The whole row opens the page (a click bubbles up from the
+                      headline button, which is there for the keyboard); the
+                      record named in the detail opens that one record. */}
+                  <div
                     onClick={() => onNavigate(l.view)}
-                    style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', padding: '12px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}
+                    style={{ display: 'flex', alignItems: 'flex-start', gap: 12, width: '100%', padding: '12px 0', cursor: 'pointer', textAlign: 'start' }}
                   >
                     <span aria-hidden style={{ width: 8, height: 8, borderRadius: 999, background: TONE_COLOR[l.tone], marginTop: 8, flexShrink: 0 }} />
                     <span style={{ flex: 1, minWidth: 0 }}>
-                      <span data-headline style={{ display: 'block', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{headline(l)}</span>
+                      <button type="button" data-line-go style={{ display: 'block', width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', textAlign: 'start' }}>
+                        <span data-headline style={{ display: 'block', fontSize: 16, fontWeight: 700, color: 'var(--text-primary)', lineHeight: 1.4 }}>{headline(l)}</span>
+                      </button>
                       {parts.length > 0 && (
                         <span data-detail style={{ display: 'block', fontSize: 13, color: 'var(--text-muted)', marginTop: 3, lineHeight: 1.5, overflowWrap: 'anywhere' }}>
                           {parts.map((p, j) => <React.Fragment key={j}>{j > 0 && <span aria-hidden> · </span>}{p}</React.Fragment>)}
@@ -316,21 +400,13 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
                       )}
                     </span>
                     <ArrowRight className="w-4 h-4" style={{ color: 'var(--text-muted)', marginTop: 5, flexShrink: 0 }} />
-                  </button>
+                  </div>
                 </li>
               );
             })}
           </ul>
         )}
       </section>
-
-      {/* One-box capture (queue C1) — the default way to add work: paste an
-          e-mail or write a sentence, confirm the proposal in the normal form. */}
-      <QuickCapture user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={onNavigate} />
-
-      {/* Ask-it questions (queue D11) — "what did we send NNPC in July?"
-          answered from the records the reader can already see. */}
-      <AskBox user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={onNavigate} />
 
       {/* First-run guidance — the three steps work takes here. Hidden for
           anyone who has already opened a record, and dismissible for good. */}
@@ -362,43 +438,48 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
         </div>
       )}
 
-      {/* All sections — the old tile grid, now one level down */}
-      <div data-sections>
-        <button
-          onClick={toggleSections}
-          aria-expanded={sectionsOpen}
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 0', background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', color: 'var(--text-muted)' }}
-        >
-          <LayoutGrid className="w-4 h-4" />
-          <span style={sectionHeading}>{t('All sections')}</span>
-          <ChevronDown className="w-4 h-4" style={{ transform: sectionsOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
-        </button>
-        {sectionsOpen && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginTop: 10 }}>
-            {groups.map(g => (
-              <div key={g.key}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6 }}>{g.label}</div>
-                {g.items.map(s => (
-                  <button
-                    key={s.id}
-                    data-section={s.id}
-                    onClick={() => onNavigate(s.id)}
-                    style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '8px 8px', minHeight: 40, background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, color: 'var(--text-primary)', textAlign: 'start' }}
-                  >
-                    <span style={{ color: 'var(--text-muted)', display: 'flex' }}>{s.icon}</span>
-                    <span style={{ flex: 1 }}>{s.label}</span>
-                    {!!s.badge && (
-                      <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-secondary)', background: 'var(--surface-2)', border: '1px solid var(--border)', padding: '1px 7px' }}>
-                        {s.badge > 99 ? '99+' : s.badge}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-        )}
+      {/* The floating tools — "Add anything" (queue C1: paste an e-mail or
+          write a sentence, confirm it in the normal form) and "Ask ETaske"
+          (queue D11: questions answered from the records the reader can
+          already see). Two buttons on the side of the screen, each opening a
+          panel; nothing sits in the page flow. */}
+      <div className={`home-tools-rail${tool ? ' has-open' : ''}`} data-home-tools>
+        {tools.map(k => (
+          <button
+            key={k.key}
+            data-home-tool-btn={k.key}
+            className={`home-tool-btn${tool === k.key ? ' is-open' : ''}`}
+            onClick={() => openTool(k.key)}
+            aria-expanded={tool === k.key}
+            aria-controls={`home-tool-${k.key}`}
+            aria-label={k.label}
+            title={k.label}
+          >
+            {k.icon}
+          </button>
+        ))}
       </div>
+      {tool && <div className="home-tool-backdrop" onClick={() => setTool(null)} aria-hidden />}
+      {tools.map(k => mounted[k.key] && (
+        <div
+          key={k.key}
+          id={`home-tool-${k.key}`}
+          data-home-tool={k.key}
+          className="home-tool-panel"
+          role="dialog"
+          aria-label={k.label}
+          hidden={tool !== k.key}
+        >
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 4 }}>
+            <button className="home-tool-close" onClick={() => setTool(null)} aria-label={t('Close')} title={t('Close')}>
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          {k.key === 'capture'
+            ? <QuickCapture user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={onNavigate} />
+            : <AskBox user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={onNavigate} />}
+        </div>
+      ))}
     </div>
   );
 }

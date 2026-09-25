@@ -139,7 +139,7 @@ export default function AskBox({ user, appUser, projectUsers, onNavigate }: Prop
     if (r.kind === 'task') { requestOpen({ type: 'task', ...ref }); onNavigate('tasks'); }
     else if (r.kind === 'corresponding') { requestOpen({ type: 'corresponding', ...ref }); onNavigate('correspondences'); }
     else if (r.kind === 'opportunity') { requestOpen({ type: 'opportunity', ...ref }); onNavigate('opportunities'); }
-    else onNavigate('projects');
+    else { requestOpen({ type: 'project', ...ref }); onNavigate('projects'); }
   };
 
   const understood = query ? understoodChips(query, t, label, fmt) : [];

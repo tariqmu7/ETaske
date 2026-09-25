@@ -64,6 +64,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import './src/i18n';
 import HomeDashboard from './src/HomeDashboard';
+import { subscribeOpen } from './src/lib/deepLink';
 import i18n, { applyLanguageToDocument } from './src/i18n';
 
 const USERS = [
@@ -119,6 +120,8 @@ window.fetch = async (url) => {
 };
 
 window.__nav = [];
+window.__opened = [];
+subscribeOpen(r => { window.__opened.push({ type: r.type, id: r.id }); });
 const root = createRoot(document.getElementById('root'));
 let seq = 0;
 // A fresh key per mount: HomeDashboard keeps its state across re-renders, so a
@@ -351,7 +354,8 @@ const lineKeys = () => evalJS(`JSON.stringify([...document.querySelectorAll('[da
 const headlineOf = k => evalJS(`window.__txt(document.querySelector('[data-line="${k}"] [data-headline]'))`);
 const detailOf = k => evalJS(`(() => { const d = document.querySelector('[data-line="${k}"] [data-detail]'); return d ? window.__txt(d) : ''; })()`);
 const heading = () => evalJS(`window.__txt(document.getElementById('home-briefing-h'))`);
-const LINE = k => `document.querySelector('[data-line="${k}"]')`;
+const LINE = k => `document.querySelector('[data-line="${k}"] [data-line-go]')`;
+const LEAD = k => `document.querySelector('[data-line="${k}"] [data-lead]')`;
 const sectionIds = () => evalJS(`JSON.stringify([...document.querySelectorAll('[data-section]')].map(b => b.dataset.section))`).then(JSON.parse);
 async function mount(uid, bridge = true) {
   await evalJS(`window.__mount(${JSON.stringify(uid)}, ${bridge})`);
@@ -394,23 +398,59 @@ for (const [k, view] of [['late', 'due-soon'], ['today', 'due-soon'], ['signoff'
   const last = await evalJS(`window.__nav.slice(-1)[0]`);
   check(`${k} → ${view}`, last === view, last);
 }
+check('clicking a line itself opens no single record', (await evalJS(`window.__opened.length`)) === 0);
 
-console.log('\n[3] everything else is one level down');
-check('★ the old tile grid is gone (no section buttons on first sight)', (await evalJS(`document.querySelectorAll('[data-section]').length`)) === 0);
-check('the Ask box is still on Home', await evalJS(`!!document.getElementById('ask-box')`));
-check('the briefing sits ABOVE the Ask box', await evalJS(`(() => {
-  const b = document.querySelector('[data-briefing]'); const a = document.getElementById('ask-box');
-  return !!(b && a && (b.compareDocumentPosition(a) & Node.DOCUMENT_POSITION_FOLLOWING));
-})()`));
-await clickEl(`document.querySelector('[data-sections] > button')`, 'All sections');
-await sleep(200);
+console.log('\n[2b] the record a sentence names opens that very record');
+for (const [k, type, id, view] of [
+  ['late', 'task', 't1', 'tasks'], ['today', 'task', 't3', 'tasks'], ['signoff', 'opportunity', 'o2', 'opportunities'],
+  ['bids', 'opportunity', 'o1', 'opportunities'], ['contracts', 'project', 'p1', 'projects'],
+]) {
+  await clickEl(LEAD(k), `the record in the ${k} line`);
+  const opened = await evalJS(`JSON.stringify(window.__opened.slice(-1)[0] || null)`).then(JSON.parse);
+  const last = await evalJS(`window.__nav.slice(-1)[0]`);
+  check(`★ ${k}: opens ${type} ${id} on ${view}`, opened && opened.type === type && opened.id === id && last === view, JSON.stringify(opened) + ' ' + last);
+}
+check('one click = one navigation (the row underneath does not fire too)', await evalJS(`(() => { const n = window.__nav.length; document.querySelector('[data-line="late"] [data-lead]').click(); return window.__nav.length === n + 1 && window.__nav[n] === 'tasks'; })()`));
+check('mail and review lines name no record, so offer no record link', !(await evalJS(`!!document.querySelector('[data-line="mail"] [data-lead], [data-line="review"] [data-lead]')`)));
+check('the record link is a real button (keyboard reachable)', await evalJS(`document.querySelector('[data-line="late"] [data-lead]').tagName === 'BUTTON'`));
+
+console.log('\n[3] All sections first and always open; the two boxes float on the side');
 let sections = await sectionIds();
-check('opening "All sections" lists every section a manager can reach', ['due-soon', 'tasks', 'waiting', 'calendar', 'opportunities', 'clients', 'overview', 'weekly-report', 'archive'].every(s => sections.includes(s)), sections.join(','));
+check('★ All sections is open on first sight (no toggle)', sections.length > 0 && !(await evalJS(`!!document.querySelector('[data-sections] button[aria-expanded]')`)));
+check('★ All sections sits ABOVE the briefing', await evalJS(`(() => {
+  const s = document.querySelector('[data-sections]'); const b = document.querySelector('[data-briefing]');
+  return !!(s && b && (s.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING));
+})()`));
+check('it lists every section a manager can reach', ['due-soon', 'tasks', 'waiting', 'calendar', 'opportunities', 'clients', 'overview', 'weekly-report', 'archive'].every(s => sections.includes(s)), sections.join(','));
 check('a manager (not Admin) does not see Users', !sections.includes('admin'));
-await shot('2-sections');
+check('★ neither box is in the page before its button is used', !(await evalJS(`!!document.getElementById('ask-box') || !!document.getElementById('quick-capture')`)));
+check('two floating buttons, fixed to the side', await evalJS(`(() => {
+  const r = document.querySelector('[data-home-tools]'); if (!r) return false;
+  const bs = r.querySelectorAll('[data-home-tool-btn]'); const box = r.getBoundingClientRect();
+  return getComputedStyle(r).position === 'fixed' && bs.length === 2 && Math.abs(box.right - document.documentElement.clientWidth) < 2;
+})()`));
+await clickEl(`document.querySelector('[data-home-tool-btn="ask"]')`, 'the Ask button');
+await sleep(250);
+check('★ the Ask button opens the Ask box in a panel', await evalJS(`window.__vis(document.getElementById('ask-box'))`));
+check('the cursor is put in the box', await evalJS(`!!document.activeElement && document.activeElement.id === 'ask-box'`));
+await shot('2-ask-panel');
+await clickEl(`document.querySelector('[data-home-tool-btn="capture"]')`, 'the Add button');
+await sleep(250);
+check('the Add button swaps to the Add anything box', await evalJS(`window.__vis(document.getElementById('quick-capture')) && !window.__vis(document.getElementById('ask-box'))`));
+await evalJS(`(() => { const el = document.getElementById('quick-capture'); const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(el, 'Call Petrojet tomorrow'); el.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+await sleep(150);
+await clickEl(`document.querySelector('.home-tool-backdrop')`, 'outside the panel');
+await sleep(150);
+check('a click outside closes the panel', !(await evalJS(`window.__vis(document.getElementById('quick-capture'))`)));
+await clickEl(`document.querySelector('[data-home-tool-btn="capture"]')`, 'the Add button again');
+await sleep(250);
+check('★ what was typed is still there after closing and reopening', (await evalJS(`document.getElementById('quick-capture').value`)) === 'Call Petrojet tomorrow');
+await evalJS(`document.getElementById('quick-capture').blur(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+await sleep(150);
+check('Escape closes the panel', !(await evalJS(`window.__vis(document.getElementById('quick-capture'))`)));
+await shot('3-sections');
 await clickEl(`document.querySelector('[data-section="clients"]')`, 'Clients');
 check('a section opens its page', (await evalJS(`window.__nav.slice(-1)[0]`)) === 'clients');
-check('the open/closed choice is remembered in this browser', (await evalJS(`localStorage.getItem('etaske.home.sections.open.v1')`)) === '1');
 
 console.log('\n[4] an employee sees only their own work');
 await mount('u-ahmed');
@@ -422,11 +462,8 @@ check('★ "2 of your items are late" (Mona’s letter is not his)', (await head
 check('no "most with" for an employee', !(await detailOf('late')).includes('most with'));
 check('"1 of your tenders closes this week"', (await headlineOf('bids')) === '1 of your tenders closes this week', await headlineOf('bids'));
 sections = await sectionIds();
-check('"All sections" stayed open after the remount (remembered)', sections.length > 0);
+check('All sections is open for an employee too', sections.length > 0);
 check('an employee gets no Insights sections', !sections.some(s => ['overview', 'bid-analytics', 'weekly-report', 'duplicates'].includes(s)), sections.join(','));
-await clickEl(`document.querySelector('[data-sections] > button')`, 'All sections (close)');
-await sleep(150);
-check('closing it hides the list again', (await evalJS(`document.querySelectorAll('[data-section]').length`)) === 0);
 
 console.log('\n[5] nothing to say → one calm sentence');
 await mount('u-new', false);
@@ -463,6 +500,22 @@ await evalJS(`window.__setLang('en')`);
 await sleep(300);
 await shot('6-en-mobile');
 check('no horizontal overflow at 390px (LTR)', (await evalJS(`document.documentElement.scrollWidth - document.documentElement.clientWidth`)) <= 0);
+check('the section buttons are thumb-sized (44px+) and two to a row', await evalJS(`(() => {
+  const bs = [...document.querySelectorAll('[data-group="work"] [data-section]')];
+  return bs.length > 2 && bs.every(b => b.getBoundingClientRect().height >= 44) && bs[0].getBoundingClientRect().top === bs[1].getBoundingClientRect().top
+    && Math.abs(bs[0].getBoundingClientRect().width - bs[1].getBoundingClientRect().width) < 2;
+})()`));
+await evalJS(`window.scrollTo(0, 0)`);
+await clickEl(`document.querySelector('[data-home-tool-btn="ask"]')`, 'the Ask button (phone)');
+await sleep(300);
+check('★ on a phone the box opens as a full-width bottom sheet', await evalJS(`(() => {
+  const p = document.querySelector('[data-home-tool="ask"]'); const r = p.getBoundingClientRect();
+  return !p.hidden && r.left <= 1 && r.right >= document.documentElement.clientWidth - 1 && r.bottom >= innerHeight - 2 && r.top > 0;
+})()`));
+await shot('7-en-mobile-panel');
+await clickEl(`document.querySelector('[data-home-tool="ask"] .home-tool-close')`, 'Close (phone)');
+await sleep(150);
+check('the X closes it', await evalJS(`document.querySelector('[data-home-tool="ask"]').hidden`));
 await send('Emulation.clearDeviceMetricsOverride');
 
 check('nothing was written to Firestore', (await evalJS(`window.__store.get('tasks').size`)) === 5
