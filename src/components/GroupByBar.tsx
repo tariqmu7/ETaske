@@ -27,10 +27,37 @@ interface Props<K extends string> {
   value: K;
   onChange: (next: K) => void;
   options: readonly GroupByOption<K>[];
+  /**
+   * One small dropdown instead of the button strip, on every screen size — for
+   * a board whose toolbar must stay on ONE row (Tasks, queue T3). The strip
+   * alone is ~450 px and pushed Filters onto a second line.
+   */
+  compact?: boolean;
 }
 
-export default function GroupByBar<K extends string>({ value, onChange, options }: Props<K>) {
+export default function GroupByBar<K extends string>({ value, onChange, options, compact }: Props<K>) {
   const { t } = useTranslation();
+
+  if (compact) {
+    // A <label>, not a <div>: the phone rule `.board-toolbar > div:has(> .input)`
+    // stretches the search box to a full row and must not catch this one.
+    return (
+      <label className="groupby-compact" title={t('Group by')}>
+        <span className="groupby-compact-caption">{t('Group by')}</span>
+        <span className="groupby-compact-field">
+          <Layers className="groupby-compact-icon" aria-hidden />
+          <select
+            className="input"
+            aria-label={t('Group by')}
+            value={value}
+            onChange={e => onChange(e.target.value as K)}
+          >
+            {options.map(opt => <option key={opt.key} value={opt.key}>{opt.label}</option>)}
+          </select>
+        </span>
+      </label>
+    );
+  }
 
   return (
     // `flexWrap` + the scrollable strip below are what keep a 390px phone from

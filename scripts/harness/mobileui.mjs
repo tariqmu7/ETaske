@@ -121,6 +121,10 @@ T('t1', { taskName: 'Prepare the AGIBA tank-cleaning commercial offer and price 
 T('t2', { taskName: 'Site survey report for Meleiha', dueDate: dayOffset(-3), assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'TK000302' });
 T('t3', { taskName: 'إعداد تقرير الزيارة الميدانية لمحطة المعالجة', dueDate: dayOffset(0), assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'TK000303' });
 T('t4', { taskName: 'Collect subcontractor quotations', dueDate: dayOffset(5), status: 'To Do', assignedToId: 'u-mona', assignedTo: 'Mona Fathy', serialNumber: 'TK000304' });
+// Tidy Tasks T2: a FINISHED task (due yesterday — the old date-only order put it
+// first) and a later open one, both the manager's and both newest-created.
+T('t5', { taskName: 'Send the signed NDA to Petrojet', dueDate: dayOffset(-1), status: 'Done', assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'TK000305', createdAt: ts(-1) });
+T('t6', { taskName: 'Book the kick-off meeting room', dueDate: dayOffset(10), status: 'Pending', priority: 'Low', assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'TK000306', createdAt: ts(-1) });
 
 const C = (id, extra) => __seed('correspondences', id, { body: 'Please confirm the scope and the schedule.', sentFrom: 'NNPC', dateReceived: dayOffset(-10), createdAt: ts(-10), updatedAt: ts(-1), userId: 'u-mgr', teamId: 'T1', ...extra });
 C('l1', { subject: 'Clarification on the scope of the turnaround maintenance works', deadline: dayOffset(-1), status: 'Assigned', assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'CR000401' });
@@ -251,6 +255,288 @@ async function shot(name, full = true) {
   fs.writeFileSync(path.join(ROOT, `scripts/harness/mobileui-${name}.png`), Buffer.from(s.data, 'base64'));
 }
 
+// Tidy Tasks T1: the Tasks board's SLIM ROWS. Groups by status, opens the
+// "In Progress" card (the manager's two late seeded tasks, one with an Arabic title)
+// and measures the rows themselves: short, no sideways scroll, ONE status
+// label per row whose menu holds the three states, Arabic title set rtl.
+async function slimRows(tag, phone) {
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/tasks'`); await sleep(700);
+  await evalJS(`(async () => {
+    const sel = document.querySelector('.groupby-select, .groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'status'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const cards = [...document.querySelectorAll('button[data-group-card]')];
+    const card = cards.find(c => /In Progress|قيد التنفيذ/.test(c.textContent)) || cards[0];
+    card.click();
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  })()`);
+  const r = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const rows = [...document.querySelectorAll('.card[id^="task-"]')].filter(window.__vis);
+    const h = rows.map(c => Math.round(c.querySelector('[data-task-row]').getBoundingClientRect().height));
+    const labels = rows.map(c => c.querySelectorAll('button[data-status]').length);
+    const pills = rows.map(c => [...c.querySelectorAll('button')].filter(b => /^(Pending|In Progress|Done|قيد الانتظار|قيد التنفيذ|منجز)$/.test(b.textContent.trim())).length);
+    const ar = [...document.querySelectorAll('.task-row-title')].find(t => /[؀-ۿ]/.test(t.textContent));
+    const edges = rows.map(c => { const s = getComputedStyle(c); return [s.borderLeftWidth, s.borderRightWidth]; });
+    const rowOver = rows.filter(c => c.scrollWidth > c.clientWidth + 1).length;
+    return { n: rows.length, h, labels, pills, arDir: ar ? getComputedStyle(ar).direction : null, edges, rowOver, over: window.__overflow() };
+  })())`));
+  const why = JSON.stringify(r);
+  const maxH = phone ? 110 : 52;  // one line on a desktop, two on a phone
+  check(`${tag}: the opened group shows slim task rows`, r.n >= 2, why);
+  check(`${tag}: every row is short (≤ ${maxH}px — was a ~150px card)`, r.h.every(x => x <= maxH), why);
+  check(`${tag}: ONE status label per row, no three-pill control`, r.labels.every(x => x === 1) && r.pills.every(x => x === 1), why);
+  check(`${tag}: an Arabic title is laid out right-to-left`, r.arDir === 'rtl', why);
+  check(`${tag}: no sideways scroll on the page or inside a row`, r.over <= 0 && r.rowOver === 0, why);
+  // No per-person colour stripe: a side is the 1px hairline or a 3px late edge.
+  check(`${tag}: no per-person 4px colour stripe`, r.edges.every(e => e.every(w => w === '1px' || w === '3px')), why);
+  // The status menu opens with all three states and closes again.
+  const menu = JSON.parse(await evalJS(`(async () => {
+    const b = document.querySelector('.card[id^="task-"] button[data-status]');
+    b.click(); await new Promise(r => setTimeout(r, 250));
+    const opts = [...document.querySelectorAll('[role="menu"] [data-status-option]')].map(o => o.getAttribute('data-status-option'));
+    const m = document.querySelector('[role="menu"]'); const mr = m && m.getBoundingClientRect();
+    const inView = !!mr && mr.left >= 0 && mr.right <= innerWidth + 1;
+    b.click(); await new Promise(r => setTimeout(r, 250));
+    return JSON.stringify({ opts, inView, closed: !document.querySelector('[role="menu"] [data-status-option]') });
+  })()`));
+  check(`${tag}: the status label opens a menu of the three states, on screen`,
+    menu.opts.join('|') === 'Pending|In Progress|Done' && menu.inView, JSON.stringify(menu));
+  // Opening a row brings back what the slim row leaves out — moved, not deleted.
+  const open = JSON.parse(await evalJS(`(async () => {
+    const row = document.querySelector('.card[id^="task-"] [data-task-row]');
+    const card = row.closest('.card');
+    const before = card.innerText.length;
+    row.querySelector('h3').click(); await new Promise(r => setTimeout(r, 500));
+    const txt = card.innerText;
+    const res = { before, after: txt.length, desc: txt.includes('Coordinate with the client'), details: !!card.querySelector('.task-row-details'), ms: !!card.querySelector('.task-expand') };
+    row.querySelector('h3').click(); await new Promise(r => setTimeout(r, 500));
+    res.closed = !card.querySelector('.task-row-details');
+    return JSON.stringify(res);
+  })()`));
+  check(`${tag}: opening a row shows the description, details and milestones; closing hides them`,
+    open.desc && open.details && open.ms && open.after > open.before && open.closed, JSON.stringify(open));
+}
+
+// Tidy Tasks T2: urgent first, finished folded. Groups by assignee and opens
+// the manager's card: late → due today → later, the finished task hidden behind
+// "Show 1 finished"; the choice is remembered, and hiding again works.
+async function finishedFold(tag) {
+  await evalJS(`(() => { try { localStorage.removeItem('etaske:tasks:showDone'); } catch {} })()`);
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/tasks'`); await sleep(700);
+  const order = async () => JSON.parse(await evalJS(`JSON.stringify([...document.querySelectorAll('.card[id^="task-"]')].filter(window.__vis).map(c => c.id.replace('task-', '')))`));
+  await evalJS(`(async () => {
+    const sel = document.querySelector('.groupby-select, .groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'user'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const card = [...document.querySelectorAll('button[data-group-card]')].find(c => /Tariq Salama/.test(c.textContent));
+    card.click();
+    await new Promise(r => setTimeout(r, 500));
+  })()`);
+  const before = await order();
+  const btn = JSON.parse(await evalJS(`JSON.stringify((() => { const b = document.querySelector('[data-finished-toggle]'); return b ? { mode: b.getAttribute('data-finished-toggle'), text: b.textContent.trim() } : null; })())`));
+  check(`${tag}: open work in urgent order (late → today → later), finished hidden`, before.join('|') === 't2|t3|t6', JSON.stringify(before));
+  check(`${tag}: a "Show 1 finished" button sits under the list`, !!btn && btn.mode === 'show' && /1/.test(btn.text), JSON.stringify(btn));
+  await evalJS(`document.querySelector('[data-finished-toggle]').click()`); await sleep(400);
+  const shown = await order();
+  const saved = await evalJS(`(() => { try { return localStorage.getItem('etaske:tasks:showDone'); } catch { return 'x'; } })()`);
+  check(`${tag}: "Show" brings the finished task back, LAST`, shown.join('|') === 't2|t3|t6|t5', JSON.stringify(shown));
+  check(`${tag}: the choice is remembered`, saved === '1', saved);
+  await evalJS(`document.querySelector('[data-finished-toggle="hide"]').click()`); await sleep(400);
+  const hidden = await order();
+  check(`${tag}: "Hide finished" folds it again`, hidden.join('|') === 't2|t3|t6'
+    && (await evalJS(`localStorage.getItem('etaske:tasks:showDone')`)) === '0', JSON.stringify(hidden));
+  check(`${tag}: no sideways scroll`, (await evalJS(`window.__overflow()`)) <= 0);
+}
+
+// Tidy Tasks T3: the toolbar on ONE row (desktop) / TWO rows (phone), the
+// group tabs that replaced "← All Groups", and the open · late · finished
+// counts on the section header. Groups by status and opens "In Progress"
+// (the manager's two open tasks, one of them late).
+async function toolbarTabs(tag, phone) {
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/tasks'`); await sleep(700);
+  await evalJS(`window.scrollTo(0, 0)`);
+  const bar = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const tb = document.querySelector('.board-toolbar--compact');
+    if (!tb) return null;
+    const parts = {
+      scope: tb.querySelector('.board-toolbar-scope'),
+      search: tb.querySelector('input[type=text]'),
+      group: tb.querySelector('.groupby-compact select'),
+      filters: tb.querySelector('.board-toolbar-actions > .btn'),
+    };
+    const box = {};
+    for (const [k, el] of Object.entries(parts)) {
+      const r = el && window.__vis(el) ? el.getBoundingClientRect() : null;
+      box[k] = r ? { top: Math.round(r.top), mid: Math.round(r.top + r.height / 2), h: Math.round(r.height), w: Math.round(r.width) } : null;
+    }
+    const mids = Object.values(box).filter(Boolean).map(b => b.mid).sort((a, b) => a - b);
+    let rows = mids.length ? 1 : 0;
+    for (let i = 1; i < mids.length; i++) if (mids[i] - mids[i - 1] > 12) rows++;
+    const f = parts.filters;
+    return { box, rows, h: Math.round(tb.getBoundingClientRect().height), fname: f && (f.getAttribute('aria-label') || f.textContent.trim()),
+      cut: [...tb.querySelectorAll('button, select')].filter(window.__vis).filter(el => el.scrollWidth > el.clientWidth + 1).map(el => el.textContent.trim().slice(0, 15)) };
+  })())`));
+  const why = JSON.stringify(bar);
+  check(`${tag}: the Tasks toolbar is the compact one`, !!bar, why);
+  if (!bar) return;
+  check(`${tag}: scope, search, Group by and Filters are all shown`, Object.values(bar.box).every(Boolean), why);
+  if (phone) {
+    check(`${tag}: toolbar is TWO rows on a phone (search, then scope · group · Filters)`, bar.rows === 2
+      && bar.box.search.top < bar.box.scope.top && Math.abs(bar.box.scope.mid - bar.box.group.mid) <= 6 && Math.abs(bar.box.group.mid - bar.box.filters.mid) <= 6, why);
+    check(`${tag}: Group by and Filters are 40 px targets; Filters keeps a spoken name`, bar.box.group.h >= 40 && bar.box.filters.h >= 40 && bar.box.filters.w >= 40 && !!bar.fname, why);
+  } else {
+    check(`${tag}: toolbar is ONE row on a desktop`, bar.rows === 1 && bar.h <= 60, why);
+  }
+  check(`${tag}: no toolbar control is cut`, bar.cut.length === 0, why);
+
+  // Open "In Progress" from the grid → the tab strip replaces the back box.
+  await evalJS(`(async () => {
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'status'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const cards = [...document.querySelectorAll('button[data-group-card]')];
+    (cards.find(c => /In Progress|قيد التنفيذ/.test(c.textContent)) || cards[0]).click();
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  })()`);
+  const tabs = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const nav = document.querySelector('[data-group-tabs]');
+    const all = [...document.querySelectorAll('[data-group-tab]')];
+    const cur = document.querySelector('[data-group-tab][aria-current="true"]');
+    const back = [...document.querySelectorAll('button')].filter(window.__vis).filter(b => !b.closest('[data-group-tabs]') && /^(All Groups|كل المجموعات)$/.test(b.textContent.trim())).length;
+    const counts = document.querySelector('[data-group-counts]');
+    const late = counts && counts.querySelector('.group-head-chip--late');
+    return { nav: !!nav && window.__vis(nav), n: all.length, first: all[0] && all[0].getAttribute('data-group-tab'),
+      cur: cur && cur.getAttribute('data-group-tab'), curText: cur && cur.textContent.trim(), curLate: !!cur && !!cur.querySelector('.group-tab-late'),
+      back, counts: counts && counts.innerText.replace(/\\s+/g, ' ').trim(), late: late && late.textContent.trim(),
+      navH: nav && Math.round(nav.getBoundingClientRect().height), over: window.__overflow() };
+  })())`));
+  const w2 = JSON.stringify(tabs);
+  check(`${tag}: an opened group shows the tab strip, not a lone back box`, tabs.nav && tabs.back === 0, w2);
+  check(`${tag}: first tab = all groups, then one tab per group`, tabs.first === '' && tabs.n >= 3, w2);
+  check(`${tag}: the open group's tab is marked, with its size and a red late count`, tabs.cur === 'In Progress' && /2/.test(tabs.curText) && tabs.curLate, w2);
+  check(`${tag}: the section header counts open · late`, !!tabs.counts && /2/.test(tabs.counts) && !!tabs.late && /1/.test(tabs.late), w2);
+  check(`${tag}: the tab strip is one slim row, no sideways page scroll`, tabs.navH <= 48 && tabs.over <= 0, w2);
+  await shot(`${phone ? (/ar /.test(tag) ? 'ar' : 'en') : 'desktop'}-task-toolbar`, false);
+
+  // Another tab switches group straight away; the first tab goes back to the grid.
+  const hop = JSON.parse(await evalJS(`(async () => {
+    const other = [...document.querySelectorAll('[data-group-tab]')].find(b => b.getAttribute('data-group-tab') && b.getAttribute('aria-current') !== 'true');
+    const key = other.getAttribute('data-group-tab');
+    other.click(); await new Promise(r => setTimeout(r, 400));
+    const cur = document.querySelector('[data-group-tab][aria-current="true"]');
+    const switched = !!cur && cur.getAttribute('data-group-tab') === key;
+    document.querySelector('[data-group-tab=""]').click(); await new Promise(r => setTimeout(r, 400));
+    return JSON.stringify({ key, switched, grid: document.querySelectorAll('button[data-group-card]').length, tabsGone: !document.querySelector('[data-group-tabs]') });
+  })()`));
+  check(`${tag}: another tab opens that group; "All groups" returns to the grid`, hop.switched && hop.grid >= 2 && hop.tabsGone, JSON.stringify(hop));
+}
+
+// Tidy Tasks T4: the List / Board switch and the Board view. "My Tasks" holds
+// the manager's t6 (Pending), t2 + t3 (In Progress, t2 late) and t5 (Done).
+// Moves a card by the "Move to" menu AND by a real drag-and-drop, opens a
+// card (→ the list with that task open), and puts everything back.
+async function boardView(tag, phone) {
+  await evalJS(`(() => { try { localStorage.removeItem('etaske:tasks:layout'); } catch {} })()`);
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/tasks'`); await sleep(700);
+  await evalJS(`window.scrollTo(0, 0)`);
+  const cols = () => evalJS(`JSON.stringify(Object.fromEntries([...document.querySelectorAll('[data-board-col]')].map(c => [c.getAttribute('data-board-col'), [...c.querySelectorAll('[data-board-card]')].map(k => k.getAttribute('data-board-card'))])))`).then(JSON.parse);
+
+  const sw = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const s = document.querySelector('.board-toolbar--compact .task-layout-switch');
+    const b = s && [...s.querySelectorAll('button[data-layout]')];
+    // Phone: the switch rides on the search row; desktop: the one toolbar row.
+    const scope = ${phone} ? document.querySelector('.board-toolbar--compact input[type=text]') : document.querySelector('.board-toolbar-scope');
+    const r = s && s.getBoundingClientRect(), rs = scope && scope.getBoundingClientRect();
+    return s && { vis: window.__vis(s), keys: b.map(x => x.getAttribute('data-layout')), pressed: b.filter(x => x.getAttribute('aria-pressed') === 'true').map(x => x.getAttribute('data-layout')),
+      named: b.every(x => (x.textContent.trim() || x.title).length > 0), h: Math.round(Math.min(...b.map(x => x.getBoundingClientRect().height))),
+      sameRow: !!rs && Math.abs((r.top + r.height / 2) - (rs.top + rs.height / 2)) <= 8 };
+  })())`));
+  const w0 = JSON.stringify(sw);
+  check(`${tag}: a List / Board switch sits in the toolbar, List by default`, !!sw && sw.vis && sw.keys.join() === 'list,board' && sw.pressed.join() === 'list' && sw.named, w0);
+  check(`${tag}: the switch shares the ${phone ? 'search' : 'toolbar'} row and is a ${phone ? 36 : 30} px target`, !!sw && sw.sameRow && sw.h >= (phone ? 36 : 30), w0);
+
+  await evalJS(`document.querySelector('[data-layout="board"]').click()`); await sleep(500);
+  const b1 = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const board = document.querySelector('[data-task-board]');
+    const cols = [...document.querySelectorAll('[data-board-col]')];
+    const inProg = document.querySelector('[data-board-col="In Progress"]');
+    return { board: !!board && window.__vis(board), cols: cols.map(c => c.getAttribute('data-board-col')),
+      group: !!document.querySelector('.groupby-compact select'), rows: document.querySelectorAll('[data-task-row]').length,
+      saved: localStorage.getItem('etaske:tasks:layout'),
+      counts: cols.map(c => c.querySelector('[data-col-count]').textContent.trim()),
+      late: !!inProg.querySelector('.group-head-chip--late'), lateCard: !!document.querySelector('[data-board-card="t2"][data-late="1"]'),
+      over: window.__overflow(),
+      arTitle: (() => { const e = document.querySelector('[data-board-card="t3"] .task-card-title'); return e && getComputedStyle(e).direction; })() };
+  })())`));
+  const w1 = JSON.stringify(b1);
+  check(`${tag}: Board shows three columns Pending · In Progress · Done, no list rows`, b1.board && b1.cols.join('|') === 'Pending|In Progress|Done' && b1.rows === 0, w1);
+  check(`${tag}: Group by is hidden on the board and the choice is saved`, !b1.group && b1.saved === 'board', w1);
+  const c1 = await cols();
+  check(`${tag}: each task sits in its status column, late first`, JSON.stringify(c1) === JSON.stringify({ Pending: ['t6'], 'In Progress': ['t2', 't3'], Done: ['t5'] }), JSON.stringify(c1));
+  check(`${tag}: column counts, a red late chip and a late edge on the late card`, b1.counts.join() === '1,2,1' && b1.late && b1.lateCard, w1);
+  check(`${tag}: the Arabic title runs right-to-left`, b1.arTitle === 'rtl', w1);
+  check(`${tag}: no sideways page scroll with the board open`, b1.over <= 0, w1);
+  if (phone) {
+    const strip = JSON.parse(await evalJS(`JSON.stringify((() => { const b = document.querySelector('[data-task-board]'); const c = b.querySelector('[data-board-col]');
+      return { scrolls: b.scrollWidth > b.clientWidth, colW: Math.round(c.getBoundingClientRect().width), vw: window.innerWidth }; })())`));
+    check(`${tag}: on a phone the columns scroll sideways inside the board, one near-screen-wide column at a time`, strip.scrolls && strip.colW >= strip.vw * 0.7, JSON.stringify(strip));
+  }
+  await shot(`${phone ? (/^ar /.test(tag) ? 'ar' : 'en') : 'desktop'}-task-board`, false);
+
+  // Move by the menu (keyboard / phone path).
+  await evalJS(`(async () => {
+    document.querySelector('[data-move-for="t6"]').click(); await new Promise(r => setTimeout(r, 200));
+    document.querySelector('[data-move-option="In Progress"]').click(); await new Promise(r => setTimeout(r, 500));
+  })()`);
+  const c2 = await cols();
+  check(`${tag}: "Move to → In Progress" moves the card`, c2['In Progress'].includes('t6') && !c2.Pending.includes('t6'), JSON.stringify(c2));
+
+  // Move by a real drag and drop.
+  await evalJS(`(async () => {
+    const card = document.querySelector('[data-board-card="t6"]');
+    const col = document.querySelector('[data-board-col="Done"]');
+    const dt = new DataTransfer();
+    card.dispatchEvent(new DragEvent('dragstart', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    await new Promise(r => setTimeout(r, 60));
+    col.dispatchEvent(new DragEvent('dragenter', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    col.dispatchEvent(new DragEvent('dragover', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    await new Promise(r => setTimeout(r, 60));
+    window.__overSeen = col.classList.contains('is-over');
+    col.dispatchEvent(new DragEvent('drop', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    card.dispatchEvent(new DragEvent('dragend', { bubbles: true, cancelable: true, dataTransfer: dt }));
+    await new Promise(r => setTimeout(r, 500));
+  })()`);
+  const c3 = await cols();
+  check(`${tag}: dragging a card onto Done moves it there (the column lights up while over it)`, c3.Done[0] === 't6' && !c3['In Progress'].includes('t6') && (await evalJS(`window.__overSeen`)), JSON.stringify(c3));
+  // Put it back.
+  await evalJS(`(async () => {
+    document.querySelector('[data-move-for="t6"]').click(); await new Promise(r => setTimeout(r, 200));
+    document.querySelector('[data-move-option="Pending"]').click(); await new Promise(r => setTimeout(r, 500));
+  })()`);
+  const c4 = await cols();
+  check(`${tag}: …and back to Pending`, JSON.stringify(c4) === JSON.stringify(c1), JSON.stringify(c4));
+
+  // Opening a card → the list, that task open; the saved choice stays Board.
+  await evalJS(`document.querySelector('[data-board-card="t3"] .task-card-open').click()`); await sleep(700);
+  const op = JSON.parse(await evalJS(`JSON.stringify({ board: !!document.querySelector('[data-task-board]'),
+    open: !!document.querySelector('#task-t3 .task-row-details'), pressed: document.querySelector('[data-layout][aria-pressed="true"]').getAttribute('data-layout'),
+    saved: localStorage.getItem('etaske:tasks:layout') })`));
+  check(`${tag}: opening a card shows that task open in the list; Board stays the saved choice`, !op.board && op.open && op.pressed === 'list' && op.saved === 'board', JSON.stringify(op));
+
+  await evalJS(`document.querySelector('[data-layout="list"]').click()`); await sleep(300);
+  check(`${tag}: List switches back and is saved`, (await evalJS(`localStorage.getItem('etaske:tasks:layout')`)) === 'list'
+    && !(await evalJS(`!!document.querySelector('[data-task-board]')`)));
+}
+
 // Measures, run inside the page.
 const HELPERS = `
 document.documentElement.style.scrollBehavior = 'auto';   // index.css animates scrolls
@@ -357,7 +643,7 @@ try {
         const acts = [...document.querySelectorAll('.board-toolbar-actions > .btn')].filter(window.__vis);
         const actTops = new Set(acts.map(a => Math.round(a.getBoundingClientRect().top)));
         const actCut = acts.filter(a => a.scrollWidth > a.clientWidth + 1).map(a => a.textContent.trim());
-        const strip = document.querySelector('.groupby-strip'), sel = document.querySelector('.groupby-select');
+        const strip = document.querySelector('.groupby-strip'), sel = document.querySelector('.groupby-select, .groupby-compact select');
         const first = document.querySelector('.card-grid-sm > .card');
         return {
           headH: Math.round(hr.height), oneLine: Math.abs(ar.top - tr.top) < 30 || (ar.top < tr.bottom && ar.bottom > tr.top),
@@ -386,7 +672,7 @@ try {
 
       // Choosing another grouping in the select really regroups the board.
       const regroup = await evalJS(`(async () => {
-        const sel = document.querySelector('.groupby-select');
+        const sel = document.querySelector('.groupby-select, .groupby-compact select');
         const before = [...document.querySelectorAll('.card-grid-sm > .card')].map(c => c.textContent.trim().slice(0, 25)).join('|');
         const next = [...sel.options].find(o => o.value !== sel.value).value;
         const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
@@ -400,6 +686,14 @@ try {
       await evalJS(`window.scrollTo(0, 0)`);
       await shot(`${lang}-board-${view}`, false);
     }
+
+    console.log(`
+[${lang.toUpperCase()}] Tasks slim rows`);
+    await slimRows(`${lang} Tasks rows`, true);
+    await shot(`${lang}-task-rows`, false);
+    await finishedFold(`${lang} Tasks finished`);
+    await toolbarTabs(`${lang} Tasks toolbar`, true);
+    await boardView(`${lang} Tasks board`, true);
 
     // The chat bubble steps aside while the page scrolls, and comes back.
     await evalJS(`location.hash = '/correspondences'`);
@@ -499,15 +793,26 @@ try {
         desc: desc ? window.__vis(desc) : null,
         icon: document.querySelector('.board-head-icon') ? window.__vis(document.querySelector('.board-head-icon')) : null,
         strip: window.__vis(document.querySelector('.groupby-strip')),
-        select: window.__vis(document.querySelector('.groupby-select')),
+        select: window.__vis(document.querySelector('.groupby-select, .groupby-compact select')),
         actions: getComputedStyle(document.querySelector('.board-toolbar-actions')).display,
       };
     })())`));
     check(`desktop ${label}: header keeps its words${d.desc !== null ? ' and description' : ''}${d.icon !== null ? ' and icon' : ''}`,
       d.label && d.desc !== false && d.icon !== false, JSON.stringify(d));
-    check(`desktop ${label}: Group by stays the button strip, toolbar row unchanged`, d.strip && !d.select && d.actions === 'contents', JSON.stringify(d));
+    if (view === 'tasks') {
+      // T3: Tasks carries the compact dropdown so its toolbar holds ONE row.
+      check(`desktop ${label}: Group by is one dropdown, toolbar row unchanged`, !d.strip && d.select && d.actions === 'contents', JSON.stringify(d));
+    } else {
+      check(`desktop ${label}: Group by stays the button strip, toolbar row unchanged`, d.strip && !d.select && d.actions === 'contents', JSON.stringify(d));
+    }
   }
   await shot('desktop-projects', false);
+  await slimRows('desktop Tasks rows', false);
+  await shot('desktop-task-rows', false);
+  await finishedFold('desktop Tasks finished');
+  await toolbarTabs('desktop Tasks toolbar', false);
+  await boardView('desktop Tasks board', false);
+  await shot('desktop-task-finished', false);
 
   check('no uncaught page errors', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,
     (pageErrors.join(' || ') + ' ' + (await evalJS(`window.__errors.join(' || ')`))).slice(0, 500));

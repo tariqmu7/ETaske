@@ -571,7 +571,10 @@ console.log('\n[8] a status move is echoed, and "done" reads as done');
 // progress lands.
 const puBeforeStatus = (await projectUpdates('p1')).length;
 await openGroupHolding('TK000005');
-await clickEl(`window.__one('button', 'In Progress', window.__taskCard('TK000005'))`, 'In Progress');
+// Slim rows (Tidy Tasks T1): ONE status label per row; its menu holds the three states.
+await clickEl(`window.__taskCard('TK000005').querySelector('button[data-status]')`, 'status label (TK000005)');
+await sleep(200);
+await clickEl(`document.querySelector('[role="menu"] button[data-status-option="In Progress"]')`, 'In Progress');
 await sleep(700);
 const puStatus = await projectUpdates('p1');
 check('the status move posted one entry', puStatus.length === puBeforeStatus + 1, String(puStatus.length));
@@ -579,7 +582,10 @@ check('it names the new status', (puStatus[puStatus.length - 1].text || '').incl
 check('the task really moved', (await docOf('tasks', 't-linked')).status === 'In Progress');
 
 await openGroupHolding('TK000005');
-await clickEl(`window.__one('button', 'Done', window.__taskCard('TK000005'))`, 'Done');
+// Slim rows (Tidy Tasks T1): ONE status label per row; its menu holds the three states.
+await clickEl(`window.__taskCard('TK000005').querySelector('button[data-status]')`, 'status label (TK000005)');
+await sleep(200);
+await clickEl(`document.querySelector('[role="menu"] button[data-status-option="Done"]')`, 'Done');
 await sleep(700);
 const puDone = await projectUpdates('p1');
 check('finishing posted its own entry', puDone.length === puStatus.length + 1, String(puDone.length));
@@ -591,7 +597,10 @@ check('the project summary line followed', (await docOf('projects', 'p1')).lastU
 console.log('\n[9] an UNLINKED task moving status writes nothing');
 const allBefore = (await allOf('projectUpdates')).length + (await allOf('opportunityFollowUps')).length;
 await openGroupHolding('TK000006');
-await clickEl(`window.__one('button', 'In Progress', window.__taskCard('TK000006'))`, 'In Progress (unlinked task)');
+// Slim rows (Tidy Tasks T1): ONE status label per row; its menu holds the three states.
+await clickEl(`window.__taskCard('TK000006').querySelector('button[data-status]')`, 'status label (TK000006)');
+await sleep(200);
+await clickEl(`document.querySelector('[role="menu"] button[data-status-option="In Progress"]')`, 'In Progress (unlinked task)');
 await sleep(600);
 check('the unlinked task moved', (await docOf('tasks', 't-plain')).status === 'In Progress');
 check('★ and no history was written anywhere',

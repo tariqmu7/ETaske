@@ -320,6 +320,17 @@ const en = {
   "Private": "Private",
   "Click to advance status": "Click to advance status",
   "Task actions": "Task actions",
+  "Change status": "Change status",
+  "Show {{count}} finished": "Show {{count}} finished",
+  "Hide finished": "Hide finished",
+  "Task layout": "Task layout",
+  "List": "List",
+  "Board": "Board",
+  "Show as a list": "Show as a list",
+  "Show as a board": "Show as a board",
+  "Move to": "Move to",
+  "Drop a task here": "Drop a task here",
+  "No tasks here": "No tasks here",
   "Private — only you can see this task": "Private — only you can see this task",
   "Creation date": "Creation date",
   "Click to filter by this tag": "Click to filter by this tag",
@@ -2084,6 +2095,9 @@ const en = {
   "Reading your records…": "Reading your records…",
   "Nothing is late and nothing is due today.": "Nothing is late and nothing is due today.",
   "All sections": "All sections",
+  "Open: {{count}}": "Open: {{count}}",
+  "Late: {{count}}": "Late: {{count}}",
+  "Finished: {{count}}": "Finished: {{count}}",
 
 } as const;
 

@@ -35,11 +35,16 @@ interface Props {
   onClearFilters?: () => void;
   /** Ghost actions that are not the board's primary action (Export, Analytics…). */
   secondary?: React.ReactNode;
+  /**
+   * Keep the whole toolbar on one row on a desktop and on two on a phone
+   * (search, then scope · group · Filters). Pair it with `GroupByBar compact`.
+   */
+  compact?: boolean;
 }
 
 export default function BoardToolbar({
   search, onSearch, searchPlaceholder,
-  scope, groupBy, filters, activeFilterCount = 0, onClearFilters, secondary,
+  scope, groupBy, filters, activeFilterCount = 0, onClearFilters, secondary, compact,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -48,7 +53,7 @@ export default function BoardToolbar({
   return (
     <div style={{ marginBottom: 20 }}>
       <div
-        className="board-toolbar"
+        className={compact ? 'board-toolbar board-toolbar--compact' : 'board-toolbar'}
         style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', maxWidth: '100%', minWidth: 0 }}
       >
         {scope}
@@ -82,11 +87,12 @@ export default function BoardToolbar({
             className="btn btn-ghost"
             onClick={() => setOpen(v => !v)}
             aria-expanded={open}
+            aria-label={t('Filters')}
             title={t('Filters')}
             style={{ flexShrink: 0 }}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            {t('Filters')}
+            <span className="board-toolbar-filters-label">{t('Filters')}</span>
             {activeFilterCount > 0 && (
               <span
                 style={{

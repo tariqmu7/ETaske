@@ -326,6 +326,17 @@ const ar: Record<keyof typeof en, string> = {
   "Private": "خاصة",
   "Click to advance status": "اضغط لتقديم الحالة",
   "Task actions": "إجراءات المهمة",
+  "Change status": "غيّر الحالة",
+  "Show {{count}} finished": "اعرض المهام المنجزة ({{count}})",
+  "Hide finished": "أخفِ المهام المنجزة",
+  "Task layout": "طريقة العرض",
+  "List": "قائمة",
+  "Board": "لوحة",
+  "Show as a list": "اعرض المهام في قائمة",
+  "Show as a board": "اعرض المهام في لوحة أعمدة",
+  "Move to": "انقلها إلى",
+  "Drop a task here": "أفلِت المهمة هنا",
+  "No tasks here": "لا مهام هنا",
   "Private — only you can see this task": "خاصة — لا يرى هذه المهمة غيرك",
   "Creation date": "تاريخ الإنشاء",
   "Click to filter by this tag": "اضغط للتصفية بهذا الوسم",
@@ -2027,6 +2038,9 @@ const ar: Record<keyof typeof en, string> = {
   "Reading your records…": "نقرأ سجلاتك…",
   "Nothing is late and nothing is due today.": "لا تأخير، ولا مواعيد تحلّ اليوم.",
   "All sections": "كل الأقسام",
+  "Open: {{count}}": "مفتوحة: {{count}}",
+  "Late: {{count}}": "متأخرة: {{count}}",
+  "Finished: {{count}}": "منجزة: {{count}}",
 
 };
 

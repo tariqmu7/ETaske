@@ -1617,10 +1617,11 @@ const sideOf = `(() => {
 })()`;
 const rtlSide = JSON.parse(await evalJS(sideOf));
 check('★ the search icon sits on the RIGHT of its box in RTL', rtlSide.iconPastCentre === true, JSON.stringify(rtlSide));
-// The opposite side reads 1px, not 0 — that is .card's own hairline border,
-// which the 4px accent overrides on one side only.
-check('★ the task card accent stripe moves to the right edge in RTL',
-  rtlSide.accentRight === '4px' && rtlSide.accentLeft === '1px', JSON.stringify(rtlSide));
+// Slim rows (Tidy Tasks T1) dropped the per-person 4px stripe: a row keeps
+// .card's 1px hairline, and only a late / due-soon row gets a 3px edge — on
+// the inline START, i.e. the right in RTL. The left must never carry it.
+check('★ the task row attention edge sits on the right in RTL, never the left',
+  rtlSide.accentLeft === '1px' && rtlSide.accentRight === '3px', JSON.stringify(rtlSide));
 
 // ★ Found by LOOKING at the screenshot, not by an assertion: the serial
 // rendered as "TK000001#". The '#' is a bidi-neutral character, so in an RTL
@@ -1663,7 +1664,7 @@ await sleep(250);
 const ltrSide = JSON.parse(await evalJS(sideOf));
 check('non-vacuous: the same icon sits on the LEFT under dir=ltr', ltrSide.iconPastCentre === false, JSON.stringify(ltrSide));
 check('non-vacuous: the same accent stripe is on the left edge under dir=ltr',
-  ltrSide.accentLeft === '4px' && ltrSide.accentRight === '1px', JSON.stringify(ltrSide));
+  ltrSide.accentLeft === '3px' && ltrSide.accentRight === '1px', JSON.stringify(ltrSide));
 await evalJS(`document.documentElement.setAttribute('dir','rtl')`);
 await shot('dash-ar');
 
@@ -1765,12 +1766,12 @@ const c11Collapsed = await evalJS(`(() => {
     .find(b => /Filters|عوامل التصفية/.test(b.textContent || ''));
   return JSON.stringify({
     primaries,
-    selects: root.querySelectorAll('select:not(.groupby-select)').length,  // the phone Group by select (E2b) is not a filter,
+    selects: root.querySelectorAll('select:not(.groupby-select):not(.groupby-compact select)').length,  // the Group by select (phone E2b, compact T3) is not a filter,
     dates: root.querySelectorAll('input[type=date]').length,
     filterLabel: filterBtn ? (filterBtn.textContent || '').trim() : null,
     expanded: filterBtn ? filterBtn.getAttribute('aria-expanded') : null,
     searches: root.querySelectorAll('input[type=text], input.input:not([type=date])').length,
-    groupBy: !!root.querySelector('[role=group]'),
+    groupBy: !!root.querySelector('[role=group], .groupby-compact'),  // strip, or the Tasks dropdown (T3)
     clearAll: [...root.querySelectorAll('button')].some(b => (b.textContent || '').trim() === 'مسح الكل'),
   });
 })()`).then(JSON.parse);
@@ -1857,7 +1858,10 @@ const enumEn = await evalJS(`(() => {
   return JSON.stringify({ btns, opts });
 })()`).then(JSON.parse);
 check('non-vacuous: the same controls read English again under en',
-  enumEn.btns.includes('In Progress') && enumEn.opts.some(o => o.v === 'Done' && o.t === 'Done'),
+  // Slim rows (Tidy Tasks T1): a row shows ONE status label (its own status), so
+  // the seeded Pending tasks paint "Pending" — the other two live in its menu.
+  enumEn.btns.includes('Pending') && !enumEn.btns.includes('قيد الانتظار')
+    && enumEn.opts.some(o => o.v === 'Done' && o.t === 'Done'),
   enumEn.btns.slice(0, 14).join(' | '));
 check('non-vacuous: the option VALUES never changed', enumEn.opts.some(o => o.v === 'In Progress'),
   enumEn.opts.slice(0, 10).map(o => o.v).join(' | '));
@@ -1891,8 +1895,18 @@ const gridCards = () => evalJS(
   `JSON.stringify([...document.querySelectorAll('#root button[data-group-card]')].map(b => (b.innerText || '').trim().replace(/\\s+/g, ' ')))`,
 ).then(JSON.parse);
 const taskRows = () => evalJS(`document.querySelectorAll('#root .card[id^="task-"]').length`);
+// Tasks carries the compact Group by DROPDOWN since Tidy Tasks T3 (one-row
+// toolbar), so the dimension is picked by its option label, not a strip button.
 const pickDim = async (labelAr) => {
-  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  const ok = await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    const opt = sel && [...sel.options].find(o => (o.textContent || '').trim() === ${JSON.stringify(labelAr)});
+    if (!opt) return false;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  if (!ok) throw new Error(`no Group by option ${labelAr}`);
   await sleep(420);
   return gridCards();
 };

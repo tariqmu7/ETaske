@@ -22,10 +22,10 @@ import { getNextSerialNumber } from './lib/counters';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { consumePending, subscribeOpen } from './lib/deepLink';
 import {
-  Plus, CheckSquare, Clock, AlertCircle, X, ChevronDown, ChevronRight, ChevronLeft,
+  Plus, Clock, AlertCircle, X, ChevronDown, ChevronUp, ChevronRight, ChevronLeft,
   Flag, Target, Calendar, Link2, Edit2, Trash2, CheckCircle2,
   TrendingUp, ListTodo, Filter, Layers, Tag, Archive, Paperclip, Download, ExternalLink,
-  Users, ArrowLeft, Lock, Globe, MapPin, Briefcase, ListChecks, User as UserIcon
+  Users, Lock, Globe, MapPin, Briefcase, ListChecks, User as UserIcon, LayoutList, Columns3
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -40,7 +40,10 @@ import LinkedRecordsBlock from './components/LinkedRecordsBlock';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
-import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
+import GroupTabs, { GroupTab } from './components/GroupTabs';
+import TaskBoard from './components/TaskBoard';
+import { buildGroups, UNGROUPED } from './lib/grouping';
+import { byTaskUrgency, foldFinished, localToday } from './lib/taskOrder';
 import { uploadToDrive } from './lib/driveUpload';
 import { attachmentClick } from './lib/driveFiles';
 import DriveImage from './components/DriveImage';
@@ -64,10 +67,6 @@ const taskSource = (task: Task, status?: TaskStatus): LinkSource => ({
 function priorityBadge(p: string) {
   const map: Record<string, string> = { Urgent: 'badge-urgent', High: 'badge-high', Medium: 'badge-medium', Low: 'badge-low' };
   return `badge ${map[p] || 'badge-medium'}`;
-}
-function statusBadge(s: string) {
-  const map: Record<string, string> = { 'In Progress': 'badge-inprogress', Done: 'badge-done', Pending: 'badge-pending', Archived: 'badge-archived' };
-  return `badge ${map[s] || 'badge-pending'}`;
 }
 
 function msBadge(s: MilestoneStatus) {
@@ -96,6 +95,12 @@ const STATUS_ACCENT: Record<string, string> = {
   'In Progress': '#3b82f6',
   Done: '#4ade80',
 };
+
+/** localStorage key for the "show finished tasks" choice (T2). */
+const SHOW_FINISHED_KEY = 'etaske:tasks:showDone';
+
+/** localStorage key for the List / Board choice (T4): 'list' | 'board'. */
+const LAYOUT_KEY = 'etaske:tasks:layout';
 
 /** Avatar glyph for the dimensions that have no person to show a face for. */
 const GROUP_ICON: Partial<Record<TaskGroupBy, LucideIcon>> = {
@@ -159,6 +164,8 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [showAdvancedEdit, setShowAdvancedEdit] = useState(false);
   const [isDragOverEdit, setIsDragOverEdit] = useState(false);
   const [openActionMenu, setOpenActionMenu] = useState<string | null>(null);
+  // The status label's menu on a slim row (one open at a time, like the "···").
+  const [openStatusMenu, setOpenStatusMenu] = useState<string | null>(null);
   // When a milestone is updated on a task whose due date is already
   // alerting (overdue / due soon), prompt the user to keep, extend, or
   // pick a new due date.
@@ -175,7 +182,30 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   const [dateFilter, setDateFilter] = useState('');
   const [isUploading, setIsUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  // Slim rows (T1) are ~50px, so a page holds more of them than the old cards.
+  const itemsPerPage = 30;
+  // Finished tasks fold behind "Show N finished" (Tidy Tasks T2). One choice
+  // for the whole board, remembered per browser.
+  const [showFinished, setShowFinished] = useState<boolean>(() => {
+    try { return localStorage.getItem(SHOW_FINISHED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleShowFinished = () => setShowFinished(prev => {
+    const next = !prev;
+    try { localStorage.setItem(SHOW_FINISHED_KEY, next ? '1' : '0'); } catch { /* private window */ }
+    return next;
+  });
+
+  // List or Board (Tidy Tasks T4), remembered per browser. `chooseLayout` is
+  // the user's own pick and is saved; a deep link switches to the list for
+  // that one visit without overwriting the saved choice.
+  const [layout, setLayout] = useState<'list' | 'board'>(() => {
+    try { return localStorage.getItem(LAYOUT_KEY) === 'board' ? 'board' : 'list'; } catch { return 'list'; }
+  });
+  const chooseLayout = (next: 'list' | 'board') => {
+    setLayout(next);
+    setFocusedTaskId(null);
+    try { localStorage.setItem(LAYOUT_KEY, next); } catch { /* private window */ }
+  };
 
   const isManagerOrAdmin = appUser.role === 'Admin' || appUser.role === 'Manager';
 
@@ -371,15 +401,19 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   // ("3 tasks" on a card holding 40). Pagination moved below, onto whatever
   // list is actually being shown.
   //
-  // Sorted soonest-due-first inside each bucket (undated last; equal dates keep
-  // newest-created-first — the listener already sorts createdAt desc and
-  // `buildGroups` sorts stably).
+  // Urgent first (T2): late → due within 3 days → later → no date, finished
+  // last (see lib/taskOrder.ts). Sorted once here; `buildGroups` keeps the
+  // incoming order inside each bucket, so every list below inherits it.
+  const today = localToday();
+  const ordered = useMemo(
+    () => [...filtered].sort(byTaskUrgency<Task>(today)),
+    [filtered, today],
+  );
   const groupedTasks = useMemo(
-    () => buildGroups(filtered, groupKeyOf, {
+    () => buildGroups(ordered, groupKeyOf, {
       order: groupBy === 'status' ? STATUS_GROUP_ORDER : undefined,
-      sort: byDueDateAsc<Task>(t => t.dueDate),
     }),
-    [filtered, groupKeyOf, groupBy],
+    [ordered, groupKeyOf, groupBy],
   );
 
   // The open bucket, re-resolved from `groupedTasks` every render: a filter (or
@@ -403,7 +437,15 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   // grid entirely — otherwise the shared task is hidden behind a card.
   const showGroupGrid = !focusedTaskId && !activeGroup;
 
-  const listSource = activeGroup ? activeGroup.items : filtered;
+  // Finished work is folded away unless asked for. The task the user has open
+  // (or was sent to by a link) stays, even when it is Done.
+  const fullList = activeGroup ? activeGroup.items : ordered;
+  const fold = useMemo(
+    () => foldFinished(fullList, showFinished, [expandedTask, focusedTaskId]),
+    [fullList, showFinished, expandedTask, focusedTaskId],
+  );
+  const listSource = fold.visible;
+  const finishedInList = useMemo(() => fullList.filter(tk => tk.status === 'Done').length, [fullList]);
 
   const paginatedTasks = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -411,6 +453,11 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
   }, [listSource, currentPage]);
 
   const totalPages = Math.ceil(listSource.length / itemsPerPage);
+
+  // Hiding finished work can leave the pager past its last page.
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   // Header for one bucket. Each dimension gets its own phrasing because a single
   // "{{x}} Tasks" template reads wrong for half of them ("Ahmed Tasks").
@@ -482,13 +529,32 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     };
   }), [groupedTasks, groupBy, projectUsers, label, t]);
 
+  // Per-bucket totals over EVERY filtered task (finished ones too, folded or
+  // not) — what the group tabs and the section headers above the rows report,
+  // so neither shows one page's worth as if it were the whole group.
+  const groupTally = useMemo(() => {
+    const m = new Map<string, { open: number; late: number; done: number }>();
+    for (const g of groupedTasks) {
+      const done = g.items.filter(tk => tk.status === 'Done').length;
+      const late = g.items.filter(tk => tk.status !== 'Done' && isOverdue(tk.dueDate)).length;
+      m.set(g.key, { open: g.items.length - done, late, done });
+    }
+    return m;
+  }, [groupedTasks]);
+
+  const groupTabs = useMemo<GroupTab[]>(() => groupedTasks.map(g => ({
+    key: g.key,
+    label: groupTitle(g),
+    count: g.items.length,
+    late: groupTally.get(g.key)?.late || 0,
+  })), [groupedTasks, groupTally, groupBy, label, t]);
+
   // What the LIST renders. Drilled in = the open bucket, one page of it. Not
   // drilled in = the deep-link case, where the page is re-bucketed as before.
   const renderGroups = useMemo(() => {
     if (activeGroup) return [{ key: activeGroup.key, value: activeGroup.value, items: paginatedTasks }];
     return buildGroups(paginatedTasks, groupKeyOf, {
       order: groupBy === 'status' ? STATUS_GROUP_ORDER : undefined,
-      sort: byDueDateAsc<Task>(t => t.dueDate),
     });
   }, [activeGroup, paginatedTasks, groupKeyOf, groupBy]);
 
@@ -526,11 +592,18 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
     // narrowing the list (and break the page math computed just below).
     setOpenGroup(null);
     setFocusedTaskId(taskId);
+    // The open task lives in the list — the board has no room for its panel.
+    setLayout('list');
 
-    // With all filters cleared + "All Tasks", `filtered` is just the
-    // non-archived tasks in listener order, so its page math is reproducible.
-    const defaultFiltered = tasks.filter(t => t.status !== 'Archived');
-    const idx = defaultFiltered.findIndex(t => t.id === taskId);
+    // With all filters cleared + "All Tasks", the list is every non-archived
+    // task in board order with finished work folded (the target always stays),
+    // so its page math is reproducible here.
+    const defaultList = foldFinished(
+      tasks.filter(t => t.status !== 'Archived').sort(byTaskUrgency<Task>(localToday())),
+      showFinished,
+      [taskId],
+    ).visible;
+    const idx = defaultList.findIndex(t => t.id === taskId);
     skipPageResetRef.current = true;
     setCurrentPage(idx >= 0 ? Math.floor(idx / itemsPerPage) + 1 : 1);
 
@@ -985,7 +1058,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         onSearch={setSearch}
         searchPlaceholder={t('Search tasks…')}
         scope={
-          <div style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4, flexShrink: 0 }}>
+          <div className="board-toolbar-scope" style={{ background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 0, padding: 4, display: 'flex', gap: 4, flexShrink: 0 }}>
             {(['mine', 'all'] as const).map(v => (
               <button
                 key={v}
@@ -1004,7 +1077,29 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
             ))}
           </div>
         }
-        groupBy={<GroupByBar<TaskGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        compact
+        groupBy={
+          <>
+            {/* The board is already split by status, so Group by only means
+                something in the list. */}
+            {layout === 'list' && <GroupByBar<TaskGroupBy> compact value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+            <div className="task-layout-switch" role="group" aria-label={t('Task layout')}>
+              {([['list', LayoutList, t('List')], ['board', Columns3, t('Board')]] as const).map(([key, Icon, text]) => (
+                <button
+                  key={key}
+                  type="button"
+                  data-layout={key}
+                  aria-pressed={layout === key}
+                  title={key === 'list' ? t('Show as a list') : t('Show as a board')}
+                  onClick={() => chooseLayout(key)}
+                >
+                  <Icon style={{ width: 15, height: 15, flexShrink: 0 }} />
+                  <span className="task-layout-label">{text}</span>
+                </button>
+              ))}
+            </div>
+          </>
+        }
         activeFilterCount={
           (categoryFilter !== 'All' ? 1 : 0) + (dateFilter ? 1 : 0) + (statusFilter !== 'All' ? 1 : 0) +
           (deptFilter !== 'All' ? 1 : 0) + (employeeFilter !== 'All' ? 1 : 0) + (subCategoryFilter !== 'All' ? 1 : 0)
@@ -1086,7 +1181,19 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         tasks={tasks}
       />
 
-      {showGroupGrid ? (
+      {layout === 'board' ? (
+        <TaskBoard
+          tasks={ordered}
+          projectUsers={projectUsers}
+          progressOf={taskId => {
+            const ms = getMilestonesForTask(taskId);
+            return { done: ms.filter(m => m.status === 'Done').length, total: ms.length };
+          }}
+          onMove={handleUpdateTaskStatus}
+          onOpen={handleOpenTask}
+          empty={renderEmpty(<Columns3 style={{ width: 28, height: 28 }} />)}
+        />
+      ) : showGroupGrid ? (
         // Grouping IS the grid: one card per bucket, and the list only appears
         // once a card is opened. `groupCards` is built from every filtered task,
         // so the counts on the cards are the real totals, not one page of them.
@@ -1097,24 +1204,34 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
         />
       ) : (
       <>
-      {/* The only way back to the grid — from a drilled-in card, or from the
-          deep link that skipped the grid in the first place. */}
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={() => { setOpenGroup(null); setFocusedTaskId(null); }}
-        style={{ marginBottom: 16 }}
-      >
-        <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
-      </button>
+      {/* Group tabs (T3): the first goes back to the grid — from a drilled-in
+          card, or from the deep link that skipped the grid — and every other
+          group is one tap away, with its size and its late count. */}
+      <GroupTabs
+        tabs={groupTabs}
+        active={activeGroup ? activeGroup.key : null}
+        onSelect={key => { setFocusedTaskId(null); setOpenGroup(key); }}
+      />
       <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {renderGroups.map(group => {
           const catTasks = group.items;
           return (
             <div key={group.key}>
-              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+              <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingInlineStart: 4 }}>
                 <Layers className="w-4 h-4 text-accent" />
                 {groupHeading(group)}
-                <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{catTasks.length}</span>
+                {(() => {
+                  // The whole group's numbers, not this page's: open · late · finished.
+                  const tally = groupTally.get(group.key);
+                  if (!tally) return null;
+                  return (
+                    <span className="group-head-counts" data-group-counts>
+                      <span className="group-head-chip">{t('Open: {{count}}', { count: tally.open })}</span>
+                      {tally.late > 0 && <span className="group-head-chip group-head-chip--late">{t('Late: {{count}}', { count: tally.late })}</span>}
+                      {tally.done > 0 && <span className="group-head-chip group-head-chip--done">{t('Finished: {{count}}', { count: tally.done })}</span>}
+                    </span>
+                  );
+                })()}
               </h2>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
                 <AnimatePresence>
@@ -1137,91 +1254,160 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                         id={`task-${task.id}`}
                         exit={{ opacity: 0 }}
                         className="card"
-                        style={{ 
-                          overflow: 'hidden', 
-                          borderInlineStart: isEditing ? '4px solid var(--accent)' : (isTaskDueSoon ? '4px solid #f97316' : `4px solid ${(() => {
-                            const u = projectUsers.find(pu => pu.id === task.assignedToId);
-                            return u?.userColor || getUserColor(task.assignedToId || task.assignedTo || '');
-                          })()}`),
-                          backgroundColor: isTaskDueSoon ? 'var(--surface-warn)' : (task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)'),
+                        style={{
+                          // Slim rows (Tidy Tasks T1): ONE accent colour. No
+                          // per-person stripe any more — the edge only speaks
+                          // when something needs attention (late / due soon)
+                          // or while the task is being edited.
+                          position: 'relative',
+                          zIndex: (openActionMenu === task.id || openStatusMenu === task.id) ? 5 : undefined,
+                          borderInlineStart: isEditing ? '3px solid var(--accent)'
+                            : isTaskOverdue ? '3px solid #ef4444'
+                            : isTaskDueSoon ? '3px solid #f97316' : undefined,
+                          backgroundColor: task.status === 'Done' ? 'var(--surface-2)' : 'var(--surface)',
                           transition: 'background-color 0.2s ease'
                         }}
                       >
                         {(
                           <>
                             <div
-                              style={{ padding: '20px 24px', display: 'flex', gap: 16, cursor: 'pointer', alignItems: 'flex-start' }}
+                              className="task-row"
+                              data-task-row
                               onClick={() => {
                                 setExpandedTask(isExpanded ? null : task.id);
                                 if (isExpanded && focusedTaskId === task.id) setFocusedTaskId(null);
                               }}
                             >
-                              <button
-                                onClick={e => {
-                                  e.stopPropagation();
-                                  if (!canEdit) return;
-                                  const next = task.status === 'Pending' ? 'In Progress' : task.status === 'In Progress' ? 'Done' : 'Pending';
-                                  handleUpdateTaskStatus(task.id, next as TaskStatus);
-                                }}
-                                style={{ marginTop: 2, background: 'none', border: 'none', cursor: canEdit ? 'pointer' : 'default', padding: 0, flexShrink: 0 }}
-                                title={canEdit ? t('Click to advance status') : ''}
-                              >
-                                {task.status === 'Done'
-                                  ? <CheckCircle2 style={{ width: 22, height: 22, color: '#4ade80' }} />
-                                  : task.status === 'In Progress'
-                                  ? <Clock style={{ width: 22, height: 22, color: '#818cf8' }} />
-                                  : <CheckSquare style={{ width: 22, height: 22, color: 'var(--text-muted)' }} />
-                                }
-                              </button>
+                              <div className="task-row-main">
+                                {task.serialNumber && (
+                                  <span className="task-row-serial ltr-data">#{task.serialNumber}</span>
+                                )}
+                                {/* dir="auto": an Arabic title lines up on the right of its cell. */}
+                                <h3
+                                  dir="auto"
+                                  className="task-row-title"
+                                  title={task.taskName}
+                                  style={{ color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)' }}
+                                >
+                                  {task.taskName}
+                                </h3>
+                                {task.isPrivate && (
+                                  <span title={t('Private — only you can see this task')} style={{ display: 'inline-flex', color: 'var(--text-muted)', flexShrink: 0 }}>
+                                    <Lock style={{ width: 12, height: 12 }} />
+                                  </span>
+                                )}
+                              </div>
 
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                                  {canEdit ? (
-                                    <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 2, borderRadius: 0, border: '1px solid var(--border)' }} onClick={e => e.stopPropagation()}>
-                                      {(['Pending', 'In Progress', 'Done'] as TaskStatus[]).map(s => (
-                                        <button
-                                          key={s}
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (task.status !== s) handleUpdateTaskStatus(task.id, s);
-                                          }}
+                              <div className="task-row-meta">
+                                <span className="task-row-owner" title={task.assignedTo || t('Unassigned')}>
+                                  {(() => {
+                                    const u = projectUsers.find(pu => pu.id === task.assignedToId);
+                                    const name = task.assignedTo || '';
+                                    return u?.photoURL ? (
+                                      <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                    ) : (
+                                      <span className="task-row-initial" aria-hidden>{(name.trim()[0] || '?').toUpperCase()}</span>
+                                    );
+                                  })()}
+                                  <span className="task-row-ellipsis">{task.assignedTo || t('Unassigned')}</span>
+                                </span>
+
+                                <span
+                                  className="task-row-due"
+                                  title={isTaskOverdue ? t('OVERDUE') : isTaskDueSoon ? t('DUE SOON') : undefined}
+                                  style={{ color: isTaskOverdue ? '#ef4444' : isTaskDueSoon ? '#ea580c' : 'var(--text-muted)', fontWeight: (isTaskOverdue || isTaskDueSoon) ? 700 : 500 }}
+                                >
+                                  {task.dueDate ? (
+                                    <>
+                                      {isTaskOverdue ? <AlertCircle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                                      <span className="ltr-data">{task.dueDate}</span>
+                                    </>
+                                  ) : <span aria-hidden>—</span>}
+                                </span>
+
+                                <span
+                                  className="task-row-progress"
+                                  title={taskMilestones.length ? t('{{done}}/{{total}} milestones', { done: doneMilestones, total: taskMilestones.length }) : undefined}
+                                >
+                                  {taskMilestones.length > 0 && (
+                                    <>
+                                      <span className="task-row-bar"><span style={{ width: `${progress}%` }} /></span>
+                                      <span className="ltr-data">{doneMilestones}/{taskMilestones.length}</span>
+                                    </>
+                                  )}
+                                </span>
+
+                                {/* ONE status label; click → menu. Replaces the
+                                    Pending / In Progress / Done pill trio. */}
+                                <div className="task-row-status" style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    className="task-status-label"
+                                    data-status={task.status}
+                                    aria-haspopup="menu"
+                                    aria-expanded={openStatusMenu === task.id}
+                                    title={t('Change status')}
+                                    disabled={!canEdit}
+                                    onClick={() => { setOpenActionMenu(null); setOpenStatusMenu(openStatusMenu === task.id ? null : task.id); }}
+                                  >
+                                    {task.status === 'Done'
+                                      ? <CheckCircle2 style={{ width: 12, height: 12, flexShrink: 0 }} />
+                                      : <span className="task-status-dot" />}
+                                    <span>{label(task.status)}</span>
+                                    {canEdit && <ChevronDown style={{ width: 12, height: 12, opacity: 0.7, flexShrink: 0 }} />}
+                                  </button>
+                                  <AnimatePresence>
+                                    {openStatusMenu === task.id && (
+                                      <>
+                                        <div style={{ position: 'fixed', inset: 0, zIndex: 99 }} onClick={() => setOpenStatusMenu(null)} />
+                                        <motion.div
+                                          role="menu"
+                                          initial={{ opacity: 0, y: -6, scale: 0.96 }}
+                                          animate={{ opacity: 1, y: 0, scale: 1 }}
+                                          exit={{ opacity: 0, y: -6, scale: 0.96 }}
+                                          transition={{ duration: 0.12 }}
                                           style={{
-                                            padding: '2px 10px',
-                                            fontSize: 11,
-                                            fontWeight: 700,
-                                            borderRadius: 0,
-                                            border: 'none',
-                                            cursor: 'pointer',
-                                            background: task.status === s ? (s === 'Done' ? 'var(--green-100)' : s === 'In Progress' ? 'var(--blue-50)' : 'var(--surface)') : 'transparent',
-                                            color: task.status === s ? (s === 'Done' ? 'var(--green-400)' : s === 'In Progress' ? 'var(--blue-400)' : 'var(--text-primary)') : 'var(--text-muted)',
-                                            transition: 'all 0.15s'
+                                            position: 'absolute', top: '100%', insetInlineEnd: 0, marginTop: 4,
+                                            background: 'var(--surface)',
+                                            border: '1px solid var(--border-md)',
+                                            boxShadow: '0 8px 24px rgba(15,23,42,0.12)',
+                                            zIndex: 100,
+                                            minWidth: 148,
+                                            overflow: 'hidden',
                                           }}
                                         >
-                                          {label(s)}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  ) : (
-                                    <span className={statusBadge(task.status)}>{label(task.status)}</span>
-                                  )}
-                                  {isExpanded && <span className={priorityBadge(task.priority)}>{label(task.priority)}</span>}
-                                  {task.isPrivate && (
-                                    <span
-                                      className="badge"
-                                      style={{ marginInlineStart: 8, background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
-                                      title={t('Private — only you can see this task')}
-                                    >
-                                      <Lock style={{ width: 11, height: 11 }} /> {t('Private')}
-                                    </span>
-                                  )}
-                                  {isTaskOverdue && <span className="badge badge-urgent" style={{ marginInlineStart: 8 }}>{t('OVERDUE')}</span>}
-                                  {isTaskDueSoon && <span className="badge" style={{ marginInlineStart: 8, background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>}
-                                  
-                                  <div style={{ marginInlineStart: 'auto', position: 'relative' }} onClick={e => e.stopPropagation()}>
+                                          {STATUS_GROUP_ORDER.map(s => (
+                                            <button
+                                              key={s}
+                                              type="button"
+                                              role="menuitemradio"
+                                              aria-checked={task.status === s}
+                                              data-status-option={s}
+                                              style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: task.status === s ? 700 : 500, color: 'var(--text-primary)', textAlign: 'start' }}
+                                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--surface-2)')}
+                                              onMouseLeave={e => (e.currentTarget.style.background = 'none')}
+                                              onClick={() => {
+                                                setOpenStatusMenu(null);
+                                                if (task.status !== s) handleUpdateTaskStatus(task.id, s);
+                                              }}
+                                            >
+                                              <Check style={{ width: 14, height: 14, flexShrink: 0, color: 'var(--accent)', visibility: task.status === s ? 'visible' : 'hidden' }} />
+                                              {label(s)}
+                                            </button>
+                                          ))}
+                                        </motion.div>
+                                      </>
+                                    )}
+                                  </AnimatePresence>
+                                </div>
+                              </div>
+
+                              <div className="task-row-actions">
+                                  <div style={{ position: 'relative' }} onClick={e => e.stopPropagation()}>
                                     <button
                                       className="btn btn-ghost btn-icon"
                                       style={{ padding: '4px 8px', height: 'auto', fontSize: 16, fontWeight: 700, letterSpacing: '0.05em', color: 'var(--text-muted)', lineHeight: 1 }}
-                                      onClick={e => { e.stopPropagation(); setOpenActionMenu(openActionMenu === task.id ? null : task.id); }}
+                                      onClick={e => { e.stopPropagation(); setOpenStatusMenu(null); setOpenActionMenu(openActionMenu === task.id ? null : task.id); }}
                                       title={t('Task actions')}
                                     >
                                       ···
@@ -1283,33 +1469,36 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       )}
                                     </AnimatePresence>
                                   </div>
-                                </div>
-                                {task.serialNumber && (
-                                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 2 }}>
-                                    <span className="ltr-data">#{task.serialNumber}</span>
-                                  </div>
-                                )}
-                                <h3 style={{ fontWeight: 700, fontSize: 15, color: task.status === 'Done' ? 'var(--text-muted)' : 'var(--text-primary)', marginBottom: 4 }}>
-                                  {task.taskName}
-                                </h3>
-                                {isExpanded && (
-                                  <p style={{ color: 'var(--text-muted)', fontSize: 13 }}>
-                                    {task.description}
-                                  </p>
-                                )}
+                                <ChevronRight className="task-row-chevron" style={{ width: 16, height: 16, color: 'var(--text-muted)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }} />
+                              </div>
+                            </div>
 
-                                <div style={{ display: 'flex', gap: 16, marginTop: 10, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-                                  {task.assignedTo && (
-                                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
-                                      {(() => {
-                                        const u = projectUsers.find(pu => pu.id === task.assignedToId);
-                                        return u?.photoURL ? (
-                                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
-                                        ) : (
-                                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(task.assignedToId || task.assignedTo) }} />
-                                        );
-                                      })()}
-                                      {task.assignedTo}
+                            <AnimatePresence>
+                              {isExpanded && (
+<motion.div
+                                  initial={{ height: 0, opacity: 0 }}
+                                  animate={{ height: 'auto', opacity: 1 }}
+                                  exit={{ height: 0, opacity: 0 }}
+                                  style={{ overflow: 'hidden' }}
+                                >
+                                  <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '16px 20px' }}>
+                                    {/* Everything the slim row leaves out opens here —
+                                        moved, not deleted. */}
+                                    <div className="task-row-details" style={{ marginBottom: 20 }}>
+                                      {task.description && (
+                                        <p dir="auto" style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 10px', whiteSpace: 'pre-wrap' }}>
+                                          {task.description}
+                                        </p>
+                                      )}
+                                      <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
+                                        <span className={priorityBadge(task.priority)}>{label(task.priority)}</span>
+                                  {task.isPrivate && (
+                                    <span
+                                      className="badge"
+                                      style={{ background: 'var(--surface-3, #e2e8f0)', color: 'var(--text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                                      title={t('Private — only you can see this task')}
+                                    >
+                                      <Lock style={{ width: 11, height: 11 }} /> {t('Private')}
                                     </span>
                                   )}
                                   {isExpanded && task.assignedBy && (
@@ -1371,13 +1560,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                       <Tag className="w-3 h-3" /> {task.subCategory}
                                     </span>
                                   )}
-                                </div>
-
-                                {/* UX task 5 — the collapsed row is title /
-                                    owner / status / due date only. The bid or
-                                    project a task hangs off is real context but
-                                    it is one more line to scan, so it opens
-                                    with the card. */}
+                                      </div>
                                 {isExpanded && <LinkedRecordsBlock links={linksOf(task)} />}
 
                                 {isExpanded && task.attachedFile && (
@@ -1482,32 +1665,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     </div>
                                   </div>
                                 )}
-
-                                {taskMilestones.length > 0 && (
-                                  <div style={{ marginTop: 12 }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>
-                                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Target className="w-3 h-3" /> {t('{{done}}/{{total}} milestones', { done: doneMilestones, total: taskMilestones.length })}</span>
-                                      <span>{progress}%</span>
                                     </div>
-                                    <div className="progress-bar">
-                                      <div className="progress-fill" style={{ width: `${progress}%` }} />
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                              <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', transform: isExpanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0, marginTop: 4 }} />
-                            </div>
-
-                            <AnimatePresence>
-                              {isExpanded && (
-<motion.div
-                                  initial={{ height: 0, opacity: 0 }}
-                                  animate={{ height: 'auto', opacity: 1 }}
-                                  exit={{ height: 0, opacity: 0 }}
-                                  style={{ overflow: 'hidden' }}
-                                >
-                                  <div className="task-expand" style={{ borderTop: '1px solid var(--border)', padding: '20px 24px', paddingInlineStart: 62 }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
@@ -1693,6 +1851,21 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
            );
          })}
        </div>
+
+      {/* Finished work sits behind this one button (T2) — below the list, so
+          open work is what the page leads with. */}
+      {(fold.hidden > 0 || (showFinished && finishedInList > 0 && finishedInList < fullList.length)) && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm task-finished-toggle"
+          data-finished-toggle={showFinished ? 'hide' : 'show'}
+          aria-expanded={showFinished}
+          onClick={toggleShowFinished}
+        >
+          {showFinished ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {showFinished ? t('Hide finished') : t('Show {{count}} finished', { count: fold.hidden })}
+        </button>
+      )}
 
       {totalPages > 1 && (
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 12, marginTop: 24, padding: '12px 0', borderTop: '1px solid var(--border)' }}>
