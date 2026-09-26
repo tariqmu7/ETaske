@@ -1538,6 +1538,7 @@ h1, h2, h3, h4, p, span, div {
   .board-toolbar--compact .board-toolbar-actions { display: contents !important; width: auto; }
   .board-toolbar--compact .board-toolbar-actions > .btn { flex: 0 0 auto; min-width: 44px; padding-inline: 10px; }
   .board-toolbar--compact .board-toolbar-filters-label,
+  .board-toolbar--compact .board-toolbar-action-label,
   .board-toolbar--compact .board-toolbar-actions > .btn > svg:last-child { display: none; }
 }
 
@@ -1676,4 +1677,31 @@ h1, h2, h3, h4, p, span, div {
 @media (max-width: 640px) {
   .task-row-from { width: auto; max-width: 40vw; }
   .corr-row-assign-label { display: none; }
+}
+
+/* ── Bids board: slim rows (Tidy T5b) ────────────────────────────────────
+   Reuses the Tasks row (.task-row) and the Letters' client column
+   (.task-row-from); a bid adds its checklist, its value and a stage label
+   in the stage's own colour. */
+.opp-row .task-status-label { cursor: default; }
+.opp-row .task-row-status { width: 150px; }
+.opp-row .opp-row-steps { width: 92px; }
+.opp-row-value { width: 96px; text-align: end; font-weight: 800; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.opp-row-signoff { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: #b45309; }
+/* The full desktop row needs ~1,000px; below that it folds to two lines
+   (title + actions, then the meta), as on a phone. */
+.opp-list { container-type: inline-size; }
+@container (max-width: 1040px) {
+  .opp-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main actions" "meta meta"; }
+  .opp-row .task-row-meta { flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+  .opp-row .task-row-status { margin-inline-start: auto; width: auto; }
+  .opp-row .opp-row-steps:empty { display: none; }
+}
+/* A phone has room for client, deadline, steps and stage on one meta line;
+   the value is on the group card and the bid page. */
+@media (max-width: 640px) {
+  .opp-row .opp-row-steps { width: auto; }
+  .opp-row .task-row-meta { gap: 6px 10px; }
+  .opp-row-value, .opp-row-signoff-label,
+  .opp-row .task-row-from > svg, .opp-row .opp-row-steps > svg { display: none; }
 }

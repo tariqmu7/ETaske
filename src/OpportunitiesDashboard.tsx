@@ -24,9 +24,10 @@ import { buildChecklist, checklistProgress, defaultTemplateForSource, templatesF
 import { findSimilarBids } from './lib/duplicates';
 import { checkGate, crossesGate, approvalState, waitingForSignOff, isManagerRole, type GateProblem, type GateResult } from './lib/offerApproval';
 import {
-  Plus, X, Target, Building2, CalendarClock,
+  Plus, X, Target, Building2, Calendar,
   Trash2, Edit2, AlertCircle, User as UserIcon, BarChart3,
-  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ArrowLeft, ShieldCheck, Clock,
+  FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ShieldCheck, Clock,
+  Check, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AppView } from './App';
@@ -35,7 +36,8 @@ import OpportunityDetail from './OpportunityDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
-import CardMenu from './components/CardMenu';
+import GroupTabs, { GroupTab } from './components/GroupTabs';
+import { byTaskUrgency, foldFinished, type OrderableTask } from './lib/taskOrder';
 import { buildGroups, UNGROUPED } from './lib/grouping';
 import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
 
@@ -76,6 +78,33 @@ const OPPORTUNITY_GROUP_ICON: Partial<Record<OpportunityGroupBy, LucideIcon>> = 
   location: MapPin,
   source: Inbox,
 };
+
+/** localStorage key for the "show closed bids" choice (Tidy T5b). */
+const SHOW_CLOSED_KEY = 'etaske:bids:showClosed';
+
+/**
+ * Stages where the submission deadline still means something. Once a bid is
+ * Submitted / Under Evaluation the ball is in the client's court, so a passed
+ * deadline is not "late" — the same rule the Ask box and the calendar use.
+ */
+const PRE_SUBMISSION: readonly OpportunityStage[] = ['Identified', 'Prequalification', 'Bid Preparation'];
+const beforeSubmission = (o: Opportunity) => PRE_SUBMISSION.includes(o.stage);
+const isClosedBid = (o: Opportunity) => !isOpportunityOpen(o.stage);
+const isLateBid = (o: Opportunity) => {
+  if (!beforeSubmission(o)) return false;
+  const d = daysUntil(o.submissionDeadline);
+  return d !== null && d < 0;
+};
+
+/**
+ * A bid seen through the Tasks board's reading order (lib/taskOrder.ts): late →
+ * due within 3 days → later → no deadline, closed last. A submitted bid waits
+ * on the client, so it sits with the undated ones rather than at the top.
+ */
+const asOrderable = (o: Opportunity): OrderableTask => ({
+  status: isClosedBid(o) ? 'Done' : o.stage,
+  dueDate: beforeSubmission(o) ? o.submissionDeadline : undefined,
+});
 
 const emptyForm = () => ({
   title: '',
@@ -132,6 +161,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const [openTab, setOpenTab] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportNote, setExportNote] = useState<string | null>(null);
+  // Won / Lost / No Bid / Cancelled sit behind one "Show N closed" button —
+  // one board-wide choice, remembered on this device (Tidy T5b).
+  const [showClosed, setShowClosed] = useState<boolean>(() => {
+    try { return localStorage.getItem(SHOW_CLOSED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleShowClosed = () => setShowClosed(v => {
+    try { localStorage.setItem(SHOW_CLOSED_KEY, v ? '0' : '1'); } catch { /* private window */ }
+    return !v;
+  });
 
   const canDelete = appUser.role === 'Admin' || appUser.role === 'Manager';
 
@@ -175,14 +213,12 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     // 0 rather than 100 so an unassessed bid never inflates the forecast.
     const weighted = open.reduce((sum, o) => sum + toNumber(o.estimatedValue) * ((o.probability ?? 0) / 100), 0);
     const openValue = open.reduce((sum, o) => sum + toNumber(o.estimatedValue), 0);
+    // Deadlines only count while the offer has not gone out yet.
     const dueSoon = open.filter(o => {
       const d = daysUntil(o.submissionDeadline);
-      return d !== null && d >= 0 && d <= 7;
+      return beforeSubmission(o) && d !== null && d >= 0 && d <= 7;
     }).length;
-    const overdue = open.filter(o => {
-      const d = daysUntil(o.submissionDeadline);
-      return d !== null && d < 0;
-    }).length;
+    const overdue = open.filter(isLateBid).length;
     return {
       open: open.length,
       openValue,
@@ -209,6 +245,11 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     return rank;
   }, []);
 
+  // The default order (Tidy T5b) is the Tasks board's: late first, then due
+  // within 3 days, later, undated/submitted, closed last. Equal rows keep the
+  // listener's newest-created-first order (the sort is stable).
+  const urgency = useMemo(() => byTaskUrgency<OrderableTask>(today), [today]);
+
   const visible = useMemo(() => {
     const rows = opportunities.filter(o => {
       if (stageFilter === 'Open' && !isOpportunityOpen(o.stage)) return false;
@@ -219,17 +260,11 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     rows.sort((a, b) => {
       if (sortBy === 'value') return toNumber(b.estimatedValue) - toNumber(a.estimatedValue);
       if (sortBy === 'stage') return (stageRank[a.stage] ?? 99) - (stageRank[b.stage] ?? 99);
-      if (sortBy === 'deadline') {
-        // Opportunities without a deadline sink to the bottom instead of
-        // hijacking the top of the list.
-        const av = a.submissionDeadline || '9999-12-31';
-        const bv = b.submissionDeadline || '9999-12-31';
-        return av.localeCompare(bv);
-      }
+      if (sortBy === 'deadline') return urgency(asOrderable(a), asOrderable(b));
       return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0);
     });
     return rows;
-  }, [opportunities, search, stageFilter, sortBy, stageRank]);
+  }, [opportunities, search, stageFilter, sortBy, stageRank, urgency]);
 
   const isFiltering = search.trim() !== '' || stageFilter !== 'All';
 
@@ -275,11 +310,20 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   // the whole board, above any of this.
   const showGroupGrid = !activeGroup;
 
+  // Closed bids are folded away unless asked for. A bucket holding nothing but
+  // closed bids (Won, Lost…) shows them anyway — see `foldFinished`.
+  const fullList = activeGroup ? activeGroup.items : visible;
+  const fold = useMemo(
+    () => foldFinished(fullList, showClosed, [], isClosedBid),
+    [fullList, showClosed],
+  );
+  const closedInList = useMemo(() => fullList.filter(isClosedBid).length, [fullList]);
+
   // What the list renders: the open bucket only. This board has no pager, so
   // unlike the tasks/correspondences boards there is nothing else to re-scope.
   const renderGroups = useMemo(
-    () => (activeGroup ? [activeGroup] : []),
-    [activeGroup],
+    () => (activeGroup ? [{ key: activeGroup.key, value: activeGroup.value, items: fold.visible }] : []),
+    [activeGroup, fold.visible],
   );
 
   // Header for one bucket. Each dimension gets its own phrasing because a single
@@ -321,12 +365,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     // naively and labelled with `mainCurrency`, exactly as the KPI tiles at the
     // top of this board already do.
     const openValue = open.reduce((sum, o) => sum + toNumber(o.estimatedValue), 0);
-    // "Late" = the submission deadline has passed on a bid still open. A Won,
-    // Lost, No Bid or Cancelled record cannot miss a deadline any more.
-    const late = open.filter(o => {
-      const d = daysUntil(o.submissionDeadline);
-      return d !== null && d < 0;
-    }).length;
+    // "Late" = the submission deadline has passed on a bid not yet submitted. A
+    // submitted or closed bid cannot miss its deadline any more.
+    const late = rows.filter(isLateBid).length;
 
     // The bucket key for `owner` is `ownerName` (the module's denormalised
     // label), so no lookup is needed to LABEL the card — but a face still is.
@@ -363,6 +404,24 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       ],
     };
   }), [groupedOpportunities, groupBy, projectUsers, mainCurrency, dl, t]);
+
+  // Per-bucket totals over EVERY filtered bid (closed ones too, folded or not)
+  // — what the group tabs and the section header report.
+  const groupTally = useMemo(() => {
+    const m = new Map<string, { open: number; late: number; closed: number }>();
+    for (const g of groupedOpportunities) {
+      const closed = g.items.filter(isClosedBid).length;
+      m.set(g.key, { open: g.items.length - closed, late: g.items.filter(isLateBid).length, closed });
+    }
+    return m;
+  }, [groupedOpportunities]);
+
+  const groupTabs = useMemo<GroupTab[]>(() => groupedOpportunities.map(g => ({
+    key: g.key,
+    label: groupTitle(g),
+    count: g.items.length,
+    late: groupTally.get(g.key)?.late || 0,
+  })), [groupedOpportunities, groupTally, groupBy, dl, t]);
 
   const groupByOptions = useMemo<GroupByOption<OpportunityGroupBy>[]>(() => [
     { key: 'stage', label: t('Stage'), icon: ListChecks },
@@ -731,7 +790,8 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
         search={search}
         onSearch={setSearch}
         searchPlaceholder={t('Search opportunities…')}
-        groupBy={<GroupByBar<OpportunityGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        compact
+        groupBy={<GroupByBar<OpportunityGroupBy> compact value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
         activeFilterCount={(stageFilter !== 'All' ? 1 : 0) + (sortBy !== 'deadline' ? 1 : 0)}
         onClearFilters={() => { setStageFilter('All'); setSortBy('deadline'); }}
         filters={
@@ -765,13 +825,15 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
               onClick={handleExport}
               disabled={exporting}
               title={t('Download the pipeline, outcomes, bid gates and follow-ups as one Excel workbook')}
+              aria-label={t('Export')}
             >
               {exporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              {exporting ? t('Exporting…') : t('Export')}
+              {/* Icon-only on a phone, so the compact toolbar keeps to one row. */}
+              <span className="board-toolbar-action-label">{exporting ? t('Exporting…') : t('Export')}</span>
             </button>
             {onNavigate && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
-              <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title={t('Win rate, loss reasons and pipeline analysis')}>
-                <BarChart3 className="w-4 h-4" /> {t('Analytics')}
+              <button className="btn btn-ghost" onClick={() => onNavigate('bid-analytics')} title={t('Win rate, loss reasons and pipeline analysis')} aria-label={t('Analytics')}>
+                <BarChart3 className="w-4 h-4" /> <span className="board-toolbar-action-label">{t('Analytics')}</span>
               </button>
             )}
           </>
@@ -812,90 +874,151 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           }
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* The only way back to the grid. */}
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => setOpenGroup(null)}
-            style={{ alignSelf: 'flex-start' }}
-          >
-            <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
-          </button>
+        <>
+        {/* Group tabs (Tidy T5b): the first goes back to the grid, every other
+            group is one tap away with its size and its late count. */}
+        <GroupTabs
+          tabs={groupTabs}
+          active={activeGroup ? activeGroup.key : null}
+          onSelect={setOpenGroup}
+        />
+        {/* `opp-list` is a size container: when the list is too narrow for one
+            line, the rows fold to two (see index.css). */}
+        <div className="opp-list" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {renderGroups.map(group => (
           <div key={group.key}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingInlineStart: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
               {groupHeading(group)}
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+              {(() => {
+                // The whole group's numbers, closed ones included: open · late · closed.
+                const tally = groupTally.get(group.key);
+                if (!tally) return null;
+                return (
+                  <span className="group-head-counts" data-group-counts>
+                    <span className="group-head-chip">{t('Open: {{count}}', { count: tally.open })}</span>
+                    {tally.late > 0 && <span className="group-head-chip group-head-chip--late">{t('Late: {{count}}', { count: tally.late })}</span>}
+                    {tally.closed > 0 && <span className="group-head-chip group-head-chip--done">{t('Closed: {{count}}', { count: tally.closed })}</span>}
+                  </span>
+                );
+              })()}
             </h2>
-            <div className="card-grid">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <AnimatePresence>
             {group.items.map(o => {
+              // Slim rows (Tidy T5b): ONE line per bid — serial, title, client,
+              // owner, deadline, checklist, value, stage. Scope, sector and the
+              // rest live on the bid page a click away.
+              const closed = isClosedBid(o);
+              const pre = beforeSubmission(o);
               const dLeft = daysUntil(o.submissionDeadline);
-              const showCountdown = isOpportunityOpen(o.stage) && dLeft !== null;
-              const late = showCountdown && (dLeft as number) < 0;
-              const soon = showCountdown && (dLeft as number) >= 0 && (dLeft as number) <= 7;
-              // Read off the bid itself (settled rule 1) — no extra query per card.
-              const steps = isOpportunityOpen(o.stage) ? checklistProgress(o.checklist, today) : null;
+              const late = isLateBid(o);
+              const soon = pre && !late && dLeft !== null && dLeft <= 7;
+              // Read off the bid itself (settled rule 1) — no extra query per row.
+              const steps = !closed ? checklistProgress(o.checklist, today) : null;
+              const owner = o.ownerId ? projectUsers.find(pu => pu.id === o.ownerId) : undefined;
+              const dueTitle = !pre || dLeft === null ? undefined
+                : late ? t('{{count}}d past deadline', { count: Math.abs(dLeft) })
+                : dLeft === 0 ? t('Due today') : t('{{count}}d to deadline', { count: dLeft });
               return (
                 <motion.div
                   key={o.id}
-                  layout
-                  initial={{ opacity: 0, y: 8 }}
-                  animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
                   className="card card-interactive"
-                  style={{ padding: 18, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10, borderInlineStart: `3px solid ${STAGE_COLORS[o.stage] || 'var(--border)'}` }}
-                  onClick={() => openOpportunity(o)}
+                  style={{
+                    // The edge only speaks when something needs attention.
+                    borderInlineStart: late ? '3px solid #ef4444' : soon ? '3px solid #f97316' : undefined,
+                    backgroundColor: closed ? 'var(--surface-2)' : 'var(--surface)',
+                  }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, padding: '3px 8px', color: '#fff', background: STAGE_COLORS[o.stage] || '#64748b' }}>
-                      {dl(o.stage)}
-                    </span>
-                    {o.approval?.status === 'requested' && isOpportunityOpen(o.stage) && (
-                      <span data-approval="card-badge" style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#b45309', marginInlineStart: 'auto' }}>
-                        <Clock className="w-3.5 h-3.5" /> {t('Awaiting sign-off')}
-                      </span>
-                    )}
-                    <CardMenu items={[
-                      { label: t('Edit'), icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => openEdit(o) },
-                      ...(canDelete ? [{ label: t('Delete'), icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => setDeleteTarget(o), danger: true }] : []),
-                    ]} />
-                  </div>
-
-                  <div>
-                    <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{o.title}</h3>
-                    {o.serialNumber && (
-                      <span className="ltr-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{o.serialNumber}</span>
-                    )}
-                  </div>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                    {o.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.client}{o.sector ? ` · ${o.sector}` : ''}</div>}
-                    {o.ownerName && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><UserIcon className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {o.ownerName}</div>}
-                    {showCountdown && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: late ? '#dc2626' : soon ? '#f59e0b' : 'var(--text-secondary)', fontWeight: late || soon ? 700 : 400 }}>
-                        <CalendarClock className="w-3.5 h-3.5" />
-                        {late
-                          ? t('{{count}}d past deadline', { count: Math.abs(dLeft as number) })
-                          : (dLeft === 0 ? t('Due today') : t('{{count}}d to deadline', { count: dLeft as number }))}
-                      </div>
-                    )}
-                    {steps && steps.total > 0 && (
-                      <div data-testid="opp-card-checklist" style={{ display: 'flex', alignItems: 'center', gap: 6, color: steps.late > 0 ? '#dc2626' : 'var(--text-secondary)', fontWeight: steps.late > 0 ? 700 : 400 }}>
-                        <ListChecks className="w-3.5 h-3.5" />
-                        <span>
-                          {t('{{done}}/{{total}} steps', { done: steps.done, total: steps.total })}
-                          {steps.late > 0 && ` · ${steps.late === 1 ? t('{{count}} step overdue', { count: 1 }) : t('{{count}} steps overdue', { count: steps.late })}`}
+                  <div className="task-row opp-row" data-opp-row={o.id} onClick={() => openOpportunity(o)}>
+                    <div className="task-row-main">
+                      {o.serialNumber && <span className="task-row-serial ltr-data">{o.serialNumber}</span>}
+                      {/* dir="auto": an Arabic title lines up on the right of its cell. */}
+                      <h3 dir="auto" className="task-row-title" title={o.title} style={{ color: closed ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                        {o.title}
+                      </h3>
+                      {o.approval?.status === 'requested' && !closed && (
+                        <span data-approval="card-badge" className="opp-row-signoff" title={t('Awaiting sign-off')}>
+                          <Clock className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
+                          <span className="opp-row-signoff-label">{t('Awaiting sign-off')}</span>
                         </span>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 6 }}>
-                    <span className="ltr-data" style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>
-                      {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
-                    </span>
+                    <div className="task-row-meta">
+                      <span className="task-row-from" title={o.client ? `${o.client}${o.sector ? ` · ${o.sector}` : ''}` : undefined}>
+                        <Building2 className="w-3 h-3" style={{ flexShrink: 0 }} aria-hidden />
+                        <span className="task-row-ellipsis" dir="auto">{o.client || '—'}</span>
+                      </span>
+
+                      {/* Grouped by owner, every row would repeat the group's name. */}
+                      {groupBy !== 'owner' && (
+                        <span className="task-row-owner" title={o.ownerName || t('Unassigned')}>
+                          {o.ownerName ? (
+                            <>
+                              {owner?.photoURL
+                                ? <img src={owner.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                : <span className="task-row-initial" aria-hidden>{(o.ownerName.trim()[0] || '?').toUpperCase()}</span>}
+                              <span className="task-row-ellipsis">{o.ownerName}</span>
+                            </>
+                          ) : (
+                            <span className="task-row-ellipsis" style={{ color: 'var(--text-muted)' }}>{t('Unassigned')}</span>
+                          )}
+                        </span>
+                      )}
+
+                      <span
+                        className="task-row-due"
+                        data-opp-due
+                        title={dueTitle}
+                        style={{ color: late ? '#ef4444' : soon ? '#ea580c' : 'var(--text-muted)', fontWeight: (late || soon) ? 700 : 500 }}
+                      >
+                        {o.submissionDeadline ? (
+                          <>
+                            {late ? <AlertCircle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                            <span className="ltr-data">{o.submissionDeadline}</span>
+                          </>
+                        ) : <span aria-hidden>—</span>}
+                      </span>
+
+                      <span
+                        className="task-row-progress opp-row-steps"
+                        title={steps && steps.late > 0 ? (steps.late === 1 ? t('{{count}} step overdue', { count: 1 }) : t('{{count}} steps overdue', { count: steps.late })) : undefined}
+                        style={steps && steps.late > 0 ? { color: '#dc2626', fontWeight: 700 } : undefined}
+                      >
+                        {steps && steps.total > 0 && (
+                          <>
+                            <ListChecks className="w-3 h-3" style={{ flexShrink: 0 }} aria-hidden />
+                            <span data-testid="opp-card-checklist">{t('{{done}}/{{total}} steps', { done: steps.done, total: steps.total })}</span>
+                          </>
+                        )}
+                      </span>
+
+                      <span className="opp-row-value ltr-data">
+                        {o.estimatedValue ? money(toNumber(o.estimatedValue), o.currency) : '—'}
+                      </span>
+
+                      <span className="task-row-status">
+                        <span className="task-status-label" data-stage={o.stage} style={closed ? undefined : { color: STAGE_COLORS[o.stage], borderColor: STAGE_COLORS[o.stage] }}>
+                          {closed
+                            ? <Check style={{ width: 12, height: 12, flexShrink: 0 }} />
+                            : <span className="task-status-dot" style={{ background: 'currentColor' }} />}
+                          <span>{dl(o.stage)}</span>
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="task-row-actions" onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(o)} title={t('Edit')} aria-label={t('Edit')}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      {canDelete && (
+                        <button className="btn btn-ghost btn-icon btn-sm corr-row-delete" onClick={() => setDeleteTarget(o)} title={t('Delete')} aria-label={t('Delete')}>
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </motion.div>
               );
@@ -905,6 +1028,22 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           </div>
           ))}
         </div>
+
+        {/* Closed bids sit behind this one button — below the list, so live
+            work is what the page leads with. */}
+        {(fold.hidden > 0 || (showClosed && closedInList > 0 && closedInList < fullList.length)) && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm task-finished-toggle"
+            data-closed-toggle={showClosed ? 'hide' : 'show'}
+            aria-expanded={showClosed}
+            onClick={toggleShowClosed}
+          >
+            {showClosed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {showClosed ? t('Hide closed bids') : t('Show {{count}} closed bids', { count: fold.hidden })}
+          </button>
+        )}
+        </>
       )}
 
       </>

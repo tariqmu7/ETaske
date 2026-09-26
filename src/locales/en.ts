@@ -2101,6 +2101,8 @@ const en = {
   "Closed: {{count}}": "Closed: {{count}}",
   "Show {{count}} closed": "Show {{count}} closed",
   "Hide closed": "Hide closed",
+  "Show {{count}} closed bids": "Show {{count}} closed bids",
+  "Hide closed bids": "Hide closed bids",
 
 } as const;
 

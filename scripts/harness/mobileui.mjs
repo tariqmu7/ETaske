@@ -136,6 +136,12 @@ C('l4', { subject: 'Signed minutes of the handover meeting', deadline: dayOffset
 __seed('opportunities', 'o1', { title: 'Tank farm maintenance framework agreement', client: 'NNPC', stage: 'Bid Preparation', submissionDeadline: dayOffset(3), ownerId: 'u-ahmed', ownerName: 'Ahmed Samir', serialNumber: 'OP000011', estimatedValue: 12000000, currency: 'EGP', winProbability: 40, createdAt: ts(-20), updatedAt: ts(-1) });
 __seed('opportunities', 'o2', { title: 'Terminal upgrade', client: 'Petromint', stage: 'Submitted', submissionDeadline: dayOffset(-5), ownerId: 'u-mgr', ownerName: 'Tariq Salama', serialNumber: 'OP000012', estimatedValue: 5000000, currency: 'EGP', createdAt: ts(-40), updatedAt: ts(-3) });
 
+// Tidy T5b: the manager's bids - o4 late (not yet submitted), o2 submitted
+// (its passed deadline is NOT late), o3 lost (folded under "Show 1 closed").
+__seed('opportunities', 'o3', { title: 'Jetty inspection services', client: 'NNPC', stage: 'Lost', submissionDeadline: dayOffset(-30), ownerId: 'u-mgr', ownerName: 'Tariq Salama', serialNumber: 'OP000013', estimatedValue: 800000, currency: 'EGP', createdAt: ts(-1), updatedAt: ts(-1) });
+__seed('opportunities', 'o4', { title: 'Crude tank cleaning call-off for the western desert fields', client: 'Khalda', stage: 'Identified', submissionDeadline: dayOffset(-2), ownerId: 'u-mgr', ownerName: 'Tariq Salama', serialNumber: 'OP000014', estimatedValue: 2500000, currency: 'EGP', createdAt: ts(-50), updatedAt: ts(-2),
+  checklist: [{ id: 's1', title: 'Bid bond', dueDate: dayOffset(-4), done: false }, { id: 's2', title: 'Technical offer', dueDate: dayOffset(-3), done: true }] });
+
 __seed('projects', 'p1', { name: 'Meleiha gas plant operations and maintenance', client: 'AGIBA', status: 'Active', serialNumber: 'PR000003', startDate: dayOffset(-200), endDate: dayOffset(160), userId: 'u-mgr', teamId: 'T1', createdAt: ts(-200), updatedAt: ts(-4) });
 __seed('projectContracts', 'k1', { projectId: 'p1', subject: 'Tank cleaning', contractNumber: 'C-2201', endDate: dayOffset(12), status: 'Active' });
 
@@ -547,6 +553,94 @@ async function letterRows(tag, phone) {
   })()`);
 }
 
+// Tidy T5b: the Bids board gets the same tidy-up. Groups by owner and opens
+// Tariq: o4 (late, not submitted), o2 (submitted — never "late"), o3 (lost).
+async function bidRows(tag, phone) {
+  await evalJS(`(() => { try { localStorage.removeItem('etaske:bids:showClosed'); } catch {} })()`);
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/opportunities'`); await sleep(700);
+  const compact = await evalJS(`!!document.querySelector('.board-toolbar--compact .groupby-compact select')`);
+  check(`${tag}: the Bids toolbar is the compact one (Group by dropdown)`, compact);
+  await evalJS(`(async () => {
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'owner'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const card = [...document.querySelectorAll('button[data-group-card]')].find(c => /Tariq/.test(c.textContent));
+    card.click();
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  })()`);
+  const order = async () => JSON.parse(await evalJS(`JSON.stringify([...document.querySelectorAll('[data-opp-row]')].filter(window.__vis).map(r => r.getAttribute('data-opp-row')))`));
+  const r = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const rows = [...document.querySelectorAll('[data-opp-row]')].filter(window.__vis);
+    const h = rows.map(x => Math.round(x.getBoundingClientRect().height));
+    const cards = rows.map(x => x.closest('.card'));
+    const edges = cards.map(c => { const s = getComputedStyle(c); return [s.borderLeftWidth, s.borderRightWidth]; });
+    const rowOver = cards.filter(c => c.scrollWidth > c.clientWidth + 1).length;
+    const tog = document.querySelector('[data-closed-toggle]');
+    const cur = document.querySelector('[data-group-tab][aria-current="true"]');
+    const counts = document.querySelector('[data-group-counts]');
+    const due = id => { const d = document.querySelector('[data-opp-row="' + id + '"] [data-opp-due]'); return d ? getComputedStyle(d).color : null; };
+    const steps = document.querySelector('[data-opp-row="o4"] [data-testid=opp-card-checklist]');
+    return { h, edges, rowOver, over: window.__overflow(),
+      owner: rows.filter(x => x.querySelector('.task-row-owner')).length,
+      client: rows.map(x => (x.querySelector('.task-row-from') || {}).textContent || '').join('|'),
+      dueLate: due('o4'), dueSubmitted: due('o2'), steps: steps && steps.textContent.trim(),
+      tog: tog && { mode: tog.getAttribute('data-closed-toggle'), text: tog.textContent.trim() },
+      tabs: !!document.querySelector('[data-group-tabs]'), curLate: !!cur && !!cur.querySelector('.group-tab-late'),
+      counts: counts && counts.innerText.replace(/\\s+/g, ' ').trim(),
+      late: !!(counts && counts.querySelector('.group-head-chip--late')), closedChip: !!(counts && counts.querySelector('.group-head-chip--done')) };
+  })())`));
+  const why = JSON.stringify(r);
+  // Desktop: two lines (~82px) — the ~1,000px page is too narrow for every
+  // bid column AND a readable title on one line (was a ~190px card).
+  const maxH = phone ? 110 : 90;
+  const first = await order();
+  check(`${tag}: late bid first, submitted next, lost bid folded away`, first.join('|') === 'o4|o2', JSON.stringify(first));
+  check(`${tag}: every bid row is short (≤ ${maxH}px)`, r.h.length === 2 && r.h.every(x => x <= maxH), why);
+  check(`${tag}: grouped by owner, the rows do not repeat the owner; the client is on the row`, r.owner === 0 && /Khalda/.test(r.client) && /Petromint/.test(r.client), why);
+  check(`${tag}: the late deadline is red; a submitted bid's passed deadline is not`, /239, 68, 68/.test(r.dueLate || '') && !/239, 68, 68/.test(r.dueSubmitted || ''), why);
+  check(`${tag}: the checklist count stays on the row`, !!r.steps && /1\/2/.test(r.steps), why);
+  check(`${tag}: a late row gets a 3px edge, no stage stripe`, r.edges.every(e => e.every(w => w === '1px' || w === '3px')) && r.edges[0].includes('3px') && !r.edges[1].includes('3px'), why);
+  check(`${tag}: no sideways scroll on the page or inside a row`, r.over <= 0 && r.rowOver === 0, why);
+  check(`${tag}: group tabs shown, Tariq's tab carries a red late count`, r.tabs && r.curLate, why);
+  check(`${tag}: the section header counts open · late · closed`, !!r.counts && r.late && r.closedChip, why);
+  check(`${tag}: a "Show 1 closed bids" button sits under the list`, !!r.tog && r.tog.mode === 'show' && /1/.test(r.tog.text), why);
+
+  await shot(`${phone ? (/ar /.test(tag) ? 'ar' : 'en') : 'desktop'}-bid-rows`, false);
+  await evalJS(`document.querySelector('[data-closed-toggle]').click()`); await sleep(400);
+  const shown = await order();
+  const saved = await evalJS(`(() => { try { return localStorage.getItem('etaske:bids:showClosed'); } catch { return 'x'; } })()`);
+  check(`${tag}: "Show" brings the lost bid back, LAST, and is remembered`, shown.join('|') === 'o4|o2|o3' && saved === '1', JSON.stringify({ shown, saved }));
+  await evalJS(`document.querySelector('[data-closed-toggle="hide"]').click()`); await sleep(400);
+  const hidden = await order();
+  check(`${tag}: "Hide closed bids" folds it again`, hidden.join('|') === 'o4|o2'
+    && (await evalJS(`localStorage.getItem('etaske:bids:showClosed')`)) === '0', JSON.stringify(hidden));
+
+  // Clicking a row opens the bid page.
+  const det = JSON.parse(await evalJS(`(async () => {
+    document.querySelector('[data-opp-row="o4"] h3').click(); await new Promise(r => setTimeout(r, 600));
+    const page = !document.querySelector('[data-opp-row]') && document.body.innerText.includes('OP000014');
+    return JSON.stringify({ page });
+  })()`));
+  check(`${tag}: clicking a row opens that bid's page`, det.page, JSON.stringify(det));
+
+  // Put the board back the way the rest of the run expects it (leaving the
+  // view unmounts the bid page).
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/opportunities'`); await sleep(600);
+  await evalJS(`(async () => {
+    const tab = document.querySelector('[data-group-tab=""]');
+    if (tab) { tab.click(); await new Promise(r => setTimeout(r, 300)); }
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'stage'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    try { localStorage.removeItem('etaske:bids:showClosed'); } catch {}
+  })()`);
+}
+
 // Tidy Tasks T4: the List / Board switch and the Board view. "My Tasks" holds
 // the manager's t6 (Pending), t2 + t3 (In Progress, t2 late) and t5 (Done).
 // Moves a card by the "Move to" menu AND by a real drag-and-drop, opens a
@@ -803,6 +897,7 @@ try {
     await toolbarTabs(`${lang} Tasks toolbar`, true);
     await boardView(`${lang} Tasks board`, true);
     await letterRows(`${lang} Letters rows`, true);
+    await bidRows(`${lang} Bids rows`, true);
 
     // The chat bubble steps aside while the page scrolls, and comes back.
     await evalJS(`location.hash = '/correspondences'`);
@@ -908,8 +1003,8 @@ try {
     })())`));
     check(`desktop ${label}: header keeps its words${d.desc !== null ? ' and description' : ''}${d.icon !== null ? ' and icon' : ''}`,
       d.label && d.desc !== false && d.icon !== false, JSON.stringify(d));
-    if (view === 'tasks' || view === 'correspondences') {
-      // T3 / T5a: Tasks and Letters carry the compact dropdown so the toolbar holds ONE row.
+    if (view === 'tasks' || view === 'correspondences' || view === 'opportunities') {
+      // T3 / T5a / T5b: Tasks, Letters and Bids carry the compact dropdown so the toolbar holds ONE row.
       check(`desktop ${label}: Group by is one dropdown, toolbar row unchanged`, !d.strip && d.select && d.actions === 'contents', JSON.stringify(d));
     } else {
       check(`desktop ${label}: Group by stays the button strip, toolbar row unchanged`, d.strip && !d.select && d.actions === 'contents', JSON.stringify(d));
@@ -922,6 +1017,7 @@ try {
   await toolbarTabs('desktop Tasks toolbar', false);
   await boardView('desktop Tasks board', false);
   await letterRows('desktop Letters rows', false);
+  await bidRows('desktop Bids rows', false);
   await shot('desktop-task-finished', false);
 
   check('no uncaught page errors', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,

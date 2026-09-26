@@ -71,13 +71,13 @@ function isoDay(d: Date): string {
  * Done status filter) — folding everything would leave an empty list behind a
  * button, which is just a slower way to show the same rows.
  */
-export function foldFinished<T extends { id: string; status: string }>(
+export function foldFinished<T extends { id: string }>(
   items: readonly T[],
   showFinished: boolean,
   keepIds: readonly (string | null | undefined)[] = [],
   // What "finished" means on this board — `Done` for a task, `Closed` for a
-  // letter (Tidy T5a).
-  isDone: (item: T) => boolean = item => item.status === 'Done',
+  // letter (Tidy T5a), a closed stage for a bid (T5b).
+  isDone: (item: T) => boolean = item => (item as { status?: string }).status === 'Done',
 ): { visible: T[]; hidden: number } {
   if (showFinished || items.every(isDone)) return { visible: [...items], hidden: 0 };
   const keep = new Set(keepIds.filter(Boolean) as string[]);

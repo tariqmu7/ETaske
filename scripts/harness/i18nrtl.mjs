@@ -2329,8 +2329,18 @@ await oppBackToGrid();
 // PAINTED cards after a real click.
 console.log('\n[C7b] the opportunities group-by GRID + drill-in (grid task 4)');
 const oppText = () => evalJS(`document.getElementById('root').innerText || ''`);
+// Since Tidy T5b the Bids board carries the compact Group by DROPDOWN, so the
+// dimensions are its options.
 const pickOppGroup = async (labelAr) => {
-  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  const ok = await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    const opt = sel && [...sel.options].find(o => (o.textContent || '').trim() === ${JSON.stringify(labelAr)});
+    if (!opt) return false;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  if (!ok) throw new Error(`no Group by option ${labelAr}`);
   await sleep(420);
   return oppGridCards();
 };

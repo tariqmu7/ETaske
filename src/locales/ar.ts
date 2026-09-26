@@ -2044,6 +2044,8 @@ const ar: Record<keyof typeof en, string> = {
   "Closed: {{count}}": "مغلقة: {{count}}",
   "Show {{count}} closed": "اعرض المراسلات المغلقة ({{count}})",
   "Hide closed": "أخفِ المراسلات المغلقة",
+  "Show {{count}} closed bids": "اعرض الفرص المغلقة ({{count}})",
+  "Hide closed bids": "أخفِ الفرص المغلقة",
 
 };
 
