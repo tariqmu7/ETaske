@@ -323,7 +323,10 @@ window.__selectWith = (optionText, root) => [...(root || document).querySelector
 window.__corrCard = key => [...document.querySelectorAll('div')]
   .filter(d => window.__vis(d) && window.__txt(d).includes(key)
     && [...d.querySelectorAll('button')].some(b => b.title === 'Edit'))
-  .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)[0] || null;
+  .sort((a, b) => (a.textContent || '').length - (b.textContent || '').length)
+  // Slim rows (Tidy T5a): the smallest match is the row; the card around it
+  // also holds the quick-assign panel.
+  .map(d => d.closest('.card') || d)[0] || null;
 window.__subject = () => { const f = window.__form(); return f ? f.querySelector('input.input') : null; };
 // The create-task slide-over (ManagerInbox conversion).
 window.__panel = () => document.querySelector('input[placeholder="What needs to be done?"]');
@@ -637,9 +640,12 @@ check('★ the other names the TASK and its serial',
 console.log('\n[10] the inline quick-assign inherits the link too');
 const fuBeforeQuick = (await followUps('op2')).length;
 await openGroupHolding('CR000042');
+// Quick assign opens under its row on demand since Tidy T5a.
+await clickEl(`window.__corrCard('CR000042').querySelector('[data-quick-assign]')`, 'open quick assign');
+await sleep(300);
 await pickIn('Select employee', 'u-emp1', `window.__corrCard('CR000042')`);
 await openGroupHolding('CR000042');
-await clickEl(`window.__one('button', 'Assign', window.__corrCard('CR000042'))`, 'Assign (quick)');
+await clickEl(`window.__one('button', 'Assign', window.__corrCard('CR000042').querySelector('[data-quick-assign-panel]'))`, 'Assign (quick)');
 await sleep(1000);
 const quickTask = (await allOf('tasks')).find(t => t.correspondingId === 'c-quick');
 check('the quick-assign created its task', !!quickTask);

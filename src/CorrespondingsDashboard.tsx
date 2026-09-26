@@ -25,7 +25,7 @@ import { consumeCreateIntent, subscribeCreate, type CorrespondingPrefill } from 
 import {
   Plus, Filter, X, AlertCircle, MailOpen, ChevronDown, FileText,
   Paperclip, Calendar, Download, Trash2, Edit2, Clock, Building2, Tag, ExternalLink,
-  UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon, ArrowLeft
+  UserPlus, Send, MessageSquare, Layers, ListChecks, MapPin, User as UserIcon, ChevronUp
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -39,7 +39,9 @@ import RecordLinkPicker from './components/RecordLinkPicker';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
-import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
+import { buildGroups, UNGROUPED } from './lib/grouping';
+import GroupTabs, { GroupTab } from './components/GroupTabs';
+import { byTaskUrgency, foldFinished, localToday, type OrderableTask } from './lib/taskOrder';
 import FollowUpLetterModal from './components/FollowUpLetterModal';
 import { waitingSince, type FollowUpInfo } from './lib/followUp';
 import { uploadToDrive } from './lib/driveUpload';
@@ -89,6 +91,20 @@ const CORR_STATUS_ACCENT: Record<string, string> = {
   Assigned: '#8b5cf6',
   Closed: '#94a3b8',
 };
+
+/** localStorage key for the "show closed letters" choice (Tidy T5a). */
+const SHOW_CLOSED_KEY = 'etaske:letters:showClosed';
+
+/**
+ * A letter seen through the Tasks board's reading order (lib/taskOrder.ts):
+ * late → due within 3 days → later → no deadline, Closed last.
+ */
+const asOrderable = (i: Corresponding): OrderableTask => ({
+  status: i.status === 'Closed' ? 'Done' : i.status,
+  dueDate: i.deadline,
+  priority: i.priority,
+});
+const isClosed = (i: Corresponding) => i.status === 'Closed';
 
 /** Avatar glyph for the dimensions that have no person to show a face for. */
 const CORR_GROUP_ICON: Partial<Record<CorrGroupBy, LucideIcon>> = {
@@ -179,7 +195,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   const [isUploading, setIsUploading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Corresponding | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  // 30, like the Tasks board: slim rows (Tidy T5a) fit three times as many.
+  const itemsPerPage = 30;
   const [copiedPath, setCopiedPath] = useState<string | null>(null);
   const [selectedCorrForDetails, setSelectedCorrForDetails] = useState<Corresponding | null>(null);
   // The ready-made chaser for a correspondence that has gone quiet (queue task B4).
@@ -197,6 +214,18 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   // Inline quick-assign drafts for unassigned cards, keyed by correspondence id
   const [assignDraft, setAssignDraft] = useState<Record<string, { toId: string; comment: string }>>({});
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  // Quick assign now opens under its row on demand (Tidy T5a) instead of
+  // standing open on every unassigned card.
+  const [assignOpenId, setAssignOpenId] = useState<string | null>(null);
+  // Closed letters sit behind one "Show N closed" button — one board-wide
+  // choice, remembered on this device.
+  const [showClosed, setShowClosed] = useState<boolean>(() => {
+    try { return localStorage.getItem(SHOW_CLOSED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleShowClosed = () => setShowClosed(v => {
+    try { localStorage.setItem(SHOW_CLOSED_KEY, v ? '0' : '1'); } catch { /* private window */ }
+    return !v;
+  });
 
   const setDraft = (id: string, patch: Partial<{ toId: string; comment: string }>) =>
     setAssignDraft(p => ({ ...p, [id]: { toId: '', comment: '', ...p[id], ...patch } }));
@@ -329,15 +358,20 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   // ("3 correspondences" on a card holding 40). Pagination moved below, onto
   // whatever list is actually on screen.
   //
-  // Sorted soonest-deadline-first inside each bucket (undated last; equal dates
-  // keep newest-created-first — the listener orders createdAt desc and
-  // `buildGroups` sorts stably).
+  // Urgent first (Tidy T5a, same order as the Tasks board): late → due within
+  // 3 days → later → no deadline, Closed last; equal dates keep newest-created
+  // first (the listener orders createdAt desc and the sort is stable). Sorted
+  // once here; `buildGroups` keeps the incoming order inside each bucket.
+  const today = localToday();
+  const ordered = useMemo(() => {
+    const cmp = byTaskUrgency<OrderableTask>(today);
+    return [...filtered].sort((a, b) => cmp(asOrderable(a), asOrderable(b)));
+  }, [filtered, today]);
   const groupedItems = useMemo(
-    () => buildGroups(filtered, groupKeyOf, {
+    () => buildGroups(ordered, groupKeyOf, {
       order: groupBy === 'status' ? CORR_STATUS_GROUP_ORDER : undefined,
-      sort: byDueDateAsc<Corresponding>(i => i.deadline),
     }),
-    [filtered, groupKeyOf, groupBy],
+    [ordered, groupKeyOf, groupBy],
   );
 
   // The open bucket, re-resolved from `groupedItems` every render: a filter (or
@@ -362,12 +396,25 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
   // the detail modal, which sits above the grid.
   const showGroupGrid = !activeGroup;
 
-  const listSource = activeGroup ? activeGroup.items : filtered;
+  // Closed letters are folded away unless asked for; the one open in the
+  // detail window stays.
+  const fullList = activeGroup ? activeGroup.items : ordered;
+  const fold = useMemo(
+    () => foldFinished(fullList, showClosed, [selectedCorrForDetails?.id], isClosed),
+    [fullList, showClosed, selectedCorrForDetails?.id],
+  );
+  const listSource = fold.visible;
+  const closedInList = useMemo(() => fullList.filter(isClosed).length, [fullList]);
   const totalPages = Math.ceil(listSource.length / itemsPerPage);
   const paginatedItems = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
     return listSource.slice(startIndex, startIndex + itemsPerPage);
   }, [listSource, currentPage]);
+
+  // Hiding closed letters can leave the pager past its last page.
+  useEffect(() => {
+    if (totalPages > 0 && currentPage > totalPages) setCurrentPage(totalPages);
+  }, [totalPages, currentPage]);
 
   // What the list renders: the open bucket, one page of it.
   const renderGroups = useMemo(
@@ -448,6 +495,25 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       ],
     };
   }), [groupedItems, groupBy, projectUsers, label, t]);
+
+  // Per-bucket totals over EVERY filtered letter (closed ones too, folded or
+  // not) — what the group tabs and the section header report.
+  const groupTally = useMemo(() => {
+    const m = new Map<string, { open: number; late: number; closed: number }>();
+    for (const g of groupedItems) {
+      const closed = g.items.filter(isClosed).length;
+      const late = g.items.filter(i => !isClosed(i) && isOverdue(i.deadline)).length;
+      m.set(g.key, { open: g.items.length - closed, late, closed });
+    }
+    return m;
+  }, [groupedItems]);
+
+  const groupTabs = useMemo<GroupTab[]>(() => groupedItems.map(g => ({
+    key: g.key,
+    label: groupTitle(g),
+    count: g.items.length,
+    late: groupTally.get(g.key)?.late || 0,
+  })), [groupedItems, groupTally, groupBy, label, t]);
 
   const groupByOptions = useMemo<GroupByOption<CorrGroupBy>[]>(() => [
     { key: 'status', label: t('Status'), icon: ListChecks },
@@ -954,7 +1020,8 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         search={search}
         onSearch={setSearch}
         searchPlaceholder={t('Search subject or sender…')}
-        groupBy={<GroupByBar<CorrGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        compact
+        groupBy={<GroupByBar<CorrGroupBy> compact value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
         activeFilterCount={(dateFilter ? 1 : 0) + (deptFilter !== 'All' ? 1 : 0)}
         onClearFilters={() => { setDateFilter(''); setDeptFilter('All'); }}
         filters={
@@ -1008,263 +1075,194 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         />
       ) : (
       <>
-      {/* The only way back to the grid. */}
-      <button
-        className="btn btn-ghost btn-sm"
-        onClick={() => setOpenGroup(null)}
-        style={{ marginBottom: 16 }}
-      >
-        <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
-      </button>
-      {/* Items list, scoped to the open bucket */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+      {/* Group tabs (Tidy T5a): the first goes back to the grid, every other
+          group is one tap away with its size and its late count. */}
+      <GroupTabs
+        tabs={groupTabs}
+        active={activeGroup ? activeGroup.key : null}
+        onSelect={setOpenGroup}
+      />
+      {/* Items list, scoped to the open bucket. `corr-list` is a size
+          container: next to the manager's workload panel the list is too
+          narrow for one line, so the rows fold to two (see index.css). */}
+      <div className="corr-list" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
         {renderGroups.map(group => (
         <div key={group.key}>
-          <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingInlineStart: 4 }}>
             <Layers className="w-4 h-4 text-accent" />
             {groupHeading(group)}
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+            {(() => {
+              // The whole group's numbers, not this page's: open · late · closed.
+              const tally = groupTally.get(group.key);
+              if (!tally) return null;
+              return (
+                <span className="group-head-counts" data-group-counts>
+                  <span className="group-head-chip">{t('Open: {{count}}', { count: tally.open })}</span>
+                  {tally.late > 0 && <span className="group-head-chip group-head-chip--late">{t('Late: {{count}}', { count: tally.late })}</span>}
+                  {tally.closed > 0 && <span className="group-head-chip group-head-chip--done">{t('Closed: {{count}}', { count: tally.closed })}</span>}
+                </span>
+              );
+            })()}
           </h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         <AnimatePresence>
           {group.items.map(item => {
-            // Unassigned cards are rendered "full" (whole body + links + an inline
-            // quick-assign panel) and are NOT clickable — everything is on the card.
-            const isUnassignedCard = !item.assignedToId && item.status !== 'Closed';
+            // Slim rows (Tidy T5a): ONE line per letter — serial, subject,
+            // sender, owner, deadline, status. The body, folders and the
+            // attachment live in the detail window a click away; quick assign
+            // opens under the row on demand.
+            const closed = item.status === 'Closed';
+            const late = !closed && isOverdue(item.deadline);
+            const soon = !closed && !late && isDueSoon(item.deadline);
+            const unassigned = !item.assignedToId && !closed;
+            const assignOpen = assignOpenId === item.id;
             const draft = assignDraft[item.id] || { toId: '', comment: '' };
+            const owner = item.assignedToId ? projectUsers.find(pu => pu.id === item.assignedToId) : undefined;
             return (
             <motion.div
-              layout
               key={item.id}
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-               className={isUnassignedCard ? 'card' : 'card card-interactive'}
-               style={{
-                 padding: '14px 18px',
-                 cursor: isUnassignedCard ? 'default' : 'pointer',
-                 display: 'flex',
-                 alignItems: isUnassignedCard ? 'flex-start' : 'center',
-                 gap: 16,
-                 borderInlineStart: isDueSoon(item.deadline) && item.status !== 'Closed'
-                   ? '4px solid #f97316'
-                   : `4px solid ${(() => {
-                     const u = projectUsers.find(pu => pu.id === item.assignedToId);
-                     return u?.userColor || getUserColor(item.assignedToId || item.userId || '');
-                   })()}`,
-                 backgroundColor: isDueSoon(item.deadline) && item.status !== 'Closed' ? 'var(--surface-warn)' : 'var(--surface)'
-               }}
-              onClick={isUnassignedCard ? undefined : () => setSelectedCorrForDetails(item)}
+              exit={{ opacity: 0 }}
+              className="card"
+              style={{
+                // The edge only speaks when something needs attention.
+                borderInlineStart: late ? '3px solid #ef4444' : soon ? '3px solid #f97316' : undefined,
+                backgroundColor: closed ? 'var(--surface-2)' : 'var(--surface)',
+              }}
             >
-              {/* Main column */}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                {/* Title row: serial + subject + badges */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 4 }}>
+              <div
+                className="task-row corr-row"
+                data-corr-row={item.id}
+                onClick={() => setSelectedCorrForDetails(item)}
+              >
+                <div className="task-row-main">
                   {item.serialNumber && (
-                    <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', flexShrink: 0 }} className="ltr-data">
-                      #{item.serialNumber}
-                    </span>
+                    <span className="task-row-serial ltr-data">#{item.serialNumber}</span>
                   )}
-                  <h3 style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.4, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>{item.subject}</h3>
-                  <span className={statusBadgeClass(item.status)}>{label(item.status)}</span>
-                  {isUnassignedCard && <span className={priorityBadgeClass(item.priority)}>{label(item.priority)}</span>}
-                  {isUnassignedCard && item.category && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                      textTransform: 'uppercase',
-                      background: item.category === 'Project' ? '#dbeafe' : item.category === 'External' ? '#dcfce7' : '#f3e8ff',
-                      color: item.category === 'Project' ? '#1d4ed8' : item.category === 'External' ? '#15803d' : '#6d28d9',
-                    }} className={fmt.bidiFor(label(item.category))}>{label(item.category)}</span>
-                  )}
-                  {isUnassignedCard && item.actions && item.actions !== 'None' && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', padding: '3px 10px',
-                      borderRadius: 0, fontSize: 11, fontWeight: 700, letterSpacing: '0.04em',
-                      textTransform: 'uppercase', background: '#fee2e2', color: '#dc2626',
-                      border: '1px solid #fecaca'
-                    }}>{label(item.actions)}</span>
-                  )}
-                  {!item.assignedToId && item.status !== 'Closed' && (
-                    <span className="badge" style={{ background: '#f43f5e', color: '#fff' }}>{t('UNASSIGNED')}</span>
-                  )}
-                  {isOverdue(item.deadline) && item.status !== 'Closed' && (
-                    <span className="badge badge-urgent">{t('OVERDUE')}</span>
-                  )}
-                  {isDueSoon(item.deadline) && item.status !== 'Closed' && (
-                    <span className="badge" style={{ background: '#f97316', color: '#fff' }}>{t('DUE SOON')}</span>
-                  )}
+                  {/* dir="auto": an Arabic subject lines up on the right of its cell. */}
+                  <h3
+                    dir="auto"
+                    className="task-row-title"
+                    title={item.subject}
+                    style={{ color: closed ? 'var(--text-muted)' : 'var(--text-primary)' }}
+                  >
+                    {item.subject}
+                  </h3>
                 </div>
 
-                {/* Body — full on unassigned cards, one-line snippet elsewhere */}
-                {isUnassignedCard && item.body && (
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 13, margin: '0 0 8px', whiteSpace: 'pre-wrap', lineHeight: 1.6 }}>{item.body}</p>
-                )}
+                <div className="task-row-meta">
+                  {/* Grouped by sender, every row would repeat the group's name. */}
+                  {groupBy !== 'sender' && <span className="task-row-from" title={item.sentFrom ? `${t('From:')} ${item.sentFrom}` : undefined}>
+                    <MailOpen className="w-3 h-3" style={{ flexShrink: 0 }} aria-hidden />
+                    <span className="task-row-ellipsis" dir="auto">{item.sentFrom || '—'}</span>
+                  </span>}
 
-                {/* Meta line */}
-                <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--text-muted)', flexWrap: 'wrap', alignItems: 'center' }}>
-                  {isUnassignedCard && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <Building2 className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                      {item.department}{item.subCategory ? ` › ${item.subCategory}` : ''}
+                  <span className="task-row-owner" title={item.assignedTo || t('Unassigned')}>
+                    {item.assignedTo ? (
+                      <>
+                        {owner?.photoURL
+                          ? <img src={owner.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                          : <span className="task-row-initial" aria-hidden>{(item.assignedTo.trim()[0] || '?').toUpperCase()}</span>}
+                        <span className="task-row-ellipsis">{item.assignedTo}</span>
+                      </>
+                    ) : (
+                      <span className="task-row-ellipsis" data-unassigned style={{ color: unassigned ? '#e11d48' : 'var(--text-muted)' }}>{t('Unassigned')}</span>
+                    )}
+                  </span>
+
+                  <span
+                    className="task-row-due"
+                    title={late ? t('OVERDUE') : soon ? t('DUE SOON') : undefined}
+                    style={{ color: late ? '#ef4444' : soon ? '#ea580c' : 'var(--text-muted)', fontWeight: (late || soon) ? 700 : 500 }}
+                  >
+                    {item.deadline ? (
+                      <>
+                        {late ? <AlertCircle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                        <span className="ltr-data">{item.deadline}</span>
+                      </>
+                    ) : <span aria-hidden>—</span>}
+                  </span>
+
+                  <span className="task-row-status">
+                    <span className="task-status-label" data-status={item.status}>
+                      {closed
+                        ? <Check style={{ width: 12, height: 12, flexShrink: 0 }} />
+                        : <span className="task-status-dot" />}
+                      <span>{label(item.status)}</span>
                     </span>
-                  )}
-                  {isUnassignedCard && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <MailOpen className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                      {t('From:')} {item.sentFrom}
-                    </span>
-                  )}
-                  {item.deadline && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#fbbf24' }}>
-                      <Calendar className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                      {item.deadline}
-                    </span>
-                  )}
-                  {isUnassignedCard && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {(() => {
-                        const u = projectUsers.find(pu => pu.id === item.userId);
-                        return u?.photoURL ? (
-                          <img src={u.photoURL} className="avatar" style={{ width: 14, height: 14, objectFit: 'cover', opacity: 0.8 }} alt="" />
-                        ) : (
-                          <span style={{ width: 8, height: 8, borderRadius: 0, background: u?.userColor || getUserColor(item.userId), opacity: 0.6 }} />
-                        );
-                      })()}
-                      {projectUsers.find(u => u.id === item.userId)?.displayName || t('Unknown')}
-                    </span>
-                  )}
-                  {item.assignedTo && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-primary)', fontWeight: 600 }}>
-                      {(() => {
-                        const u = projectUsers.find(pu => pu.id === item.assignedToId);
-                        return u?.photoURL ? (
-                          <img src={u.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover' }} alt="" />
-                        ) : (
-                          <span style={{ width: 10, height: 10, borderRadius: 0, background: u?.userColor || getUserColor(item.assignedToId || item.assignedTo) }} />
-                        );
-                      })()}
-                      <span className="dir-arrow">→</span> {item.assignedTo}
-                    </span>
-                  )}
+                  </span>
                 </div>
 
-                {/* ── Full info shown inline on unassigned cards ── */}
-                {isUnassignedCard && (
-                  <>
-                    {/* Shared folders / links — fully expanded, no need to open the card */}
-                    {item.filePaths && item.filePaths.length > 0 && (
-                      <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <ExternalLink className="w-3.5 h-3.5" /> {t('Shared Folders / Links')}
-                        </div>
-                        {item.filePaths.map((path, idx) => {
-                          const friendlyName = path.split(/[/\\]/).filter(Boolean).pop() || path;
-                          const isUrl = path.startsWith('http://') || path.startsWith('https://');
-                          return (
-                            <div key={idx} style={{ padding: '8px 12px', background: 'var(--surface-3)', border: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <span
-                                  onClick={() => openOrCopyPath(path)}
-                                  title={isUrl ? path : t('Click to copy path: {{path}}', { path })}
-                                  style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-primary)', cursor: 'pointer', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                                >{friendlyName}</span>
-                                {!isUrl && (
-                                  <span style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'monospace', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{path}</span>
-                                )}
-                              </div>
-                              <button
-                                onClick={() => openOrCopyPath(path)}
-                                title={t('Open (web link) or copy this path')}
-                                className="btn btn-ghost btn-sm"
-                                style={{ padding: '4px 8px', height: 'auto', minHeight: 'auto', flexShrink: 0 }}
-                              >
-                                {copiedPath === path ? <Check className="w-3.5 h-3.5 text-green" /> : <ExternalLink className="w-3.5 h-3.5" />}
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-
-                    {/* Attachment link */}
-                    {item.attachedFile && (
-                      <a
-                        href={item.attachedFile} onClick={attachmentClick(item.attachedFile, item.attachedFileName)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', background: 'var(--blue-50)', border: '1px solid var(--blue-200)', color: 'var(--blue-400)', textDecoration: 'none', fontSize: 12, fontWeight: 600 }}
-                      >
-                        <Paperclip className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                        <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.attachedFileName || t('View attachment')}</span>
-                        <ExternalLink className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
-                      </a>
-                    )}
-
-                    {/* Quick assign — pick an employee, add a comment, hand it off */}
-                    {isManager && (
-                      <div style={{ marginTop: 14, padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <UserPlus className="w-3.5 h-3.5" /> {t('Quick Assign')}
-                        </div>
-                        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
-                          <select
-                            className="input"
-                            style={{ flex: '1 1 180px', minWidth: 160 }}
-                            value={draft.toId}
-                            onClick={e => e.stopPropagation()}
-                            onChange={e => setDraft(item.id, { toId: e.target.value })}
-                          >
-                            <option value="">— {t('Select employee')} —</option>
-                            {targetUsers.map(u => (
-                              <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
-                            ))}
-                          </select>
-                          <div style={{ position: 'relative', flex: '2 1 220px', minWidth: 180 }}>
-                            <MessageSquare style={{ position: 'absolute', insetInlineStart: 10, top: 12, width: 14, height: 14, color: 'var(--text-muted)' }} />
-                            <textarea
-                              className="input"
-                              style={{ paddingInlineStart: 32, minHeight: 38, resize: 'vertical' }}
-                              rows={1}
-                              placeholder={t('Add a comment for them…')}
-                              value={draft.comment}
-                              onChange={e => setDraft(item.id, { comment: e.target.value })}
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-primary"
-                            disabled={!draft.toId || assigningId === item.id}
-                            onClick={() => quickAssign(item)}
-                            style={{ gap: 6, flexShrink: 0 }}
-                          >
-                            <Send className="w-3.5 h-3.5" />
-                            {assigningId === item.id ? t('Assigning…') : t('Assign')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
+                <div className="task-row-actions" onClick={e => e.stopPropagation()}>
+                  {unassigned && isManager && (
+                    <button
+                      type="button"
+                      className="btn btn-ghost btn-sm corr-row-assign"
+                      data-quick-assign={item.id}
+                      aria-expanded={assignOpen}
+                      onClick={() => setAssignOpenId(assignOpen ? null : item.id)}
+                      title={t('Quick Assign')}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      <span className="corr-row-assign-label">{t('Assign')}</span>
+                    </button>
+                  )}
+                  <button
+                    className="btn btn-ghost btn-icon btn-sm"
+                    onClick={() => openModal(item, false)}
+                    title={t('Edit')}
+                    aria-label={t('Edit')}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    className="btn btn-ghost btn-icon btn-sm corr-row-delete"
+                    onClick={() => setDeleteTarget(item)}
+                    title={t('Delete')}
+                    aria-label={t('Delete')}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
 
-              {/* Action buttons */}
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                <button
-                  className="btn btn-ghost btn-icon btn-sm"
-                  onClick={e => { e.stopPropagation(); openModal(item, false); }}
-                  title={t('Edit')}
-                >
-                  <Edit2 className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  className="btn btn-danger btn-icon btn-sm"
-                  onClick={e => { e.stopPropagation(); setDeleteTarget(item); }}
-                  title={t('Delete')}
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
+              {/* Quick assign — pick an employee, add a comment, hand it off */}
+              {unassigned && isManager && assignOpen && (
+                <div data-quick-assign-panel={item.id} style={{ margin: '0 12px 12px', padding: 12, background: 'var(--surface-2)', border: '1px solid var(--border)', display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'flex-start' }}>
+                  <select
+                    className="input"
+                    style={{ flex: '1 1 180px', minWidth: 160 }}
+                    value={draft.toId}
+                    aria-label={t('Select employee')}
+                    onChange={e => setDraft(item.id, { toId: e.target.value })}
+                  >
+                    <option value="">— {t('Select employee')} —</option>
+                    {targetUsers.map(u => (
+                      <option key={u.id} value={u.id}>{u.displayName} ({label(u.role)})</option>
+                    ))}
+                  </select>
+                  <div style={{ position: 'relative', flex: '2 1 220px', minWidth: 180 }}>
+                    <MessageSquare style={{ position: 'absolute', insetInlineStart: 10, top: 12, width: 14, height: 14, color: 'var(--text-muted)' }} />
+                    <textarea
+                      className="input"
+                      style={{ paddingInlineStart: 32, minHeight: 38, resize: 'vertical' }}
+                      rows={1}
+                      placeholder={t('Add a comment for them…')}
+                      value={draft.comment}
+                      onChange={e => setDraft(item.id, { comment: e.target.value })}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-primary"
+                    disabled={!draft.toId || assigningId === item.id}
+                    onClick={() => quickAssign(item)}
+                    style={{ gap: 6, flexShrink: 0 }}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    {assigningId === item.id ? t('Assigning…') : t('Assign')}
+                  </button>
+                </div>
+              )}
             </motion.div>
             );
           })}
@@ -1273,6 +1271,21 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
         </div>
         ))}
       </div>
+
+      {/* Closed letters sit behind this one button — below the list, so open
+          work is what the page leads with. */}
+      {(fold.hidden > 0 || (showClosed && closedInList > 0 && closedInList < fullList.length)) && (
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm task-finished-toggle"
+          data-closed-toggle={showClosed ? 'hide' : 'show'}
+          aria-expanded={showClosed}
+          onClick={toggleShowClosed}
+        >
+          {showClosed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {showClosed ? t('Hide closed') : t('Show {{count}} closed', { count: fold.hidden })}
+        </button>
+      )}
 
       {/* Pagination Controls — over the open bucket, not the whole list */}
       {totalPages > 1 && (
@@ -2002,6 +2015,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
+            data-corr-details
             style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(15, 23, 42, 0.6)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(4px)' }}
             onClick={() => setSelectedCorrForDetails(null)}
           >

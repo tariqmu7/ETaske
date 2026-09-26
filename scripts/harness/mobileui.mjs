@@ -130,6 +130,8 @@ const C = (id, extra) => __seed('correspondences', id, { body: 'Please confirm t
 C('l1', { subject: 'Clarification on the scope of the turnaround maintenance works', deadline: dayOffset(-1), status: 'Assigned', assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'CR000401' });
 C('l2', { subject: 'New enquiry from WEPCO', status: 'Unread', serialNumber: 'CR000402' });
 C('l3', { subject: 'دعوة للمشاركة في مناقصة صيانة الخزانات', status: 'Reviewing', serialNumber: 'CR000403', sentFrom: 'بتروجت' });
+// Tidy T5a: a closed NNPC letter, folded away under "Show 1 closed".
+C('l4', { subject: 'Signed minutes of the handover meeting', deadline: dayOffset(-3), status: 'Closed', assignedToId: 'u-mgr', assignedTo: 'Tariq Salama', serialNumber: 'CR000404' });
 
 __seed('opportunities', 'o1', { title: 'Tank farm maintenance framework agreement', client: 'NNPC', stage: 'Bid Preparation', submissionDeadline: dayOffset(3), ownerId: 'u-ahmed', ownerName: 'Ahmed Samir', serialNumber: 'OP000011', estimatedValue: 12000000, currency: 'EGP', winProbability: 40, createdAt: ts(-20), updatedAt: ts(-1) });
 __seed('opportunities', 'o2', { title: 'Terminal upgrade', client: 'Petromint', stage: 'Submitted', submissionDeadline: dayOffset(-5), ownerId: 'u-mgr', ownerName: 'Tariq Salama', serialNumber: 'OP000012', estimatedValue: 5000000, currency: 'EGP', createdAt: ts(-40), updatedAt: ts(-3) });
@@ -439,6 +441,112 @@ async function toolbarTabs(tag, phone) {
   check(`${tag}: another tab opens that group; "All groups" returns to the grid`, hop.switched && hop.grid >= 2 && hop.tabsGone, JSON.stringify(hop));
 }
 
+// Tidy T5a: the Letters board gets the Tasks tidy-up — slim one-line rows,
+// late first with closed letters folded, the compact toolbar, group tabs and
+// open · late · closed counts. Shows ALL letters (Total), groups by sender and
+// opens NNPC: l1 (late, assigned), l2 (unread, unassigned), l4 (closed).
+async function letterRows(tag, phone) {
+  await evalJS(`(() => { try { localStorage.removeItem('etaske:letters:showClosed'); } catch {} })()`);
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/correspondences'`); await sleep(700);
+  const compact = await evalJS(`!!document.querySelector('.board-toolbar--compact .groupby-compact select')`);
+  check(`${tag}: the Letters toolbar is the compact one (Group by dropdown)`, compact);
+  await evalJS(`(async () => {
+    document.querySelectorAll('.board-kpi')[1].click();
+    await new Promise(r => setTimeout(r, 300));
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'sender'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const card = [...document.querySelectorAll('button[data-group-card]')].find(c => /NNPC/.test(c.textContent));
+    card.click();
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  })()`);
+  const order = async () => JSON.parse(await evalJS(`JSON.stringify([...document.querySelectorAll('[data-corr-row]')].filter(window.__vis).map(r => r.getAttribute('data-corr-row')))`));
+  const r = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const rows = [...document.querySelectorAll('[data-corr-row]')].filter(window.__vis);
+    const h = rows.map(x => Math.round(x.getBoundingClientRect().height));
+    const cards = rows.map(x => x.closest('.card'));
+    const edges = cards.map(c => { const s = getComputedStyle(c); return [s.borderLeftWidth, s.borderRightWidth]; });
+    const rowOver = cards.filter(c => c.scrollWidth > c.clientWidth + 1).length;
+    const tog = document.querySelector('[data-closed-toggle]');
+    const cur = document.querySelector('[data-group-tab][aria-current="true"]');
+    const counts = document.querySelector('[data-group-counts]');
+    return { h, edges, rowOver, over: window.__overflow(),
+      body: rows.some(x => x.closest('.card').innerText.includes('Please confirm the scope')),
+      from: rows.filter(x => x.querySelector('.task-row-from')).length,
+      tog: tog && { mode: tog.getAttribute('data-closed-toggle'), text: tog.textContent.trim() },
+      tabs: !!document.querySelector('[data-group-tabs]'), cur: cur && cur.getAttribute('data-group-tab'), curLate: !!cur && !!cur.querySelector('.group-tab-late'),
+      counts: counts && counts.innerText.replace(/\\s+/g, ' ').trim(),
+      late: !!(counts && counts.querySelector('.group-head-chip--late')), closedChip: !!(counts && counts.querySelector('.group-head-chip--done')) };
+  })())`));
+  const why = JSON.stringify(r);
+  // Desktop: two lines beside the manager's workload panel (was a ~150-300px card).
+  const maxH = phone ? 110 : 90;
+  const first = await order();
+  check(`${tag}: late letter first, closed letter folded away`, first.join('|') === 'l1|l2', JSON.stringify(first));
+  check(`${tag}: every letter row is short (≤ ${maxH}px)`, r.h.length === 2 && r.h.every(x => x <= maxH), why);
+  check(`${tag}: the letter body is not on the row any more`, !r.body, why);
+  check(`${tag}: grouped by sender, the rows do not repeat the sender`, r.from === 0, why);
+  check(`${tag}: a late row gets a 3px edge, no per-person stripe`, r.edges.every(e => e.every(w => w === '1px' || w === '3px')) && r.edges[0].includes('3px'), why);
+  check(`${tag}: no sideways scroll on the page or inside a row`, r.over <= 0 && r.rowOver === 0, why);
+  check(`${tag}: group tabs shown, NNPC marked with a red late count`, r.tabs && r.cur === 'NNPC' && r.curLate, why);
+  check(`${tag}: the section header counts open · late · closed`, !!r.counts && r.late && r.closedChip, why);
+  check(`${tag}: a "Show 1 closed" button sits under the list`, !!r.tog && r.tog.mode === 'show' && /1/.test(r.tog.text), why);
+
+  // Quick assign opens under its row on demand, and closes again.
+  const qa = JSON.parse(await evalJS(`(async () => {
+    const b = document.querySelector('[data-quick-assign="l2"]');
+    if (!b) return JSON.stringify({ btn: false });
+    const bw = Math.round(b.getBoundingClientRect().height);
+    const before = !!document.querySelector('[data-quick-assign-panel]');
+    b.click(); await new Promise(r => setTimeout(r, 300));
+    const p = document.querySelector('[data-quick-assign-panel="l2"]');
+    const open = !!p && window.__vis(p) && !!p.querySelector('select');
+    const over = window.__overflow();
+    const modal = !!document.querySelector('[data-corr-details]');
+    b.click(); await new Promise(r => setTimeout(r, 300));
+    return JSON.stringify({ btn: true, bw, before, open, over, modal, closed: !document.querySelector('[data-quick-assign-panel]'),
+      onAssigned: !!document.querySelector('[data-quick-assign="l1"]') });
+  })()`));
+  check(`${tag}: "Assign" on an unassigned row opens quick assign under it (not the detail window) and closes again`,
+    qa.btn && !qa.before && qa.open && !qa.modal && qa.closed && qa.over <= 0 && !qa.onAssigned, JSON.stringify(qa));
+
+  // Clicking a row opens the detail window, which still holds the body.
+  const det = JSON.parse(await evalJS(`(async () => {
+    document.querySelector('[data-corr-row="l1"] h3').click(); await new Promise(r => setTimeout(r, 500));
+    const m = document.querySelector('[data-corr-details]');
+    const txt = m ? m.innerText : '';
+    if (m) { m.dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(r => setTimeout(r, 500)); }
+    return JSON.stringify({ open: !!m, body: txt.includes('Please confirm the scope'), serial: txt.includes('CR000401'), closed: !document.querySelector('[data-corr-details]') });
+  })()`));
+  check(`${tag}: clicking a row opens the letter with its body; it closes again`, det.open && det.body && det.serial && det.closed, JSON.stringify(det));
+
+  await shot(`${phone ? (/ar /.test(tag) ? 'ar' : 'en') : 'desktop'}-letter-rows`, false);
+  await evalJS(`document.querySelector('[data-closed-toggle]').click()`); await sleep(400);
+  const shown = await order();
+  const saved = await evalJS(`(() => { try { return localStorage.getItem('etaske:letters:showClosed'); } catch { return 'x'; } })()`);
+  check(`${tag}: "Show" brings the closed letter back, LAST, and is remembered`, shown.join('|') === 'l1|l2|l4' && saved === '1', JSON.stringify({ shown, saved }));
+  await evalJS(`document.querySelector('[data-closed-toggle="hide"]').click()`); await sleep(400);
+  const hidden = await order();
+  check(`${tag}: "Hide closed" folds it again`, hidden.join('|') === 'l1|l2'
+    && (await evalJS(`localStorage.getItem('etaske:letters:showClosed')`)) === '0', JSON.stringify(hidden));
+
+  // Put the board back the way the rest of the run expects it.
+  await evalJS(`(async () => {
+    document.querySelector('[data-group-tab=""]').click();
+    await new Promise(r => setTimeout(r, 300));
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'status'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    document.querySelectorAll('.board-kpi')[0].click();
+    await new Promise(r => setTimeout(r, 300));
+    try { localStorage.removeItem('etaske:letters:showClosed'); } catch {}
+  })()`);
+}
+
 // Tidy Tasks T4: the List / Board switch and the Board view. "My Tasks" holds
 // the manager's t6 (Pending), t2 + t3 (In Progress, t2 late) and t5 (Done).
 // Moves a card by the "Move to" menu AND by a real drag-and-drop, opens a
@@ -694,6 +802,7 @@ try {
     await finishedFold(`${lang} Tasks finished`);
     await toolbarTabs(`${lang} Tasks toolbar`, true);
     await boardView(`${lang} Tasks board`, true);
+    await letterRows(`${lang} Letters rows`, true);
 
     // The chat bubble steps aside while the page scrolls, and comes back.
     await evalJS(`location.hash = '/correspondences'`);
@@ -799,8 +908,8 @@ try {
     })())`));
     check(`desktop ${label}: header keeps its words${d.desc !== null ? ' and description' : ''}${d.icon !== null ? ' and icon' : ''}`,
       d.label && d.desc !== false && d.icon !== false, JSON.stringify(d));
-    if (view === 'tasks') {
-      // T3: Tasks carries the compact dropdown so its toolbar holds ONE row.
+    if (view === 'tasks' || view === 'correspondences') {
+      // T3 / T5a: Tasks and Letters carry the compact dropdown so the toolbar holds ONE row.
       check(`desktop ${label}: Group by is one dropdown, toolbar row unchanged`, !d.strip && d.select && d.actions === 'contents', JSON.stringify(d));
     } else {
       check(`desktop ${label}: Group by stays the button strip, toolbar row unchanged`, d.strip && !d.select && d.actions === 'contents', JSON.stringify(d));
@@ -812,6 +921,7 @@ try {
   await finishedFold('desktop Tasks finished');
   await toolbarTabs('desktop Tasks toolbar', false);
   await boardView('desktop Tasks board', false);
+  await letterRows('desktop Letters rows', false);
   await shot('desktop-task-finished', false);
 
   check('no uncaught page errors', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,

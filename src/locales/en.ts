@@ -2098,6 +2098,9 @@ const en = {
   "Open: {{count}}": "Open: {{count}}",
   "Late: {{count}}": "Late: {{count}}",
   "Finished: {{count}}": "Finished: {{count}}",
+  "Closed: {{count}}": "Closed: {{count}}",
+  "Show {{count}} closed": "Show {{count}} closed",
+  "Hide closed": "Hide closed",
 
 } as const;
 

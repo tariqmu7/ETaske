@@ -1652,3 +1652,28 @@ h1, h2, h3, h4, p, span, div {
   .board-toolbar--compact .task-layout-switch > button { min-height: 38px; padding-inline: 10px; }
   .board-toolbar--compact .task-layout-label { display: none; }
 }
+
+/* ── Letters board: slim rows (Tidy T5a) ─────────────────────────────────
+   Reuses the Tasks row (.task-row); a letter adds the sender column and a
+   quick-assign button on unassigned rows. */
+.task-row-from { display: inline-flex; align-items: center; gap: 6px; width: 130px; min-width: 0; color: var(--text-muted); }
+.corr-row .task-status-label { cursor: default; }
+.corr-row .task-status-label[data-status="Unread"] { color: #b45309; border-color: #f59e0b; }
+.corr-row .task-status-label[data-status="Assigned"] { color: var(--accent); border-color: var(--accent); }
+.corr-row .task-status-label[data-status="Assigned"] .task-status-dot { background: currentColor; }
+.corr-row .task-status-label[data-status="Closed"] { color: var(--text-muted); background: transparent; }
+.corr-row-assign { gap: 6px; color: var(--accent) !important; font-weight: 700; }
+.corr-row-delete:hover { color: #dc2626 !important; }
+@media (max-width: 900px) { .task-row-from { width: 100px; } }
+/* Beside the manager's workload panel the list is ~700px — too narrow for one
+   line, so the row folds to two (title + actions, then the meta), as on a phone. */
+.corr-list { container-type: inline-size; }
+@container (max-width: 820px) {
+  .corr-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main actions" "meta meta"; }
+  .corr-row .task-row-meta { flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+  .corr-row .task-row-status { margin-inline-start: auto; width: auto; }
+}
+@media (max-width: 640px) {
+  .task-row-from { width: auto; max-width: 40vw; }
+  .corr-row-assign-label { display: none; }
+}

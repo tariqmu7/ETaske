@@ -1675,9 +1675,14 @@ await shot('dash-ar');
 console.log('\n[C3] the literal arrow in the copy');
 await evalJS(`window.__mount('corr')`);
 await sleep(500);
-// The arrow is painted on a correspondence ROW ("assigned → Nevin"), and rows
-// now live behind a group card — drill in or there is nothing to measure.
+// The arrow used to be painted on a correspondence ROW ("assigned → Nevin").
+// The slim rows (Tidy T5a) show the owner in a column of its own, so no row
+// draws it any more; the remaining literal arrows ("Client file →") sit on
+// pages this harness does not open. Measure the .dir-arrow rule on a probe
+// inside the mounted board instead — it proves the mirroring, not which copy
+// carries the wrapper.
 await openFirstGroupCard();
+await evalJS(`(() => { const s = document.createElement('span'); s.className = 'dir-arrow'; s.id = 'arrow-probe'; s.textContent = '→'; document.querySelector('#root').appendChild(s); })()`);
 const arrow = `(() => {
   const a = document.querySelector('#root .dir-arrow');
   return a ? getComputedStyle(a).transform : 'not rendered';
@@ -1689,6 +1694,7 @@ await sleep(200);
 const arrowLtr = await evalJS(arrow);
 check('non-vacuous: the same "→" is not mirrored in LTR', arrowLtr === 'none', arrowLtr);
 await evalJS(`document.documentElement.setAttribute('dir','rtl')`);
+await evalJS(`document.getElementById('arrow-probe')?.remove()`);
 
 // ── [C4] the tasks flow really renders Arabic (task 4) ──────────────────────
 // [A5]/[A6] only read source. This mounts the real TasksDashboard and the real
@@ -2105,12 +2111,14 @@ await sleep(300);
 // click on the segmented control — "the same rows, arranged differently" is the
 // whole feature, and a props-level test would prove nothing about it.
 console.log('\n[C5b] the correspondences group-by GRID + drill-in (grid task 2)');
+// Since Tidy T5a the board carries the compact Group by DROPDOWN (one-row
+// toolbar, like Tasks), so the dimensions are its options.
 const corrGroupBar = await evalJS(`(() => {
-  const g = document.querySelector('#root [role="group"][aria-label]');
-  if (!g) return JSON.stringify({ err: 'no group-by bar' });
+  const g = document.querySelector('#root .groupby-compact select');
+  if (!g) return JSON.stringify({ err: 'no group-by dropdown' });
   return JSON.stringify({ aria: g.getAttribute('aria-label'),
-    opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
-    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
+    opts: [...g.options].map(o => (o.textContent || '').trim()),
+    pressed: [...g.options].filter(o => o.selected).map(o => (o.textContent || '').trim()) });
 })()`).then(JSON.parse);
 check('the group-by bar renders its five dimensions in Arabic',
   ['الحالة', 'الفئة', 'الموقع', 'الجهة المرسِلة', 'المسؤول'].every(o => (corrGroupBar.opts || []).includes(o)),
@@ -2137,7 +2145,15 @@ const corrRows = () => evalJS(
   `((document.getElementById('root').innerText || '').match(/CR0000\\d/g) || []).length`,
 );
 const corrPickDim = async (labelAr) => {
-  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  const ok = await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    const opt = sel && [...sel.options].find(o => (o.textContent || '').trim() === ${JSON.stringify(labelAr)});
+    if (!opt) return false;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  if (!ok) throw new Error(`no Group by option ${labelAr}`);
   await sleep(420);
   return corrCards();
 };
