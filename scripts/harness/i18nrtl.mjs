@@ -2776,8 +2776,9 @@ const projBackToGrid = async () => {
 };
 
 await openProjGroup();
+// Since Tidy T5c the status is the row's `[data-proj-status]` label.
 const projLatinBadges = await evalJS(`(() => {
-  const spans = [...document.querySelectorAll('#root .card.card-interactive .badge')].map(s => (s.textContent || '').trim());
+  const spans = [...document.querySelectorAll('#root .card.card-interactive [data-proj-status]')].map(s => (s.textContent || '').trim());
   return JSON.stringify(spans.filter(Boolean));
 })()`).then(JSON.parse);
 check('★ no project card badge is still a Latin status value',
@@ -2814,11 +2815,13 @@ check("★★ the search box reserves its room on the icon's side, not on a fixe
 // projects, arranged differently" is the feature, and a props-level test proves
 // nothing about it.
 console.log('\n[C8b] the projects group-by GRID + drill-in (grid task 3)');
+// Since Tidy T5c the Projects board carries the compact Group by DROPDOWN:
+// the dimensions are its options, "pressed" is the selected one.
 const projBar = await evalJS(`(() => {
-  const g = document.querySelector('#root [role="group"][aria-label]');
-  if (!g) return JSON.stringify({ err: 'no group-by bar' });
-  return JSON.stringify({ opts: [...g.querySelectorAll('button')].map(b => (b.textContent || '').trim()),
-    pressed: [...g.querySelectorAll('button[aria-pressed="true"]')].map(b => (b.textContent || '').trim()) });
+  const sel = document.querySelector('#root .groupby-compact select');
+  if (!sel) return JSON.stringify({ err: 'no group-by bar' });
+  return JSON.stringify({ opts: [...sel.options].map(o => (o.textContent || '').trim()),
+    pressed: [(sel.options[sel.selectedIndex] || {}).textContent || ''].map(x => x.trim()) });
 })()`).then(JSON.parse);
 check('the projects group-by bar renders its four dimensions in Arabic',
   ['الحالة', 'العميل', 'الموقع', 'المسؤول'].every(o => (projBar.opts || []).includes(o)),
@@ -2827,7 +2830,15 @@ check('★ "الحالة" is the pressed default', (projBar.pressed || [])[0] ==
 
 const projText = () => evalJS(`document.getElementById('root').innerText || ''`);
 const pickProjGroup = async (labelAr) => {
-  await clickEl(`[...document.querySelectorAll('#root [role="group"][aria-label] button')].find(b => (b.textContent||'').trim() === ${JSON.stringify(labelAr)})`, `group by ${labelAr}`);
+  const ok = await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    const opt = sel && [...sel.options].find(o => (o.textContent || '').trim() === ${JSON.stringify(labelAr)});
+    if (!opt) return false;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, opt.value);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  })()`);
+  if (!ok) throw new Error(`no Group by option ${labelAr}`);
   await sleep(420);
   return projGridCards();
 };
@@ -2866,26 +2877,28 @@ check('★ the drilled-in list still names the bucket it came from',
 check('★ and there is a way back to the grid',
   projDrilled.includes(ar['All Groups']), projDrilled.slice(0, 160).replace(/\n/g, ' / '));
 // ★ The in-bucket order is the board's OWN sort select — this board has one, so
-// the grouping deliberately does not force an order of its own.
-check('★ inside a bucket the default "Most recent" sort still rules (newest first)',
-  projActiveRecent[0].startsWith('Meleiha') && projActiveRecent[1].startsWith('Suez refinery jetty'),
-  projActiveRecent.slice(0, 3).join(' | '));
+// the grouping deliberately does not force an order of its own. Since Tidy T5c
+// its default is the Tasks board's order: soonest end date first.
+const projActiveByEnd = projActiveRecent;
+check('★ inside a bucket the default "End date (soonest)" sort rules',
+  projActiveByEnd[0].startsWith('Suez refinery jetty') && projActiveByEnd[1].startsWith('Meleiha'),
+  projActiveByEnd.slice(0, 3).join(' | '));
 await openBoardFilters();
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-  setter.call(sel, 'end');
+  setter.call(sel, 'recent');
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 })()`);
 await sleep(320);
-const projActiveByEnd = await projCardTitles();
-check('★★ switching the sort to "End date (soonest)" reorders INSIDE the open bucket',
-  projActiveByEnd[0].startsWith('Suez refinery jetty') && projActiveByEnd[1].startsWith('Meleiha'),
-  projActiveByEnd.slice(0, 3).join(' | '));
+const projActiveNewest = await projCardTitles();
+check('★★ switching the sort to "Most recent" reorders INSIDE the open bucket (newest first)',
+  projActiveNewest[0].startsWith('Meleiha') && projActiveNewest[1].startsWith('Suez refinery jetty'),
+  projActiveNewest.slice(0, 3).join(' | '));
 await evalJS(`(() => {
   const sel = [...document.querySelectorAll('#root select')].find(s => [...s.options].some(o => o.value === 'end'));
   const setter = Object.getOwnPropertyDescriptor(window.HTMLSelectElement.prototype, 'value').set;
-  setter.call(sel, 'recent');
+  setter.call(sel, 'end');
   sel.dispatchEvent(new Event('change', { bubbles: true }));
 })()`);
 await sleep(320);
@@ -2967,10 +2980,11 @@ await sleep(300);
 
 // ── the detail page and its four tabs ───────────────────────────────────────
 // Grid task 3: a project card lives behind a group card now. The board is
-// grouped by status and 'نشط' is the first bucket, whose newest project is p-a
-// — the one every child collection below is keyed to.
+// grouped by status and 'نشط' is the first bucket, which holds p-a — the one
+// every child collection below is keyed to. Since Tidy T5c the rows sort by
+// end date, so p-a is clicked by its id rather than by being first.
 await openProjGroup('نشط');
-await clickEl(`document.querySelector('#root .card.card-interactive')`, 'open a project');
+await clickEl(`document.querySelector('#root [data-proj-row="p-a"] h3')`, 'open a project');
 await sleep(650);
 const projDetail = await evalJS(`(() => {
   const btns = [...document.querySelectorAll('#root button')].map(b => (b.textContent || '').trim());

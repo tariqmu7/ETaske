@@ -11,13 +11,13 @@ import {
   AppUser, Project, ProjectStatus, PROJECT_STATUS_OPTIONS,
 } from './types';
 import { getNextSerialNumber } from './lib/counters';
-import { buildChecklist, templatesFor, localToday } from './lib/checklists';
-import { globalSearch, getUserColor, isOverdue } from './utils';
+import { buildChecklist, templatesFor, localToday, checklistProgress } from './lib/checklists';
+import { globalSearch, getUserColor } from './utils';
 import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat, DATE_SHORT } from './lib/format';
 import {
-  Plus, X, FolderKanban, Building2,
-  Trash2, Edit2, ChevronRight, AlertCircle, ArrowLeft,
+  Plus, X, FolderKanban, Building2, Calendar,
+  Trash2, Edit2, AlertCircle, Check, ChevronDown, ChevronUp,
   Layers, ListChecks, MapPin, User as UserIcon,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -26,8 +26,9 @@ import ProjectDetail from './ProjectDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
-import CardMenu from './components/CardMenu';
-import { buildGroups, byDueDateAsc, UNGROUPED } from './lib/grouping';
+import GroupTabs, { GroupTab } from './components/GroupTabs';
+import { byTaskUrgency, foldFinished, type OrderableTask } from './lib/taskOrder';
+import { buildGroups, UNGROUPED } from './lib/grouping';
 import type { AppView } from './App';
 import { consumePending, subscribeOpen, takeConsumedTab } from './lib/deepLink';
 
@@ -37,16 +38,6 @@ interface Props {
   projectUsers: AppUser[];
   /** Threaded to ProjectDetail's Linked tab so it can open a task / email. */
   onNavigate?: (v: AppView) => void;
-}
-
-function statusBadgeClass(s?: ProjectStatus) {
-  switch (s) {
-    case 'Active': return 'badge badge-inprogress';
-    case 'On Hold': return 'badge badge-pending';
-    case 'Completed': return 'badge badge-done';
-    case 'Cancelled': return 'badge badge-closed';
-    default: return 'badge';
-  }
 }
 
 /**
@@ -88,8 +79,38 @@ const PROJECT_GROUP_ICON: Partial<Record<ProjectGroupBy, LucideIcon>> = {
   location: MapPin,
 };
 
-/** "Soonest end date first, undated last" — the optional in-bucket sort. */
-const byEndDate = byDueDateAsc<Project>(p => p.endDate);
+/** localStorage key for the "show finished projects" choice (Tidy T5c). */
+const SHOW_FINISHED_KEY = 'etaske:projects:showFinished';
+
+/** An end date this close (days) paints the row orange. */
+const ENDING_SOON_DAYS = 30;
+
+/**
+ * Completed or Cancelled = finished: folded away like a Done task. A running
+ * project (Active / On Hold) is LATE once its end date has passed.
+ */
+const isFinishedProject = (p: Project) => p.status === 'Completed' || p.status === 'Cancelled';
+const daysToEnd = (p: Project, today: string): number | null => {
+  const end = (p.endDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(end)) return null;
+  const [y, m, d] = end.split('-').map(Number);
+  const [ty, tm, td] = today.split('-').map(Number);
+  return Math.round((Date.UTC(y, m - 1, d) - Date.UTC(ty, tm - 1, td)) / 86400000);
+};
+const isLateProject = (p: Project, today: string) => {
+  if (isFinishedProject(p)) return false;
+  const d = daysToEnd(p, today);
+  return d !== null && d < 0;
+};
+
+/**
+ * A project seen through the Tasks board's reading order (lib/taskOrder.ts):
+ * past its end date → ending soonest → no end date, finished last.
+ */
+const asOrderable = (p: Project): OrderableTask => ({
+  status: isFinishedProject(p) ? 'Done' : p.status,
+  dueDate: isFinishedProject(p) ? undefined : p.endDate,
+});
 
 const emptyForm = () => ({
   name: '',
@@ -114,7 +135,9 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
-  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status' | 'end'>('recent');
+  // Default = the Tasks board's order (Tidy T5c): late first, then the soonest
+  // end date, undated, finished last.
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'status' | 'end'>('end');
   const [groupBy, setGroupBy] = useState<ProjectGroupBy>('status');
   /** `null` = the group grid is showing; a key = that bucket is drilled into. */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
@@ -129,6 +152,16 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   // Kept out of formData on purpose: handleSave spreads formData into the doc.
   const [checklistKey, setChecklistKey] = useState<string>('contract');
   const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  // Completed / Cancelled sit behind one "Show N finished" button — one
+  // board-wide choice, remembered on this device (Tidy T5c).
+  const [showFinished, setShowFinished] = useState<boolean>(() => {
+    try { return localStorage.getItem(SHOW_FINISHED_KEY) === '1'; } catch { return false; }
+  });
+  const toggleShowFinished = () => setShowFinished(v => {
+    try { localStorage.setItem(SHOW_FINISHED_KEY, v ? '0' : '1'); } catch { /* private window */ }
+    return !v;
+  });
+  const today = localToday();
 
   useEffect(() => {
     const q = query(collection(db, 'projects'), orderBy('createdAt', 'desc'));
@@ -171,6 +204,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   }, [projects]);
 
   const statusRank: Record<string, number> = { Active: 0, 'On Hold': 1, Completed: 2, Cancelled: 3 };
+  const urgency = useMemo(() => byTaskUrgency<OrderableTask>(today), [today]);
 
   const visible = useMemo(() => {
     const rows = projects.filter(p => {
@@ -181,14 +215,14 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
     rows.sort((a, b) => {
       if (sortBy === 'name') return (a.name || '').localeCompare(b.name || '');
       if (sortBy === 'status') return (statusRank[a.status] ?? 9) - (statusRank[b.status] ?? 9);
-      // Soonest-ending first. Rows the comparator calls equal keep the incoming
-      // createdAt-desc order (the sort is stable), so undated projects still
-      // read newest-first at the bottom.
-      if (sortBy === 'end') return byEndDate(a, b);
+      // Late first, then soonest-ending, undated, finished last. Rows the
+      // comparator calls equal keep the incoming createdAt-desc order (the sort
+      // is stable), so undated projects still read newest-first.
+      if (sortBy === 'end') return urgency(asOrderable(a), asOrderable(b));
       return (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0); // recent
     });
     return rows;
-  }, [projects, search, statusFilter, sortBy]);
+  }, [projects, search, statusFilter, sortBy, urgency]);
 
   const isFiltering = search.trim() !== '' || statusFilter !== 'All';
 
@@ -240,11 +274,21 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   // full-page `ProjectDetail` above, before any of this renders.
   const showGroupGrid = !activeGroup;
 
+  // Finished projects are folded away unless asked for. A bucket holding
+  // nothing but finished projects (the Completed group) shows them anyway —
+  // see `foldFinished`.
+  const fullList = activeGroup ? activeGroup.items : visible;
+  const fold = useMemo(
+    () => foldFinished(fullList, showFinished, [], isFinishedProject),
+    [fullList, showFinished],
+  );
+  const finishedInList = useMemo(() => fullList.filter(isFinishedProject).length, [fullList]);
+
   // What the list renders: the open bucket only. This board has no pager, so
   // unlike the tasks/correspondences boards there is nothing else to re-scope.
   const renderGroups = useMemo(
-    () => (activeGroup ? [activeGroup] : []),
-    [activeGroup],
+    () => (activeGroup ? [{ key: activeGroup.key, value: activeGroup.value, items: fold.visible }] : []),
+    [activeGroup, fold.visible],
   );
 
   // Header for one bucket. Each dimension gets its own phrasing because a single
@@ -285,7 +329,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
     const completed = rows.filter(p => p.status === 'Completed').length;
     // "Late" = the end date has passed on a project still meant to be running.
     // A Completed or Cancelled project is not late, it is finished.
-    const late = rows.filter(p => p.status !== 'Completed' && p.status !== 'Cancelled' && isOverdue(p.endDate)).length;
+    const late = rows.filter(p => isLateProject(p, today)).length;
 
     // Resolve the owner through a project's `userId`, not by matching the
     // bucket key against the directory — the key is a display name, and two
@@ -320,7 +364,25 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
         { label: dl('Completed'), value: completed, tone: 'success' as const },
       ],
     };
-  }), [groupedProjects, groupBy, projectUsers, dl, t]);
+  }), [groupedProjects, groupBy, projectUsers, dl, t, today]);
+
+  // Per-bucket totals over EVERY filtered project (finished ones too, folded
+  // or not) — what the group tabs and the section header report.
+  const groupTally = useMemo(() => {
+    const m = new Map<string, { open: number; late: number; finished: number }>();
+    for (const g of groupedProjects) {
+      const finished = g.items.filter(isFinishedProject).length;
+      m.set(g.key, { open: g.items.length - finished, late: g.items.filter(p => isLateProject(p, today)).length, finished });
+    }
+    return m;
+  }, [groupedProjects, today]);
+
+  const groupTabs = useMemo<GroupTab[]>(() => groupedProjects.map(g => ({
+    key: g.key,
+    label: groupTitle(g),
+    count: g.items.length,
+    late: groupTally.get(g.key)?.late || 0,
+  })), [groupedProjects, groupTally, groupBy, dl, t]);
 
   const groupByOptions = useMemo<GroupByOption<ProjectGroupBy>[]>(() => [
     { key: 'status', label: t('Status'), icon: ListChecks },
@@ -492,9 +554,10 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
         search={search}
         onSearch={setSearch}
         searchPlaceholder={t('Search projects…')}
-        groupBy={<GroupByBar<ProjectGroupBy> value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
-        activeFilterCount={(statusFilter !== 'All' ? 1 : 0) + (sortBy !== 'recent' ? 1 : 0)}
-        onClearFilters={() => { setStatusFilter('All'); setSortBy('recent'); }}
+        compact
+        groupBy={<GroupByBar<ProjectGroupBy> compact value={groupBy} onChange={setGroupBy} options={groupByOptions} />}
+        activeFilterCount={(statusFilter !== 'All' ? 1 : 0) + (sortBy !== 'end' ? 1 : 0)}
+        onClearFilters={() => { setStatusFilter('All'); setSortBy('end'); }}
         filters={
           <>
             <select
@@ -514,10 +577,10 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
               style={{ padding: '10px 12px', background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 14, fontFamily: 'inherit' }}
               title={t('Sort projects')}
             >
+              <option value="end">{t('End date (soonest)')}</option>
               <option value="recent">{t('Most recent')}</option>
               <option value="name">{t('Name (A–Z)')}</option>
               <option value="status">{t('Status')}</option>
-              <option value="end">{t('End date (soonest)')}</option>
             </select>
           </>
         }
@@ -557,69 +620,164 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
           }
         />
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-          {/* The only way back to the grid. */}
-          <button
-            className="btn btn-ghost btn-sm"
-            onClick={() => setOpenGroup(null)}
-            style={{ alignSelf: 'flex-start' }}
-          >
-            <ArrowLeft className="w-4 h-4" /> {t('All Groups')}
-          </button>
+        <>
+        {/* Group tabs (Tidy T5c): the first goes back to the grid, every other
+            group is one tap away with its size and its late count. */}
+        <GroupTabs
+          tabs={groupTabs}
+          active={activeGroup ? activeGroup.key : null}
+          onSelect={setOpenGroup}
+        />
+        {/* `proj-list` is a size container: when the list is too narrow for one
+            line, the rows fold to two (see index.css). */}
+        <div className="proj-list" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
           {renderGroups.map(group => (
           <div key={group.key}>
-            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8, paddingInlineStart: 4 }}>
+            <h2 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', marginBottom: 12, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8, paddingInlineStart: 4 }}>
               <Layers className="w-4 h-4 text-accent" />
               {groupHeading(group)}
-              <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginInlineStart: 'auto', background: 'var(--surface-2)', padding: '2px 8px', borderRadius: 0 }}>{group.items.length}</span>
+              {(() => {
+                // The whole group's numbers, finished ones included: open · late · ended.
+                const tally = groupTally.get(group.key);
+                if (!tally) return null;
+                return (
+                  <span className="group-head-counts" data-group-counts>
+                    <span className="group-head-chip">{t('Open: {{count}}', { count: tally.open })}</span>
+                    {tally.late > 0 && <span className="group-head-chip group-head-chip--late">{t('Late: {{count}}', { count: tally.late })}</span>}
+                    {tally.finished > 0 && <span className="group-head-chip group-head-chip--done">{t('Ended: {{count}}', { count: tally.finished })}</span>}
+                  </span>
+                );
+              })()}
             </h2>
-            <div className="card-grid">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           <AnimatePresence>
-            {group.items.map(p => (
-              <motion.div
-                key={p.id}
-                layout
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0 }}
-                className="card card-interactive"
-                style={{ padding: 18, cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 10 }}
-                onClick={() => setSelectedId(p.id)}
-              >
-                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
-                  <span className={statusBadgeClass(p.status)}>{dl(p.status)}</span>
-                  <CardMenu items={[
-                    { label: t('Edit'), icon: <Edit2 className="w-3.5 h-3.5" />, onClick: () => openEdit(p) },
-                    { label: t('Delete'), icon: <Trash2 className="w-3.5 h-3.5" />, onClick: () => setDeleteTarget(p), danger: true },
-                  ]} />
-                </div>
+            {group.items.map(p => {
+              // Slim rows (Tidy T5c): ONE line per project — serial, name,
+              // client, owner, end date, checklist, status. Code, location and
+              // the rest live on the project page a click away.
+              const finished = isFinishedProject(p);
+              const dLeft = finished ? null : daysToEnd(p, today);
+              const late = isLateProject(p, today);
+              const soon = !late && dLeft !== null && dLeft <= ENDING_SOON_DAYS;
+              // Read off the project itself (settled rule 1) — no extra query per row.
+              const steps = !finished ? checklistProgress(p.checklist, today) : null;
+              const owner = p.userId ? projectUsers.find(pu => pu.id === p.userId) : undefined;
+              const ownerName = owner?.displayName || '';
+              const color = PROJECT_STATUS_ACCENT[p.status];
+              return (
+                <motion.div
+                  key={p.id}
+                  exit={{ opacity: 0 }}
+                  className="card card-interactive"
+                  style={{
+                    // The edge only speaks when something needs attention.
+                    borderInlineStart: late ? '3px solid #ef4444' : soon ? '3px solid #f97316' : undefined,
+                    backgroundColor: finished ? 'var(--surface-2)' : 'var(--surface)',
+                  }}
+                >
+                  <div className="task-row proj-row" data-proj-row={p.id} onClick={() => setSelectedId(p.id)}>
+                    <div className="task-row-main">
+                      {p.serialNumber && <span className="task-row-serial ltr-data">{p.serialNumber}</span>}
+                      {/* dir="auto": an Arabic name lines up on the right of its cell. */}
+                      <h3 dir="auto" className="task-row-title" title={p.name} style={{ color: finished ? 'var(--text-muted)' : 'var(--text-primary)' }}>
+                        {p.name}
+                      </h3>
+                    </div>
 
-                <div>
-                  <h3 style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)', margin: 0, lineHeight: 1.3 }}>{p.name}</h3>
-                  {p.serialNumber && (
-                    <span className="ltr-data" style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.04em' }}>{p.serialNumber}</span>
-                  )}
-                </div>
+                    <div className="task-row-meta">
+                      <span className="task-row-from" title={p.client ? `${p.client}${p.operator ? ` · ${p.operator}` : ''}` : undefined}>
+                        <Building2 className="w-3 h-3" style={{ flexShrink: 0 }} aria-hidden />
+                        <span className="task-row-ellipsis" dir="auto">{p.client || '—'}</span>
+                      </span>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 12.5, color: 'var(--text-secondary)' }}>
-                  {p.client && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Building2 className="w-3.5 h-3.5" style={{ color: 'var(--text-muted)' }} /> {p.client}{p.operator ? ` · ${p.operator}` : ''}</div>}
-                </div>
+                      {/* Grouped by owner, every row would repeat the group's name. */}
+                      {groupBy !== 'owner' && (
+                        <span className="task-row-owner" title={ownerName || undefined}>
+                          {ownerName ? (
+                            <>
+                              {owner?.photoURL
+                                ? <img src={owner.photoURL} className="avatar" style={{ width: 18, height: 18, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                                : <span className="task-row-initial" aria-hidden>{(ownerName.trim()[0] || '?').toUpperCase()}</span>}
+                              <span className="task-row-ellipsis">{ownerName}</span>
+                            </>
+                          ) : <span className="task-row-ellipsis" style={{ color: 'var(--text-muted)' }}>—</span>}
+                        </span>
+                      )}
 
-                <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 6 }}>
-                  <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    {p.lastUpdateAt ? t('Updated {{date}}', { date: fmt.date(p.lastUpdateAt, DATE_SHORT) }) : ''}
-                  </span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, fontSize: 12, fontWeight: 700, color: 'var(--accent)' }}>
-                    {t('Open')} <ChevronRight className="w-4 h-4" />
-                  </span>
-                </div>
-              </motion.div>
-            ))}
+                      <span
+                        className="task-row-due"
+                        data-proj-end
+                        title={p.endDate ? `${t('End date')}: ${p.endDate}` : undefined}
+                        style={{ color: late ? '#ef4444' : soon ? '#ea580c' : 'var(--text-muted)', fontWeight: (late || soon) ? 700 : 500 }}
+                      >
+                        {p.endDate ? (
+                          <>
+                            {late ? <AlertCircle className="w-3 h-3" /> : <Calendar className="w-3 h-3" />}
+                            <span className="ltr-data">{p.endDate}</span>
+                          </>
+                        ) : <span aria-hidden>—</span>}
+                      </span>
+
+                      <span
+                        className="task-row-progress proj-row-steps"
+                        title={steps && steps.late > 0 ? (steps.late === 1 ? t('{{count}} step overdue', { count: 1 }) : t('{{count}} steps overdue', { count: steps.late })) : undefined}
+                        style={steps && steps.late > 0 ? { color: '#dc2626', fontWeight: 700 } : undefined}
+                      >
+                        {steps && steps.total > 0 && (
+                          <>
+                            <ListChecks className="w-3 h-3" style={{ flexShrink: 0 }} aria-hidden />
+                            <span data-testid="proj-card-checklist">{t('{{done}}/{{total}} steps', { done: steps.done, total: steps.total })}</span>
+                          </>
+                        )}
+                      </span>
+
+                      <span className="proj-row-updated">
+                        {p.lastUpdateAt ? t('Updated {{date}}', { date: fmt.date(p.lastUpdateAt, DATE_SHORT) }) : ''}
+                      </span>
+
+                      <span className="task-row-status">
+                        <span className="task-status-label" data-proj-status={p.status} style={finished || !color ? undefined : { color, borderColor: color }}>
+                          {finished
+                            ? <Check style={{ width: 12, height: 12, flexShrink: 0 }} />
+                            : <span className="task-status-dot" style={{ background: 'currentColor' }} />}
+                          <span>{dl(p.status)}</span>
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="task-row-actions" onClick={e => e.stopPropagation()}>
+                      <button className="btn btn-ghost btn-icon btn-sm" onClick={() => openEdit(p)} title={t('Edit')} aria-label={t('Edit')}>
+                        <Edit2 className="w-3.5 h-3.5" />
+                      </button>
+                      <button className="btn btn-ghost btn-icon btn-sm corr-row-delete" onClick={() => setDeleteTarget(p)} title={t('Delete')} aria-label={t('Delete')}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                </motion.div>
+              );
+            })}
           </AnimatePresence>
             </div>
           </div>
           ))}
         </div>
+
+        {/* Finished projects sit behind this one button — below the list, so
+            running work is what the page leads with. */}
+        {(fold.hidden > 0 || (showFinished && finishedInList > 0 && finishedInList < fullList.length)) && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm task-finished-toggle"
+            data-finished-toggle={showFinished ? 'hide' : 'show'}
+            aria-expanded={showFinished}
+            onClick={toggleShowFinished}
+          >
+            {showFinished ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            {showFinished ? t('Hide finished projects') : t('Show {{count}} finished projects', { count: fold.hidden })}
+          </button>
+        )}
+        </>
       )}
 
       {/* Create / Edit modal */}

@@ -143,6 +143,11 @@ __seed('opportunities', 'o4', { title: 'Crude tank cleaning call-off for the wes
   checklist: [{ id: 's1', title: 'Bid bond', dueDate: dayOffset(-4), done: false }, { id: 's2', title: 'Technical offer', dueDate: dayOffset(-3), done: true }] });
 
 __seed('projects', 'p1', { name: 'Meleiha gas plant operations and maintenance', client: 'AGIBA', status: 'Active', serialNumber: 'PR000003', startDate: dayOffset(-200), endDate: dayOffset(160), userId: 'u-mgr', teamId: 'T1', createdAt: ts(-200), updatedAt: ts(-4) });
+// Tidy T5c: the manager's projects - p2 running past its end date (late),
+// p1 ending in 160 days, p3 Completed (folded under "Show 1 finished").
+__seed('projects', 'p2', { name: 'Ras Gharib tank farm rehabilitation and inspection works', client: 'GPC', status: 'Active', serialNumber: 'PR000004', startDate: dayOffset(-300), endDate: dayOffset(-5), userId: 'u-mgr', teamId: 'T1', createdAt: ts(-300), updatedAt: ts(-6),
+  checklist: [{ id: 's1', title: 'Contract signed', dueDate: dayOffset(-290), done: true }, { id: 's2', title: 'First invoice issued', dueDate: dayOffset(-10), done: false }] });
+__seed('projects', 'p3', { name: 'Abu Qir jetty repairs', client: 'Abu Qir Petroleum', status: 'Completed', serialNumber: 'PR000002', startDate: dayOffset(-400), endDate: dayOffset(-60), userId: 'u-mgr', teamId: 'T1', createdAt: ts(-1), updatedAt: ts(-1) });
 __seed('projectContracts', 'k1', { projectId: 'p1', subject: 'Tank cleaning', contractNumber: 'C-2201', endDate: dayOffset(12), status: 'Active' });
 
 // First-run strip and "All sections" state are per browser — start clean.
@@ -641,6 +646,92 @@ async function bidRows(tag, phone) {
   })()`);
 }
 
+// Tidy T5c: the Projects board gets the same tidy-up. Groups by owner and
+// opens Tariq: p2 (running past its end date), p1 (ends in 160 days), p3
+// (Completed - folded away).
+async function projectRows(tag, phone) {
+  await evalJS(`(() => { try { localStorage.removeItem('etaske:projects:showFinished'); } catch {} })()`);
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/projects'`); await sleep(700);
+  const compact = await evalJS(`!!document.querySelector('.board-toolbar--compact .groupby-compact select')`);
+  check(`${tag}: the Projects toolbar is the compact one (Group by dropdown)`, compact);
+  await evalJS(`(async () => {
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'owner'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    const card = [...document.querySelectorAll('button[data-group-card]')].find(c => /Tariq/.test(c.textContent));
+    card.click();
+    await new Promise(r => setTimeout(r, 500));
+    window.scrollTo(0, 0);
+  })()`);
+  const order = async () => JSON.parse(await evalJS(`JSON.stringify([...document.querySelectorAll('[data-proj-row]')].filter(window.__vis).map(r => r.getAttribute('data-proj-row')))`));
+  const r = JSON.parse(await evalJS(`JSON.stringify((() => {
+    const rows = [...document.querySelectorAll('[data-proj-row]')].filter(window.__vis);
+    const h = rows.map(x => Math.round(x.getBoundingClientRect().height));
+    const cards = rows.map(x => x.closest('.card'));
+    const edges = cards.map(c => { const s = getComputedStyle(c); return [s.borderLeftWidth, s.borderRightWidth]; });
+    const rowOver = cards.filter(c => c.scrollWidth > c.clientWidth + 1).length;
+    const tog = document.querySelector('[data-finished-toggle]');
+    const cur = document.querySelector('[data-group-tab][aria-current="true"]');
+    const counts = document.querySelector('[data-group-counts]');
+    const end = id => { const d = document.querySelector('[data-proj-row="' + id + '"] [data-proj-end]'); return d ? getComputedStyle(d).color : null; };
+    const steps = document.querySelector('[data-proj-row="p2"] [data-testid=proj-card-checklist]');
+    return { h, edges, rowOver, over: window.__overflow(),
+      owner: rows.filter(x => x.querySelector('.task-row-owner')).length,
+      client: rows.map(x => (x.querySelector('.task-row-from') || {}).textContent || '').join('|'),
+      endLate: end('p2'), endLater: end('p1'), steps: steps && steps.textContent.trim(),
+      tog: tog && { mode: tog.getAttribute('data-finished-toggle'), text: tog.textContent.trim() },
+      tabs: !!document.querySelector('[data-group-tabs]'), curLate: !!cur && !!cur.querySelector('.group-tab-late'),
+      counts: counts && counts.innerText.replace(/\\s+/g, ' ').trim(),
+      late: !!(counts && counts.querySelector('.group-head-chip--late')), endedChip: !!(counts && counts.querySelector('.group-head-chip--done')) };
+  })())`));
+  const why = JSON.stringify(r);
+  const maxH = phone ? 110 : 90;
+  const first = await order();
+  check(`${tag}: late project first, the running one next, the completed one folded away`, first.join('|') === 'p2|p1', JSON.stringify(first));
+  check(`${tag}: every project row is short (≤ ${maxH}px)`, r.h.length === 2 && r.h.every(x => x <= maxH), why);
+  check(`${tag}: grouped by owner, the rows do not repeat the owner; the client is on the row`, r.owner === 0 && /GPC/.test(r.client) && /AGIBA/.test(r.client), why);
+  check(`${tag}: a passed end date on a running project is red; a later one is not`, /239, 68, 68/.test(r.endLate || '') && !/239, 68, 68/.test(r.endLater || ''), why);
+  check(`${tag}: the checklist count stays on the row`, !!r.steps && /1\/2/.test(r.steps), why);
+  check(`${tag}: a late row gets a 3px edge, no status stripe`, r.edges.every(e => e.every(w => w === '1px' || w === '3px')) && r.edges[0].includes('3px') && !r.edges[1].includes('3px'), why);
+  check(`${tag}: no sideways scroll on the page or inside a row`, r.over <= 0 && r.rowOver === 0, why);
+  check(`${tag}: group tabs shown, Tariq's tab carries a red late count`, r.tabs && r.curLate, why);
+  check(`${tag}: the section header counts open · late · ended`, !!r.counts && r.late && r.endedChip, why);
+  check(`${tag}: a "Show 1 finished projects" button sits under the list`, !!r.tog && r.tog.mode === 'show' && /1/.test(r.tog.text), why);
+
+  await shot(`${phone ? (/ar /.test(tag) ? 'ar' : 'en') : 'desktop'}-project-rows`, false);
+  await evalJS(`document.querySelector('[data-finished-toggle]').click()`); await sleep(400);
+  const shown = await order();
+  const saved = await evalJS(`(() => { try { return localStorage.getItem('etaske:projects:showFinished'); } catch { return 'x'; } })()`);
+  check(`${tag}: "Show" brings the completed project back, LAST, and is remembered`, shown.join('|') === 'p2|p1|p3' && saved === '1', JSON.stringify({ shown, saved }));
+  await evalJS(`document.querySelector('[data-finished-toggle="hide"]').click()`); await sleep(400);
+  const hidden = await order();
+  check(`${tag}: "Hide finished projects" folds it again`, hidden.join('|') === 'p2|p1'
+    && (await evalJS(`localStorage.getItem('etaske:projects:showFinished')`)) === '0', JSON.stringify(hidden));
+
+  // Clicking a row opens the project page.
+  const det = JSON.parse(await evalJS(`(async () => {
+    document.querySelector('[data-proj-row="p2"] h3').click(); await new Promise(r => setTimeout(r, 600));
+    const page = !document.querySelector('[data-proj-row]') && document.body.innerText.includes('Ras Gharib tank farm');
+    return JSON.stringify({ page });
+  })()`));
+  check(`${tag}: clicking a row opens that project's page`, det.page, JSON.stringify(det));
+
+  // Put the board back the way the rest of the run expects it.
+  await evalJS(`location.hash = '/home'`); await sleep(300);
+  await evalJS(`location.hash = '/projects'`); await sleep(600);
+  await evalJS(`(async () => {
+    const tab = document.querySelector('[data-group-tab=""]');
+    if (tab) { tab.click(); await new Promise(r => setTimeout(r, 300)); }
+    const sel = document.querySelector('.groupby-compact select');
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set;
+    setter.call(sel, 'status'); sel.dispatchEvent(new Event('change', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 300));
+    try { localStorage.removeItem('etaske:projects:showFinished'); } catch {}
+  })()`);
+}
+
 // Tidy Tasks T4: the List / Board switch and the Board view. "My Tasks" holds
 // the manager's t6 (Pending), t2 + t3 (In Progress, t2 late) and t5 (Done).
 // Moves a card by the "Move to" menu AND by a real drag-and-drop, opens a
@@ -898,6 +989,7 @@ try {
     await boardView(`${lang} Tasks board`, true);
     await letterRows(`${lang} Letters rows`, true);
     await bidRows(`${lang} Bids rows`, true);
+    await projectRows(`${lang} Projects rows`, true);
 
     // The chat bubble steps aside while the page scrolls, and comes back.
     await evalJS(`location.hash = '/correspondences'`);
@@ -1003,8 +1095,8 @@ try {
     })())`));
     check(`desktop ${label}: header keeps its words${d.desc !== null ? ' and description' : ''}${d.icon !== null ? ' and icon' : ''}`,
       d.label && d.desc !== false && d.icon !== false, JSON.stringify(d));
-    if (view === 'tasks' || view === 'correspondences' || view === 'opportunities') {
-      // T3 / T5a / T5b: Tasks, Letters and Bids carry the compact dropdown so the toolbar holds ONE row.
+    if (view === 'tasks' || view === 'correspondences' || view === 'opportunities' || view === 'projects') {
+      // T3 / T5a-c: all four boards carry the compact dropdown so the toolbar holds ONE row.
       check(`desktop ${label}: Group by is one dropdown, toolbar row unchanged`, !d.strip && d.select && d.actions === 'contents', JSON.stringify(d));
     } else {
       check(`desktop ${label}: Group by stays the button strip, toolbar row unchanged`, d.strip && !d.select && d.actions === 'contents', JSON.stringify(d));
@@ -1018,6 +1110,7 @@ try {
   await boardView('desktop Tasks board', false);
   await letterRows('desktop Letters rows', false);
   await bidRows('desktop Bids rows', false);
+  await projectRows('desktop Projects rows', false);
   await shot('desktop-task-finished', false);
 
   check('no uncaught page errors', pageErrors.length === 0 && (await evalJS(`window.__errors.length`)) === 0,

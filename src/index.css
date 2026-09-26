@@ -1705,3 +1705,25 @@ h1, h2, h3, h4, p, span, div {
   .opp-row-value, .opp-row-signoff-label,
   .opp-row .task-row-from > svg, .opp-row .opp-row-steps > svg { display: none; }
 }
+
+/* ── Projects board: slim rows (Tidy T5c) ────────────────────────────────
+   Same row as Tasks / Letters / Bids; a project adds its checklist, when it
+   was last updated, and a status label in the status's own colour. */
+.proj-row .task-status-label { cursor: default; }
+.proj-row .task-row-status { width: 110px; }
+.proj-row .proj-row-steps { width: 92px; }
+.proj-row-updated { width: 110px; color: var(--text-muted); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* The full desktop row needs ~1,040px; below that it folds to two lines
+   (name + actions, then the meta), as on a phone. */
+.proj-list { container-type: inline-size; }
+@container (max-width: 1040px) {
+  .proj-row { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "main actions" "meta meta"; }
+  .proj-row .task-row-meta { flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+  .proj-row .task-row-status { margin-inline-start: auto; width: auto; }
+  .proj-row .proj-row-steps:empty, .proj-row-updated:empty { display: none; }
+}
+@media (max-width: 640px) {
+  .proj-row .proj-row-steps { width: auto; }
+  .proj-row .task-row-meta { gap: 6px 10px; }
+  .proj-row-updated, .proj-row .task-row-from > svg, .proj-row .proj-row-steps > svg { display: none; }
+}
