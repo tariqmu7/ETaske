@@ -239,6 +239,8 @@ const OPPORTUNITY_COLUMNS: [string, string][] = [
   ['awardedValue', 'Awarded Value'],
   ['scope', 'Scope'],
   ['lastFollowUpText', 'Last Follow-up'],
+  ['waitingFor', 'Waiting For'],
+  ['nextStep', 'Next Step'],
   ['nextActionDate', 'Next Action'],
   ['createdAt', 'Created At'],
   ['updatedAt', 'Updated At'],
@@ -287,13 +289,15 @@ const OPPORTUNITY_FOLLOWUP_COLUMNS: [string, string][] = [
   ['authorName', 'Author'],
   ['stage', 'Stage At The Time'],
   ['text', 'Follow-up'],
+  ['waitingFor', 'Waiting For'],
+  ['nextStep', 'Next Step'],
   ['nextActionDate', 'Next Action'],
   ['id', 'Doc ID'],
 ];
 
 const WIDE_KEYS = new Set([
   'subject', 'body', 'taskName', 'description', 'notes',
-  'title', 'scope', 'text', 'lastFollowUpText', 'opportunityTitle',
+  'title', 'scope', 'text', 'lastFollowUpText', 'opportunityTitle', 'waitingFor', 'nextStep',
   'clientFeedback', 'lessonsLearned', 'reasons',
 ]);
 

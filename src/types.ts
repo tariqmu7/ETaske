@@ -379,6 +379,8 @@ export interface Opportunity {
   lastFollowUpText?: string;
   lastFollowUpAt?: Timestamp;
   nextActionDate?: string;
+  waitingFor?: string;            // queue O2 — who/what the bid is waiting on
+  nextStep?: string;              // queue O2 — the next step itself (date = nextActionDate)
   // Standard steps (queue C3) — see src/lib/checklists.ts
   checklist?: ChecklistItem[];
   // Decision memory (queue D6) — see src/lib/decisionMemory.ts
@@ -413,6 +415,8 @@ export interface OpportunityFollowUp {
   text: string;
   stage?: OpportunityStage;       // stage snapshot at time of the follow-up
   nextActionDate?: string;
+  waitingFor?: string;            // queue O2 — snapshot, mirrored onto the opportunity
+  nextStep?: string;
   authorId: string;
   authorName: string;
   authorColor?: string;

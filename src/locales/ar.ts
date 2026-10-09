@@ -2050,6 +2050,19 @@ const ar: Record<keyof typeof en, string> = {
   "Show {{count}} finished projects": "اعرض المشروعات المنتهية ({{count}})",
   "Hide finished projects": "أخفِ المشروعات المنتهية",
 
+  // Queue O2 — the bid page "At a glance" card.
+  "At a glance": "الموقف باختصار",
+  "Add an update": "أضف تحديثًا",
+  "Last update": "آخر تحديث",
+  "No update yet.": "لا تحديث بعد.",
+  "No update for {{count}} days": "بلا تحديث منذ {{count}} يوم",
+  "Waiting for": "بانتظار",
+  "Next step": "الخطوة التالية",
+  "Nothing recorded": "لم يُسجَّل شيء",
+  "e.g. the client’s reply on the price": "مثل: رد العميل على السعر",
+  "e.g. send the revised offer": "مثل: إرسال العرض المعدَّل",
+  "Posting also updates the bid’s stage, what it is waiting for and its next step.": "عند النشر تتحدّث مرحلة الفرصة، وما تنتظره، وخطوتها التالية.",
+
 };
 
 export default ar;

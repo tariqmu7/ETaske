@@ -16,6 +16,7 @@ import OpportunityDecisionsTab from './components/opportunities/OpportunityDecis
 import LinkedRecordsPanel from './components/LinkedRecordsPanel';
 import ChecklistPanel from './components/ChecklistPanel';
 import OfferApprovalCard from './components/opportunities/OfferApprovalCard';
+import OpportunityGlance from './components/opportunities/OpportunityGlance';
 import { clientFileHash } from './lib/clientFile';
 import { STAGE_COLORS, fullMoney, daysUntil } from './components/opportunities/opportunityUi';
 import type { AppView } from './App';
@@ -51,6 +52,8 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
   const dl = useDisplayLabel();
   const fmt = useFormat();
   const [tab, setTab] = useState<Tab>(() => (TAB_IDS.includes(initialTab as Tab) ? (initialTab as Tab) : 'followups'));
+  // Bumped by "Add an update" on the glance card — the Follow-ups tab opens its form when it changes.
+  const [composeSignal, setComposeSignal] = useState(0);
 
   const o = opportunity;
   const stageColor = STAGE_COLORS[o.stage] || 'var(--border)';
@@ -117,9 +120,14 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
             icon={<Percent className="w-3.5 h-3.5" />}
           />
           <Metric label={t('Submission deadline')} value={fmt.date(o.submissionDeadline) || '—'} />
-          <Metric label={t('Next action')} value={fmt.date(o.nextActionDate) || '—'} />
         </div>
       </div>
+
+      {/* Queue O2 — status, waiting for, next step and last update, for the CEO. */}
+      <OpportunityGlance
+        opportunity={o}
+        onAddUpdate={() => { setTab('followups'); setComposeSignal(n => n + 1); }}
+      />
 
       {/* Queue D10 — manager sign-off before the offer goes out. */}
       <OfferApprovalCard opportunity={o} appUser={appUser} projectUsers={projectUsers} />
@@ -208,7 +216,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
       )}
 
       {tab === 'followups' && (
-        <OpportunityFollowUpsTab opportunity={o} user={user} appUser={appUser} />
+        <OpportunityFollowUpsTab opportunity={o} user={user} appUser={appUser} composeSignal={composeSignal} />
       )}
 
       {tab === 'checklist' && (

@@ -9,6 +9,7 @@ failure.
 ```bash
 node scripts/harness/inboxconvert.mjs # ManagerInbox -> CreateTaskPanel, in a browser (78 assertions)
 node scripts/harness/bidtask.mjs      # opportunity -> task: the Tasks tab, in a browser (55)
+node scripts/harness/glanceui.mjs      # bid page "At a glance" card + update form (queue O2), browser (36)
 node scripts/harness/tasklinks.mjs    # task -> bid/project: the link picker + history, browser (59)
 node scripts/harness/maillinks.mjs    # email -> bid/project: the correspondence form, the inherited
                                       #   link on the task it is assigned as, the inbox conversion (73)

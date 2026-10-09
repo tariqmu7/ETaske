@@ -2532,8 +2532,8 @@ check('the detail tab bar is Arabic (المتابعات / المراحل / ال�
 check('the back / edit buttons read كل الفرص and تعديل الفرصة',
   detail.btns.includes('كل الفرص') && detail.btns.includes('تعديل الفرصة'),
   detail.btns.slice(0, 8).join(' | '));
-check('the follow-ups tab opens in Arabic (آخر متابعة / نشر المتابعة)',
-  detail.body.includes('آخر متابعة') && detail.btns.includes('نشر المتابعة'),
+check('the glance card + follow-ups tab open in Arabic (الموقف باختصار / بانتظار / أضف تحديثًا)',
+  ['الموقف باختصار', 'آخر تحديث', 'بانتظار', 'الخطوة التالية'].every(w => detail.body.includes(w)) && detail.btns.includes('أضف تحديثًا'),
   detail.body.slice(0, 200));
 check('the headline metrics are Arabic (القيمة التقديرية / احتمالية الفوز)',
   detail.body.includes('القيمة التقديرية') && detail.body.includes('احتمالية الفوز'),

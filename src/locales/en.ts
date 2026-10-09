@@ -2107,6 +2107,19 @@ const en = {
   "Show {{count}} finished projects": "Show {{count}} finished projects",
   "Hide finished projects": "Hide finished projects",
 
+  // Queue O2 — the bid page "At a glance" card.
+  "At a glance": "At a glance",
+  "Add an update": "Add an update",
+  "Last update": "Last update",
+  "No update yet.": "No update yet.",
+  "No update for {{count}} days": "No update for {{count}} days",
+  "Waiting for": "Waiting for",
+  "Next step": "Next step",
+  "Nothing recorded": "Nothing recorded",
+  "e.g. the client’s reply on the price": "e.g. the client’s reply on the price",
+  "e.g. send the revised offer": "e.g. send the revised offer",
+  "Posting also updates the bid’s stage, what it is waiting for and its next step.": "Posting also updates the bid’s stage, what it is waiting for and its next step.",
+
 } as const;
 
 export default en;

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc,
@@ -13,13 +13,15 @@ import {
 import { getUserColor } from '../../utils';
 import { useDisplayLabel } from '../../lib/displayLabel';
 import { useFormat } from '../../lib/format';
-import { Send, Clock, CalendarClock, Trash2, MessageSquare } from 'lucide-react';
+import { Send, CalendarClock, Trash2, Plus, Hourglass, ArrowRightCircle } from 'lucide-react';
 import { checkGate } from '../../lib/offerApproval';
 
 interface Props {
   opportunity: Opportunity;
   user: User;
   appUser: AppUser;
+  /** Bumped by the page's "Add an update" button — opens the form. */
+  composeSignal?: number;
 }
 
 // A Firestore Timestamp reaches this file typed as `{ seconds }` only, so the
@@ -29,7 +31,7 @@ const STAMP: Intl.DateTimeFormatOptions = {
   day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
 };
 
-export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: Props) {
+export default function OpportunityFollowUpsTab({ opportunity, user, appUser, composeSignal = 0 }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const f = useFormat();
@@ -38,6 +40,11 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
   const [text, setText] = useState('');
   const [stage, setStage] = useState<OpportunityStage>(opportunity.stage || 'Identified');
   const [nextActionDate, setNextActionDate] = useState(opportunity.nextActionDate || '');
+  // Queue O2 — both start from what the bid says now, so an update only has to
+  // change what actually changed.
+  const [waitingFor, setWaitingFor] = useState(opportunity.waitingFor || '');
+  const [nextStep, setNextStep] = useState(opportunity.nextStep || '');
+  const [composing, setComposing] = useState(composeSignal > 0);
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<OpportunityFollowUp | null>(null);
@@ -46,6 +53,9 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
   // follow the opportunity when the record changes underneath us.
   useEffect(() => { setStage(opportunity.stage || 'Identified'); }, [opportunity.stage]);
   useEffect(() => { setNextActionDate(opportunity.nextActionDate || ''); }, [opportunity.nextActionDate]);
+  useEffect(() => { setWaitingFor(opportunity.waitingFor || ''); }, [opportunity.waitingFor]);
+  useEffect(() => { setNextStep(opportunity.nextStep || ''); }, [opportunity.nextStep]);
+  useEffect(() => { if (composeSignal > 0) setComposing(true); }, [composeSignal]);
 
   useEffect(() => {
     const q = query(collection(db, 'opportunityFollowUps'), where('opportunityId', '==', opportunity.id));
@@ -59,15 +69,6 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
     });
     return () => unsub();
   }, [opportunity.id]);
-
-  const nextDue = useMemo(() => {
-    if (!opportunity.nextActionDate) return null;
-    const target = new Date(`${opportunity.nextActionDate}T00:00:00`).getTime();
-    if (!isFinite(target)) return null;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    return Math.round((target - today.getTime()) / 86_400_000);
-  }, [opportunity.nextActionDate]);
 
   const post = async () => {
     if (!text.trim()) return;
@@ -88,6 +89,8 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         text: text.trim(),
         stage,
         nextActionDate,
+        waitingFor: waitingFor.trim(),
+        nextStep: nextStep.trim(),
         authorId: user.uid,
         authorName: appUser.displayName || 'Unknown',
         authorColor: appUser.userColor || getUserColor(appUser.displayName || user.uid),
@@ -99,11 +102,14 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         lastFollowUpText: text.trim(),
         lastFollowUpAt: serverTimestamp(),
         nextActionDate,
+        waitingFor: waitingFor.trim(),
+        nextStep: nextStep.trim(),
         stage,
         ...('approval' in gate && gate.approval ? { approval: gate.approval } : {}),
         updatedAt: serverTimestamp(),
       });
       setText('');
+      setComposing(false);
     } catch (e) {
       console.error('post follow-up failed:', e);
       setError(t('Failed to post the follow-up. Please try again.'));
@@ -135,44 +141,16 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         </div>
       )}
 
-      {/* Latest follow-up + next action */}
-      <div className="card" style={{ padding: 22 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-          <MessageSquare className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
-            {t('Latest follow-up')}
-          </span>
+      {/* Composer — closed until asked for, so the history sits right under
+          the page's "At a glance" card (queue O2). */}
+      {!composing ? (
+        <div>
+          <button className="btn btn-primary" data-followup-open onClick={() => setComposing(true)}>
+            <Plus className="w-4 h-4" /> {t('Add an update')}
+          </button>
         </div>
-        {opportunity.lastFollowUpText ? (
-          <p style={{ fontSize: 15, color: 'var(--text-primary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>
-            {opportunity.lastFollowUpText}
-          </p>
-        ) : (
-          <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: 0 }}>{t('No follow-up recorded yet.')}</p>
-        )}
-        <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', marginTop: 12, fontSize: 12, color: 'var(--text-muted)' }}>
-          {opportunity.lastFollowUpAt && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <Clock className="w-3.5 h-3.5" /> {fmt(opportunity.lastFollowUpAt)}
-            </span>
-          )}
-          {opportunity.nextActionDate && (
-            <span style={{
-              display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700,
-              color: nextDue !== null && nextDue < 0 ? '#dc2626'
-                : nextDue !== null && nextDue <= 3 ? '#f59e0b' : 'var(--text-secondary)',
-            }}>
-              <CalendarClock className="w-3.5 h-3.5" />
-              {t('Next action {{date}}', { date: f.date(opportunity.nextActionDate) })}
-              {nextDue !== null && ` · ${nextDue < 0 ? t('{{count}}d overdue', { count: Math.abs(nextDue) })
-                : nextDue === 0 ? t('today') : t('in {{count}}d', { count: nextDue })}`}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Composer */}
-      <div className="card" style={{ padding: 16 }}>
+      ) : (
+      <div className="card" data-followup-form style={{ padding: 16 }}>
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
           <label style={{ display: 'grid', gap: 4 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Stage now')}</span>
@@ -185,6 +163,18 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
             <input type="date" value={nextActionDate} onChange={e => setNextActionDate(e.target.value)} style={inputStyle} />
           </label>
         </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12, marginBottom: 10 }}>
+          <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Waiting for')}</span>
+            <input data-followup-waiting dir="auto" value={waitingFor} onChange={e => setWaitingFor(e.target.value)}
+              placeholder={t('e.g. the client’s reply on the price')} style={inputStyle} />
+          </label>
+          <label style={{ display: 'grid', gap: 4, minWidth: 0 }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('Next step')}</span>
+            <input data-followup-next dir="auto" value={nextStep} onChange={e => setNextStep(e.target.value)}
+              placeholder={t('e.g. send the revised offer')} style={inputStyle} />
+          </label>
+        </div>
         <textarea
           value={text}
           onChange={e => setText(e.target.value)}
@@ -194,13 +184,17 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
         />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>
-            {t("Posting also updates the opportunity's stage and next action date.")}
+            {t('Posting also updates the bid’s stage, what it is waiting for and its next step.')}
           </span>
-          <button className="btn btn-primary" disabled={posting || !text.trim()} onClick={post}>
-            <Send className="w-4 h-4" /> {posting ? t('Posting…') : t('Post follow-up')}
-          </button>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-ghost" onClick={() => setComposing(false)}>{t('Cancel')}</button>
+            <button className="btn btn-primary" disabled={posting || !text.trim()} onClick={post}>
+              <Send className="w-4 h-4" /> {posting ? t('Posting…') : t('Post follow-up')}
+            </button>
+          </div>
         </div>
       </div>
+      )}
 
       {/* Timeline */}
       <div>
@@ -229,7 +223,21 @@ export default function OpportunityFollowUpsTab({ opportunity, user, appUser }: 
                     </button>
                   )}
                 </div>
-                <p style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fu.text}</p>
+                <p dir="auto" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5, whiteSpace: 'pre-wrap' }}>{fu.text}</p>
+                {(fu.waitingFor || fu.nextStep) && (
+                  <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginTop: 4, fontSize: 12, color: 'var(--text-muted)' }}>
+                    {fu.waitingFor && (
+                      <span data-history-waiting style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <Hourglass className="w-3 h-3" /> {t('Waiting for')}: <span dir="auto">{fu.waitingFor}</span>
+                      </span>
+                    )}
+                    {fu.nextStep && (
+                      <span data-history-next style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                        <ArrowRightCircle className="w-3 h-3" /> {t('Next step')}: <span dir="auto">{fu.nextStep}</span>
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>

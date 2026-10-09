@@ -348,7 +348,7 @@ check('a "Tasks" tab sits in the tab bar', await evalJS(`!!window.__exact('butto
 check('the existing tabs are untouched',
   await evalJS(`['Overview','Follow-ups','Milestones','Outcome'].every(l => !!window.__exact('button', l))`));
 check('Follow-ups is still the tab that opens first',
-  await evalJS(`document.body.textContent.includes('Latest follow-up')`));
+  await evalJS(`!!document.querySelector('[data-followup-open]')`));
 
 console.log('\n[2] it lists exactly the tasks linked to THIS bid');
 await clickEl(`window.__exact('button', 'Tasks')`, 'Tasks tab');

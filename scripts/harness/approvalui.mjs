@@ -364,6 +364,9 @@ try {
   await clickEl(`window.__one('.modal button', 'Cancel')`, 'cancel');
   await sleep(150);
   // the Follow-ups tab has its own "Stage now" box — same gate
+  // (queue O2: the form is closed until "Add an update" is pressed)
+  await clickEl(`document.querySelector('[data-followup-open]')`, 'open the update form');
+  await sleep(100);
   await evalJS(`(() => { const s = [...document.querySelectorAll('select')].find(x => !x.closest('.modal') && [...x.options].some(o => o.value === 'Submitted')); window.__pick(s, 'Submitted'); })()`);
   await sleep(100);
   await evalJS(`window.__type(document.querySelector('textarea:not([data-approval])'), 'Sent by courier')`);
