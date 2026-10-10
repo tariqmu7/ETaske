@@ -165,7 +165,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
               <Row label={t('Source')} value={dl(o.source)} />
               <Row label={t('Client')} value={o.client} />
               <Row label={t('Sector')} value={o.sector} />
-              <Row label={t('Location')} value={o.location} />
+              <Row label={t('Country')} value={o.location} />
               <Row label={t('Tender / RFQ number')} value={o.tenderNumber} />
               <Row label={t('Bid owner')} value={owner?.displayName || o.ownerName} />
               <Row label={t('Announced')} value={fmt.date(o.announcedDate)} />

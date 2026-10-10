@@ -337,11 +337,23 @@ const setField = async (label, value) => {
 };
 const valOf = label => evalJS(`(() => { const el = ${fieldIn(label)}; return el ? el.value : null; })()`);
 const rows = () => evalJS(`[...document.querySelectorAll('[data-testid=checklist-row]')].filter(window.__vis).map(r => window.__txt(r))`);
+// Queue O3 — the Bids board now opens grouped by COUNTRY. These checks drill
+// into a STAGE bucket, so switch the compact Group by dropdown to Stage first.
+const oppByStage = async () => {
+  await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    if (!sel || sel.value === 'stage') return;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'stage');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await sleep(300);
+};
 // Reach a card on the board: the grid may be showing group cards first.
 async function openBid(title) {
   const direct = await evalJS(`!!window.__one('.card-interactive', ${JSON.stringify(title)})`);
   if (!direct) {
     // drill into whichever group card is showing (every seeded/created bid is 'Identified')
+    await oppByStage();
     await clickEl(`window.__one('button, .card, [role=button]', 'Identified')`, 'Identified group');
     await waitFor(`window.__one('.card-interactive', ${JSON.stringify(title)})`, `card ${title}`);
   }
@@ -402,6 +414,7 @@ try {
   console.log('\n[3] board card');
   const gridFirst = !(await evalJS(`!!window.__one('.card-interactive', 'Suez refinery')`));
   if (gridFirst) {
+    await oppByStage();
     await clickEl(`window.__one('button, .card, [role=button]', 'Identified')`, 'Identified group');
     await waitFor(`window.__one('.card-interactive', 'Suez refinery')`, 'card');
   }
@@ -499,6 +512,7 @@ try {
   await clickEl(`window.__one('button', 'All opportunities')`, 'back');
   await evalJS(`window.__setLang('ar')`); await sleep(300);
   if (!(await evalJS(`!!window.__one('.card-interactive', 'Suez refinery')`))) {
+    await oppByStage();
     await clickEl(`window.__one('button, .card, [role=button]', 'مُحدَّد')`, 'group (ar)');
   }
   await clickEl(`window.__one('.card-interactive h3', 'Suez refinery shutdown tender')`, 'card (ar)');

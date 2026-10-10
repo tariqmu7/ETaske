@@ -2351,10 +2351,19 @@ const oppCardTitles = () => evalJS(`(() => {
   return JSON.stringify(h);
 })()`).then(JSON.parse);
 
-const oppStageCards = await oppGridCards();
+// Queue O3 — the board OPENS grouped by COUNTRY (the bid's `location`), with
+// "الدولة" as the dimension's name and «بدون دولة» for a bid that has none.
+const oppDefaultCards = await oppGridCards();
 check('★ the board OPENS on the grid — group cards, and not one bid card',
-  oppStageCards.length === 3 && (await oppRows()) === 0,
-  `${oppStageCards.length} cards / ${await oppRows()} bid cards`);
+  oppDefaultCards.length === 2 && (await oppRows()) === 0,
+  `${oppDefaultCards.length} cards / ${await oppRows()} bid cards`);
+check('★ O3: the default grouping is by COUNTRY, labelled «الدولة»',
+  oppDefaultCards[0].includes('Alexandria') && oppDefaultCards[1].includes('بدون دولة')
+  && (await evalJS(`(() => { const s = document.querySelector('#root .groupby-compact select'); return s ? s.options[s.selectedIndex].textContent.trim() : ''; })()`)) === 'الدولة',
+  oppDefaultCards.join(' | '));
+const oppStageCards = await pickOppGroup('المرحلة');
+check('★ by stage: three buckets once Stage is picked',
+  oppStageCards.length === 3, oppStageCards.join(' | '));
 check('★ by stage: one card per bucket, in PIPELINE order (not alphabetical)',
   oppStageCards[0].includes('مُحدَّد') && oppStageCards[1].includes('مُقدَّم') && oppStageCards[2].includes('فوز'),
   oppStageCards.join(' | '));
@@ -2384,15 +2393,15 @@ check('★ back returns to the full grid, unchanged',
 // Like the projects board and unlike tasks/correspondences, an Opportunity OWNS
 // its location — no listener, no link to resolve. o-c carries none, which is
 // what proves the "no value" bucket sorts LAST.
-const oppLocationCards = await pickOppGroup('الموقع');
+const oppLocationCards = await pickOppGroup('الدولة');
 check('★ by location: read straight off the bid, and the stage buckets are gone',
   oppLocationCards.length === 2 && oppLocationCards[0].includes('Alexandria')
   // The "Location: {{name}}" framing belongs on the drilled-in section header,
   // not under the icon that already says what kind of card this is.
-  && !oppLocationCards.some(c => c.includes('موقع:')),
+  && !oppLocationCards.some(c => c.includes('دولة:')),
   oppLocationCards.join(' | '));
 check('★ the "no location" card is LAST, never leading the grid',
-  oppLocationCards[1].includes('بدون موقع'), oppLocationCards.join(' | '));
+  oppLocationCards[1].includes('بدون دولة'), oppLocationCards.join(' | '));
 check('★ each card summarises what is INSIDE it (live / won / lost)',
   oppLocationCards.every(c => c.includes(ar['live']) && c.includes('فوز') && c.includes('خسارة')),
   oppLocationCards[0]);

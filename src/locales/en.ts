@@ -1391,6 +1391,11 @@ const en = {
   "{{stage}} Opportunities": "{{stage}} Opportunities",
   "Source: {{name}}": "Source: {{name}}",
   "No source": "No source",
+  // Queue O3 — on the bids board the free-text `location` is a COUNTRY, and
+  // the board opens grouped by it.
+  "Country": "Country",
+  "No country": "No country",
+  "Country: {{name}}": "Country: {{name}}",
   // Group-by GRID on the opportunities board (2026-08-26). The bare count word
   // stands alone beside its own large figure, same as the other three boards.
   "opportunity": "opportunity",

@@ -225,6 +225,17 @@ async function waitFor(expression, label, timeout = 6000) {
   throw new Error(`timed out waiting for ${label || expression}`);
 }
 
+// Queue O3 — the Bids board now opens grouped by COUNTRY. These checks drill
+// into a STAGE bucket, so switch the compact Group by dropdown to Stage first.
+const oppByStage = async () => {
+  await evalJS(`(() => {
+    const sel = document.querySelector('#root .groupby-compact select');
+    if (!sel || sel.value === 'stage') return;
+    Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value').set.call(sel, 'stage');
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
+  await sleep(300);
+};
 const HELPERS = `
 window.__vis = el => !!(el && el.offsetParent !== null && el.getClientRects().length);
 // ⚠ textContent, never innerText (innerText returns the uppercase-TRANSFORMED text).
@@ -400,6 +411,7 @@ try {
   await mountAs('u-mona');
   check('an employee does not get the waiting list', (await count('[data-approval=waiting]')) === 0);
   await mountAs('u-mgr');
+  await oppByStage();
   await clickEl(`window.__one('.card', 'Bid Preparation')`, 'stage group');
   await waitFor(`document.querySelector('[data-approval=card-badge]')`, 'badge');
   check('bid card shows "Awaiting sign-off"', (await txt('[data-approval=card-badge]')) === 'Awaiting sign-off');

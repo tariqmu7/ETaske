@@ -138,7 +138,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const [search, setSearch] = useState('');
   const [stageFilter, setStageFilter] = useState<string>('All');
   const [sortBy, setSortBy] = useState<'deadline' | 'value' | 'recent' | 'stage'>('deadline');
-  const [groupBy, setGroupBy] = useState<OpportunityGroupBy>('stage');
+  // Queue O3 — the bid pipeline is read country by country, so that is the
+  // default view. `location` holds the country (labelled "Country" here).
+  const [groupBy, setGroupBy] = useState<OpportunityGroupBy>('location');
   /** `null` = the group grid is showing; a key = that bucket is drilled into. */
   const [openGroup, setOpenGroup] = useState<string | null>(null);
 
@@ -331,7 +333,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const groupHeading = (group: { key: string; value: string }) => {
     if (group.key === UNGROUPED) {
       switch (groupBy) {
-        case 'location': return t('No location');
+        case 'location': return t('No country');
         case 'source': return t('No source');
         case 'owner': return t('No owner');
         default: return t('Uncategorized');
@@ -339,7 +341,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     }
     const name = dl(group.value);
     switch (groupBy) {
-      case 'location': return t('Location: {{name}}', { name });
+      case 'location': return t('Country: {{name}}', { name });
       case 'source': return t('Source: {{name}}', { name });
       case 'owner': return t('Owner: {{name}}', { name });
       default: return t('{{stage}} Opportunities', { stage: name });
@@ -425,7 +427,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
 
   const groupByOptions = useMemo<GroupByOption<OpportunityGroupBy>[]>(() => [
     { key: 'stage', label: t('Stage'), icon: ListChecks },
-    { key: 'location', label: t('Location'), icon: MapPin },
+    { key: 'location', label: t('Country'), icon: MapPin },
     { key: 'source', label: t('Source'), icon: Inbox },
     { key: 'owner', label: t('Owner'), icon: UserIcon },
   ], [t]);
@@ -1148,7 +1150,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                 <Field label={t('Decision date')}><input type="date" value={formData.decisionDate} onChange={e => setFormData({ ...formData, decisionDate: e.target.value })} className="opp-input" /></Field>
                 <Field label={t('Next action')}><input type="date" value={formData.nextActionDate} onChange={e => setFormData({ ...formData, nextActionDate: e.target.value })} className="opp-input" /></Field>
               </div>
-              <Field label={t('Location')}><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
+              <Field label={t('Country')}><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} className="opp-input" /></Field>
               <Field label={t('Scope')}><textarea value={formData.scope} onChange={e => setFormData({ ...formData, scope: e.target.value })} className="opp-input" rows={3} /></Field>
 
               {!editing && (
