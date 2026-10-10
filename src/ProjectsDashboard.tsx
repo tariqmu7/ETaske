@@ -492,7 +492,7 @@ export default function ProjectsDashboard({ user, appUser, projectUsers, onNavig
   }
 
   return (
-    <div className="board-page" style={{ maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+    <div className="board-page" style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px' }}>
       {/* Header */}
       <div className="board-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>

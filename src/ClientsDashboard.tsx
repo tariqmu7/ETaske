@@ -192,7 +192,7 @@ export default function ClientsDashboard({ user, appUser, projectUsers, onNaviga
   if (!selected || (loaded && !known)) {
     const shown = clients.filter(c => globalSearch({ n: c.name, o: c.otherNames }, search.trim()));
     return (
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }} data-clients="list">
+      <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-clients="list">
         <div style={{ marginBottom: 16 }}>
           <h1 style={{ fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>{t('Clients')}</h1>
           <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
@@ -264,7 +264,7 @@ export default function ClientsDashboard({ user, appUser, projectUsers, onNaviga
   // ── One client ────────────────────────────────────────────────────────────
   if (!file) {
     return (
-      <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }}>
+      <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }}>
         <p role="status" style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('Reading the boards…')}</p>
       </div>
     );
@@ -289,7 +289,7 @@ export default function ClientsDashboard({ user, appUser, projectUsers, onNaviga
   );
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }} data-clients="file">
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-clients="file">
       <button className="btn btn-ghost" onClick={() => select(null)} style={{ marginBottom: 16 }}>
         <ArrowLeft className="w-4 h-4" /> {t('All clients')}
       </button>

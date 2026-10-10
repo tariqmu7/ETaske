@@ -184,7 +184,7 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
   ] : [];
 
   return (
-    <div style={{ maxWidth: 1000, margin: '0 auto', padding: '20px 16px' }} data-wr="page">
+    <div style={{ maxWidth: 'var(--read-max)', margin: '0 auto', padding: '20px 16px' }} data-wr="page">
       <div style={{ marginBottom: 14 }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
           <FileText size={22} style={{ color: 'var(--blue-600)' }} /> {t('Weekly report')}

@@ -67,7 +67,7 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
   ];
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }}>
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }}>
       {/* Back + edit */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
         <button className="btn btn-ghost" onClick={onBack}>

@@ -74,7 +74,7 @@ export default function DocumentsDashboard({ user, onNavigate }: Props) {
   const filtered = q.trim() !== '' || kind !== 'all' || projectId !== 'all' || direction !== 'all';
 
   return (
-    <div style={{ maxWidth: 1080, margin: '0 auto', padding: '24px 16px' }} data-testid="documents-page">
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px' }} data-testid="documents-page">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <FolderOpen className="w-6 h-6" style={{ color: 'var(--accent)' }} />
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t('Documents')}</h1>

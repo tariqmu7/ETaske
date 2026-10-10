@@ -887,7 +887,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
 
 // ── Presentation pieces ─────────────────────────────────────────────────────
 
-const wrap: React.CSSProperties = { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' };
+const wrap: React.CSSProperties = { maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px' };
 
 const errorBox: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px',

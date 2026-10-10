@@ -212,7 +212,7 @@ export default function Announcements({ appUser, announcements, projectUsers }: 
     a.authorId === appUser.id || appUser.role === 'Admin' || appUser.role === 'Manager';
 
   return (
-    <div style={{ padding: '4px 0', minHeight: '60vh', maxWidth: 760, margin: '0 auto' }}>
+    <div style={{ padding: '4px 0', minHeight: '60vh', maxWidth: 'var(--read-max)', margin: '0 auto' }}>
       <div style={{ marginBottom: 24, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{
           width: 44, height: 44, borderRadius: 0, background: 'var(--accent)',

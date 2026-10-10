@@ -194,7 +194,7 @@ export default function CalendarDashboard({ user, appUser, onNavigate }: Props) 
   const selectedEvents = days.get(selected) || [];
 
   return (
-    <div style={{ maxWidth: 1280, margin: '0 auto', padding: '20px 16px' }} data-cal="page">
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-cal="page">
       <div style={{ marginBottom: 14 }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
           <CalendarDays size={22} style={{ color: 'var(--blue-600)' }} /> {t('Calendar')}

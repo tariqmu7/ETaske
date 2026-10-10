@@ -138,7 +138,7 @@ export default function MeetingsDashboard({ user, appUser, projectUsers, onNavig
 
   if (selected && meetings && !current) {
     return (
-      <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px' }} data-meet="page">
+      <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-meet="page">
         <button type="button" className="btn btn-ghost" data-meet="back" onClick={() => select(null)}><ArrowLeft size={15} /> {t('All meetings')}</button>
         <p role="alert" style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 16 }}>{t('This meeting no longer exists.')}</p>
       </div>
@@ -218,7 +218,7 @@ export default function MeetingsDashboard({ user, appUser, projectUsers, onNavig
   );
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px' }} data-meet="page">
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-meet="page">
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
         <div style={{ minWidth: 0 }}>
           <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
@@ -660,7 +660,7 @@ function MeetingEditor({
   ];
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px 96px' }} data-meet="editor" data-id={meeting.id}>
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px 96px' }} data-meet="editor" data-id={meeting.id}>
       <button type="button" className="btn btn-ghost" data-meet="back" onClick={back} style={{ marginBottom: 8 }}>
         <ArrowLeft size={15} /> {t('All meetings')}
       </button>

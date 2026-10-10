@@ -309,7 +309,7 @@ export default function NeedsYouDashboard({ user, appUser, onNavigate }: Props) 
   );
 
   return (
-    <div style={{ padding: '24px 0', maxWidth: 720, margin: '0 auto' }}>
+    <div style={{ padding: '24px 0', maxWidth: 'var(--read-max)', margin: '0 auto' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <div style={{ background: '#f97316', padding: 8, borderRadius: 0 }}>
           <AlertCircle className="w-5 h-5" style={{ color: '#fff' }} />

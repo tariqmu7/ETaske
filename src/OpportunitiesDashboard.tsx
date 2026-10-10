@@ -707,7 +707,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   }, [selectedId, opportunities, loading]);
 
   return (
-    <div className={selected ? undefined : 'board-page'} style={selected ? { maxWidth: 'none', margin: 0, padding: 0 } : { maxWidth: 1280, margin: '0 auto', padding: '24px 16px' }}>
+    <div className={selected ? undefined : 'board-page'} style={selected ? { maxWidth: 'none', margin: 0, padding: 0 } : { maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px' }}>
       {selected ? (
         <OpportunityDetail
           key={`${selected.id}:${openTab || ''}`}

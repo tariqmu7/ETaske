@@ -257,7 +257,7 @@ export default function HandoverDashboard({ user, appUser, projectUsers, onNavig
   const ownFile = personId === user.uid;
 
   return (
-    <div style={{ maxWidth: 1100, margin: '0 auto', padding: '20px 16px' }} data-handover="page">
+    <div style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '20px 16px' }} data-handover="page">
       <div style={{ marginBottom: 14 }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
           <Handshake size={22} style={{ color: 'var(--blue-600)' }} /> {t('Handover')}
