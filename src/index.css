@@ -1804,3 +1804,8 @@ h1, h2, h3, h4, p, span, div {
   .ms-row-bar { grid-column: 1 / -1; grid-row: 2; }
   .ms-row-dated .ms-row-when { grid-column: 1 / -1; grid-row: 2; text-align: start; }
 }
+
+/* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
+   Quiet: shown only for Managers only / Private — an "Everyone" bid says nothing. */
+.opp-row-private { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-secondary); }
+@media (max-width: 640px) { .opp-row-private-label { display: none; } }

@@ -2139,6 +2139,15 @@ const ar: Record<keyof typeof en, string> = {
   "Expired: {{count}}": "منتهية: {{count}}",
   "Other: {{count}}": "أخرى: {{count}}",
 
+  // Queue M6 — bid privacy
+  "Managers only": "المديرون فقط",
+  "Who can see this bid": "مَن يطّلع على العطاء",
+  "You will no longer see this bid after saving.": "لن يظهر لك هذا العطاء بعد الحفظ.",
+  "Only the bid team or a manager can change this.": "لا يغيّر هذا الخيار إلا فريق العطاء أو أحد المديرين.",
+  "Only the bid team (owner, co-owners, whoever added it) and admins can see it.": "لا يطّلع عليه إلا فريق العطاء (مسؤوله وشركاؤه ومن أضافه) ومدير النظام.",
+  "Managers, admins and the bid team can see it.": "يطّلع عليه المديرون ومدير النظام وفريق العطاء.",
+  "Everyone in the department can see it.": "يطّلع عليه جميع أفراد القسم.",
+
 };
 
 export default ar;

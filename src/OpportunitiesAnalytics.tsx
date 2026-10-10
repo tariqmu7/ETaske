@@ -17,6 +17,7 @@ import {
   Minus, RefreshCw, Info, FileSpreadsheet, Loader2,
 } from 'lucide-react';
 import { exportOpportunities } from './lib/exportData';
+import { visibleBids } from './lib/bidVisibility';
 
 /*
  * Opportunities analytics — the management read of the bid pipeline.
@@ -133,9 +134,11 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
   // the rules already scope reads to approved org members.
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'opportunities')), snap => {
-      setOpportunities(
+      // Queue M6 — a bid hidden from this viewer is left out of every metric.
+      setOpportunities(visibleBids(
         snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Opportunity)),
-      );
+        { id: appUser.id, role: appUser.role },
+      ));
       setUpdatedAt(new Date());
       setLoading(false);
     }, err => {
@@ -144,7 +147,7 @@ export default function OpportunitiesAnalytics({ appUser, projectUsers, onNaviga
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [appUser.id, appUser.role]);
 
   useEffect(() => {
     const unsub = onSnapshot(query(collection(db, 'opportunityFeedback')), snap => {

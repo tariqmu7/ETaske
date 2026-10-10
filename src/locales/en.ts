@@ -2197,6 +2197,15 @@ const en = {
   "Expired: {{count}}": "Expired: {{count}}",
   "Other: {{count}}": "Other: {{count}}",
 
+  // Queue M6 — bid privacy
+  "Managers only": "Managers only",
+  "Who can see this bid": "Who can see this bid",
+  "You will no longer see this bid after saving.": "You will no longer see this bid after saving.",
+  "Only the bid team or a manager can change this.": "Only the bid team or a manager can change this.",
+  "Only the bid team (owner, co-owners, whoever added it) and admins can see it.": "Only the bid team (owner, co-owners, whoever added it) and admins can see it.",
+  "Managers, admins and the bid team can see it.": "Managers, admins and the bid team can see it.",
+  "Everyone in the department can see it.": "Everyone in the department can see it.",
+
 } as const;
 
 export default en;

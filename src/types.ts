@@ -376,6 +376,8 @@ export interface Opportunity {
   ownerId?: string;
   ownerName?: string;
   collaboratorIds?: string[];
+  // Bid privacy (queue M6) — missing = 'all'. See src/lib/bidVisibility.ts
+  visibility?: 'all' | 'managers' | 'private';
   // Outcome (set when the stage becomes closed; full detail lives in
   // opportunityFeedback — see OpportunityFeedback)
   awardedTo?: string;             // winning competitor, when lost

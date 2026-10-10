@@ -6,7 +6,7 @@ import { useDisplayLabel } from './lib/displayLabel';
 import { useFormat } from './lib/format';
 import {
   ArrowLeft, Edit2, MessageSquare, FileText, Building2, Hash, MapPin,
-  CalendarClock, User as UserIcon, Percent, Trophy, Flag, CheckSquare, ListChecks, Gavel,
+  CalendarClock, User as UserIcon, Percent, Trophy, Flag, CheckSquare, ListChecks, Gavel, Lock, Users,
 } from 'lucide-react';
 import OpportunityFollowUpsTab from './components/opportunities/OpportunityFollowUpsTab';
 import OpportunityMilestonesTab from './components/opportunities/OpportunityMilestonesTab';
@@ -18,6 +18,7 @@ import ChecklistPanel from './components/ChecklistPanel';
 import OfferApprovalCard from './components/opportunities/OfferApprovalCard';
 import OpportunityGlance from './components/opportunities/OpportunityGlance';
 import { clientFileHash } from './lib/clientFile';
+import { BID_VISIBILITY_LABEL, visibilityOf } from './lib/bidVisibility';
 import { STAGE_COLORS, fullMoney, daysUntil } from './components/opportunities/opportunityUi';
 import type { AppView } from './App';
 
@@ -83,6 +84,12 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
             {dl(o.stage)}
           </span>
           {o.serialNumber && <span className="ltr-data" style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)' }}>{o.serialNumber}</span>}
+          {visibilityOf(o) !== 'all' && (
+            <span data-bid-visibility={visibilityOf(o)} className="opp-row-private" style={{ fontSize: 12 }}>
+              {visibilityOf(o) === 'private' ? <Lock className="w-3.5 h-3.5" aria-hidden /> : <Users className="w-3.5 h-3.5" aria-hidden />}
+              {t(BID_VISIBILITY_LABEL[visibilityOf(o)])}
+            </span>
+          )}
         </div>
 
         <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', fontSize: 13, color: 'var(--text-secondary)' }}>

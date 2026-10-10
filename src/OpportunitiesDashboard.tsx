@@ -27,7 +27,7 @@ import {
   Plus, X, Target, Building2, Calendar,
   Trash2, Edit2, AlertCircle, User as UserIcon, BarChart3,
   FileSpreadsheet, Loader2, Layers, ListChecks, MapPin, Inbox, ShieldCheck, Clock,
-  Check, ChevronDown, ChevronUp,
+  Check, ChevronDown, ChevronUp, Lock, Users,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { AppView } from './App';
@@ -41,6 +41,10 @@ import GroupTabs, { GroupTab } from './components/GroupTabs';
 import { byTaskUrgency, foldFinished, type OrderableTask } from './lib/taskOrder';
 import { buildGroups, UNGROUPED } from './lib/grouping';
 import { STAGE_COLORS, toNumber, money, daysUntil } from './components/opportunities/opportunityUi';
+import {
+  BID_VISIBILITY_OPTIONS, BID_VISIBILITY_LABEL, canSeeBid, canSetBidVisibility, visibilityOf, visibleBids,
+  type BidVisibility,
+} from './lib/bidVisibility';
 
 interface Props {
   user: User;
@@ -127,13 +131,20 @@ const emptyForm = () => ({
   awardedTo: '',
   awardedValue: '',
   nextActionDate: '',
+  visibility: 'all' as BidVisibility,
 });
 
 export default function OpportunitiesDashboard({ user, appUser, projectUsers, onNavigate }: Props) {
   const { t } = useTranslation();
   const dl = useDisplayLabel();
   const fmt = useFormat();
-  const [opportunities, setOpportunities] = useState<Opportunity[]>([]);
+  const [allOpportunities, setAllOpportunities] = useState<Opportunity[]>([]);
+  // Queue M6 — a bid marked Managers only / Private never reaches this board
+  // for someone outside it (lib/bidVisibility.ts).
+  const opportunities = useMemo(
+    () => visibleBids(allOpportunities, { id: appUser.id, role: appUser.role }),
+    [allOpportunities, appUser.id, appUser.role],
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -195,7 +206,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   useEffect(() => {
     const q = query(collection(db, 'opportunities'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      setOpportunities(
+      setAllOpportunities(
         snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Opportunity))
       );
       setLoading(false);
@@ -496,6 +507,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       awardedTo: o.awardedTo || '',
       awardedValue: o.awardedValue === undefined || o.awardedValue === null ? '' : String(o.awardedValue),
       nextActionDate: o.nextActionDate || '',
+      visibility: visibilityOf(o),
     });
     setIsModalOpen(true);
   };
@@ -551,6 +563,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       awardedTo: formData.awardedTo.trim(),
       awardedValue,
       nextActionDate: formData.nextActionDate,
+      visibility: formData.visibility,
     };
     setSaving(true);
     setFormError(null);
@@ -598,6 +611,21 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   };
 
   const closedOutcome = formData.stage === 'Lost' || formData.stage === 'Won';
+  // Queue M6 — who may change the privacy, and whether saving would hide the
+  // bid from the person saving it (a manager making someone else's bid private).
+  const viewer = { id: appUser.id, role: appUser.role };
+  const visibilityEditable = canSetBidVisibility(editing, viewer);
+  const loseSight = !canSeeBid({
+    ownerId: formData.ownerId,
+    collaboratorIds: editing?.collaboratorIds,
+    userId: editing ? editing.userId : user.uid,
+    visibility: formData.visibility,
+  }, viewer);
+  const visibilityHint = loseSight ? t('You will no longer see this bid after saving.')
+    : !visibilityEditable ? t('Only the bid team or a manager can change this.')
+    : formData.visibility === 'private' ? t('Only the bid team (owner, co-owners, whoever added it) and admins can see it.')
+    : formData.visibility === 'managers' ? t('Managers, admins and the bid team can see it.')
+    : t('Everyone in the department can see it.');
 
   function gateMessage(p: GateProblem) {
     switch (p) {
@@ -942,6 +970,14 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                       <h3 dir="auto" className="task-row-title" title={o.title} style={{ color: closed ? 'var(--text-muted)' : 'var(--text-primary)' }}>
                         {o.title}
                       </h3>
+                      {visibilityOf(o) !== 'all' && (
+                        <span data-bid-visibility={visibilityOf(o)} className="opp-row-private" title={t(BID_VISIBILITY_LABEL[visibilityOf(o)])}>
+                          {visibilityOf(o) === 'private'
+                            ? <Lock className="w-3.5 h-3.5" style={{ flexShrink: 0 }} aria-hidden />
+                            : <Users className="w-3.5 h-3.5" style={{ flexShrink: 0 }} aria-hidden />}
+                          <span className="opp-row-private-label">{t(BID_VISIBILITY_LABEL[visibilityOf(o)])}</span>
+                        </span>
+                      )}
                       {o.approval?.status === 'requested' && !closed && (
                         <span data-approval="card-badge" className="opp-row-signoff" title={t('Awaiting sign-off')}>
                           <Clock className="w-3.5 h-3.5" style={{ flexShrink: 0 }} />
@@ -1130,6 +1166,23 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
                   </select>
                 </Field>
               </div>
+              <Field label={t('Who can see this bid')}>
+                <select
+                  data-bid-visibility-select
+                  value={formData.visibility}
+                  disabled={!visibilityEditable}
+                  onChange={e => setFormData({ ...formData, visibility: e.target.value as BidVisibility })}
+                  className="opp-input"
+                >
+                  {BID_VISIBILITY_OPTIONS.map(v => <option key={v} value={v}>{t(BID_VISIBILITY_LABEL[v])}</option>)}
+                </select>
+                <span
+                  data-bid-visibility-hint={loseSight ? 'lose-sight' : 'info'}
+                  style={{ display: 'block', marginTop: 4, fontSize: 11.5, fontWeight: loseSight ? 700 : 500, color: loseSight ? '#b45309' : 'var(--text-muted)' }}
+                >
+                  {visibilityHint}
+                </span>
+              </Field>
               <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 0.8fr', gap: 14 }}>
                 <Field label={t('Estimated value')}>
                   <input type="number" min="0" value={formData.estimatedValue} onChange={e => setFormData({ ...formData, estimatedValue: e.target.value })} className="opp-input" />
