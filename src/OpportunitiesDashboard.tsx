@@ -36,6 +36,7 @@ import OpportunityDetail from './OpportunityDetail';
 import GroupByBar, { GroupByOption } from './components/GroupByBar';
 import BoardToolbar from './components/BoardToolbar';
 import GroupGrid, { GroupCard } from './components/GroupGrid';
+import { countryFlagUrl } from './lib/countryFlag';
 import GroupTabs, { GroupTab } from './components/GroupTabs';
 import { byTaskUrgency, foldFinished, type OrderableTask } from './lib/taskOrder';
 import { buildGroups, UNGROUPED } from './lib/grouping';
@@ -390,6 +391,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
           ? (owner?.userColor || getUserColor(ownerId || group.value || group.key))
           : getUserColor(group.key),
       photoURL: isPerson ? owner?.photoURL : undefined,
+      flagURL: groupBy === 'location' && group.key !== UNGROUPED ? countryFlagUrl(group.value) : undefined,
       // A person gets an initial; a stage/location/source gets the dimension's
       // icon, so the card still reads as "a thing of this kind".
       initial: isPerson ? title.charAt(0).toUpperCase() : undefined,

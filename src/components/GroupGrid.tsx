@@ -54,6 +54,8 @@ export interface GroupCard {
   accent?: string;
   /** Avatar image; falls back to `initial`, then to `icon`. */
   photoURL?: string;
+  /** A country's flag (Group by Country). Drawn instead of `icon` when given. */
+  flagURL?: string;
   /** Single letter drawn in an `accent`-filled square when there is no photo. */
   initial?: string;
   /** Used when neither `photoURL` nor `initial` is given (dimensions with no person). */
@@ -105,6 +107,10 @@ export default function GroupGrid({ cards, onSelect, empty }: Props) {
             <div className="group-card-head">
               {card.photoURL ? (
                 <img src={card.photoURL} className="avatar group-card-face" style={{ objectFit: 'cover' }} alt="" />
+              ) : card.flagURL ? (
+                <span className="group-card-face group-card-flag" data-group-flag>
+                  <img src={card.flagURL} alt="" loading="lazy" />
+                </span>
               ) : card.initial ? (
                 <span className="group-card-face" style={{ background: accent, color: '#fff', fontSize: 15, fontWeight: 800 }}>
                   {card.initial}

@@ -7,6 +7,11 @@ export default defineConfig(() => {
   return {
     base: './',
     plugins: [react(), tailwindcss()],
+    build: {
+      // Country flags (lib/countryFlag.ts) stay separate files fetched on
+      // demand; inlining ~270 small SVGs would bloat the main bundle.
+      assetsInlineLimit: (file: string) => (file.includes('flag-icons') ? false : undefined),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
