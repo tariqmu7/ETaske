@@ -36,7 +36,13 @@ const stubPlugin = {
     b.onResolve({ filter: /^firebase\/firestore$/ }, () => ({ path: 'stub-firestore', namespace: 'stub' }));
     b.onResolve({ filter: /\/firebase$/ }, () => ({ path: 'stub-firebase', namespace: 'stub' }));
     b.onLoad({ filter: /.*/, namespace: 'stub' }, args => ({
-      contents: args.path === 'stub-firestore' ? FIRESTORE_STUB : 'export const db = { __fake: true };',
+      // Every query the reader runs is logged (queue M6c) so [3b] can prove a
+      // non-admin never asks for the whole collection.
+      contents: args.path === 'stub-firestore'
+        ? FIRESTORE_STUB
+          .replace('export function onSnapshot(q,', 'export function onSnapshot(q, ...rest) { (globalThis.__qlog ||= []).push(q); return _onSnapshot(q, ...rest); }\nfunction _onSnapshot(q,')
+          .replace('export async function getDocs(q) {', 'export async function getDocs(q) { (globalThis.__qlog ||= []).push(q);')
+        : 'export const db = { __fake: true };',
       loader: 'js',
     }));
   },
@@ -53,7 +59,10 @@ const { subscribeVisibleBids, getVisibleBids, byCreatedDesc } = await import(pat
 const ts = s => ({ seconds: s, nanoseconds: 0 });
 const seed = (id, data) => globalThis.__seed('opportunities', id, data);
 seed('--stats--', { value: 9 });
-seed('b-all',   { title: 'Open to all',        createdAt: ts(100) });                         // no field = everyone
+seed('b-all',   { title: 'Open to all',        createdAt: ts(100), visibility: 'all' });
+// Pre-M6 bid with NO field: the screens treat it as everyone's, but no rule-safe
+// query reaches it (M6c) — only its own team and admins list it until the backfill.
+globalThis.__seedRaw('opportunities', 'b-old', { title: 'Old, not backfilled', createdAt: ts(10), ownerId: 'u-sara' });
 seed('b-mgrs',  { title: 'Managers bid',       createdAt: ts(300), visibility: 'managers', ownerId: 'u-sara' });
 seed('b-priv',  { title: 'Private bid',        createdAt: ts(200), visibility: 'private', ownerId: 'u-sara' });
 seed('b-collab',{ title: 'Private, Mona helps', createdAt: ts(400), visibility: 'private', ownerId: 'u-sara', collaboratorIds: ['u-mona'] });
@@ -68,9 +77,9 @@ const VIEWERS = {
   employee: { id: 'u-emp',  role: 'Employee' },
 };
 const EXPECT = {
-  admin:    ['b-all', 'b-collab', 'b-made', 'b-mgrs', 'b-priv'],
+  admin:    ['b-all', 'b-collab', 'b-made', 'b-mgrs', 'b-old', 'b-priv'],
   manager:  ['b-all', 'b-mgrs'],
-  owner:    ['b-all', 'b-collab', 'b-made', 'b-mgrs', 'b-priv'],
+  owner:    ['b-all', 'b-collab', 'b-made', 'b-mgrs', 'b-old', 'b-priv'],
   collab:   ['b-all', 'b-collab'],
   creator:  ['b-all', 'b-made'],
   employee: ['b-all'],
@@ -100,9 +109,26 @@ stops.forEach(s => s());
 
 console.log('\n[3] newest first');
 const sorted = (await getVisibleBids(VIEWERS.admin)).sort(byCreatedDesc).map(b => b.id);
-check('sorted by createdAt, newest first', sorted.join(',') === 'b-collab,b-mgrs,b-priv,b-all,b-made', sorted.join(','));
+check('sorted by createdAt, newest first', sorted.join(',') === 'b-collab,b-mgrs,b-priv,b-all,b-made,b-old', sorted.join(','));
 check('a bid with no createdAt sorts last, without crashing',
   [{ id: 'x' }, { id: 'y', createdAt: { toMillis: () => 5 } }].sort(byCreatedDesc)[0].id === 'y');
+
+console.log('\n[3b] the reader asks only rule-safe questions (the same set bidrules.mjs proves on the emulator)');
+const asked = async viewer => {
+  globalThis.__qlog = [];
+  await getVisibleBids(viewer);
+  subscribeVisibleBids(viewer, () => {})();
+  return [...new Set(globalThis.__qlog.map(q => (q.__cs || []).map(c => `${c.field} ${c.op} ${c.value}`).join(' & ') || 'WHOLE'))].sort();
+};
+const empQ = await asked(VIEWERS.employee);
+check('employee: open bids + its own as owner / creator / co-owner, never the whole collection',
+  JSON.stringify(empQ) === JSON.stringify(['collaboratorIds array-contains u-emp', 'ownerId == u-emp', 'userId == u-emp', 'visibility == all']),
+  empQ.join(' | '));
+const mgrQ = await asked(VIEWERS.manager);
+check('manager: adds managers-only bids, never private ones or the whole collection',
+  mgrQ.includes('visibility == managers') && mgrQ.length === 5 && !mgrQ.includes('WHOLE'), mgrQ.join(' | '));
+const admQ = await asked(VIEWERS.admin);
+check('admin: one whole-collection read', JSON.stringify(admQ) === '["WHOLE"]', admQ.join(' | '));
 
 console.log('\n[4] source guard — nothing else reads the bid list directly');
 const walk = dir => fs.readdirSync(dir, { withFileTypes: true }).flatMap(e =>

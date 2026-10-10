@@ -267,13 +267,53 @@ service cloud.firestore {
         a.get('currency', '') == after.get('currency', '');
       return isManagerOrAdmin() || (noSelfApproval && (!gated || signedOff));
     }
+    // Bid privacy (queue M6c) — mirrors src/lib/bidVisibility.ts, keep the two
+    // in step. visibility 'all' (or missing / anything else) = every approved
+    // user; 'managers' = managers + admins + the bid's team; 'private' = admins
+    // + the team. Team = owner, creator (userId) or a co-owner (collaboratorIds).
+    // Rules are guards, not filters: clients list bids through the union of
+    // rule-safe queries in src/lib/bidReads.ts.
+    function bidIsOpen(data) {
+      return !(data.get('visibility', 'all') in ['managers', 'private']);
+    }
+    function isBidTeam(data) {
+      return data.get('ownerId', '') == request.auth.uid ||
+        data.get('userId', '') == request.auth.uid ||
+        request.auth.uid in data.get('collaboratorIds', []);
+    }
+    function canSeeBid(data) {
+      return bidIsOpen(data) || isAdmin() || isBidTeam(data) ||
+        (data.get('visibility', 'all') == 'managers' && isManagerOrAdmin());
+    }
+    // LIST must not use bidIsOpen: when a query does not constrain a field, the
+    // rules engine sees it as absent, so get('visibility', 'all') answers 'all'
+    // and a bare collection query would read every private bid (proved in
+    // scripts/harness/bidrules.mjs). A listed bid must carry visibility 'all'
+    // — old bids need scripts/backfill-bid-visibility.ts — and the team checks
+    // here only pass when the query itself is on ownerId / userId / collaboratorIds.
+    function canListBid(data) {
+      return data.get('visibility', '') == 'all' || isAdmin() || isBidTeam(data) ||
+        (data.get('visibility', '') == 'managers' && isManagerOrAdmin());
+    }
+    function validBidVisibility(data) {
+      return data.get('visibility', 'all') in ['all', 'managers', 'private'];
+    }
+    // Only the team or a manager/admin may change who sees a bid (a colleague
+    // who can merely see an "Everyone" bid may not hide it from the rest).
+    function keepsBidVisibility() {
+      return request.resource.data.get('visibility', 'all') == resource.data.get('visibility', 'all') ||
+        isManagerOrAdmin() || isBidTeam(resource.data);
+    }
     match /opportunities/{id} {
-      allow read: if isApproved();
+      allow get: if isApproved() && canSeeBid(resource.data);
+      allow list: if isApproved() && canListBid(resource.data);
       allow create: if isApproved() && id != '--stats--' &&
         request.resource.data.userId == request.auth.uid &&
+        validBidVisibility(request.resource.data) &&
         (isManagerOrAdmin() || request.resource.data.get('approval', {}).get('status', '') != 'approved');
-      allow update: if isApproved() && id != '--stats--' && passesOfferSignOff();
-      allow delete: if isManagerOrAdmin() && id != '--stats--';
+      allow update: if isApproved() && id != '--stats--' && canSeeBid(resource.data) &&
+        validBidVisibility(request.resource.data) && keepsBidVisibility() && passesOfferSignOff();
+      allow delete: if isManagerOrAdmin() && id != '--stats--' && canSeeBid(resource.data);
     }
     match /opportunityFollowUps/{id} {
       allow read: if isApproved();

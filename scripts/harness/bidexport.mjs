@@ -24,9 +24,9 @@ const iso = off => {
 const DATA = {
   opportunities: [
     { id: 'o1', serialNumber: 'OP000001', title: 'EGPC Turnaround', client: 'EGPC', stage: 'Lost',
-      estimatedValue: 2_000_000, probability: 25, currency: 'EGP', submissionDeadline: iso(-10) },
+      estimatedValue: 2_000_000, probability: 25, currency: 'EGP', submissionDeadline: iso(-10), visibility: 'all' },
     { id: 'o2', serialNumber: 'OP000002', title: 'AGIBA Maintenance', client: 'AGIBA', stage: 'Bid Preparation',
-      estimatedValue: '1,500,000', currency: 'EGP' },            // string value, NO probability
+      estimatedValue: '1,500,000', currency: 'EGP', visibility: 'all' }, // string value, NO probability
     { id: '--stats--', count: 2 },                               // counter doc must be excluded
   ],
   opportunityFeedback: [
@@ -45,10 +45,18 @@ const DATA = {
   ],
 };
 
-const snapFor = name => ({
-  docs: (DATA[name] || []).map(d => ({ id: d.id, data: () => { const { id, ...rest } = d; return rest; } })),
-  size: (DATA[name] || []).length,
-});
+// `name` is a collection name, or { name, cs } from query() — bidReads.ts (M6c)
+// lists bids through single-field where() queries, so the stub applies them.
+const snapFor = q => {
+  const name = typeof q === 'string' ? q : q.name;
+  const keep = d => (typeof q === 'string' ? [] : q.cs).every(c => c.op === 'array-contains'
+    ? Array.isArray(d[c.field]) && d[c.field].includes(c.value) : d[c.field] === c.value);
+  const list = (DATA[name] || []).filter(keep);
+  return {
+  docs: list.map(d => ({ id: d.id, data: () => { const { id, ...rest } = d; return rest; } })),
+  size: list.length,
+  };
+};
 
 const stubPlugin = {
   name: 'stub',
@@ -64,6 +72,8 @@ const stubPlugin = {
         : args.path === 'stub-tv'
           ? `export async function getVisibleTasks() { return []; }`
           : `export function collection(_db, name) { return name; }
+             export function query(name, ...cs) { return { name, cs }; }
+             export function where(field, op, value) { return { field, op, value }; }
              export async function getDocs(name) { return globalThis.__snap(name); }
              export function onSnapshot() { return () => {}; }
              export class Timestamp {}`,

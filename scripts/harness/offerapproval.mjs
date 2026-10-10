@@ -236,7 +236,8 @@ const bid = (extra = {}) => ({ id: 'b1', title: 'Tank cleaning', stage: 'Bid Pre
 {
   const rules = fs.readFileSync(path.join(ROOT, 'firestore.rules'), 'utf8');
   ok(/function passesOfferSignOff\(\)/.test(rules), '[10] rule function exists');
-  ok(/allow update: if isApproved\(\) && id != '--stats--' && passesOfferSignOff\(\);/.test(rules), '[10] bid updates go through it');
+  // M6c added the privacy checks to the same rule; sign-off must still be in it.
+  ok(/allow update: if isApproved\(\) && id != '--stats--' && [^;]*passesOfferSignOff\(\);/.test(rules), '[10] bid updates go through it');
   const list = s => JSON.stringify(s.map(x => `'${x}'`).join(', '));
   ok(rules.includes(`in [${M.PRE_SEND_STAGES.map(x => `'${x}'`).join(', ')}]`), `[10] same pre-send stages ${list(M.PRE_SEND_STAGES)}`);
   ok(rules.includes(`in [${M.GATED_STAGES.map(x => `'${x}'`).join(', ')}]`), `[10] same gated stages ${list(M.GATED_STAGES)}`);

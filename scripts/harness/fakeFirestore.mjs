@@ -15,7 +15,15 @@ let seq = 0;
 const coll = name => { if (!store.has(name)) store.set(name, new Map()); return store.get(name); };
 globalThis.__store = store;
 globalThis.__writes = [];
-globalThis.__seed = (name, id, data) => { coll(name).set(id, data); };
+// A seeded bid with no visibility gets 'all', like every live bid after
+// scripts/backfill-bid-visibility.ts (queue M6c) — src/lib/bidReads.ts lists bids
+// with where('visibility', '==', 'all'), which a doc without the field never
+// matches. __seedRaw stores a doc exactly as given (an un-backfilled bid).
+globalThis.__seedRaw = (name, id, data) => { coll(name).set(id, data); };
+globalThis.__seed = (name, id, data) => {
+  const backfilled = name === 'opportunities' && id !== '--stats--' && data && !('visibility' in data);
+  coll(name).set(id, backfilled ? { ...data, visibility: 'all' } : data);
+};
 
 export function collection(_db, name) { return { __coll: name }; }
 export function doc(_db, name, id) { return { __coll: name, id }; }
