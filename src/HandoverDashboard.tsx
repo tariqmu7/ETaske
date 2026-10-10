@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { createNotification } from './lib/pushNotification';
 import { useFormat, DATE_MEDIUM } from './lib/format';
@@ -96,9 +97,9 @@ export default function HandoverDashboard({ user, appUser, projectUsers, onNavig
     const unsubT = subscribeVisibleTasks(user.uid, list => setTasks(list), () => setTasks([]));
     const sub = (name: string, set: (v: any[]) => void) => onSnapshot(collection(db, name), s => set(rows(s)),
       err => { console.warn(`Handover — ${name} listener:`, err.code); set([]); });
-    const u = [sub('correspondences', setLetters), sub('opportunities', setBids), sub('projectContracts', setContracts), sub('projects', setProjects)];
+    const u = [sub('correspondences', setLetters), subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids, () => setBids([])), sub('projectContracts', setContracts), sub('projects', setProjects)];
     return () => { unsubT(); u.forEach(f => f()); };
-  }, [user.uid]);
+  }, [user.uid, appUser.role]);
 
   // Back / Forward and a pasted `#/handover?person=…` link.
   useEffect(() => {

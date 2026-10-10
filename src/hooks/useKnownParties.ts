@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { collection, onSnapshot } from 'firebase/firestore';
+import { subscribeVisibleBids } from '../lib/bidReads';
+import type { BidViewer } from '../lib/bidVisibility';
 import { db } from '../lib/firebase';
 import type { Opportunity, Project } from '../types';
 import type { KnownParty } from '../lib/mailSuggest';
@@ -21,31 +23,30 @@ export interface KnownRecord {
  * most likely about. `records` carries the serial/title a link needs, keyed by
  * record id.
  */
-export function useKnownParties(): { parties: KnownParty[]; records: Record<string, KnownRecord> } {
+export function useKnownParties(viewer: BidViewer): { parties: KnownParty[]; records: Record<string, KnownRecord> } {
   const [bidParties, setBidParties] = useState<KnownParty[]>([]);
   const [projectParties, setProjectParties] = useState<KnownParty[]>([]);
   const [records, setRecords] = useState<Record<string, KnownRecord>>({});
 
   useEffect(() => {
-    const unsubBids = onSnapshot(collection(db, 'opportunities'), snap => {
+    // Queue M6b — only the bids this person may see (bid privacy).
+    const unsubBids = subscribeVisibleBids(viewer, bids => {
       const rows: KnownParty[] = [];
       const recs: Record<string, KnownRecord> = {};
-      snap.docs.forEach(d => {
-        if (d.id === '--stats--') return;
-        const o = d.data() as Opportunity;
-        recs[d.id] = { type: 'opportunity', serial: o.serialNumber, title: o.title };
+      bids.forEach(o => {
+        recs[o.id] = { type: 'opportunity', serial: o.serialNumber, title: o.title };
         if (o.client) {
           rows.push({
             name: o.client,
             type: 'opportunity',
-            id: d.id,
+            id: o.id,
             label: [o.serialNumber, o.title].filter(Boolean).join(' · '),
           });
         }
       });
       setBidParties(rows);
       setRecords(prev => ({ ...prev, ...recs }));
-    }, err => console.warn('Known parties — opportunities listener:', err.code));
+    }, err => console.warn('Known parties — opportunities listener:', err?.code));
 
     const unsubProjects = onSnapshot(collection(db, 'projects'), snap => {
       const rows: KnownParty[] = [];
@@ -63,7 +64,7 @@ export function useKnownParties(): { parties: KnownParty[]; records: Record<stri
     }, err => console.warn('Known parties — projects listener:', err.code));
 
     return () => { unsubBids(); unsubProjects(); };
-  }, []);
+  }, [viewer.id, viewer.role]);
 
   const parties = useMemo(() => {
     const seen = new Set<string>();

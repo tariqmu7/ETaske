@@ -20,6 +20,7 @@ import { consumePending, subscribeOpen, takeConsumedTab } from './lib/deepLink';
 import { consumeCreateIntent, subscribeCreate, type OpportunityPrefill } from './lib/createIntent';
 import { recordRecent } from './lib/recents';
 import { exportOpportunities } from './lib/exportData';
+import { subscribeVisibleBids, byCreatedDesc } from './lib/bidReads';
 import { buildChecklist, checklistProgress, defaultTemplateForSource, templatesFor, localToday } from './lib/checklists';
 import { findSimilarBids } from './lib/duplicates';
 import { checkGate, crossesGate, approvalState, waitingForSignOff, isManagerRole, type GateProblem, type GateResult } from './lib/offerApproval';
@@ -204,11 +205,9 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
   const waiting = useMemo(() => (isManager ? waitingForSignOff(opportunities, Date.now()) : []), [isManager, opportunities]);
 
   useEffect(() => {
-    const q = query(collection(db, 'opportunities'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setAllOpportunities(
-        snap.docs.filter(d => d.id !== '--stats--').map(d => ({ id: d.id, ...d.data() } as Opportunity))
-      );
+    // Queue M6b — read through the shared privacy-aware reader (newest first).
+    const unsub = subscribeVisibleBids({ id: appUser.id, role: appUser.role }, bids => {
+      setAllOpportunities(bids.sort(byCreatedDesc));
       setLoading(false);
     }, err => {
       console.error('Opportunities listener error:', err, { uid: auth.currentUser?.uid });
@@ -216,7 +215,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
       setLoading(false);
     });
     return () => unsub();
-  }, []);
+  }, [appUser.id, appUser.role]);
 
   const stats = useMemo(() => {
     const open = opportunities.filter(o => isOpportunityOpen(o.stage));
@@ -655,7 +654,7 @@ export default function OpportunitiesDashboard({ user, appUser, projectUsers, on
     setExporting(true);
     setError(null);
     try {
-      const r = await exportOpportunities();
+      const r = await exportOpportunities({ id: appUser.id, role: appUser.role });
       setExportNote(t('Saved {{file}} — {{opportunities}} opportunities, {{feedback}} outcomes, {{milestones}} bid gates, {{followUps}} follow-ups.', {
         file: r.fileName, opportunities: r.opportunities, feedback: r.feedback,
         milestones: r.milestones, followUps: r.followUps,

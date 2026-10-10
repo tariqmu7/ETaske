@@ -2108,7 +2108,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
                 <div style={{ marginBottom: 20 }}>
-                  <RecordLinkPicker value={editLinks} onChange={setEditLinks} active={!!editingTask} />
+                  <RecordLinkPicker viewer={{ id: appUser.id, role: appUser.role }} value={editLinks} onChange={setEditLinks} active={!!editingTask} />
                 </div>
 
                 <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>

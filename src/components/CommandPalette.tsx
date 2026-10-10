@@ -8,6 +8,7 @@ import { Stethoscope,
 import { useTranslation } from 'react-i18next';
 import { db } from '../lib/firebase';
 import { getVisibleTasks } from '../lib/taskVisibility';
+import { getVisibleBids } from '../lib/bidReads';
 import { globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
 import { canViewMedical } from '../lib/medicalAccess';
@@ -58,13 +59,13 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
           getVisibleTasks(appUser.id),
           getDocs(collection(db, 'correspondences')),
           getDocs(collection(db, 'projects')),
-          getDocs(collection(db, 'opportunities')),
+          getVisibleBids({ id: appUser.id, role: appUser.role }),
         ]);
         if (cancelled) return;
         setTasks(t);
         setCorrs(stripStats(c.docs).map(d => ({ id: d.id, ...d.data() })));
         setProjects(stripStats(p.docs).map(d => ({ id: d.id, ...d.data() })));
-        setOpportunities(stripStats(o.docs).map(d => ({ id: d.id, ...d.data() })));
+        setOpportunities(o);
         setLoaded(true);
       } catch (err) {
         console.warn('Command palette load error:', err);

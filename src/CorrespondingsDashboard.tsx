@@ -1732,6 +1732,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                     </div>
                   ) : (
                     <RecordLinkPicker
+                      viewer={{ id: appUser.id, role: appUser.role }}
                       value={formLinks}
                       onChange={setFormLinks}
                       active={isModalOpen}

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { getNextSerialNumber } from './lib/counters';
 import { createNotification } from './lib/pushNotification';
@@ -114,11 +115,11 @@ export default function MeetingsDashboard({ user, appUser, projectUsers, onNavig
     if (!open) return;
     const sub = (name: string, set: (v: any[]) => void) => onSnapshot(collection(db, name), s => set(rows(s)),
       err => { console.warn(`Meetings — ${name} listener:`, err.code); set([]); });
-    const u1 = sub('opportunities', setBids);
+    const u1 = subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids, () => setBids([]));
     const u2 = sub('projects', setProjects);
     const u3 = sub('correspondences', setLetters);
     return () => { u1(); u2(); u3(); };
-  }, [open]);
+  }, [open, user.uid, appUser.role]);
 
   // `#/meetings?id=…` ⇄ the open meeting, so Back/Forward and links work.
   useEffect(() => {
@@ -714,6 +715,7 @@ function MeetingEditor({
         </div>
         {!ro && (
           <RecordLinkPicker
+            viewer={{ id: appUser.id, role: appUser.role }}
             value={{ opportunityId: draft.opportunityId, opportunitySerial: draft.opportunitySerial, opportunityTitle: draft.opportunityTitle, projectId: draft.projectId, projectName: draft.projectName }}
             onChange={l => set({ ...l })}
             hint={t('Link the meeting to a bid or a project: the agenda suggests its open work, and the tasks from it are linked too.')}

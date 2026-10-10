@@ -65,6 +65,7 @@ const stubPlugin = {
           ? `export async function getVisibleTasks() { return []; }`
           : `export function collection(_db, name) { return name; }
              export async function getDocs(name) { return globalThis.__snap(name); }
+             export function onSnapshot() { return () => {}; }
              export class Timestamp {}`,
       loader: 'js',
     }));
@@ -97,7 +98,9 @@ const check = (name, cond, detail = '') => {
   else { fail++; console.log(`  FAIL ${name}${detail ? ` — ${detail}` : ''}`); }
 };
 
-const result = await exportOpportunities();
+// An admin sees every bid, so a child row with no parent really is a deleted bid.
+const ADMIN = { id: 'u-adm', role: 'Admin' };
+const result = await exportOpportunities(ADMIN);
 const wb = XLSX.read(new Uint8Array(await captured.arrayBuffer()), { type: 'array' });
 const rows = sheet => XLSX.utils.sheet_to_json(wb.Sheets[sheet], { defval: '' });
 
@@ -138,6 +141,27 @@ check('orphan row is exported and labelled', gate('Prequalification')['Bid Seria
 console.log('\n[5] follow-ups sheet');
 const fus = rows('Follow-ups');
 check('newest follow-up first', fus[0]['Follow-up'] === 'Clarifications sent', String(fus[0]['Follow-up']));
+
+console.log('\n[6] bid privacy (queue M6b) — the export is the whole book the viewer may SEE');
+DATA.opportunities.push({ id: 'o3', serialNumber: 'OP000003', title: 'Secret Pipeline Bid', client: 'ENPPI', stage: 'Bid Preparation',
+  visibility: 'private', ownerId: 'u-owner', userId: 'u-owner' });
+DATA.opportunityFeedback.push({ id: 'f3', opportunityId: 'o3', outcome: 'Lost', reasons: ['Price too high'] });
+DATA.opportunityFollowUps.push({ id: 'u3', opportunityId: 'o3', text: 'Secret call', createdAt: { seconds: 300 } });
+const exportAs = async viewer => {
+  const r = await exportOpportunities(viewer);
+  const book = XLSX.read(new Uint8Array(await captured.arrayBuffer()), { type: 'array' });
+  return { r, text: JSON.stringify(book.SheetNames.map(n => XLSX.utils.sheet_to_json(book.Sheets[n], { defval: '' }))) };
+};
+const emp = await exportAs({ id: 'u-emp', role: 'Employee' });
+check('employee: private bid of someone else is left out', emp.r.opportunities === 2 && !emp.text.includes('Secret Pipeline Bid'), JSON.stringify(emp.r));
+check('employee: its outcome and follow-up rows are left out too', emp.r.feedback === 1 && emp.r.followUps === 2 && !emp.text.includes('Secret call'), JSON.stringify(emp.r));
+check('employee: a row with no visible parent is NOT labelled "(deleted bid)"', !emp.text.includes('(deleted bid)') && emp.r.milestones === 3, JSON.stringify(emp.r));
+const mgr = await exportAs({ id: 'u-mgr', role: 'Manager' });
+check('manager: a private bid is hidden from a manager outside its team', mgr.r.opportunities === 2 && !mgr.text.includes('Secret'), JSON.stringify(mgr.r));
+const own = await exportAs({ id: 'u-owner', role: 'Employee' });
+check('owner: sees their own private bid and its rows', own.r.opportunities === 3 && own.text.includes('Secret call'), JSON.stringify(own.r));
+const adm = await exportAs(ADMIN);
+check('admin: sees everything, orphan still labelled', adm.r.opportunities === 3 && adm.r.feedback === 2 && adm.text.includes('(deleted bid)'), JSON.stringify(adm.r));
 
 console.log(`\n${pass}/${pass + fail} passed${fail ? ` — ${fail} FAILED` : ''}`);
 fs.rmSync(OUT, { force: true });

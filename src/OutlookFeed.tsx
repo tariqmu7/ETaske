@@ -277,7 +277,7 @@ export default function OutlookFeed({ user, appUser, projectUsers, onNavigate }:
   // The suggestion engine matches a sender or a subject against these, so an
   // AGIBA mail can say "AGIBA — already on your boards" and point at the record.
   // Shared with the one-box capture on Home (src/hooks/useKnownParties.ts).
-  const { parties } = useKnownParties();
+  const { parties } = useKnownParties({ id: appUser.id, role: appUser.role });
 
   // ── The suggestion queue ──────────────────────────────────────────────────
 

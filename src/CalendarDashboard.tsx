@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { useFormat, DATE_MEDIUM } from './lib/format';
 import {
@@ -128,13 +129,13 @@ export default function CalendarDashboard({ user, appUser, onNavigate }: Props) 
       err => { console.warn(`Calendar — ${name} listener:`, err.code); set([]); });
     const u = [
       sub('correspondences', setLetters),
-      sub('opportunities', setBids),
+      subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids, () => setBids([])),
       sub('projects', setProjects),
       sub('projectContracts', setContracts),
       sub('projectSubcontracts', setSubcontracts),
     ];
     return () => { unsubT(); u.forEach(f => f()); };
-  }, [user.uid]);
+  }, [user.uid, appUser.role]);
 
   // Back / Forward and a pasted `#/calendar?m=…` link.
   useEffect(() => {

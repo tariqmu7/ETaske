@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { createNotification } from './lib/pushNotification';
 import { clientFileHash } from './lib/clientFile';
@@ -124,9 +125,9 @@ export default function DuplicatesDashboard({ user, appUser, projectUsers, onNav
     const unsubT = subscribeVisibleTasks(user.uid, list => setTasks(list), () => setTasks([]));
     const sub = (name: string, set: (v: any[]) => void) => onSnapshot(collection(db, name), s => set(rows(s)),
       err => { console.warn(`Duplicates — ${name} listener:`, err.code); set([]); });
-    const u = [sub('opportunities', setBids), sub('correspondences', setLetters), sub('projects', setProjects)];
+    const u = [subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids, () => setBids([])), sub('correspondences', setLetters), sub('projects', setProjects)];
     return () => { unsubT(); u.forEach(f => f()); };
-  }, [user.uid]);
+  }, [user.uid, appUser.role]);
 
   const loaded = !!(bids && letters && tasks && projects);
   const report = useMemo(

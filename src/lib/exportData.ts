@@ -2,6 +2,8 @@ import * as XLSX from 'xlsx';
 import { collection, getDocs, Timestamp } from 'firebase/firestore';
 import { db, auth } from './firebase';
 import { getVisibleTasks } from './taskVisibility';
+import { getVisibleBids } from './bidReads';
+import type { BidViewer } from './bidVisibility';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 const PROJECT_ID = firebaseConfig.projectId;
@@ -399,20 +401,20 @@ const gateSlippage = (m: any): number | '' => {
  * Weighted value is computed here rather than stored — a missing probability
  * reads as 0, matching the dashboard, so an unassessed bid never inflates it.
  */
-export async function exportOpportunities(): Promise<OpportunityExportResult> {
-  const [oppSnap, fbSnap, msSnap, fuSnap] = await Promise.all([
-    getDocs(collection(db, 'opportunities')),
+export async function exportOpportunities(viewer: BidViewer): Promise<OpportunityExportResult> {
+  // Queue M6b — the whole book this person may SEE: a bid hidden from them
+  // (bid privacy) is left out, and so are its outcome, gate and follow-up rows.
+  const [bids, fbSnap, msSnap, fuSnap] = await Promise.all([
+    getVisibleBids(viewer),
     getDocs(collection(db, 'opportunityFeedback')),
     getDocs(collection(db, 'opportunityMilestones')),
     getDocs(collection(db, 'opportunityFollowUps')),
   ]);
 
-  const opportunities = oppSnap.docs
-    .filter(d => d.id !== '--stats--')
-    .map(d => {
-      const data = d.data() as any;
+  const opportunities = bids
+    .map(b => {
+      const data = b as any;
       return {
-        id: d.id,
         ...data,
         weightedValue: Math.round(num(data.estimatedValue) * ((data.probability ?? 0) / 100)),
       };
@@ -420,8 +422,11 @@ export async function exportOpportunities(): Promise<OpportunityExportResult> {
 
   const byId = new Map(opportunities.map(o => [o.id, o]));
   // A child row whose parent has been deleted still exports, labelled as such,
-  // rather than silently vanishing from the record.
-  const withParent = (rows: any[]) => rows.map(r => {
+  // rather than silently vanishing from the record. Only an admin sees every bid,
+  // so only for an admin does "no parent" mean deleted; for anyone else it may be
+  // a bid hidden from them, and its rows are left out with it.
+  const keepOrphans = viewer.role === 'Admin';
+  const withParent = (rows: any[]) => rows.filter(r => keepOrphans || byId.has(r.opportunityId)).map(r => {
     const parent = byId.get(r.opportunityId);
     return {
       ...r,

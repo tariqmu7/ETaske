@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { db } from '../lib/firebase';
 import { subscribeVisibleTasks } from '../lib/taskVisibility';
+import { subscribeVisibleBids } from '../lib/bidReads';
 import { requestOpen } from '../lib/deepLink';
 import { useFormat, DATE_MEDIUM } from '../lib/format';
 import { useDisplayLabel } from '../lib/displayLabel';
@@ -85,12 +86,12 @@ export default function AskBox({ user, appUser, projectUsers, onNavigate }: Prop
       () => setTasks([]));
     const unsubC = onSnapshot(collection(db, 'correspondences'), s => setCorrs(rows(s, correspondingRecord)),
       err => { console.warn('Ask — correspondences listener:', err.code); setCorrs([]); });
-    const unsubO = onSnapshot(collection(db, 'opportunities'), s => setBids(rows(s, opportunityRecord)),
+    const unsubO = subscribeVisibleBids({ id: user.uid, role: appUser.role }, list => setBids(list.map(opportunityRecord)),
       err => { console.warn('Ask — opportunities listener:', err.code); setBids([]); });
     const unsubP = onSnapshot(collection(db, 'projects'), s => setProjects(rows(s, projectRecord)),
       err => { console.warn('Ask — projects listener:', err.code); setProjects([]); });
     return () => { unsubT(); unsubC(); unsubO(); unsubP(); };
-  }, [wanted, user.uid]);
+  }, [wanted, user.uid, appUser.role]);
 
   const loaded = !!(tasks && corrs && bids && projects);
   const records = useMemo(

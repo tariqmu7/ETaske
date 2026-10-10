@@ -13,6 +13,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { collection, onSnapshot, query } from 'firebase/firestore';
+import { subscribeVisibleBids } from '../lib/bidReads';
+import type { BidViewer } from '../lib/bidVisibility';
 import { db } from '../lib/firebase';
 import { Opportunity, Project, RecordLinks } from '../types';
 import { buildRecordLinks } from '../lib/recordLinks';
@@ -23,6 +25,8 @@ type PrjRow = { id: string; name: string; serialNumber?: string };
 
 interface Props {
   value: RecordLinks;
+  /** Who is picking — only the bids they may see are offered (queue M6b). */
+  viewer: BidViewer;
   onChange: (links: RecordLinks) => void;
   /**
    * The opportunity was chosen by the screen the form was opened from (the
@@ -40,7 +44,7 @@ interface Props {
   hint?: string;
 }
 
-export default function RecordLinkPicker({ value, onChange, lockOpportunity, active = true, hint }: Props) {
+export default function RecordLinkPicker({ value, onChange, viewer, lockOpportunity, active = true, hint }: Props) {
   const { t } = useTranslation();
   const [opportunities, setOpportunities] = useState<OppRow[] | null>(null);
   const [projects, setProjects] = useState<PrjRow[] | null>(null);
@@ -50,10 +54,8 @@ export default function RecordLinkPicker({ value, onChange, lockOpportunity, act
   // orderBy would need an index the rest of the module deliberately avoids.
   useEffect(() => {
     if (!active) return;
-    const stopOpp = onSnapshot(query(collection(db, 'opportunities')), snap => {
-      setOpportunities(snap.docs
-        .filter(d => d.id !== '--stats--')
-        .map(d => ({ id: d.id, ...(d.data() as Opportunity) }))
+    const stopOpp = subscribeVisibleBids(viewer, bids => {
+      setOpportunities(bids
         .map(o => ({ id: o.id, title: o.title, serialNumber: o.serialNumber }))
         .sort((a, b) => (b.serialNumber || '').localeCompare(a.serialNumber || '')));
     }, err => { console.error('link picker / opportunities:', err); setOpportunities([]); setFailed(true); });
@@ -67,7 +69,7 @@ export default function RecordLinkPicker({ value, onChange, lockOpportunity, act
     }, err => { console.error('link picker / projects:', err); setProjects([]); setFailed(true); });
 
     return () => { stopOpp(); stopPrj(); };
-  }, [active]);
+  }, [active, viewer.id, viewer.role]);
 
   // A link whose record is gone (or not loaded yet) still has to be selectable,
   // or opening the form would silently drop it on the next save. The stored

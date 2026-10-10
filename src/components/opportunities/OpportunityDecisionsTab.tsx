@@ -24,6 +24,8 @@ interface Props {
   onNavigate?: (v: AppView) => void;
 }
 
+import { subscribeVisibleBids } from '../../lib/bidReads';
+
 const rows = (snap: any) => snap.docs.filter((d: any) => d.id !== '--stats--').map((d: any) => ({ id: d.id, ...d.data() }));
 
 /** Today as yyyy-mm-dd, local. */
@@ -73,12 +75,13 @@ export default function OpportunityDecisionsTab({ opportunity, user, appUser, on
   // needs the client's other bids, and it must not depend on what this
   // person's board happens to be filtered to.
   useEffect(() => {
-    const u1 = onSnapshot(collection(db, 'opportunities'), s => setBids(rows(s)),
+    // Queue M6b — only the bids this person may see.
+    const u1 = subscribeVisibleBids({ id: appUser.id, role: appUser.role }, setBids,
       err => { console.warn('Decisions — opportunities listener:', err.code); setBids([]); });
     const u2 = onSnapshot(collection(db, 'opportunityFeedback'), s => setFeedback(rows(s)),
       err => { console.warn('Decisions — opportunityFeedback listener:', err.code); setFeedback([]); });
     return () => { u1(); u2(); };
-  }, []);
+  }, [appUser.id, appUser.role]);
 
   const fbMap = useMemo(() => feedbackByBid(feedback), [feedback]);
   const timeline = useMemo(() => bidTimeline(o, fbMap.get(o.id) || null), [o, fbMap]);

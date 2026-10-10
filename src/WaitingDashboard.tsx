@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { fetchBridgeMail, BRIDGE_URL, bridgeHeaders } from './lib/outlookBridge';
 import { groupThreads, threadsAwaitingReply, threadsAwaitingTheirReply } from './lib/mailThreads';
@@ -123,10 +124,10 @@ export default function WaitingDashboard({ user, appUser, projectUsers, onNaviga
     const unsubT = subscribeVisibleTasks(user.uid, list => setTasks(list), () => setTasks([]));
     const unsubC = onSnapshot(collection(db, 'correspondences'), s => setLetters(rows(s)),
       err => { console.warn('Waiting — correspondences listener:', err.code); setLetters([]); });
-    const unsubO = onSnapshot(collection(db, 'opportunities'), s => setBids(rows(s)),
+    const unsubO = subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids,
       err => { console.warn('Waiting — opportunities listener:', err.code); setBids([]); });
     return () => { unsubT(); unsubC(); unsubO(); };
-  }, [user.uid]);
+  }, [user.uid, appUser.role]);
 
   // Outlook on this PC, when the helper is running: the chains the Outlook
   // Feed would flag (and has not had waved away). Silent when it is not.

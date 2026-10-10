@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { requestOpen } from './lib/deepLink';
 import { fetchBridgeMail, BRIDGE_URL, bridgeHeaders } from './lib/outlookBridge';
 import { useFormat, DATE_MEDIUM } from './lib/format';
@@ -97,12 +98,12 @@ export default function ClientsDashboard({ user, appUser, projectUsers, onNaviga
   useEffect(() => {
     const unsubP = onSnapshot(collection(db, 'projects'), s => setProjects(rows(s)),
       err => { console.warn('Clients — projects listener:', err.code); setProjects([]); });
-    const unsubO = onSnapshot(collection(db, 'opportunities'), s => setBids(rows(s)),
+    const unsubO = subscribeVisibleBids({ id: appUser.id, role: appUser.role }, setBids,
       err => { console.warn('Clients — opportunities listener:', err.code); setBids([]); });
     const unsubC = onSnapshot(collection(db, 'correspondences'), s => setLetters(rows(s)),
       err => { console.warn('Clients — correspondences listener:', err.code); setLetters([]); });
     return () => { unsubP(); unsubO(); unsubC(); };
-  }, []);
+  }, [appUser.id, appUser.role]);
 
   // The detail feeds are only read once a client is open (settled rule 2:
   // child collections are read whole and filtered client-side by parent id).

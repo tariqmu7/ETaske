@@ -15,6 +15,7 @@ import { getRecents, RecentItem } from './lib/recents';
 import { requestOpen } from './lib/deepLink';
 import { canViewMedical } from './lib/medicalAccess';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { fetchBridgeMail, BRIDGE_URL, bridgeHeaders } from './lib/outlookBridge';
 import { groupThreads, threadsAwaitingReply, threadsAwaitingTheirReply } from './lib/mailThreads';
 import { loadMailLedger } from './lib/mailSuggest';
@@ -107,14 +108,14 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
     const listen = (name: string, set: (v: any[]) => void) => onSnapshot(collection(db, name),
       s => set(rows(s)),
       err => { console.warn(`Home briefing — ${name} listener:`, err.code); set([]); });
-    const unsubs = [listen('correspondences', setLetters), listen('opportunities', setBids)];
+    const unsubs = [listen('correspondences', setLetters), subscribeVisibleBids({ id: user.uid, role: appUser.role }, setBids, () => setBids([]))];
     // Contracts have no owner uid, so only a manager's briefing names them
     // (the same rule as the contract expiry alert in App.tsx).
     if (isManagerOrAdmin) {
       unsubs.push(listen('projects', setProjects), listen('projectContracts', setContracts), listen('projectSubcontracts', setSubcontracts));
     }
     return () => { unsubT(); unsubs.forEach(u => u()); };
-  }, [user.uid, isManagerOrAdmin]);
+  }, [user.uid, appUser.role, isManagerOrAdmin]);
 
   // Outlook on this PC, when the helper is running — the same chains the
   // Waiting board lists. Silent (no mail sentence) when it is not.

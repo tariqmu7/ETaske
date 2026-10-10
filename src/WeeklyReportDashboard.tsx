@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { db } from './lib/firebase';
 import { getVisibleTasks } from './lib/taskVisibility';
+import { getVisibleBids } from './lib/bidReads';
 import { useFormat } from './lib/format';
 import {
   buildWeeklyFacts, writeArabicReport, arabicSubject, defaultWeek, shiftWeek, weekOf, parseWeekParam,
@@ -42,7 +43,6 @@ const MAILTO_MAX = 1900;
 /** The collections the report reads, besides tasks (read through the privacy-aware helper). */
 const SOURCES: Array<[keyof WeeklyInput, string]> = [
   ['correspondences', 'correspondences'],
-  ['opportunities', 'opportunities'],
   ['projects', 'projects'],
   ['projectUpdates', 'projectUpdates'],
   ['meetings', 'meetings'],
@@ -63,7 +63,7 @@ const SOURCES: Array<[keyof WeeklyInput, string]> = [
  * from here — Copy, Download or an e-mail draft in the manager's own program.
  * The rules live in `lib/weeklyReport.ts` (pure, harness-covered).
  */
-export default function WeeklyReportDashboard({ user, projectUsers }: Props) {
+export default function WeeklyReportDashboard({ user, appUser, projectUsers }: Props) {
   const { t } = useTranslation();
   const fmt = useFormat();
 
@@ -81,19 +81,21 @@ export default function WeeklyReportDashboard({ user, projectUsers }: Props) {
   const load = useCallback(async () => {
     setData(null);
     const missing: string[] = [];
-    const [tasks, ...rest] = await Promise.all([
+    const [tasks, bids, ...rest] = await Promise.all([
       getVisibleTasks(user.uid).catch(err => { console.warn('Weekly report — tasks:', err?.code); missing.push('tasks'); return []; }),
+      // Queue M6b — only the bids this manager may see (bid privacy).
+      getVisibleBids({ id: user.uid, role: appUser.role }).catch(err => { console.warn('Weekly report — opportunities:', err?.code); missing.push('opportunities'); return []; }),
       ...SOURCES.map(([, name]) => getDocs(collection(db, name)).then(rows).catch(err => {
         console.warn(`Weekly report — ${name}:`, err?.code); missing.push(name); return [];
       })),
     ]);
-    const next: WeeklyInput = { tasks: tasks as any[] };
+    const next: WeeklyInput = { tasks: tasks as any[], opportunities: bids as any[] } as WeeklyInput;
     SOURCES.forEach(([key], i) => { (next as any)[key] = rest[i]; });
     setUnreadable(missing);
     setData(next);
     setReadAt(Date.now());
     setDraft(null);
-  }, [user.uid]);
+  }, [user.uid, appUser.role]);
 
   useEffect(() => { void load(); }, [load]);
 

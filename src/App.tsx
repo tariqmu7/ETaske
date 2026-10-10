@@ -3,6 +3,7 @@ import { onAuthStateChanged, signOut, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, onSnapshot, collection, serverTimestamp, updateDoc, query, where, orderBy } from 'firebase/firestore';
 import { db, auth } from './lib/firebase';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
+import { subscribeVisibleBids } from './lib/bidReads';
 import { AppUser, AppNotification, Announcement, Opportunity, isOpportunityOpen } from './types';
 import LoginScreen from './LoginScreen';
 import PendingScreen from './PendingScreen';
@@ -352,11 +353,9 @@ export default function App() {
     // Bid submission deadlines. A separate listener (and a separate alert
     // engine) because a tender deadline is externally imposed and counts down
     // in days, not in the 48-hour window tasks use — see lib/dueAlerts.ts.
-    const unsubO = onSnapshot(collection(db, 'opportunities'), snap => {
-      const rows = snap.docs
-        .filter(d => d.id !== '--stats--')
-        .map(d => ({ id: d.id, ...d.data() } as Opportunity))
-        .filter(o => isOpportunityOpen(o.stage));
+    // Queue M6b — only the bids this person may see (bid privacy).
+    const unsubO = subscribeVisibleBids({ id: uid, role: appUser?.role }, bids => {
+      const rows = bids.filter(o => isOpportunityOpen(o.stage));
 
       const near = rows.filter(o => {
         const d = daysUntil(o.submissionDeadline);
@@ -385,7 +384,7 @@ export default function App() {
         opportunity: o,
         value: o.estimatedValue ? fullMoney(o.estimatedValue, o.currency) : undefined,
       })));
-    }, err => console.warn('Opportunities listener error:', err.code));
+    }, err => console.warn('Opportunities listener error:', err?.code));
 
     return () => {
       unsubT();
@@ -393,7 +392,7 @@ export default function App() {
       unsubO();
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.uid, appUser?.status]);
+  }, [user?.uid, appUser?.status, appUser?.role]);
 
   // Presence heartbeat: keep our own lastSeen fresh while the tab is open so
   // other users get an accurate "last seen" in chat. Rules allow a self-update

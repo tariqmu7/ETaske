@@ -632,6 +632,7 @@ export default function CreateTaskPanel({
                   </div>
                   <div style={{ marginBottom: 20 }}>
                     <RecordLinkPicker
+                      viewer={{ id: appUser.id, role: appUser.role }}
                       value={links}
                       onChange={setLinks}
                       lockOpportunity={lockOpportunity}

@@ -87,7 +87,7 @@ export default function QuickCapture({ user, appUser, projectUsers, onNavigate }
   const { t } = useTranslation();
   const fmt = useFormat();
   const label = useDisplayLabel();
-  const { parties, records } = useKnownParties();
+  const { parties, records } = useKnownParties({ id: appUser.id, role: appUser.role });
   const [text, setText] = useState('');
   const [kindOverride, setKindOverride] = useState<SuggestedKind | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
