@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useDisplayLabel } from './lib/displayLabel';
-import { AppUser } from './types';
+import { AppUser, MedicalAccess } from './types';
+import { MEDICAL_ACCESS_LEVELS, medicalAccessOf } from './lib/medicalAccess';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from './lib/firebase';
-import { Check, X, Shield, Users, Building, ShieldCheck, UserCog, Download, FileSpreadsheet, Database, Loader2 } from 'lucide-react';
+import { Check, X, Shield, Users, Building, ShieldCheck, UserCog, Download, FileSpreadsheet, Database, Loader2, Stethoscope } from 'lucide-react';
 import { exportToExcel, downloadFullBackup } from './lib/exportData';
 
 interface Props { users: AppUser[]; }
@@ -103,6 +104,10 @@ export default function AdminDashboard({ users }: Props) {
   const [editPhoneNumber, setEditPhoneNumber] = useState('');
   const [editPhotoURL, setEditPhotoURL] = useState('');
   const [editUserColor, setEditUserColor] = useState('');
+  const [editMedical, setEditMedical] = useState<MedicalAccess>('none');
+
+  const medicalLabel = (a: MedicalAccess) =>
+    a === 'edit' ? t('View and edit') : a === 'view' ? t('View only') : t('No access');
 
   const updateStatus = async (userId: string, status: 'Approved' | 'Rejected') => {
     try { await updateDoc(doc(db, 'users', userId), { status }); }
@@ -114,7 +119,9 @@ export default function AdminDashboard({ users }: Props) {
       await updateDoc(doc(db, 'users', userId), {
         teamId: editTeamId, role: editRole,
         department: editDepartment, phoneNumber: editPhoneNumber,
-        photoURL: editPhotoURL, userColor: editUserColor
+        photoURL: editPhotoURL, userColor: editUserColor,
+        // An admin always has full access, so nothing is stored for one.
+        medicalContractsAccess: editRole === 'Admin' ? 'none' : editMedical,
       });
       setEditingUserId(null);
     } catch (e) { console.error(e); alert(t('Failed.')); }
@@ -128,6 +135,7 @@ export default function AdminDashboard({ users }: Props) {
     setEditPhoneNumber(u.phoneNumber || '');
     setEditPhotoURL(u.photoURL || '');
     setEditUserColor(u.userColor || '#6366f1');
+    setEditMedical(u.medicalContractsAccess === 'view' || u.medicalContractsAccess === 'edit' ? u.medicalContractsAccess : 'none');
   };
 
   const pending = users.filter(u => u.status === 'Pending');
@@ -189,10 +197,10 @@ export default function AdminDashboard({ users }: Props) {
           cut off at 390px, cells stranded outside the viewport) — the same
           treatment the financials table already uses: let the card scroll. */}
       <div className="card" style={{ overflowX: 'auto' }}>
-        <table style={{ width: '100%', minWidth: 560, borderCollapse: 'collapse' }}>
+        <table style={{ width: '100%', minWidth: 700, borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ borderBottom: '1px solid var(--border)' }}>
-              {[t('User'), t('Status'), t('Role'), t('Team/Dept'), t('Actions')].map(h => (
+              {[t('User'), t('Status'), t('Role'), t('Team/Dept'), t('Medical contracts'), t('Actions')].map(h => (
                 <th key={h} style={{ padding: '14px 20px', textAlign: 'start', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{h}</th>
               ))}
             </tr>
@@ -254,6 +262,35 @@ export default function AdminDashboard({ users }: Props) {
                       {u.teamId || dl(u.department) || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t('Unassigned')}</span>}
                     </span>
                   )}
+                </td>
+                <td style={{ padding: '14px 20px' }} data-medical-cell={u.id}>
+                  {editingUserId === u.id && editRole !== 'Admin' ? (
+                    <select
+                      value={editMedical}
+                      onChange={e => setEditMedical(e.target.value as MedicalAccess)}
+                      className="input"
+                      style={{ padding: '6px 10px', fontSize: 12 }}
+                      aria-label={t('Medical contracts')}
+                      data-medical-select
+                    >
+                      {MEDICAL_ACCESS_LEVELS.map(a => <option key={a} value={a}>{medicalLabel(a)}</option>)}
+                    </select>
+                  ) : (editingUserId === u.id ? editRole : u.role) === 'Admin' ? (
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }} data-medical-level="admin">
+                      {t('Full access (admin)')}
+                    </span>
+                  ) : (() => {
+                    const a = medicalAccessOf({ ...u, status: 'Approved' });
+                    return (
+                      <span
+                        data-medical-level={a}
+                        style={{ fontSize: 13, display: 'flex', alignItems: 'center', gap: 4, color: a === 'none' ? 'var(--text-muted)' : 'var(--text-secondary)' }}
+                      >
+                        {a !== 'none' && <Stethoscope className="w-3 h-3" style={{ color: 'var(--accent)' }} />}
+                        {medicalLabel(a)}
+                      </span>
+                    );
+                  })()}
                 </td>
                 <td style={{ padding: '14px 20px', textAlign: 'end' }}>
                   {editingUserId === u.id ? (

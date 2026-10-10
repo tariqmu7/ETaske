@@ -548,6 +548,7 @@ const NOT_LABELLED = {
   ProjectContractType: 'machine values; the human text is the `label` field, which IS covered',
   OperationType: 'internal error-reporting enum, never painted',
   UserRole: 'covered via its own values below',
+  MedicalAccess: 'machine values; AdminDashboard paints "No access / View only / View and edit" (medicalaccessui.mjs checks the Arabic)',
 };
 
 const enumValues = new Map(); // name -> string[]

@@ -2125,6 +2125,13 @@ const en = {
   "e.g. send the revised offer": "e.g. send the revised offer",
   "Posting also updates the bid’s stage, what it is waiting for and its next step.": "Posting also updates the bid’s stage, what it is waiting for and its next step.",
 
+  // Medical contracts access (queue M2) — admin Users screen.
+  "Medical contracts": "Medical contracts",
+  "No access": "No access",
+  "View only": "View only",
+  "View and edit": "View and edit",
+  "Full access (admin)": "Full access (admin)",
+
 } as const;
 
 export default en;

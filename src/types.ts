@@ -8,6 +8,9 @@ import type { OfferApproval } from './lib/offerApproval';
 
 export type UserRole = 'Admin' | 'Manager' | 'Employee';
 export type UserStatus = 'Pending' | 'Approved' | 'Rejected';
+// Medical contracts section (queue M2): granted per person by an admin, apart
+// from the role. Missing = 'none'. Admins always have 'edit'. See lib/medicalAccess.ts.
+export type MedicalAccess = 'none' | 'view' | 'edit';
 
 export interface AppUser {
   id: string;
@@ -21,6 +24,8 @@ export interface AppUser {
   phoneNumber?: string;
   userColor?: string;
   lastSeen?: Timestamp;
+  // Only an admin may set this — firestore.rules refuse a self-update that changes it.
+  medicalContractsAccess?: MedicalAccess;
   // The push-device token and Telegram chat id are NOT here: this doc is readable
   // by every signed-in user, so they live in the owner-only
   // users/{uid}/private/contact (src/lib/userContact.ts, queue task A3b).

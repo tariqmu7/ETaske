@@ -28,6 +28,18 @@ service cloud.firestore {
       return isAdminEmail() ||
         (isSignedIn() && userData().status == 'Approved' && userData().role == 'Admin');
     }
+    // Medical contracts (queue M2): granted per person by an admin on the
+    // Users screen (users.medicalContractsAccess = 'none' | 'view' | 'edit'),
+    // NOT by role. Mirrors src/lib/medicalAccess.ts — keep both in step.
+    function medicalAccess() {
+      return userData().get('medicalContractsAccess', 'none');
+    }
+    function canViewMedical() {
+      return isAdmin() || (isApproved() && medicalAccess() in ['view', 'edit']);
+    }
+    function canEditMedical() {
+      return isAdmin() || (isApproved() && medicalAccess() == 'edit');
+    }
     function isManagerOrAdmin() {
       return isAdminEmail() ||
         (isSignedIn() && userData().status == 'Approved' &&
@@ -64,6 +76,9 @@ service cloud.firestore {
         (request.auth.uid == userId &&
          request.resource.data.role == resource.data.role &&
          request.resource.data.status == resource.data.status &&
+         // Medical contracts access is the admin's to grant (queue M2).
+         request.resource.data.get('medicalContractsAccess', 'none') ==
+           resource.data.get('medicalContractsAccess', 'none') &&
          keepsOrDrops('telegramChatId') && keepsOrDrops('fcmToken'))
       );
 
@@ -338,6 +353,19 @@ service cloud.firestore {
       allow delete: if isApproved() && (
         isManagerOrAdmin() || resource.data.authorId == request.auth.uid
       );
+    }
+
+    // ─── Medical contracts (queue M2) ─────────────────────────────────────────
+    // EPROM's contracts with hospitals, pharmacies, labs and centres. Only the
+    // people an admin switched on may read; only 'edit' (or an admin) may write.
+    // Subcollections (e.g. usage per period, M4) follow the same gate.
+    match /medicalContracts/{id} {
+      allow read: if canViewMedical();
+      allow create, update, delete: if canEditMedical();
+      match /{sub=**} {
+        allow read: if canViewMedical();
+        allow create, update, delete: if canEditMedical();
+      }
     }
 
     // ─── Chat Messages ────────────────────────────────────────────────────────

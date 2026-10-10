@@ -2067,6 +2067,13 @@ const ar: Record<keyof typeof en, string> = {
   "e.g. send the revised offer": "مثل: إرسال العرض المعدَّل",
   "Posting also updates the bid’s stage, what it is waiting for and its next step.": "عند النشر تتحدّث مرحلة الفرصة، وما تنتظره، وخطوتها التالية.",
 
+  // Medical contracts access (queue M2) — admin Users screen.
+  "Medical contracts": "العقود الطبية",
+  "No access": "لا يطّلع عليها",
+  "View only": "اطّلاع فقط",
+  "View and edit": "اطّلاع وتعديل",
+  "Full access (admin)": "صلاحية كاملة (مدير النظام)",
+
 };
 
 export default ar;
