@@ -181,8 +181,16 @@ service cloud.firestore {
         return request.auth.uid in data.get('collaboratorIds', []);
       }
 
-      allow read: if isApproved() &&
+      allow get: if isApproved() &&
         (!taskIsPrivate(resource.data) || ownsTask(resource.data) || isCollaborator(resource.data));
+      // LIST must not use taskIsPrivate: when a query does not constrain a field,
+      // the rules engine sees it as absent, so get('isPrivate', false) answers
+      // public and a bare collection query would read every private task (proved
+      // in scripts/harness/taskrules.mjs). A listed task must carry isPrivate ==
+      // false, or the query itself must be on assignedToId / collaboratorIds —
+      // exactly the three queries in src/lib/taskVisibility.ts.
+      allow list: if isApproved() &&
+        (resource.data.get('isPrivate', true) == false || ownsTask(resource.data) || isCollaborator(resource.data));
       allow create: if isApproved() && taskId != '--stats--' &&
         request.resource.data.assignedById == request.auth.uid;
       // Owner and collaborators can always edit. Other non-owners (managers/admin
