@@ -1727,3 +1727,33 @@ h1, h2, h3, h4, p, span, div {
   .proj-row .task-row-meta { gap: 6px 10px; }
   .proj-row-updated, .proj-row .task-row-from > svg, .proj-row .proj-row-steps > svg { display: none; }
 }
+
+/* ─── Group cards (GroupGrid) — compact, 2026-10-10 ─────────────────────────
+   One header row + an optional chip row: ~64-96px instead of ~180px. */
+.card-grid-sm.group-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(max(220px, (100% - 3 * 12px) / 4), 1fr));
+  align-items: stretch;
+}
+@media (max-width: 700px) { .card-grid-sm.group-grid { grid-template-columns: 1fr; gap: 8px; } }
+.group-card {
+  text-align: start; cursor: pointer; font-family: inherit;
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface);
+  transition: transform 0.15s, box-shadow 0.15s, background 0.15s;
+}
+.group-card:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(15,23,42,0.08); background: var(--surface-2); }
+.group-card-head { display: flex; align-items: center; gap: 10px; }
+.group-card-face {
+  width: 36px; height: 36px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+}
+.group-card-title { font-weight: 700; font-size: 14px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-card-sub { font-size: 12px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.group-card-count { display: flex; flex-direction: column; align-items: flex-end; line-height: 1.05; flex-shrink: 0; }
+.group-card-num { font-size: 22px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.02em; }
+.group-card-unit { font-size: 10px; font-weight: 600; color: var(--text-muted); }
+.group-card-chevron { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
+.group-card-stats { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; font-weight: 700; }
+.group-card-chip { padding: 3px 8px; }

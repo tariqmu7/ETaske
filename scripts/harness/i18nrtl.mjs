@@ -1938,8 +1938,11 @@ check('★ by assignee: one card per person, titled with the bare NAME',
   // the avatar that already says who this is.
   && !assigneeCards.some(c => c.includes(ar['Assigned to {{name}}'].replace('{{name}}', '').trim())),
   assigneeCards.join(' | '));
+// Since 2026-10-10 a card shows only the chips with a number above zero ("0 Won"
+// on every card was the noise Tariq called "too much white"), so each card names
+// at least ONE of the buckets and none of them reads "0 …".
 check('★ each card summarises what is INSIDE it (count + the status breakdown)',
-  assigneeCards.every(c => c.includes(ar['task']) && c.includes(ar['Pending']) && c.includes(ar['Active']) && c.includes(ar['Done'])),
+  assigneeCards.every(c => c.includes(ar['task']) && [ar['Pending'], ar['Active'], ar['Done']].some(w => c.includes(w)) && !/(^|\s)0 \S/.test(c.replace(/\d[\d.,]*[KM]? EGP/g, ''))),
   assigneeCards[0]);
 check('the person’s role is the card subtitle',
   assigneeCards.some(c => c.includes(ar['Manager'])) && assigneeCards.some(c => c.includes(ar['Employee'])),
@@ -1967,7 +1970,7 @@ await evalJS(`window.__setLang('en')`);
 await sleep(450);
 const assigneeEn = await gridCards();
 check('non-vacuous: the same cards read English under en',
-  assigneeEn.length === 3 && assigneeEn.some(c => /Pending/.test(c) && /Active/.test(c) && /Done/.test(c))
+  assigneeEn.length === 3 && assigneeEn.some(c => /Pending/.test(c)) && assigneeEn.some(c => /Active/.test(c)) && assigneeEn.some(c => /Done/.test(c))
   && !assigneeEn.some(c => c.includes(ar['Pending'])),
   assigneeEn.join(' | '));
 await shot('tasks-groupby-grid-en');
@@ -2184,7 +2187,7 @@ check('★ by sender: the cards became the senders, titled with the bare NAME',
   && !corrSenderCards.some(c => c.startsWith(ar['Closed'])),
   corrSenderCards.join(' | '));
 check('★ each card summarises what is INSIDE it (count + the status breakdown)',
-  corrSenderCards.every(c => c.includes(ar['Unread']) && c.includes(ar['Assigned']) && c.includes(ar['Closed'])),
+  corrSenderCards.every(c => [ar['Unread'], ar['Assigned'], ar['Closed']].some(w => c.includes(w)) && !/(^|\s)0 \S/.test(c.replace(/\d[\d.,]*[KM]? EGP/g, ''))),
   corrSenderCards[0]);
 
 // The location dimension is the one with no field of its own: it is resolved
@@ -2231,7 +2234,7 @@ await sleep(450);
 const corrAssigneeEn = await corrCards();
 check('non-vacuous: the same cards read English under en',
   corrAssigneeEn.length === 3
-  && corrAssigneeEn.some(c => /Unread/.test(c) && /Assigned/.test(c) && /Closed/.test(c))
+  && corrAssigneeEn.some(c => /Unread/.test(c)) && corrAssigneeEn.some(c => /Assigned/.test(c)) && corrAssigneeEn.some(c => /Closed/.test(c))
   && !corrAssigneeEn.some(c => c.includes(ar['Unread'])),
   corrAssigneeEn.join(' | '));
 await shot('corr-groupby-en');
@@ -2403,7 +2406,7 @@ check('★ by location: read straight off the bid, and the stage buckets are gon
 check('★ the "no location" card is LAST, never leading the grid',
   oppLocationCards[1].includes('بدون دولة'), oppLocationCards.join(' | '));
 check('★ each card summarises what is INSIDE it (live / won / lost)',
-  oppLocationCards.every(c => c.includes(ar['live']) && c.includes('فوز') && c.includes('خسارة')),
+  oppLocationCards.every(c => [ar['live'], 'فوز', 'خسارة'].some(w => c.includes(w)) && !/(^|\s)0 \S/.test(c.replace(/\d[\d.,]*[KM]? EGP/g, ''))),
   oppLocationCards[0]);
 // ★★ A bid board's summary is MONEY. "2 opportunities" tells a bid manager
 // nothing; the subtitle is what the bucket's still-open bids are worth, and it
@@ -2476,7 +2479,7 @@ await sleep(450);
 const oppOwnerCardsEn = await oppGridCards();
 check('non-vacuous: the same cards read English under en',
   oppOwnerCardsEn.length === 3
-  && oppOwnerCardsEn.some(c => /opportunit/.test(c) && /Won/.test(c) && /live/.test(c))
+  && oppOwnerCardsEn.every(c => /opportunit/.test(c)) && oppOwnerCardsEn.some(c => /Won/.test(c)) && oppOwnerCardsEn.some(c => /live/.test(c))
   && !oppOwnerCardsEn.some(c => c.includes(ar['live'])),
   oppOwnerCardsEn.join(' | '));
 await shot('opps-groupby-en');
@@ -2924,7 +2927,7 @@ check('★ by client: the buckets became the clients, and the status buckets are
   && !projClientCards.some(c => c.includes('عميل:')),
   projClientCards.join(' | '));
 check('★ each card summarises what is INSIDE it (count + the status breakdown)',
-  projClientCards.every(c => c.includes('نشط') && c.includes('معلّق') && c.includes('مكتمل')),
+  projClientCards.every(c => ['نشط', 'معلّق', 'مكتمل'].some(w => c.includes(w)) && !/(^|\s)0 \S/.test(c.replace(/\d[\d.,]*[KM]? EGP/g, ''))),
   projClientCards[0]);
 
 // Unlike the tasks and correspondences boards, a Project OWNS its location —

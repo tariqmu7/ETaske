@@ -81,70 +81,58 @@ export default function GroupGrid({ cards, onSelect, empty }: Props) {
   if (cards.length === 0) return <>{empty ?? null}</>;
 
   return (
-    // `.card-grid-sm` (index.css) keeps the old 240px floor but caps the row at
-    // 3 cards, so a bucket card always has room to show its stats strip.
-    <div className="card-grid-sm">
+    // `.group-grid` (index.css) overrides `.card-grid-sm`: up to 4 compact cards a
+    // row, 1 on a phone. The old class stays because the harnesses look for it.
+    <div className="card-grid-sm group-grid">
       {cards.map(card => {
         const accent = card.accent || 'var(--accent)';
         const Icon = card.icon;
+        const shown = (card.stats || []).filter(st => st.value !== 0 && st.value !== '0');
         return (
           <button
             key={card.key}
             onClick={() => onSelect(card.key)}
-            className="card"
+            className="card group-card"
             // A board's KPI strip is made of `button.card`s too, so the class
             // alone cannot identify a group card. This attribute is how the
             // harnesses tell the two apart (and it carries the bucket key).
             data-group-card={card.key}
-            style={{
-              textAlign: 'start', cursor: 'pointer', padding: 20, borderInlineStart: `4px solid ${accent}`,
-              display: 'flex', flexDirection: 'column', gap: 16, fontFamily: 'inherit',
-              background: 'var(--surface)', transition: 'transform 0.15s, box-shadow 0.15s',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-2px)'; e.currentTarget.style.boxShadow = '0 8px 24px rgba(15,23,42,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = 'none'; }}
+            style={{ borderInlineStart: `4px solid ${accent}` }}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            {/* One header row: face/icon · name + context · the count · chevron.
+                The count used to sit on its own 30px line, which made every card
+                ~180px tall and mostly empty (Tariq 2026-10-10: "too much white"). */}
+            <div className="group-card-head">
               {card.photoURL ? (
-                <img src={card.photoURL} className="avatar" style={{ width: 44, height: 44, objectFit: 'cover', flexShrink: 0 }} alt="" />
+                <img src={card.photoURL} className="avatar group-card-face" style={{ objectFit: 'cover' }} alt="" />
               ) : card.initial ? (
-                <span style={{ width: 44, height: 44, flexShrink: 0, background: accent, color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800 }}>
+                <span className="group-card-face" style={{ background: accent, color: '#fff', fontSize: 15, fontWeight: 800 }}>
                   {card.initial}
                 </span>
               ) : Icon ? (
-                <span style={{ width: 44, height: 44, flexShrink: 0, background: 'var(--surface-2)', color: accent, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Icon style={{ width: 20, height: 20 }} />
+                <span className="group-card-face" style={{ background: 'var(--surface-2)', color: accent }}>
+                  <Icon style={{ width: 18, height: 18 }} />
                 </span>
               ) : null}
               {/* `minWidth: 0` lets the ellipsis actually engage inside the flex row. */}
               <div style={{ minWidth: 0, flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {card.title}
-                </div>
-                {card.subtitle && (
-                  <div style={{ fontSize: 12, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {card.subtitle}
-                  </div>
-                )}
+                <div className="group-card-title">{card.title}</div>
+                {card.subtitle && <div className="group-card-sub">{card.subtitle}</div>}
               </div>
-              <ChevronRight style={{ width: 18, height: 18, color: 'var(--text-muted)', flexShrink: 0 }} />
+              <div className="group-card-count">
+                <span className="group-card-num">{card.count}</span>
+                <span className="group-card-unit">{card.countLabel}</span>
+              </div>
+              <ChevronRight className="group-card-chevron" />
             </div>
 
-            <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-              <span style={{ fontSize: 30, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.02em' }}>{card.count}</span>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>{card.countLabel}</span>
-              {card.badge && (
-                <span className={`badge ${card.badgeClass || 'badge-urgent'}`} style={{ marginInlineStart: 'auto' }}>{card.badge}</span>
-              )}
-            </div>
-
-            {card.stats && card.stats.length > 0 && (
-              <div style={{ display: 'flex', gap: 6, fontSize: 11, fontWeight: 700 }}>
-                {card.stats.map(s => (
-                  <span
-                    key={s.label}
-                    style={{ flex: 1, textAlign: 'center', padding: '6px 4px', ...TONE[s.tone || 'neutral'] }}
-                  >
+            {/* Only the chips that say something: "0 Won · 0 Lost" on every card
+                was most of the noise. A card with nothing to report shows none. */}
+            {(card.badge || shown.length > 0) && (
+              <div className="group-card-stats">
+                {card.badge && <span className={`badge ${card.badgeClass || 'badge-urgent'}`}>{card.badge}</span>}
+                {shown.map(s => (
+                  <span key={s.label} className="group-card-chip" style={TONE[s.tone || 'neutral']}>
                     {s.value} {s.label}
                   </span>
                 ))}
