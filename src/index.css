@@ -1761,3 +1761,46 @@ h1, h2, h3, h4, p, span, div {
 .group-card-chevron { width: 16px; height: 16px; color: var(--text-muted); flex-shrink: 0; }
 .group-card-stats { display: flex; flex-wrap: wrap; gap: 6px; font-size: 11px; font-weight: 700; }
 .group-card-chip { padding: 3px 8px; }
+
+/* ── Medical contracts statistics (queue M5) ──────────────────────────────── */
+/* Lightness steps green → amber → dark red so the buckets separate without hue;
+   every bar is also labelled with its numbers. */
+.ms { --ms-inForce: #16a34a; --ms-endingSoon: #d97706; --ms-expired: #991b1b; --ms-other: #94a3b8; }
+[data-theme="dark"] .ms { --ms-inForce: #34d399; --ms-endingSoon: #f59e0b; --ms-expired: #e11d48; --ms-other: #64748b; }
+.ms-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); align-items: start; }
+.ms-card { padding: 14px 16px; min-width: 0; }
+.ms-h { font-size: 15px; font-weight: 800; margin: 0 0 10px; color: var(--text-primary); }
+.ms-bar { display: flex; gap: 2px; height: 12px; min-width: 4px; }
+.ms-bar-big { height: 22px; width: 100%; }
+.ms-seg { display: block; min-width: 3px; height: 100%; }
+.ms-inForce { background: var(--ms-inForce); }
+.ms-endingSoon { background: var(--ms-endingSoon); }
+.ms-expired { background: var(--ms-expired); }
+.ms-other { background: var(--ms-other); }
+.ms-legend { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--text-secondary); }
+.ms-legend li { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.ms-key { width: 12px; height: 12px; display: inline-block; flex-shrink: 0; }
+.ms-row {
+  display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(60px, 1fr) auto 16px; gap: 10px; align-items: center;
+  width: 100%; padding: 7px 6px; background: none; border: 0; border-bottom: 1px solid var(--border);
+  text-align: start; cursor: pointer; font-family: inherit; color: var(--text-primary);
+}
+.ms-row:hover { background: var(--surface-2); }
+.ms-row-dated { grid-template-columns: minmax(0, 1fr) auto 16px; }
+.ms-row-name { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; font-weight: 700; }
+.ms-row-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row-sub { font-size: 11.5px; font-weight: 500; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-row-bar { display: block; min-width: 0; }
+.ms-row-num { font-size: 15px; font-weight: 800; min-width: 28px; text-align: end; }
+.ms-row-when { font-size: 12px; color: var(--text-secondary); text-align: end; }
+.ms-row-go { color: var(--text-muted); }
+[dir="rtl"] .ms-row-go { transform: scaleX(-1); }
+.ms-empty { font-size: 13px; color: var(--text-muted); margin: 0; }
+.ms-tabs { display: inline-flex; gap: 2px; padding: 3px; background: var(--surface-2); margin-bottom: 12px; }
+.ms-tabs button { padding: 6px 14px; border: 0; background: none; font: inherit; font-size: 13.5px; font-weight: 700; color: var(--text-muted); cursor: pointer; min-height: 36px; }
+.ms-tabs button[aria-selected="true"] { background: var(--surface); color: var(--text-primary); box-shadow: 0 1px 3px rgba(15,23,42,0.12); }
+@media (max-width: 560px) {
+  .ms-row { grid-template-columns: minmax(0, 1fr) auto 16px; }
+  .ms-row-bar { grid-column: 1 / -1; grid-row: 2; }
+  .ms-row-dated .ms-row-when { grid-column: 1 / -1; grid-row: 2; text-align: start; }
+}

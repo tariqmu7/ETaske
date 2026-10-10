@@ -247,3 +247,86 @@ export function areasIn(list: readonly MedicalContract[], governorate: string): 
   const g = tidy(governorate);
   return tally(list.filter(c => tidy(c.governorate) === g), c => tidy(c.area)).map(([a]) => a);
 }
+
+// ── Statistics (queue M5) ────────────────────────────────────────────────────
+// Every figure is worked out from the contracts at render (settled rule 3), as
+// of today, so the statistics can never disagree with the board. The seven
+// statuses fold into four plain buckets for the charts; the status split keeps
+// all seven.
+
+export type StatBucket = 'inForce' | 'endingSoon' | 'expired' | 'other';
+/** Bar order: fine first, then act now, then gone, then the rest. */
+export const STAT_BUCKETS: StatBucket[] = ['inForce', 'endingSoon', 'expired', 'other'];
+
+export const bucketOf = (s: MedicalStatus): StatBucket =>
+  s === 'Active' || s === 'Auto-renew' ? 'inForce'
+    : s === 'Ending soon' ? 'endingSoon'
+    : s === 'Expired' ? 'expired'
+    : 'other';
+
+export interface StatRow {
+  /** The stored text ('' = not named yet). */
+  key: string;
+  /** Area rows only: the governorate the area sits in. */
+  governorate?: string;
+  total: number;
+  buckets: Record<StatBucket, number>;
+}
+
+export interface DatedContract { c: MedicalContract; days: number; }
+
+export interface MedicalStats {
+  total: number;
+  byStatus: Record<MedicalStatus, number>;
+  buckets: Record<StatBucket, number>;
+  needsCheck: number;
+  byGovernorate: StatRow[];
+  /** Every area across governorates, most contracts first; an area is named per governorate. */
+  areas: StatRow[];
+  byType: StatRow[];
+  /** In force today and ending within ENDING_SOON_DAYS — soonest first. */
+  endingSoon: DatedContract[];
+  /** Ended and not being renewed — most recently ended first. */
+  expired: DatedContract[];
+}
+
+const emptyBuckets = (): Record<StatBucket, number> => ({ inForce: 0, endingSoon: 0, expired: 0, other: 0 });
+
+/** Rows biggest first, then by name; the unnamed ('') row always last. */
+function rowsOf(list: readonly MedicalContract[], today: string, keyOf: (c: MedicalContract) => string, govOf?: (c: MedicalContract) => string): StatRow[] {
+  const m = new Map<string, StatRow>();
+  for (const c of list) {
+    const key = tidy(keyOf(c));
+    const governorate = govOf ? tidy(govOf(c)) : undefined;
+    const id = governorate == null ? key : `${governorate}\u0000${key}`;
+    let r = m.get(id);
+    if (!r) { r = { key, governorate, total: 0, buckets: emptyBuckets() }; m.set(id, r); }
+    r.total++;
+    r.buckets[bucketOf(statusOf(c, today))]++;
+  }
+  return [...m.values()].sort((a, b) =>
+    (a.key === '' ? 1 : 0) - (b.key === '' ? 1 : 0)
+    || b.total - a.total
+    || a.key.localeCompare(b.key, 'ar')
+    || (a.governorate || '').localeCompare(b.governorate || '', 'ar'));
+}
+
+export function medicalStats(list: readonly MedicalContract[], today: string): MedicalStats {
+  const counts = countStatuses(list, today);
+  const buckets = emptyBuckets();
+  for (const s of MEDICAL_STATUSES) buckets[bucketOf(s)] += counts.byStatus[s];
+  const dated = (s: MedicalStatus) => list
+    .filter(c => statusOf(c, today) === s)
+    .map(c => ({ c, days: daysLeft(c, today) as number }));
+  return {
+    total: counts.total,
+    byStatus: counts.byStatus,
+    buckets,
+    needsCheck: counts.needsCheck,
+    byGovernorate: rowsOf(list, today, c => c.governorate),
+    areas: rowsOf(list, today, c => c.area, c => c.governorate),
+    byType: rowsOf(list, today, c => c.type),
+    endingSoon: dated('Ending soon').sort((a, b) => a.days - b.days || a.c.provider.localeCompare(b.c.provider, 'ar')),
+    expired: dated('Expired').sort((a, b) => b.days - a.days || a.c.provider.localeCompare(b.c.provider, 'ar')),
+  };
+}

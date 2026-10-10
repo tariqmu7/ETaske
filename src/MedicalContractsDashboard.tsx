@@ -6,6 +6,7 @@ import { db } from './lib/firebase';
 import { buildGroups, UNGROUPED } from './lib/grouping';
 import GroupGrid, { type GroupCard, type GroupCardStat } from './components/GroupGrid';
 import ComboBox from './components/ComboBox';
+import MedicalStatsView from './components/MedicalStatsView';
 import { canEditMedical } from './lib/medicalAccess';
 import {
   CONTRACT_STATES, MEDICAL_STATUSES, STATUS_BADGE, areasIn, compareContracts, contractPatch, countStatuses, daysLeft,
@@ -59,6 +60,8 @@ export default function MedicalContractsDashboard({ appUser }: Props) {
   const [needsCheck, setNeedsCheck] = useState(false);
   // The id, not the object: after a save the window must show the new snapshot.
   const [openId, setOpenId] = useState<string | null>(null);
+  // Board (governorate → area → rows) or Statistics (M5) — the whole book either way.
+  const [tab, setTab] = useState<'board' | 'stats'>('board');
   const canEdit = canEditMedical(appUser);
   const today = useMemo(() => todayISO(), []);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -127,6 +130,11 @@ export default function MedicalContractsDashboard({ appUser }: Props) {
 
   const pickGov = (g: string) => { setGov(g); setArea(null); };
   const resetFilters = () => { setQ(''); setType('all'); setStatus('all'); setNeedsCheck(false); };
+  // From a statistics row to that place / type on the board, with nothing else hiding it.
+  const showPlace = (g: string, a?: string) => {
+    resetFilters(); setGov(g || 'all'); setArea(a == null ? null : (a || UNGROUPED)); setTab('board');
+  };
+  const showType = (ty: string) => { resetFilters(); setType(ty || 'all'); setGov('all'); setArea(null); setTab('board'); };
 
   const kpis: { key: string; label: string; value: number; active: boolean; onClick: () => void; tone?: string }[] = [
     { key: 'all', label: t('All contracts'), value: counts.total, active: !anyFilter, onClick: resetFilters },
@@ -208,6 +216,17 @@ export default function MedicalContractsDashboard({ appUser }: Props) {
         <div className="card" style={{ padding: 18, fontSize: 13.5, color: 'var(--text-muted)' }} data-medical="empty">{t('No medical contracts yet.')}</div>
       ) : (
         <>
+          <div className="ms-tabs" role="tablist" aria-label={t('Medical contracts')}>
+            {(['board', 'stats'] as const).map(k => (
+              <button key={k} type="button" role="tab" aria-selected={tab === k} onClick={() => setTab(k)} data-medical-tab={k}>
+                {k === 'board' ? t('Board') : t('Statistics')}
+              </button>
+            ))}
+          </div>
+
+          {tab === 'stats' ? (
+            <MedicalStatsView all={all} today={today} statusLabel={STATUS_LABEL} onOpen={setOpenId} onPlace={showPlace} onType={showType} />
+          ) : <>
           {/* KPI strip — each one is also a one-click filter. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 8, marginBottom: 12 }}>
             {kpis.map(k => (
@@ -278,6 +297,7 @@ export default function MedicalContractsDashboard({ appUser }: Props) {
           ) : inArea.length === 0 ? noneMatch : (
             <div style={{ display: 'grid', gap: 8 }}>{inArea.map(c => row(c, false))}</div>
           )}
+          </>}
         </>
       )}
 

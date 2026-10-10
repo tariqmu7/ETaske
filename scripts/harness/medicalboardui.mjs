@@ -8,6 +8,7 @@
 // permission-denied message, Arabic + RTL and a 390 px phone.
 // M4b: the edit form for 'edit' access (name a new area, pick one, contract
 // state, dates), "Mark as checked", what a save writes, and refusals.
+// M5: the Statistics tab — whole-book figures, rankings, the two lists, click-through.
 // The contracts are MADE UP — the real data must never be in this public repo.
 //
 //   node scripts/harness/medicalboardui.mjs   (--headed to watch it, --shot to write PNGs)
@@ -360,6 +361,67 @@ await clickEl(q('[data-group-card="الإسكندرية"]'), 'Alexandria (phone)
 await clickEl(q('[data-group-card="سموحة"]'), 'Smouha (phone)');
 check('390 px: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
 await shot('5-ar-mobile');
+await send('Emulation.clearDeviceMetricsOverride');
+await evalJS(`window.__setLang('en')`);
+
+console.log('\n[6b] statistics (queue M5)');
+const st = JSON.parse(await evalJS(`(() => { const L = window.__lib, T = L.todayISO(), i = window.__iso;
+  const S = L.medicalStats([
+    { id: 'a', provider: 'A', type: 'x', governorate: 'G1', area: 'A1', endDate: i(10) },
+    { id: 'b', provider: 'B', type: 'x', governorate: 'G1', area: 'A1', endDate: i(-2) },
+    { id: 'c', provider: 'C', type: 'y', governorate: 'G2', area: 'A1', endDate: i(-40) },
+    { id: 'd', provider: 'D', type: 'y', governorate: 'G2', area: '', endDate: i(-1), sheetStatus: 'Renewing' },
+    { id: 'e', provider: 'E', type: 'y', governorate: 'G2', area: 'A2', endDate: '', autoRenew: true },
+  ], T);
+  const E = L.medicalStats([], T);
+  return JSON.stringify({ b: S.buckets, g: S.byGovernorate.map(r => [r.key, r.total]),
+    a: S.areas.map(r => [r.governorate, r.key, r.total]), soon: S.endingSoon.map(d => [d.c.id, d.days]),
+    exp: S.expired.map(d => d.c.id), empty: [E.total, E.areas.length, E.endingSoon.length] }); })()`));
+check('lib: four buckets (renewing counts as other, not expired)', J(st.b) === J({ inForce: 1, endingSoon: 1, expired: 2, other: 1 }), J(st.b));
+check('lib: same area name in two governorates = two rows; unnamed last', J(st.a) === J([['G1', 'A1', 2], ['G2', 'A1', 1], ['G2', 'A2', 1], ['G2', '', 1]]), J(st.a));
+check('lib: ending soon with days left; expired most recent first', J(st.soon) === J([['a', 10]]) && J(st.exp) === J(['b', 'c']), J([st.soon, st.exp]));
+check('lib: no contracts = all zero', J(st.empty) === J([0, 0, 0]));
+await remount();
+await evalJS(`window.__choose(${q('[data-medical="type-filter"]')}, 'صيدلية')`);
+await sleep(100);
+await clickEl(q('[data-medical-tab="stats"]'), 'Statistics tab');
+await waitFor(q('[data-medical="stats"]'), 'the statistics');
+check('the board strip and filters are gone on Statistics', !(await has('[data-medical-kpi]')) && !(await has('[data-medical="type-filter"]')));
+const tiles = await evalJS(`JSON.stringify([...document.querySelectorAll('[data-ms-tile]')].map(e => [e.dataset.msTile, window.__txt(e.firstElementChild)]))`).then(JSON.parse);
+check('tiles count the WHOLE book (the board type filter does not apply)', J(tiles) === J([['total', '8'], ['inForce', '3'], ['endingSoon', '1'], ['expired', '2'], ['check', '1']]), J(tiles));
+check('legend: In force 3 (38%)', (await text('[data-ms-legend="inForce"]')) === 'In force: 3 (38%)', await text('[data-ms-legend="inForce"]'));
+const statuses = await evalJS(`JSON.stringify([...document.querySelectorAll('[data-ms-status]')].map(e => e.dataset.msStatus + ' ' + window.__txt(e.querySelector('b'))))`).then(JSON.parse);
+check('status split: every status that has contracts, worst first', J(statuses) === J(['Expired 2', 'Ending soon 1', 'Renewing 1', 'Not signed 1', 'Active 2', 'Auto-renew 1']), J(statuses));
+const rowsOf = attr => evalJS(`JSON.stringify([...document.querySelectorAll('[data-ms-row="${attr}"]')].map(e => [e.dataset.msKey, window.__txt(e.querySelector('[data-ms-total]'))]))`).then(JSON.parse);
+check('governorates biggest first', J(await rowsOf('governorate')) === J([['الإسكندرية', '5'], ['القاهرة', '2'], ['الجيزة', '1']]), J(await rowsOf('governorate')));
+check('Alexandria row is labelled with its numbers', (await text('[data-ms-row="governorate"][data-ms-key="الإسكندرية"] .ms-row-sub')) === 'In force: 3 · Ending soon: 1 · Expired: 1', await text('[data-ms-row="governorate"][data-ms-key="الإسكندرية"] .ms-row-sub'));
+const barW = await evalJS(`JSON.stringify([...document.querySelectorAll('[data-ms-row="governorate"] .ms-bar')].map(b => Math.round(b.getBoundingClientRect().width / b.parentElement.getBoundingClientRect().width * 100)))`).then(JSON.parse);
+check('bars scale to the biggest (100 / 40 / 20 %)', J(barW) === J([100, 40, 20]), J(barW));
+check('areas ranked, unnamed last', J(await rowsOf('area')) === J([['سموحة', '3'], ['مدينة نصر', '2'], ['الدقي', '1'], ['سيدي جابر', '1'], ['', '1']]), J(await rowsOf('area')));
+check('types biggest first', J(await rowsOf('type')) === J([['مستشفى', '3'], ['صيدلية', '2'], ['معمل تحاليل', '2'], ['مركز أشعة', '1']]), J(await rowsOf('type')));
+const listed = attr => evalJS(`JSON.stringify([...document.querySelectorAll('[data-ms-contract="${attr}"]')].map(e => e.dataset.msId))`).then(JSON.parse);
+check('ending in 60 days: c-2 with its days', J(await listed('ending')) === J(['c-2']) && (await text('[data-ms-id="c-2"] .ms-row-when')).includes('days remaining: 20'), await text('[data-ms-id="c-2"] .ms-row-when'));
+check('expired, not renewed: c-7 then c-3 (Renewing c-8 left out)', J(await listed('expired')) === J(['c-7', 'c-3']), J(await listed('expired')));
+await shot('8-stats');
+await clickEl(q('[data-ms-id="c-3"]'), 'expired c-3');
+await waitFor(q('[data-medical-detail="c-3"]'), 'the c-3 window');
+check('a contract row opens its window', true);
+await clickEl(q('[data-medical="close"]'), 'close');
+await clickEl(q('[data-ms-row="area"][data-ms-key="سموحة"]'), 'Smouha row');
+await waitFor(q('[data-medical-row]'), 'board rows');
+check('an area row opens that area on the board, filters cleared', (await crumbs()) === 'All governorates > الإسكندرية > سموحة' && J(await rowIds()) === J(['c-3', 'c-2', 'c-1']) && (await val('[data-medical="type-filter"]')) === 'all', (await crumbs()) + J(await rowIds()));
+await clickEl(q('[data-medical-tab="stats"]'), 'Statistics again');
+await clickEl(q('[data-ms-row="type"][data-ms-key="صيدلية"]'), 'Pharmacy row');
+check('a type row opens the board filtered to that type', (await val('[data-medical="type-filter"]')) === 'صيدلية' && J(await cards()) === J([['الإسكندرية', '1'], ['القاهرة', '1']]), J(await cards()));
+await evalJS(`window.__setLang('ar')`);
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await remount();
+await clickEl(q('[data-medical-tab="stats"]'), 'Statistics (Arabic phone)');
+check('Arabic: «الإحصاءات», «حالة العقود», «سارية: 3»', (await text('[data-medical-tab="stats"]')) === 'الإحصاءات'
+  && (await text('[data-ms-section="status"] h2')) === 'حالة العقود'
+  && (await text('[data-ms-row="governorate"][data-ms-key="الإسكندرية"] .ms-row-sub')).startsWith('سارية: 3'));
+check('390 px statistics: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
+await shot('9-ar-mobile-stats');
 await send('Emulation.clearDeviceMetricsOverride');
 await evalJS(`window.__setLang('en')`);
 

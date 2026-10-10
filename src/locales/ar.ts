@@ -2121,6 +2121,23 @@ const ar: Record<keyof typeof en, string> = {
   "The end date comes before the start date.": "تاريخ الانتهاء يسبق تاريخ البدء.",
   "Last edited by {{name}}": "آخر من عدّله: {{name}}",
   "Checked by {{name}}": "راجعه: {{name}}",
+  // Medical contracts statistics (queue M5).
+  "Statistics": "الإحصاءات",
+  "Every figure counts all contracts as of today; the filters on the board do not apply here.": "تشمل الأرقامُ جميعَ العقود حتى اليوم، ولا تتأثر بالتصفية المختارة في اللوحة.",
+  "Ending in 60 days": "تنتهي خلال 60 يومًا",
+  "Expired, not renewed": "منتهية ولم تُجدَّد",
+  "Status of every contract": "حالة العقود",
+  "Contracts by governorate": "العقود حسب المحافظة",
+  "Ending in the next 60 days": "عقود تنتهي خلال 60 يومًا",
+  "Expired and not being renewed": "عقود انتهت ولم يبدأ تجديدها",
+  "No contract ends in the next 60 days.": "لا ينتهي أيُّ عقد خلال الستين يومًا المقبلة.",
+  "No expired contract is waiting for renewal.": "لا يوجد عقد منتهٍ ينتظر التجديد.",
+  "Areas ranked by number of contracts": "ترتيب المناطق حسب عدد العقود",
+  "Contracts by type": "العقود حسب النوع",
+  "Other: being renewed, not signed or no end date": "أخرى: قيد التجديد أو لم تُوقَّع أو بلا تاريخ انتهاء",
+  "In force: {{count}}": "سارية: {{count}}",
+  "Expired: {{count}}": "منتهية: {{count}}",
+  "Other: {{count}}": "أخرى: {{count}}",
 
 };
 

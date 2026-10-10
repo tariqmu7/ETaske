@@ -2179,6 +2179,23 @@ const en = {
   "The end date comes before the start date.": "The end date comes before the start date.",
   "Last edited by {{name}}": "Last edited by {{name}}",
   "Checked by {{name}}": "Checked by {{name}}",
+  // Medical contracts statistics (queue M5).
+  "Statistics": "Statistics",
+  "Every figure counts all contracts as of today; the filters on the board do not apply here.": "Every figure counts all contracts as of today; the filters on the board do not apply here.",
+  "Ending in 60 days": "Ending in 60 days",
+  "Expired, not renewed": "Expired, not renewed",
+  "Status of every contract": "Status of every contract",
+  "Contracts by governorate": "Contracts by governorate",
+  "Ending in the next 60 days": "Ending in the next 60 days",
+  "Expired and not being renewed": "Expired and not being renewed",
+  "No contract ends in the next 60 days.": "No contract ends in the next 60 days.",
+  "No expired contract is waiting for renewal.": "No expired contract is waiting for renewal.",
+  "Areas ranked by number of contracts": "Areas ranked by number of contracts",
+  "Contracts by type": "Contracts by type",
+  "Other: being renewed, not signed or no end date": "Other: being renewed, not signed or no end date",
+  "In force: {{count}}": "In force: {{count}}",
+  "Expired: {{count}}": "Expired: {{count}}",
+  "Other: {{count}}": "Other: {{count}}",
 
 } as const;
 
