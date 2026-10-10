@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
+import { Stethoscope,
   BarChart3, MailOpen, CheckSquare, FolderKanban, Archive, Megaphone, Mail, Users,
   AlertCircle, ArrowRight, Clock, Target, Hourglass, CalendarDays, Users2, Handshake,
   Building2, FolderOpen, Files, FileText, CheckCircle2, LayoutGrid, Sparkles,
@@ -13,6 +13,7 @@ import { AppUser } from './types';
 import { AppView, NavCounts } from './App';
 import { getRecents, RecentItem } from './lib/recents';
 import { requestOpen } from './lib/deepLink';
+import { canViewMedical } from './lib/medicalAccess';
 import { subscribeVisibleTasks } from './lib/taskVisibility';
 import { fetchBridgeMail, BRIDGE_URL, bridgeHeaders } from './lib/outlookBridge';
 import { groupThreads, threadsAwaitingReply, threadsAwaitingTheirReply } from './lib/mailThreads';
@@ -286,6 +287,7 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
         { id: 'projects', label: t('Projects'), icon: <FolderKanban className="w-4 h-4" />, show: true },
         { id: 'clients', label: t('Clients'), icon: <Building2 className="w-4 h-4" />, show: true },
         { id: 'documents', label: t('Documents'), icon: <FolderOpen className="w-4 h-4" />, show: true },
+        { id: 'medical-contracts', label: t('Medical contracts'), icon: <Stethoscope className="w-4 h-4" />, show: canViewMedical(appUser) },
       ] as Section[],
     },
     {

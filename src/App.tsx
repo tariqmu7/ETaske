@@ -21,6 +21,8 @@ import ProjectsDashboard from './ProjectsDashboard';
 import OpportunitiesDashboard from './OpportunitiesDashboard';
 import ClientsDashboard from './ClientsDashboard';
 import DocumentsDashboard from './DocumentsDashboard';
+import MedicalContractsDashboard from './MedicalContractsDashboard';
+import { canViewMedical } from './lib/medicalAccess';
 import WaitingDashboard from './WaitingDashboard';
 import HandoverDashboard from './HandoverDashboard';
 import DuplicatesDashboard from './DuplicatesDashboard';
@@ -31,7 +33,7 @@ import OpportunitiesAnalytics from './OpportunitiesAnalytics';
 import ChatBox from './components/ChatBox';
 import IdleResyncBanner from './components/IdleResyncBanner';
 import Announcements from './components/Announcements';
-import {
+import { Stethoscope,
   BarChart3, MailOpen, CheckSquare, Archive, Users, Megaphone, Mail, MoreHorizontal, X, FolderKanban, Home, Target, Building2, Hourglass, CalendarDays, Handshake,
   FolderOpen, Users2, Files, FileText, AlertCircle,
 } from 'lucide-react';
@@ -61,7 +63,7 @@ export interface NavCounts {
   bidsDueSoon: number;      // open bids due within 7 days or already past deadline
 }
 
-export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics' | 'clients' | 'waiting' | 'calendar' | 'documents' | 'meetings' | 'handover' | 'duplicates' | 'weekly-report';
+export type AppView = 'home' | 'correspondences' | 'manager-inbox' | 'tasks' | 'archive' | 'admin' | 'overview' | 'announcements' | 'due-soon' | 'outlook-feed' | 'projects' | 'opportunities' | 'bid-analytics' | 'clients' | 'waiting' | 'calendar' | 'documents' | 'meetings' | 'handover' | 'duplicates' | 'weekly-report' | 'medical-contracts';
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -618,6 +620,10 @@ export default function App() {
         {activeView === 'calendar' && (
           <CalendarDashboard user={user} appUser={appUser} onNavigate={setActiveView} />
         )}
+        {/* Queue M4 — gated per person by the admin's switch, never by role. */}
+        {activeView === 'medical-contracts' && canViewMedical(appUser) && (
+          <MedicalContractsDashboard appUser={appUser} onNavigate={setActiveView} />
+        )}
         {/* Queue D8 — records entered twice + clients two people bid to. Managers clean up. */}
         {activeView === 'duplicates' && (appUser.role === 'Admin' || appUser.role === 'Manager') && (
           <DuplicatesDashboard user={user} appUser={appUser} projectUsers={projectUsers} onNavigate={setActiveView} />
@@ -719,6 +725,7 @@ export default function App() {
                 { id: 'handover',        label: 'Handover',        icon: <Handshake />,   show: true },
                 { id: 'clients',         label: 'Clients',         icon: <Building2 />,   show: true },
                 { id: 'documents',       label: 'Documents',       icon: <FolderOpen />,  show: true },
+                { id: 'medical-contracts', label: 'Medical contracts', icon: <Stethoscope />, show: canViewMedical(appUser) },
                 { id: 'bid-analytics',   label: 'Bid Analytics',   icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'duplicates',      label: 'Duplicates',      icon: <Files />,       show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'weekly-report',   label: 'Weekly report',   icon: <FileText />,    show: appUser.role === 'Admin' || appUser.role === 'Manager' },

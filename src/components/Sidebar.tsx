@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import {
+import { Stethoscope,
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
   Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target,
@@ -11,6 +11,7 @@ import { AppView, NavCounts } from '../App';
 import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
+import { canViewMedical } from '../lib/medicalAccess';
 import { usePWA } from '../hooks/usePWA';
 import { connectTelegram, disconnectTelegram } from '../lib/telegram';
 import { watchMyContact } from '../lib/userContact';
@@ -191,6 +192,8 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     { id: 'clients', label: 'Clients', icon: <Building2 className="w-4 h-4" />, show: true },
     // Queue D4 — every project document in one Arabic-aware search.
     { id: 'documents', label: 'Documents', icon: <FolderOpen className="w-4 h-4" />, show: true },
+    // Queue M4 — only for people an admin switched on (lib/medicalAccess.ts), not by role.
+    { id: 'medical-contracts', label: 'Medical contracts', icon: <Stethoscope className="w-4 h-4" />, show: canViewMedical(appUser) },
     // Badge counts bids at their submission deadline (7 days out or already
     // past), not the whole pipeline — the deadline is the part that can be
     // missed, and it now sits one level down, so the count rides the group too.

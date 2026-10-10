@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import {
+import { Stethoscope,
   Search, CheckSquare, MailOpen, FolderKanban, CornerDownLeft,
   ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target, Building2, Hourglass, CalendarDays, Handshake,
   FolderOpen, Users2, Files, FileText,
@@ -10,6 +10,7 @@ import { db } from '../lib/firebase';
 import { getVisibleTasks } from '../lib/taskVisibility';
 import { globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
+import { canViewMedical } from '../lib/medicalAccess';
 import type { AppView } from '../App';
 import type { AppUser } from '../types';
 
@@ -95,6 +96,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'waiting', label: t('Waiting'), alias: 'Waiting on us them Waiting board Chase Ball in court', sub: t('Whose move it is, and for how long'), icon: <Hourglass className="w-4 h-4" /> },
     { kind: 'nav', id: 'calendar', label: t('Calendar'), alias: 'Calendar Deadlines Deadline calendar Tender deadlines Contract expiry Renewals Month', sub: t('Tender deadlines, contract ends and due dates by month'), icon: <CalendarDays className="w-4 h-4" /> },
     { kind: 'nav', id: 'opportunities', label: t('Opportunities'), alias: 'Opportunities', sub: t('Tenders, bids & deadlines'), icon: <Target className="w-4 h-4" /> },
+    ...(canViewMedical(appUser) ? [{ kind: 'nav', id: 'medical-contracts', label: t('Medical contracts'), alias: 'Medical contracts Hospitals Pharmacies Labs Clinics العقود الطبية مستشفى صيدلية معمل', sub: t('Hospitals, pharmacies and labs by governorate'), icon: <Stethoscope className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'duplicates', label: t('Duplicates'), alias: 'Duplicates Duplicate Twice Double entry Same tender Clash Conflict', sub: t('Records entered twice, and two people on one client'), icon: <Files className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'weekly-report', label: t('Weekly report'), alias: 'Weekly report Week Report Arabic report Department report Summary التقرير الأسبوعي تقرير', sub: t('The department’s week, written in Arabic'), icon: <FileText className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: t('Bid Analytics'), alias: 'Bid Analytics', sub: t('Win rate & loss reasons'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),
@@ -103,7 +105,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'archive', label: t('Archive'), alias: 'Archive', sub: t('Closed records'), icon: <Archive className="w-4 h-4" /> },
     { kind: 'nav', id: 'outlook-feed', label: t('Outlook'), alias: 'Outlook', sub: t('Synced email feed'), icon: <Mail className="w-4 h-4" /> },
     ...(appUser.role === 'Admin' ? [{ kind: 'nav', id: 'admin', label: t('Users'), alias: 'Users', sub: t('Approve & manage roles'), icon: <Users className="w-4 h-4" /> } as Hit] : []),
-  ]), [isManagerOrAdmin, appUser.role, t]);
+  ]), [isManagerOrAdmin, appUser, t]);
 
   const hits: Hit[] = useMemo(() => {
     const term = q.trim();
