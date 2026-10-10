@@ -43,6 +43,13 @@ export interface MedicalContract {
   importNotes?: string[];
   sheetRowNo?: number;
   importedAsOf?: string;
+  /** Who last saved the form (M4b). */
+  updatedBy?: string;
+  updatedByName?: string;
+  updatedAt?: unknown;
+  /** Who cleared "Needs check" (M4b). */
+  checkedByName?: string;
+  checkedAt?: unknown;
 }
 
 export type MedicalStatus = 'Expired' | 'Ending soon' | 'Renewing' | 'Not signed' | 'Active' | 'Auto-renew' | 'No end date';
@@ -162,4 +169,81 @@ export function tally(list: readonly MedicalContract[], keyOf: (c: MedicalContra
 export function mapLink(c: Pick<MedicalContract, 'lat' | 'lng'>): string | null {
   if (typeof c.lat !== 'number' || typeof c.lng !== 'number' || !isFinite(c.lat) || !isFinite(c.lng)) return null;
   return `https://www.google.com/maps/search/?api=1&query=${c.lat},${c.lng}`;
+}
+
+// ── Editing (queue M4b) ──────────────────────────────────────────────────────
+// Only people with 'edit' access (lib/medicalAccess.ts) see the form; the rules
+// refuse anyone else. The contract number is the doc id and is never edited.
+// `sheetStatusAr` stays as the sheet's own words — it is a record of the import.
+
+/** What an editor picks; dates still decide Active / Ending soon / Expired. */
+export type ContractState = 'Signed' | 'Renewing' | 'Not signed';
+export const CONTRACT_STATES: ContractState[] = ['Signed', 'Renewing', 'Not signed'];
+
+export interface ContractDraft {
+  provider: string;
+  type: string;
+  governorate: string;
+  area: string;
+  address: string;
+  startDate: string;
+  endDate: string;
+  autoRenew: boolean;
+  state: ContractState;
+  needsCheck: boolean;
+}
+
+export const stateOf = (c: Pick<MedicalContract, 'sheetStatus'>): ContractState =>
+  c.sheetStatus === 'Renewing' || c.sheetStatus === 'Not signed' ? c.sheetStatus : 'Signed';
+
+export function draftOf(c: MedicalContract): ContractDraft {
+  return {
+    provider: c.provider || '',
+    type: c.type || '',
+    governorate: c.governorate || '',
+    area: c.area || '',
+    address: c.address || '',
+    startDate: c.startDate || '',
+    endDate: c.endDate || '',
+    autoRenew: !!c.autoRenew,
+    state: stateOf(c),
+    needsCheck: !!c.needsCheck,
+  };
+}
+
+/** Trim and squeeze inner spaces, so «سموحة » and «سموحة» are one area. */
+export const tidy = (s: string) => (s || '').replace(/\s+/g, ' ').trim();
+
+/** Problems that block saving, as i18n keys (English sentences). Empty = fine. */
+export function draftProblems(d: ContractDraft): string[] {
+  const out: string[] = [];
+  if (!tidy(d.provider)) out.push('Write the provider name.');
+  if (!tidy(d.governorate)) out.push('Choose or type the governorate.');
+  if ((d.startDate && !ISO.test(d.startDate)) || (!d.autoRenew && d.endDate && !ISO.test(d.endDate))) out.push('A date is not complete.');
+  else if (!d.autoRenew && d.startDate && d.endDate && d.endDate < d.startDate) out.push('The end date comes before the start date.');
+  return out;
+}
+
+/** Only the fields that changed, ready for `updateDoc`. Empty object = nothing to save. */
+export function contractPatch(c: MedicalContract, d: ContractDraft): Partial<MedicalContract> {
+  const before = draftOf(c);
+  const after: ContractDraft = {
+    ...d,
+    provider: tidy(d.provider), type: tidy(d.type), governorate: tidy(d.governorate),
+    area: tidy(d.area), address: tidy(d.address),
+    // A contract that renews by itself has no end date (the import's shape).
+    endDate: d.autoRenew ? '' : d.endDate,
+  };
+  const patch: Partial<MedicalContract> = {};
+  for (const k of ['provider', 'type', 'governorate', 'area', 'address', 'startDate', 'endDate', 'autoRenew', 'needsCheck'] as const) {
+    if (after[k] !== before[k]) (patch as any)[k] = after[k];
+  }
+  if (after.state !== before.state) patch.sheetStatus = after.state === 'Signed' ? 'Active' : after.state;
+  return patch;
+}
+
+/** Area names already used in a governorate, biggest first — the area picker's list. */
+export function areasIn(list: readonly MedicalContract[], governorate: string): string[] {
+  const g = tidy(governorate);
+  return tally(list.filter(c => tidy(c.governorate) === g), c => tidy(c.area)).map(([a]) => a);
 }

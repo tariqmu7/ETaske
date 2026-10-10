@@ -2108,6 +2108,19 @@ const ar: Record<keyof typeof en, string> = {
   "Address": "العنوان",
   "Open on the map": "افتح على الخريطة",
   "Hospitals, pharmacies and labs by governorate": "المستشفيات والصيدليات والمعامل حسب المحافظة",
+  // Medical contracts editing (queue M4b).
+  "Signed — the dates decide": "موقَّع، وتحكم التواريخ حالته",
+  "Mark as checked": "أكِّد المراجعة",
+  "Provider": "الجهة",
+  "Contract state": "حالة التعاقد",
+  "Type a new area or pick one": "اكتب اسم منطقة جديدة أو اختر من القائمة",
+  "Someone must confirm this contract": "يحتاج العقد إلى من يؤكد بياناته",
+  "Write the provider name.": "اكتب اسم الجهة.",
+  "Choose or type the governorate.": "اختر المحافظة أو اكتب اسمها.",
+  "A date is not complete.": "أحد التواريخ غير مكتمل.",
+  "The end date comes before the start date.": "تاريخ الانتهاء يسبق تاريخ البدء.",
+  "Last edited by {{name}}": "آخر من عدّله: {{name}}",
+  "Checked by {{name}}": "راجعه: {{name}}",
 
 };
 

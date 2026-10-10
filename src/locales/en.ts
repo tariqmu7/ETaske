@@ -2166,6 +2166,19 @@ const en = {
   "Address": "Address",
   "Open on the map": "Open on the map",
   "Hospitals, pharmacies and labs by governorate": "Hospitals, pharmacies and labs by governorate",
+  // Medical contracts editing (queue M4b).
+  "Signed — the dates decide": "Signed — the dates decide",
+  "Mark as checked": "Mark as checked",
+  "Provider": "Provider",
+  "Contract state": "Contract state",
+  "Type a new area or pick one": "Type a new area or pick one",
+  "Someone must confirm this contract": "Someone must confirm this contract",
+  "Write the provider name.": "Write the provider name.",
+  "Choose or type the governorate.": "Choose or type the governorate.",
+  "A date is not complete.": "A date is not complete.",
+  "The end date comes before the start date.": "The end date comes before the start date.",
+  "Last edited by {{name}}": "Last edited by {{name}}",
+  "Checked by {{name}}": "Checked by {{name}}",
 
 } as const;
 
