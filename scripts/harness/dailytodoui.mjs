@@ -5,6 +5,7 @@
 // NOT the private, finished, closed or far-off ones), late first, editing,
 // removing and adding rows, edits kept for the day across a remount, "Start
 // again", the print sheet (print media: only the sheet shows), Excel, Arabic, 390 px.
+// "My daily tasks" is its own inner tab with its own print sheet and Excel file.
 //
 //   node scripts/harness/dailytodoui.mjs   (--headed to watch it, --shot to write PNGs + a PDF)
 
@@ -304,9 +305,15 @@ await sleep(150);
 rows = await rowTexts();
 check('the edit stayed', rows[0].includes('Finish it before noon'), rows[0]);
 check('"Start again" appears', await evalJS(`!!${q('[data-dt="reset"]')}`));
-check('the add button now sits in "My daily tasks", not in the generated list', await evalJS(`!!document.querySelector('[data-dt="mine"] [data-dt="add"]') && document.querySelectorAll('[data-dt="add"]').length === 1`));
+check('the generated tab has no "Add a task" and no personal rows', await evalJS(`!document.querySelector('[data-dt="add"]') && !document.querySelector('[data-dt="mine"]')`));
+check('"From the system" is the selected inner tab', await evalJS(`${q('[data-dt="view-system"]')}.getAttribute('aria-selected') === 'true'`));
+check('the "My daily tasks" tab shows how many are open (1)', (await text('[data-dt="view-mine"]')).includes('(1)'), await text('[data-dt="view-mine"]'));
 
-console.log('\n[3b] My daily tasks — saved to my account, only mine, carried over until done');
+console.log('\n[3b] My daily tasks — its own tab, saved to my account, only mine, carried over until done');
+await clickEl(q('[data-dt="view-mine"]'), 'My daily tasks tab');
+check('switching shows my tasks and hides the generated list', await evalJS(`!!${q('[data-dt="mine"]')} && !${q('[data-dt="table"]')} && !${q('[data-dt="tiles"]')}`));
+check('the "Include" setting is only on the generated tab', !(await evalJS(`!!${q('[data-dt="ahead"]')}`)));
+check('my tab has its own Print, Excel and Add buttons', await evalJS(`!!document.querySelector('[data-dt="mine"] [data-dt="print"]') && !!document.querySelector('[data-dt="mine"] [data-dt="excel"]') && !!document.querySelector('[data-dt="mine"] [data-dt="add"]')`));
 await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length > 0`, 'my tasks');
 let mine = await myTexts();
 check('my open task from 3 days ago is carried over, with "since"', mine.length === 1 && mine[0].includes('Call the insurance company') && mine[0].includes('منذ'), mine.join(' // '));
@@ -334,13 +341,43 @@ const tickedDoc = st.find(d => d.id === 'm-old');
 check('ticking it done saves done + today', tickedDoc.done === true && tickedDoc.doneDay === THIS_DAY, JSON.stringify(tickedDoc));
 mine = await myTexts();
 check("the ticked task stays on today's list, marked done, below the open one", mine.length === 2 && mine[1].includes('Call the insurance company | Ask for the renewal quote | yes'), mine.join(' // '));
+check('the tab count drops to the one still open', (await text('[data-dt="view-mine"]')).includes('(1)'), await text('[data-dt="view-mine"]'));
 await remount();
-await ready();
 await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length === 2`, 'my tasks after reopening');
-rows = await rowTexts();
+check('the page reopens on the tab I was on', await evalJS(`${q('[data-dt="view-mine"]')}.getAttribute('aria-selected') === 'true'`));
 mine = await myTexts();
-check('edits to the generated list are kept for the day after opening the page again', rows[0].includes('Finish it before noon'));
 check('my tasks are still there after opening the page again', mine.some(r => r.includes('زيارة موقع العميل')) && mine.some(r => r.includes('Call the insurance company')), mine.join(' // '));
+
+console.log('\n[3c] my own print sheet and Excel');
+await send('Emulation.setEmulatedMedia', { media: 'print' });
+await sleep(200);
+check('in print only the sheet shows', await evalJS(`!window.__vis(${q('[data-dt="page"]')}) && window.__vis(${q('[data-dt="print-sheet"]')})`));
+const mySheet = await text('[data-dt="print-sheet"]');
+check('my sheet is titled "My daily tasks" with its own columns', mySheet.includes('مهامي اليومية') && mySheet.includes('المهمة') && mySheet.includes('لم يتم'), mySheet.slice(0, 200));
+check('my sheet carries my tasks', mySheet.includes('زيارة موقع العميل') && mySheet.includes('Call the insurance company'));
+check('my done task prints with a tick', await evalJS(`[...document.querySelectorAll('[data-dt="print-mine"]')].some(r => r.textContent.includes('Call the insurance company') && r.textContent.includes('✓'))`));
+check('my sheet has none of the generated items', !mySheet.includes('Update risk register') && !mySheet.includes('Invoice 45') && !mySheet.includes('قائمة المتابعة اليومية'));
+check("someone else's task is not on my sheet", !mySheet.includes('Mona private reminder'));
+check('only one sheet is on the page', await evalJS(`document.querySelectorAll('[data-dt="print-sheet"]').length === 1`));
+await shot('2b-my-print');
+if (SHOT) {
+  const pdf = await send('Page.printToPDF', { preferCSSPageSize: true, printBackground: true });
+  const p = path.join(ROOT, 'scripts/harness/dailytodoui-my-print.pdf');
+  fs.writeFileSync(p, Buffer.from(pdf.data, 'base64'));
+  console.log(`       pdf  -> ${p}`);
+}
+await send('Emulation.setEmulatedMedia', { media: '' });
+await sleep(150);
+await evalJS(`(() => { window.__dl = []; const o = HTMLAnchorElement.prototype.click; HTMLAnchorElement.prototype.click = function () { window.__dl.push(this.download || ''); }; })()`);
+await clickEl(`document.querySelector('[data-dt="mine"] [data-dt="excel"]')`, 'my Excel');
+await waitFor(q('[data-dt="message"]'), 'my excel message', 8000);
+check('my Excel download confirms', (await text('[data-dt="message"]')).includes('Excel'), await text('[data-dt="message"]'));
+check('my Excel is its own file', (await evalJS(`window.__dl`)).some(n => n.startsWith('my-daily-tasks-')), JSON.stringify(await evalJS(`window.__dl`)));
+
+await clickEl(q('[data-dt="view-system"]'), 'From the system tab');
+await ready();
+rows = await rowTexts();
+check('back on the generated tab, its edits are kept for the day', rows[0].includes('Finish it before noon'));
 const writes = await evalJS(`window.__writes.map(w => w.path.split('/')[0])`);
 check('the only database writes are to my own tasks', writes.length > 0 && writes.every(c => c === 'myTodos'), writes.join(','));
 
@@ -351,9 +388,8 @@ check('in print only the sheet shows (the app is hidden)', await evalJS(`!window
 const sheet = await text('[data-dt="print-sheet"]');
 check('sheet has the Arabic title and the columns', sheet.includes('قائمة المتابعة اليومية') && sheet.includes('الإجراء المطلوب') && sheet.includes('لم يتم') && sheet.includes('ملاحظات المدير'), sheet.slice(0, 200));
 check('sheet carries the edits and the extra notes', sheet.includes('Finish it before noon') && sheet.includes('Call Sami') && sheet.includes('اجتماع الإدارة الساعة 11'));
-check('sheet has a "My daily tasks" part with my tasks', sheet.includes('مهامي اليومية') && sheet.includes('زيارة موقع العميل') && sheet.includes('Call the insurance company'), sheet.slice(-600));
-check('my done task prints with a tick', await evalJS(`[...document.querySelectorAll('[data-dt="print-mine"]')].some(r => r.textContent.includes('Call the insurance company') && r.textContent.includes('✓'))`));
-check("someone else's task is not on the sheet", !sheet.includes('Mona private reminder'));
+check('the generated sheet has none of my own tasks', !sheet.includes('مهامي اليومية') && !sheet.includes('زيارة موقع العميل') && !sheet.includes('Call the insurance company'), sheet.slice(-600));
+check('only one sheet is on the page', await evalJS(`document.querySelectorAll('[data-dt="print-sheet"]').length === 1`));
 check('sheet does not carry the removed row', !sheet.includes('Urgent no date'));
 check('sheet has a sign-off line', sheet.includes('اطّلعت عليه المديرة'));
 await shot('2-print');
@@ -371,10 +407,13 @@ console.log('\n[5] Excel download and Start again');
 await clickEl(q('[data-dt="excel"]'), 'Download Excel');
 await waitFor(q('[data-dt="message"]'), 'excel message', 8000);
 check('Excel download confirms', (await text('[data-dt="message"]')).includes('Excel'), await text('[data-dt="message"]'));
+check('the generated Excel is its own file', (await evalJS(`window.__dl`)).some(n => n.startsWith('daily-todo-')), JSON.stringify(await evalJS(`window.__dl`)));
 await clickEl(q('[data-dt="reset"]'), 'Start again');
 await sleep(200);
 rows = await rowTexts();
 check('Start again drops the edits', !rows[0].includes('Finish it before noon'));
+await clickEl(q('[data-dt="view-mine"]'), 'My daily tasks tab');
+await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length > 0`, 'my tasks');
 check('Start again leaves my own tasks alone', (await myTexts()).length === 2);
 await clickEl(`document.querySelector('[data-my-row="${added.id}"] [data-dt="my-remove"]')`, 'remove my task');
 await sleep(200);
@@ -388,7 +427,11 @@ check('tab label in Arabic', (await text('[data-wr="tab-daily"]')).includes('ق�
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true });
 await sleep(300);
 await shot('4-ar-mobile');
-check('no sideways page scroll at 390 px', (await overflow()) <= 1, String(await overflow()));
+check('no sideways page scroll at 390 px (my tab)', (await overflow()) <= 1, String(await overflow()));
+check('inner tab labels in Arabic', (await text('[data-dt="view-system"]')).includes('قائمة النظام') && (await text('[data-dt="view-mine"]')).includes('مهامي اليومية'));
+await clickEl(q('[data-dt="view-system"]'), 'From the system tab');
+await sleep(200);
+check('no sideways page scroll at 390 px (system tab)', (await overflow()) <= 1, String(await overflow()));
 await clickEl(q('[data-wr="tab-weekly"]'), 'weekly tab');
 await waitFor(`${q('[data-wr="text"]')} && ${q('[data-wr="text"]')}.value.length > 50`, 'weekly text');
 check('the weekly report still works', (await evalJS(`${q('[data-wr="text"]')}.value`)).startsWith('التقرير الأسبوعي'));

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Printer, Download, Plus, Trash2, RotateCcw, RefreshCw, Check, Info, Lock } from 'lucide-react';
+import { Printer, Download, Plus, Trash2, RotateCcw, RefreshCw, Check, Info, Lock, ListChecks, User } from 'lucide-react';
 import {
   buildDailyTodo, arDueState, shortDay, sheetTitle, sheetDate, sheetCounts, KIND_AR,
   type TodoRow, type TodoInput,
@@ -22,7 +22,10 @@ interface Props {
 
 interface Draft { rows: TodoRow[]; extra: string }
 
+type View = 'system' | 'mine';
 const AHEAD_KEY = 'etaske:dailytodo:ahead';
+const VIEW_KEY = 'etaske:dailytodo:view';
+const readView = (): View => { try { return localStorage.getItem(VIEW_KEY) === 'mine' ? 'mine' : 'system'; } catch { return 'system'; } };
 const draftKey = (day: string) => `etaske:dailytodo:${day}`;
 // Number(null) is 0, so a first visit must be told apart from a saved "today only".
 const readAhead = () => { try { const v = localStorage.getItem(AHEAD_KEY); return v !== null && ['0', '3', '7'].includes(v) ? Number(v) : 3; } catch { return 3; } };
@@ -45,9 +48,10 @@ const AHEAD_OPTIONS: Array<{ value: number; label: string }> = [
  * it edit, delete and add rows, then Print (an A4 landscape Arabic sheet with
  * "Done / Not done" boxes for the manager to tick by hand) or Download an Excel
  * copy to add more to. Edits to the generated list are kept in this browser
- * for that day only. Below it, "My daily tasks" is the person's own list, saved
- * to their account (lib/myTodos.ts) — only they can see it, and each row stays
- * until they tick it done. Both parts print on the same sheet.
+ * for that day only. The second inner tab, "My daily tasks", is the person's
+ * own list, saved to their account (lib/myTodos.ts) — only they can see it, and
+ * each row stays until they tick it done. Each tab prints and downloads on its
+ * own: the print sheet is whichever tab is open.
  */
 export default function DailyTodoSheet({ uid, data, department, onDepartment, onReload }: Props) {
   const { t } = useTranslation();
@@ -55,6 +59,8 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
   const [ahead, setAhead] = useState(readAhead);
   const [draft, setDraftState] = useState<Draft | null>(() => readDraft(iso(new Date())));
   const [message, setMessage] = useState<{ kind: 'ok' | 'error'; key: string } | null>(null);
+  const [view, setViewState] = useState<View>(readView);
+  const setView = (v: View) => { setViewState(v); setMessage(null); try { localStorage.setItem(VIEW_KEY, v); } catch { /* private window */ } };
 
   const generated = useMemo(() => (data ? buildDailyTodo(data, day, { ahead }) : []), [data, day, ahead]);
   const rows = draft?.rows ?? generated;
@@ -105,23 +111,38 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
   const onExcel = async () => {
     try {
       const XLSX = await import('xlsx');
-      const head = ['م', 'النوع', 'الرقم', 'البند', 'المسؤول', 'الإجراء المطلوب', 'الموعد', 'الحالة', 'تم', 'لم يتم', 'ملاحظات المدير'];
-      const aoa: any[][] = [
-        [sheetTitle(department)],
-        [sheetDate(day)],
-        [],
-        head,
-        ...rows.map((r, i) => [i + 1, KIND_AR[r.kind], r.serial || '', r.title, r.owner || '', r.action, r.due || '', arDueState(r), '', '', r.note || '']),
-        ...myRows.map((r, i) => [rows.length + i + 1, MY_KIND_AR, '', r.title, r.owner || '', r.action || '', r.due || '',
-          r.done ? 'تم' : arDueState(asRow(r, day)), r.done ? '✓' : '', '', r.note || '']),
-      ];
-      if (extra.trim()) aoa.push([], ['ملاحظات إضافية'], [extra.trim()]);
+      let aoa: any[][], cols: number[], sheetName: string, file: string;
+      if (view === 'mine') {
+        aoa = [
+          [myTitle(department)],
+          [sheetDate(day)],
+          [],
+          ['م', 'المهمة', 'المسؤول', 'الإجراء المطلوب', 'الموعد', 'الحالة', 'تم', 'لم يتم', 'ملاحظات'],
+          ...myRows.map((r, i) => [i + 1, r.title, r.owner || '', r.action || '', r.due || '',
+            r.done ? 'تمّت' : arDueState(asRow(r, day)), r.done ? '✓' : '', '', r.note || '']),
+        ];
+        cols = [4, 46, 18, 46, 11, 13, 7, 7, 30];
+        sheetName = 'مهامي اليومية';
+        file = `my-daily-tasks-${day}.xlsx`;
+      } else {
+        aoa = [
+          [sheetTitle(department)],
+          [sheetDate(day)],
+          [],
+          ['م', 'النوع', 'الرقم', 'البند', 'المسؤول', 'الإجراء المطلوب', 'الموعد', 'الحالة', 'تم', 'لم يتم', 'ملاحظات المدير'],
+          ...rows.map((r, i) => [i + 1, KIND_AR[r.kind], r.serial || '', r.title, r.owner || '', r.action, r.due || '', arDueState(r), '', '', r.note || '']),
+        ];
+        if (extra.trim()) aoa.push([], ['ملاحظات إضافية'], [extra.trim()]);
+        cols = [4, 9, 11, 46, 18, 46, 11, 13, 7, 7, 30];
+        sheetName = 'قائمة اليوم';
+        file = `daily-todo-${day}.xlsx`;
+      }
       const ws = XLSX.utils.aoa_to_sheet(aoa);
-      ws['!cols'] = [4, 9, 11, 46, 18, 46, 11, 13, 7, 7, 30].map(wch => ({ wch }));
+      ws['!cols'] = cols.map(wch => ({ wch }));
       const wb = XLSX.utils.book_new();
       wb.Workbook = { Views: [{ RTL: true }] };
-      XLSX.utils.book_append_sheet(wb, ws, 'قائمة اليوم');
-      XLSX.writeFile(wb, `daily-todo-${day}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+      XLSX.writeFile(wb, file);
       setMessage({ kind: 'ok', key: 'Saved as an Excel file — add more to it and print it from Excel.' });
     } catch (err) {
       console.warn('Daily to-do — Excel:', err);
@@ -140,33 +161,58 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
   };
   const th: React.CSSProperties = { padding: '8px 6px', fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textAlign: 'start', borderBottom: '2px solid var(--border)', whiteSpace: 'nowrap' };
   const td: React.CSSProperties = { padding: '6px', verticalAlign: 'top', borderBottom: '1px solid var(--border)' };
+  const tabBtn = (v: View): React.CSSProperties => ({ ...(view === v ? primary : small), minHeight: 40, padding: '8px 16px' });
+  const openMine = myRows.filter(r => !r.done).length;
+  const actions = (extraButtons?: React.ReactNode) => (
+    <>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
+        <button type="button" data-dt="print" onClick={onPrint} style={view === 'mine' ? small : primary}><Printer size={14} /> {t('Print')}</button>
+        <button type="button" data-dt="excel" onClick={onExcel} style={small}><Download size={14} /> {t('Download Excel')}</button>
+        {extraButtons}
+      </div>
+      {message && (
+        <p role={message.kind === 'error' ? 'alert' : 'status'} data-dt="message" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: message.kind === 'error' ? 'var(--danger)' : 'var(--success)', margin: '0 0 10px' }}>
+          {message.kind === 'ok' && <Check size={14} />} {t(message.key)}
+        </p>
+      )}
+    </>
+  );
 
   return (
     <div data-dt="page">
+      <div role="tablist" aria-label={t('Daily to-do list')} data-dt="views" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        <button type="button" role="tab" data-dt="view-system" aria-selected={view === 'system'} onClick={() => setView('system')} style={tabBtn('system')}>
+          <ListChecks size={14} /> {t('From the system')}
+        </button>
+        <button type="button" role="tab" data-dt="view-mine" aria-selected={view === 'mine'} onClick={() => setView('mine')} style={tabBtn('mine')}>
+          <User size={14} /> {t('My daily tasks')}{openMine > 0 && <span className="ltr-data"> ({openMine})</span>}
+        </button>
+      </div>
+
       <section className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
           <span>{t('Day')}</span>
           <input type="date" data-dt="day" value={day} onChange={e => e.target.value && setDay(e.target.value)}
             style={{ padding: '6px 10px', minHeight: 36, fontFamily: 'inherit', fontSize: 14, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
         </label>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
+        {view === 'system' && <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)' }}>
           <span>{t('Include')}</span>
           <select data-dt="ahead" value={ahead} onChange={e => { const n = Number(e.target.value); setAhead(n); try { localStorage.setItem(AHEAD_KEY, String(n)); } catch { /* ignore */ } }}
             style={{ padding: '6px 10px', minHeight: 36, fontFamily: 'inherit', fontSize: 14, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }}>
             {AHEAD_OPTIONS.map(o => <option key={o.value} value={o.value}>{t(o.label)}</option>)}
           </select>
-        </label>
+        </label>}
         <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--text-secondary)', flex: '1 1 240px', minWidth: 0 }}>
           <span style={{ whiteSpace: 'nowrap' }}>{t('Department name in the heading')}</span>
           <input data-dt="dept" dir="rtl" lang="ar" value={department} placeholder="إدارة …" onChange={e => onDepartment(e.target.value)}
             style={{ flex: 1, minWidth: 0, padding: '6px 10px', minHeight: 36, fontFamily: 'inherit', fontSize: 14, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text-primary)' }} />
         </label>
-        {draft && (
+        {draft && view === 'system' && (
           <span style={{ flexBasis: '100%', fontSize: 12, color: 'var(--text-muted)' }}>{t('The list below has your edits; changing “Include” only shows once you start again.')}</span>
         )}
       </section>
 
-      {!data ? (
+      {view === 'system' && (!data ? (
         <p role="status" data-dt="loading" style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('Reading the boards…')}</p>
       ) : (
         <>
@@ -185,22 +231,15 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
           </div>
 
           <section className="card" style={{ padding: 14 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
-              <button type="button" data-dt="print" onClick={onPrint} style={primary}><Printer size={14} /> {t('Print')}</button>
-              <button type="button" data-dt="excel" onClick={onExcel} style={small}><Download size={14} /> {t('Download Excel')}</button>
+            {actions(<>
               {draft && (
                 <button type="button" data-dt="reset" onClick={() => { setDraft(null); setMessage(null); }} style={small}><RotateCcw size={14} /> {t('Start again from the records')}</button>
               )}
               <button type="button" data-dt="reload" onClick={() => { setMessage(null); onReload(); }} style={small}><RefreshCw size={14} /> {t('Read the records again')}</button>
-            </div>
-            {message && (
-              <p role={message.kind === 'error' ? 'alert' : 'status'} data-dt="message" style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: message.kind === 'error' ? 'var(--danger)' : 'var(--success)', margin: '0 0 10px' }}>
-                {message.kind === 'ok' && <Check size={14} />} {t(message.key)}
-              </p>
-            )}
+            </>)}
 
             {rows.length === 0 ? (
-              <p data-dt="empty" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '6px 0' }}>{t('Nothing is pending on the boards for this day. Add your own tasks below if you need a sheet anyway.')}</p>
+              <p data-dt="empty" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '6px 0' }}>{t('Nothing is pending on the boards for this day. Add your own tasks in the “My daily tasks” tab.')}</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table data-dt="table" dir="rtl" lang="ar" style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse' }}>
@@ -253,14 +292,19 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
             </p>
           </section>
 
-          <section className="card" data-dt="mine" style={{ padding: 14, marginTop: 14 }}>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>{t('My daily tasks')}</h2>
-              <button type="button" data-dt="add" onClick={addMine} style={primary}><Plus size={14} /> {t('Add a task')}</button>
-            </div>
+          <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '14px 0 0', lineHeight: 1.5 }}>
+            <Info size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+            <span>{t('The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.')}</span>
+          </p>
+        </>
+      ))}
+
+      {view === 'mine' && (
+          <section className="card" data-dt="mine" style={{ padding: 14 }}>
+            {actions(<button type="button" data-dt="add" onClick={addMine} style={primary}><Plus size={14} /> {t('Add a task')}</button>)}
             <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
               <Lock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-              <span>{t('Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done, and prints on the same sheet.')}</span>
+              <span>{t('Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done.')}</span>
             </p>
             {mine === null ? (
               <p role="status" data-dt="mine-loading" style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('Reading your tasks…')}</p>
@@ -316,51 +360,48 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
               </div>
             )}
           </section>
-
-          <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '14px 0 0', lineHeight: 1.5 }}>
-            <Info size={13} style={{ flexShrink: 0, marginTop: 2 }} />
-            <span>{t('The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.')}</span>
-          </p>
-
-          {createPortal(<PrintSheet rows={rows} mine={myRows} extra={extra} day={day} department={department} />, document.body)}
-        </>
       )}
+
+      {view === 'system' && data && createPortal(<PrintSheet rows={rows} extra={extra} day={day} department={department} />, document.body)}
+      {view === 'mine' && mine && createPortal(<MyPrintSheet rows={myRows} day={day} department={department} />, document.body)}
     </div>
   );
 }
 
-const MY_KIND_AR = 'مهمتي';
+const myTitle = (department?: string) => { const d = (department || '').trim(); return d ? `مهامي اليومية — ${d}` : 'مهامي اليومية'; };
 /** A personal task in the shape the date helpers expect. */
 const asRow = (r: MyTodo, day: string): TodoRow => ({ id: r.id, kind: 'manual', title: r.title, owner: r.owner, action: r.action || '', due: r.due, lateBy: myLateBy(r, day), note: r.note });
 
-/** The paper copy: hidden on screen, the only thing that prints while this tab is open. */
-function PrintSheet({ rows, mine, extra, day, department }: { rows: TodoRow[]; mine: MyTodo[]; extra: string; day: string; department: string }) {
+const box = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000' }} />;
+const ticked = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000', lineHeight: '13px', fontSize: '11pt', fontWeight: 800 }}>✓</span>;
+const cell: React.CSSProperties = { border: '1px solid #000', padding: '5px 6px', verticalAlign: 'top', textAlign: 'start' };
+const head: React.CSSProperties = { ...cell, background: '#e8e8e8', fontWeight: 700, whiteSpace: 'nowrap' };
+const PRINT_CSS = `
+  @media screen { .dt-print { display: none; } }
+  @media print {
+    @page { size: A4 landscape; margin: 10mm; }
+    html, body { background: #fff !important; }
+    body > *:not(.dt-print) { display: none !important; }
+    .dt-print { display: block; color: #000; background: #fff; font-size: 11pt; }
+    .dt-print table { width: 100%; border-collapse: collapse; }
+    .dt-print tr { break-inside: avoid; }
+    .dt-print thead { display: table-header-group; }
+  }
+`;
+
+/** The paper copy of the generated list: hidden on screen, the only thing that prints while its tab is open. */
+function PrintSheet({ rows, extra, day, department }: { rows: TodoRow[]; extra: string; day: string; department: string }) {
   const c = sheetCounts(rows);
-  const box = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000' }} />;
-  const ticked = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000', lineHeight: '13px', fontSize: '11pt', fontWeight: 800 }}>✓</span>;
-  const cell: React.CSSProperties = { border: '1px solid #000', padding: '5px 6px', verticalAlign: 'top', textAlign: 'start' };
-  const head: React.CSSProperties = { ...cell, background: '#e8e8e8', fontWeight: 700, whiteSpace: 'nowrap' };
   return (
     <div className="dt-print" dir="rtl" lang="ar" data-dt="print-sheet">
-      <style>{`
-        @media screen { .dt-print { display: none; } }
-        @media print {
-          @page { size: A4 landscape; margin: 10mm; }
-          html, body { background: #fff !important; }
-          body > *:not(.dt-print) { display: none !important; }
-          .dt-print { display: block; color: #000; background: #fff; font-size: 11pt; }
-          .dt-print table { width: 100%; border-collapse: collapse; }
-          .dt-print tr { break-inside: avoid; }
-          .dt-print thead { display: table-header-group; }
-        }
-      `}</style>
+      <style>{PRINT_CSS}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
         <div>
           <div style={{ fontSize: '16pt', fontWeight: 800 }}>{sheetTitle(department)}</div>
           <div style={{ fontSize: '11pt' }}>{sheetDate(day)}</div>
         </div>
         <div style={{ fontSize: '10pt' }}>
-          البنود: {c.total} · المتأخرة: {c.late} · مستحقة اليوم: {c.today} · تحتاج المديرة: {c.forManager}{mine.length ? ` · مهامي: ${mine.length}` : ''}
+          البنود: {c.total} · المتأخرة: {c.late} · مستحقة اليوم: {c.today} · تحتاج المديرة: {c.forManager}
         </div>
       </div>
       <table>
@@ -392,31 +433,10 @@ function PrintSheet({ rows, mine, extra, day, department }: { rows: TodoRow[]; m
               <td style={cell} />
             </tr>
           ))}
-          {mine.length > 0 && (
-            <tr data-dt="print-mine-head"><td colSpan={8} style={head}>مهامي اليومية</td></tr>
-          )}
-          {mine.map((r, i) => {
-            const as = asRow(r, day);
-            return (
-              <tr key={r.id} data-dt="print-mine">
-                <td style={cell}>{rows.length + i + 1}</td>
-                <td style={cell}>
-                  <div style={{ fontSize: '8.5pt', color: '#444' }}>{MY_KIND_AR}{r.addedDay && r.addedDay < day && !r.done ? <> · منذ <bdi>{shortDay(r.addedDay)}</bdi></> : null}</div>
-                  <bdi>{r.title}</bdi>
-                </td>
-                <td style={cell}><bdi>{r.owner || ''}</bdi></td>
-                <td style={{ ...cell, whiteSpace: 'pre-wrap' }}><bdi>{r.action || ''}</bdi>{r.note ? <div style={{ fontSize: '9pt', color: '#444', marginTop: 2 }}><bdi>{r.note}</bdi></div> : null}</td>
-                <td style={cell}><bdi>{shortDay(r.due)}</bdi>{r.due && !r.done && <div style={{ fontSize: '9pt', fontWeight: (as.lateBy ?? -1) > 0 ? 700 : 400 }}>{arDueState(as)}</div>}</td>
-                <td style={{ ...cell, textAlign: 'center' }}>{r.done ? ticked : box}</td>
-                <td style={{ ...cell, textAlign: 'center' }}>{box}</td>
-                <td style={cell} />
-              </tr>
-            );
-          })}
           {/* Three blank lines for whatever comes up during the day. */}
           {[0, 1, 2].map(n => (
             <tr key={`blank-${n}`} style={{ height: 30 }}>
-              <td style={cell}>{rows.length + mine.length + n + 1}</td><td style={cell} /><td style={cell} /><td style={cell} /><td style={cell} />
+              <td style={cell}>{rows.length + n + 1}</td><td style={cell} /><td style={cell} /><td style={cell} /><td style={cell} />
               <td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={cell} />
             </tr>
           ))}
@@ -430,7 +450,71 @@ function PrintSheet({ rows, mine, extra, day, department }: { rows: TodoRow[]; m
         <span>اطّلعت عليه المديرة: ............................</span>
         <span>التاريخ: ............................</span>
       </div>
-      <div style={{ marginTop: 8, fontSize: '8pt', color: '#555' }}>أعدّ ETaske هذه القائمة من السجلات المدوّنة، ولا تشمل المهام الخاصة؛ أمّا «مهامي اليومية» فيُضيفها مُعِدّ القائمة بنفسه.</div>
+      <div style={{ marginTop: 8, fontSize: '8pt', color: '#555' }}>أعدّ ETaske هذه القائمة من السجلات المدوّنة، ولا تشمل المهام الخاصة.</div>
+    </div>
+  );
+}
+
+/** The paper copy of "My daily tasks": the same A4 sheet, with the person's own rows only. */
+function MyPrintSheet({ rows, day, department }: { rows: MyTodo[]; day: string; department: string }) {
+  const open = rows.filter(r => !r.done);
+  const late = open.filter(r => (myLateBy(r, day) ?? -1) > 0).length;
+  return (
+    <div className="dt-print" dir="rtl" lang="ar" data-dt="print-sheet">
+      <style>{PRINT_CSS}</style>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 8 }}>
+        <div>
+          <div style={{ fontSize: '16pt', fontWeight: 800 }}>{myTitle(department)}</div>
+          <div style={{ fontSize: '11pt' }}>{sheetDate(day)}</div>
+        </div>
+        <div style={{ fontSize: '10pt' }}>المهام: {rows.length} · المفتوحة: {open.length} · المتأخرة: {late} · تمّت اليوم: {rows.length - open.length}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ ...head, width: '3%' }}>م</th>
+            <th style={{ ...head, width: '28%' }}>المهمة</th>
+            <th style={{ ...head, width: '12%' }}>المسؤول</th>
+            <th style={{ ...head, width: '27%' }}>الإجراء المطلوب</th>
+            <th style={{ ...head, width: '10%' }}>الموعد</th>
+            <th style={{ ...head, width: '4%', textAlign: 'center' }}>تم</th>
+            <th style={{ ...head, width: '5%', textAlign: 'center' }}>لم يتم</th>
+            <th style={{ ...head, width: '11%' }}>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, i) => {
+            const as = asRow(r, day);
+            return (
+              <tr key={r.id} data-dt="print-mine">
+                <td style={cell}>{i + 1}</td>
+                <td style={cell}>
+                  {r.addedDay && r.addedDay < day && !r.done ? <div style={{ fontSize: '8.5pt', color: '#444' }}>منذ <bdi>{shortDay(r.addedDay)}</bdi></div> : null}
+                  <bdi>{r.title}</bdi>
+                </td>
+                <td style={cell}><bdi>{r.owner || ''}</bdi></td>
+                <td style={{ ...cell, whiteSpace: 'pre-wrap' }}><bdi>{r.action || ''}</bdi></td>
+                <td style={cell}><bdi>{shortDay(r.due)}</bdi>{r.due && !r.done && <div style={{ fontSize: '9pt', fontWeight: (as.lateBy ?? -1) > 0 ? 700 : 400 }}>{arDueState(as)}</div>}</td>
+                <td style={{ ...cell, textAlign: 'center' }}>{r.done ? ticked : box}</td>
+                <td style={{ ...cell, textAlign: 'center' }}>{box}</td>
+                <td style={{ ...cell, whiteSpace: 'pre-wrap' }}><bdi>{r.note || ''}</bdi></td>
+              </tr>
+            );
+          })}
+          {/* Five blank lines to add tasks by hand during the day. */}
+          {[0, 1, 2, 3, 4].map(n => (
+            <tr key={`blank-${n}`} style={{ height: 30 }}>
+              <td style={cell}>{rows.length + n + 1}</td><td style={cell} /><td style={cell} /><td style={cell} /><td style={cell} />
+              <td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={cell} />
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 18, fontSize: '10.5pt' }}>
+        <span>الاسم: ............................</span>
+        <span>التوقيع: ............................</span>
+        <span>التاريخ: ............................</span>
+      </div>
     </div>
   );
 }
