@@ -278,7 +278,7 @@ function Metric({ label, value, icon }: { label: string; value: string; icon?: R
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
         {icon}<span className={fmt.bidiFor(value)}>{value}</span>
       </div>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--label)', marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginTop: 3 }}>{label}</div>
     </div>
   );
 }
@@ -287,7 +287,7 @@ function Row({ label, value }: { label: string; value?: string }) {
   const fmt = useFormat();
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)' }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block' }}>{label}</div>
       <div style={{ fontSize: 14, color: 'var(--text-primary)', marginTop: 2 }}>
         <span className={fmt.bidiFor(value)}>{value || '—'}</span>
       </div>
@@ -297,7 +297,7 @@ function Row({ label, value }: { label: string; value?: string }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', margin: '0 0 14px' }}>
+    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: '0 0 14px' }}>
       {children}
     </h3>
   );

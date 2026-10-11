@@ -500,7 +500,7 @@ export default function App() {
 
   if (!isAuthReady) {
     return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--page-bg)' }}>
         <div className="flex flex-col items-center gap-4">
           <div className="spinner" style={{ width: 32, height: 32 }} />
           <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>{t('Loading ETaske…')}</p>
@@ -511,7 +511,7 @@ export default function App() {
 
   if (!user) return <LoginScreen />;
   if (!appUser) return (
-    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--surface-2)' }}>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: 'var(--page-bg)' }}>
       <div className="spinner" />
     </div>
   );

@@ -54,7 +54,7 @@ function SeenByBadge({ seenCount, reach, readByIds, userById }: {
           pointerEvents: 'none',
           zIndex: 9999,
         }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--label)', marginBottom: 6 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginBottom: 6 }}>
             {t('Seen by')}
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>

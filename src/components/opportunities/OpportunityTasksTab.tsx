@@ -125,7 +125,7 @@ export default function OpportunityTasksTab({ opportunity, user, appUser, projec
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
             <CheckSquare className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)' }}>
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>
               {t('Work on this bid')}
             </span>
           </div>

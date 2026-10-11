@@ -77,7 +77,7 @@ export default function HowItWorks({ enabled, onNavigate }: Props) {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-        <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)', margin: 0 }}>
+        <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0 }}>
           {t('How work flows here')}
         </h2>
         <button

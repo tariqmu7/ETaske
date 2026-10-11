@@ -261,7 +261,7 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
                 <span style={{ display: 'block', fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hit.label}</span>
                 {hit.sub && <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{hit.sub}</span>}
               </span>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)', flexShrink: 0 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', flexShrink: 0 }}>
                 {hit.kind === 'nav' ? t('Go')
                   : hit.kind === 'corresponding' ? t('Corr')
                     : hit.kind === 'opportunity' ? t('Bid')

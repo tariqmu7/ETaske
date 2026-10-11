@@ -47,7 +47,7 @@ export default function OpportunityGlance({ opportunity: o, onAddUpdate }: Props
       {/* Status line */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', margin: 0 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0 }}>
             {t('At a glance')}
           </h2>
           <span data-glance-status style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -106,7 +106,7 @@ const tileStyle: React.CSSProperties = {
 
 function TileLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px' }}>
       {icon}{children}
     </div>
   );

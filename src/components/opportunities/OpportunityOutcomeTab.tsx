@@ -217,7 +217,7 @@ export default function OpportunityOutcomeTab({ opportunity, user, appUser }: Pr
       <div className="card" style={{ padding: 22, borderInlineStart: `3px solid ${record ? STAGE_COLORS[record.outcome] : outcomeColor}` }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, flexWrap: 'wrap' }}>
           <Trophy className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>
             {t('Outcome & feedback')}
           </span>
           {record && (
@@ -491,7 +491,7 @@ function Para({ title, text }: { title: string; text: string }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', margin: '0 0 14px' }}>
+    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: '0 0 14px' }}>
       {children}
     </h3>
   );

@@ -255,7 +255,7 @@ export default function DailyTodoSheet({ uid, data, department, onDepartment, on
 
           <section className="card" data-dt="mine" style={{ padding: 14, marginTop: 14 }}>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--label)' }}>{t('My daily tasks')}</h2>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>{t('My daily tasks')}</h2>
               <button type="button" data-dt="add" onClick={addMine} style={primary}><Plus size={14} /> {t('Add a task')}</button>
             </div>
             <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>

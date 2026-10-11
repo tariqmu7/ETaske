@@ -78,7 +78,7 @@ export default function LinkedRecordsBlock({ links, compact }: Props) {
 
   return (
     <div style={{ marginTop: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', marginBottom: 8 }}>
         <Link2 style={{ width: 12, height: 12 }} />
         {t('Linked Records')}
       </div>

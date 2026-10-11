@@ -67,7 +67,7 @@ export default function GroupByBar<K extends string>({ value, onChange, options,
       <span
         style={{
           display: 'flex', alignItems: 'center', gap: 5, fontSize: 12, fontWeight: 700,
-          color: 'var(--label)', textTransform: 'uppercase', letterSpacing: '0.04em',
+          color: 'var(--head-text)', background: 'var(--head-bg)', padding: '3px 9px', textTransform: 'uppercase', letterSpacing: '0.04em',
           whiteSpace: 'nowrap',
         }}
       >

@@ -246,7 +246,7 @@ export default function ProjectContractsTab({ project, user }: Props) {
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
           {Object.entries(valueByCurrency).map(([cur, total]) => (
             <div key={cur} className="card" style={{ padding: '10px 16px' }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Total value · {{currency}}', { currency: cur })}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', textTransform: 'uppercase', letterSpacing: '0.04em' }}>{t('Total value · {{currency}}', { currency: cur })}</div>
               <div className="ltr-data" style={{ fontSize: 18, fontWeight: 800, color: 'var(--text-primary)', marginTop: 2 }}>{fmt.number(total)}</div>
             </div>
           ))}
