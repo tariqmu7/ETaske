@@ -416,6 +416,31 @@ service cloud.firestore {
       }
     }
 
+    // ─── My daily tasks (daily to-do sheet) ──────────────────────────────────
+    // Each person's own hand-typed to-do rows (src/lib/myTodos.ts). OWNER ONLY —
+    // no manager or admin reads someone else's list. A query must be filtered
+    // to the reader's own ownerId or it is refused.
+    match /myTodos/{id} {
+      function myTodoShape(d) {
+        return d.keys().hasOnly(['ownerId', 'title', 'owner', 'action', 'due', 'note', 'done', 'addedDay', 'doneDay', 'createdAt']) &&
+          d.title is string && d.title.size() <= 1000 &&
+          d.get('owner', '') is string && d.get('owner', '').size() <= 1000 &&
+          d.get('action', '') is string && d.get('action', '').size() <= 1000 &&
+          d.get('note', '') is string && d.get('note', '').size() <= 1000 &&
+          d.get('due', '') is string && d.get('due', '').size() <= 10 &&
+          d.get('doneDay', '') is string && d.get('doneDay', '').size() <= 10 &&
+          d.addedDay is string && d.addedDay.size() <= 10 &&
+          d.done is bool;
+      }
+      allow read, delete: if isApproved() && resource.data.ownerId == request.auth.uid;
+      allow create: if isApproved() && request.resource.data.ownerId == request.auth.uid &&
+        myTodoShape(request.resource.data);
+      allow update: if isApproved() && resource.data.ownerId == request.auth.uid &&
+        request.resource.data.ownerId == resource.data.ownerId &&
+        request.resource.data.addedDay == resource.data.addedDay &&
+        myTodoShape(request.resource.data);
+    }
+
     // ─── Chat Messages ────────────────────────────────────────────────────────
     match /messages/{id} {
       allow read: if isSignedIn() && (

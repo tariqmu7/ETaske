@@ -2173,6 +2173,15 @@ const ar: Record<keyof typeof en, string> = {
   "Today’s pending items and the action each one needs — print it for the manager’s desk.": "البنود المعلّقة اليوم والإجراء المطلوب في كل منها، جاهزة للطباعة ووضعها على مكتب المديرة.",
   "Report type": "نوع التقرير",
   "Daily to-do list": "قائمة المتابعة اليومية",
+  "Nothing is pending on the boards for this day. Add your own tasks below if you need a sheet anyway.": "لا شيء معلّق في اللوحات لهذا اليوم، ويمكنك إضافة مهامك أدناه إن احتجت إلى قائمة رغم ذلك.",
+  "Your edits to this list are kept in this browser for this day only. Nothing is saved to the boards.": "تُحفظ تعديلاتك على هذه القائمة في هذا المتصفح لهذا اليوم فقط، ولا يُكتب شيء في اللوحات.",
+  "My daily tasks": "مهامي اليومية",
+  "Add a task": "أضف مهمة",
+  "Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done, and prints on the same sheet.": "مهامك أنت، تُحفظ في حسابك ولا يراها أحد غيرك. تبقى كل مهمة في قائمتك يومًا بعد يوم حتى تؤشّر عليها بأنها تمّت، وتُطبع في الورقة نفسها.",
+  "Reading your tasks…": "جارٍ قراءة مهامك…",
+  "Could not read your tasks. Check the connection and open the page again.": "تعذّرت قراءة مهامك، فتحقّق من الاتصال وافتح الصفحة من جديد.",
+  "No tasks of your own for this day yet.": "لم تُضف مهامّ لنفسك في هذا اليوم بعد.",
+  "Could not save your task. Check the connection and try again.": "تعذّر حفظ مهمتك، فتحقّق من الاتصال وأعد المحاولة.",
 
 };
 

@@ -2231,6 +2231,15 @@ const en = {
   "Today’s pending items and the action each one needs — print it for the manager’s desk.": "Today’s pending items and the action each one needs — print it for the manager’s desk.",
   "Report type": "Report type",
   "Daily to-do list": "Daily to-do list",
+  "Nothing is pending on the boards for this day. Add your own tasks below if you need a sheet anyway.": "Nothing is pending on the boards for this day. Add your own tasks below if you need a sheet anyway.",
+  "Your edits to this list are kept in this browser for this day only. Nothing is saved to the boards.": "Your edits to this list are kept in this browser for this day only. Nothing is saved to the boards.",
+  "My daily tasks": "My daily tasks",
+  "Add a task": "Add a task",
+  "Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done, and prints on the same sheet.": "Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done, and prints on the same sheet.",
+  "Reading your tasks…": "Reading your tasks…",
+  "Could not read your tasks. Check the connection and open the page again.": "Could not read your tasks. Check the connection and open the page again.",
+  "No tasks of your own for this day yet.": "No tasks of your own for this day yet.",
+  "Could not save your task. Check the connection and try again.": "Could not save your task. Check the connection and try again.",
 
 } as const;
 

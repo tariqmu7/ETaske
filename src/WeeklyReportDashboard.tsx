@@ -216,7 +216,7 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
       </div>
 
       {tab === 'daily' ? (
-        <DailyTodoSheet data={data} department={dept} onDepartment={v => { setDept(v); saveDept(v); setDraft(null); }} onReload={() => void load()} />
+        <DailyTodoSheet uid={user.uid} data={data} department={dept} onDepartment={v => { setDept(v); saveDept(v); setDraft(null); }} onReload={() => void load()} />
       ) : (<>
 
       <section className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>

@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
-import { Printer, Download, Plus, Trash2, RotateCcw, RefreshCw, Check, Info } from 'lucide-react';
+import { Printer, Download, Plus, Trash2, RotateCcw, RefreshCw, Check, Info, Lock } from 'lucide-react';
 import {
   buildDailyTodo, arDueState, shortDay, sheetTitle, sheetDate, sheetCounts, KIND_AR,
   type TodoRow, type TodoInput,
 } from '../lib/dailyTodo';
 import { iso } from '../lib/deadlineCalendar';
+import { addMyTodo, myLateBy, removeMyTodo, todosForDay, updateMyTodo, watchMyTodos, type MyTodo, type MyTodoPatch } from '../lib/myTodos';
 
 interface Props {
+  /** The signed-in person — owner of the "My daily tasks" list. */
+  uid: string;
   /** The boards, read once by the Weekly report page. Null while reading. */
   data: TodoInput | null;
   /** Department name typed on the Weekly report page — used in the sheet's heading too. */
@@ -41,10 +44,12 @@ const AHEAD_OPTIONS: Array<{ value: number; label: string }> = [
  * pending items from the boards (lib/dailyTodo.ts), lets the person preparing
  * it edit, delete and add rows, then Print (an A4 landscape Arabic sheet with
  * "Done / Not done" boxes for the manager to tick by hand) or Download an Excel
- * copy to add more to. Edits are kept in this browser for that day only;
- * nothing is written to the database.
+ * copy to add more to. Edits to the generated list are kept in this browser
+ * for that day only. Below it, "My daily tasks" is the person's own list, saved
+ * to their account (lib/myTodos.ts) — only they can see it, and each row stays
+ * until they tick it done. Both parts print on the same sheet.
  */
-export default function DailyTodoSheet({ data, department, onDepartment, onReload }: Props) {
+export default function DailyTodoSheet({ uid, data, department, onDepartment, onReload }: Props) {
   const { t } = useTranslation();
   const [day, setDay] = useState(() => iso(new Date()));
   const [ahead, setAhead] = useState(readAhead);
@@ -62,12 +67,35 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
 
   useEffect(() => { setDraftState(readDraft(day)); setMessage(null); }, [day]);
 
-  const addRow = () => {
-    const n = rows.filter(r => r.kind === 'manual').length + 1;
-    edit({ rows: [...rows, { id: `manual-${Date.now()}-${n}`, kind: 'manual', title: '', action: '' }] });
-    // Focus the new row's first box once it is painted.
-    setTimeout(() => document.querySelector<HTMLInputElement>('[data-dt="row"]:last-of-type [data-dt="title"]')?.focus(), 0);
+  // ── My daily tasks (saved to the account, owner-only) ──
+  const [mine, setMine] = useState<MyTodo[] | null>(null);
+  const [mineError, setMineError] = useState(false);
+  // Typing is kept here and written when the box loses focus — one write per edit, not per key.
+  const [typing, setTyping] = useState<Record<string, MyTodoPatch>>({});
+  useEffect(() => watchMyTodos(uid, rs => { setMine(rs); setMineError(false); }, err => { console.warn('My daily tasks:', (err as any)?.code); setMineError(true); setMine([]); }), [uid]);
+  const myRows = useMemo(() => todosForDay(mine || [], day).map(r => ({ ...r, ...typing[r.id] })), [mine, day, typing]);
+
+  const failed = (what: string) => (err: unknown) => {
+    console.warn(`My daily tasks — ${what}:`, err);
+    setMessage({ kind: 'error', key: 'Could not save your task. Check the connection and try again.' });
   };
+  const saveMine = (id: string, patch: MyTodoPatch) => updateMyTodo(id, patch).catch(failed('save'));
+  const typeMine = (id: string, patch: MyTodoPatch) => setTyping(p => ({ ...p, [id]: { ...p[id], ...patch } }));
+  const blurMine = (id: string) => {
+    const patch = typing[id];
+    if (!patch) return;
+    setTyping(p => { const { [id]: _, ...rest } = p; return rest; });
+    void saveMine(id, patch);
+  };
+  const tickMine = (r: MyTodo) => void saveMine(r.id, r.done ? { done: false, doneDay: '' } : { done: true, doneDay: day });
+  const addMine = () => {
+    setMessage(null);
+    addMyTodo(uid, day, { title: '' })
+      // Focus the new row's first box once the live list paints it.
+      .then(id => setTimeout(() => document.querySelector<HTMLInputElement>(`[data-my-row="${id}"] [data-dt="my-title"]`)?.focus(), 150))
+      .catch(failed('add'));
+  };
+  const deleteMine = (id: string) => void removeMyTodo(id).catch(failed('remove'));
 
   const onPrint = () => {
     setMessage(null);
@@ -84,6 +112,8 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
         [],
         head,
         ...rows.map((r, i) => [i + 1, KIND_AR[r.kind], r.serial || '', r.title, r.owner || '', r.action, r.due || '', arDueState(r), '', '', r.note || '']),
+        ...myRows.map((r, i) => [rows.length + i + 1, MY_KIND_AR, '', r.title, r.owner || '', r.action || '', r.due || '',
+          r.done ? 'تم' : arDueState(asRow(r, day)), r.done ? '✓' : '', '', r.note || '']),
       ];
       if (extra.trim()) aoa.push([], ['ملاحظات إضافية'], [extra.trim()]);
       const ws = XLSX.utils.aoa_to_sheet(aoa);
@@ -158,7 +188,6 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', marginBottom: 10 }}>
               <button type="button" data-dt="print" onClick={onPrint} style={primary}><Printer size={14} /> {t('Print')}</button>
               <button type="button" data-dt="excel" onClick={onExcel} style={small}><Download size={14} /> {t('Download Excel')}</button>
-              <button type="button" data-dt="add" onClick={addRow} style={small}><Plus size={14} /> {t('Add a row')}</button>
               {draft && (
                 <button type="button" data-dt="reset" onClick={() => { setDraft(null); setMessage(null); }} style={small}><RotateCcw size={14} /> {t('Start again from the records')}</button>
               )}
@@ -171,7 +200,7 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
             )}
 
             {rows.length === 0 ? (
-              <p data-dt="empty" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '6px 0' }}>{t('Nothing is pending for this day. Add your own rows if you need a sheet anyway.')}</p>
+              <p data-dt="empty" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '6px 0' }}>{t('Nothing is pending on the boards for this day. Add your own tasks below if you need a sheet anyway.')}</p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
                 <table data-dt="table" dir="rtl" lang="ar" style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse' }}>
@@ -220,8 +249,72 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
               <textarea data-dt="extra" dir="rtl" lang="ar" rows={3} value={extra} onChange={e => edit({ extra: e.target.value })} style={{ ...cellInput, marginTop: 4 }} />
             </label>
             <p style={{ fontSize: 12, color: 'var(--text-muted)', margin: '6px 0 0' }}>
-              {t('Your edits are kept in this browser for this day only. Nothing is saved to the boards.')}
+              {t('Your edits to this list are kept in this browser for this day only. Nothing is saved to the boards.')}
             </p>
+          </section>
+
+          <section className="card" data-dt="mine" style={{ padding: 14, marginTop: 14 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: 'var(--label)' }}>{t('My daily tasks')}</h2>
+              <button type="button" data-dt="add" onClick={addMine} style={primary}><Plus size={14} /> {t('Add a task')}</button>
+            </div>
+            <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '0 0 10px', lineHeight: 1.5 }}>
+              <Lock size={13} style={{ flexShrink: 0, marginTop: 2 }} />
+              <span>{t('Your own tasks, saved to your account — only you can see them. Each one stays on your list every day until you tick it done, and prints on the same sheet.')}</span>
+            </p>
+            {mine === null ? (
+              <p role="status" data-dt="mine-loading" style={{ fontSize: 13, color: 'var(--text-muted)' }}>{t('Reading your tasks…')}</p>
+            ) : mineError ? (
+              <p role="alert" data-dt="mine-error" style={{ fontSize: 13, color: 'var(--danger)' }}>{t('Could not read your tasks. Check the connection and open the page again.')}</p>
+            ) : myRows.length === 0 ? (
+              <p data-dt="mine-empty" style={{ fontSize: 13.5, color: 'var(--text-secondary)', margin: '6px 0' }}>{t('No tasks of your own for this day yet.')}</p>
+            ) : (
+              <div style={{ overflowX: 'auto' }}>
+                <table data-dt="mine-table" dir="rtl" lang="ar" style={{ width: '100%', minWidth: 760, borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      <th style={{ ...th, width: 44, textAlign: 'center' }}>تم</th>
+                      <th style={th}>المهمة</th>
+                      <th style={{ ...th, width: 140 }}>المسؤول</th>
+                      <th style={th}>الإجراء المطلوب</th>
+                      <th style={{ ...th, width: 150 }}>الموعد</th>
+                      <th style={{ ...th, width: 160 }}>ملاحظة</th>
+                      <th style={{ ...th, width: 36 }} aria-label={t('Remove')} />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {myRows.map(r => {
+                      const as = asRow(r, day);
+                      return (
+                        <tr key={r.id} data-dt="my-row" data-my-row={r.id} data-done={r.done ? 'yes' : 'no'} style={{ opacity: r.done ? 0.6 : 1 }}>
+                          <td style={{ ...td, textAlign: 'center' }}>
+                            <input type="checkbox" data-dt="my-done" checked={r.done} onChange={() => tickMine(r)} aria-label={t('Done')} style={{ width: 20, height: 20, cursor: 'pointer' }} />
+                          </td>
+                          <td style={td}>
+                            {r.addedDay && r.addedDay < day && !r.done && (
+                              <div data-dt="my-since" style={{ fontSize: 11.5, color: 'var(--text-muted)', marginBottom: 3 }}>منذ <span className="ltr-data">{shortDay(r.addedDay)}</span></div>
+                            )}
+                            <input data-dt="my-title" dir="auto" value={r.title} placeholder="المهمة…" onChange={e => typeMine(r.id, { title: e.target.value })} onBlur={() => blurMine(r.id)}
+                              style={{ ...cellInput, textDecoration: r.done ? 'line-through' : undefined }} aria-label={t('Task')} />
+                          </td>
+                          <td style={td}><input data-dt="my-owner" dir="auto" value={r.owner || ''} onChange={e => typeMine(r.id, { owner: e.target.value })} onBlur={() => blurMine(r.id)} style={cellInput} aria-label={t('Owner')} /></td>
+                          <td style={td}><textarea data-dt="my-action" dir="auto" rows={2} value={r.action || ''} placeholder="الإجراء…" onChange={e => typeMine(r.id, { action: e.target.value })} onBlur={() => blurMine(r.id)} style={cellInput} aria-label={t('Required action')} /></td>
+                          <td style={td}>
+                            <input type="date" data-dt="my-due" value={r.due || ''} onChange={e => void saveMine(r.id, { due: e.target.value })} style={cellInput} aria-label={t('Due date')} />
+                            {r.due && !r.done && <div style={{ fontSize: 12, fontWeight: 700, marginTop: 3, color: (as.lateBy ?? -1) > 0 ? 'var(--danger)' : as.lateBy === 0 ? 'var(--warning)' : 'var(--text-muted)' }}>{arDueState(as)}</div>}
+                          </td>
+                          <td style={td}><input data-dt="my-note" dir="auto" value={r.note || ''} onChange={e => typeMine(r.id, { note: e.target.value })} onBlur={() => blurMine(r.id)} style={cellInput} aria-label={t('Note')} /></td>
+                          <td style={td}>
+                            <button type="button" data-dt="my-remove" onClick={() => deleteMine(r.id)} title={t('Remove')} aria-label={t('Remove')}
+                              style={{ ...small, padding: 6, minHeight: 32, color: 'var(--danger)' }}><Trash2 size={14} /></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <p style={{ display: 'flex', gap: 6, alignItems: 'flex-start', fontSize: 12, color: 'var(--text-muted)', margin: '14px 0 0', lineHeight: 1.5 }}>
@@ -229,18 +322,23 @@ export default function DailyTodoSheet({ data, department, onDepartment, onReloa
             <span>{t('The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.')}</span>
           </p>
 
-          {createPortal(<PrintSheet rows={rows} extra={extra} day={day} department={department} />, document.body)}
+          {createPortal(<PrintSheet rows={rows} mine={myRows} extra={extra} day={day} department={department} />, document.body)}
         </>
       )}
     </div>
   );
 }
 
+const MY_KIND_AR = 'مهمتي';
+/** A personal task in the shape the date helpers expect. */
+const asRow = (r: MyTodo, day: string): TodoRow => ({ id: r.id, kind: 'manual', title: r.title, owner: r.owner, action: r.action || '', due: r.due, lateBy: myLateBy(r, day), note: r.note });
+
 /** The paper copy: hidden on screen, the only thing that prints while this tab is open. */
-function PrintSheet({ rows, extra, day, department }: { rows: TodoRow[]; extra: string; day: string; department: string }) {
+function PrintSheet({ rows, mine, extra, day, department }: { rows: TodoRow[]; mine: MyTodo[]; extra: string; day: string; department: string }) {
   const c = sheetCounts(rows);
   const box = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000' }} />;
-  const cell: React.CSSProperties = { border: '1px solid #000', padding: '5px 6px', verticalAlign: 'top', textAlign: 'right' };
+  const ticked = <span style={{ display: 'inline-block', width: 14, height: 14, border: '1.5px solid #000', lineHeight: '13px', fontSize: '11pt', fontWeight: 800 }}>✓</span>;
+  const cell: React.CSSProperties = { border: '1px solid #000', padding: '5px 6px', verticalAlign: 'top', textAlign: 'start' };
   const head: React.CSSProperties = { ...cell, background: '#e8e8e8', fontWeight: 700, whiteSpace: 'nowrap' };
   return (
     <div className="dt-print" dir="rtl" lang="ar" data-dt="print-sheet">
@@ -262,7 +360,7 @@ function PrintSheet({ rows, extra, day, department }: { rows: TodoRow[]; extra: 
           <div style={{ fontSize: '11pt' }}>{sheetDate(day)}</div>
         </div>
         <div style={{ fontSize: '10pt' }}>
-          البنود: {c.total} · المتأخرة: {c.late} · مستحقة اليوم: {c.today} · تحتاج المديرة: {c.forManager}
+          البنود: {c.total} · المتأخرة: {c.late} · مستحقة اليوم: {c.today} · تحتاج المديرة: {c.forManager}{mine.length ? ` · مهامي: ${mine.length}` : ''}
         </div>
       </div>
       <table>
@@ -294,10 +392,31 @@ function PrintSheet({ rows, extra, day, department }: { rows: TodoRow[]; extra: 
               <td style={cell} />
             </tr>
           ))}
+          {mine.length > 0 && (
+            <tr data-dt="print-mine-head"><td colSpan={8} style={head}>مهامي اليومية</td></tr>
+          )}
+          {mine.map((r, i) => {
+            const as = asRow(r, day);
+            return (
+              <tr key={r.id} data-dt="print-mine">
+                <td style={cell}>{rows.length + i + 1}</td>
+                <td style={cell}>
+                  <div style={{ fontSize: '8.5pt', color: '#444' }}>{MY_KIND_AR}{r.addedDay && r.addedDay < day && !r.done ? <> · منذ <bdi>{shortDay(r.addedDay)}</bdi></> : null}</div>
+                  <bdi>{r.title}</bdi>
+                </td>
+                <td style={cell}><bdi>{r.owner || ''}</bdi></td>
+                <td style={{ ...cell, whiteSpace: 'pre-wrap' }}><bdi>{r.action || ''}</bdi>{r.note ? <div style={{ fontSize: '9pt', color: '#444', marginTop: 2 }}><bdi>{r.note}</bdi></div> : null}</td>
+                <td style={cell}><bdi>{shortDay(r.due)}</bdi>{r.due && !r.done && <div style={{ fontSize: '9pt', fontWeight: (as.lateBy ?? -1) > 0 ? 700 : 400 }}>{arDueState(as)}</div>}</td>
+                <td style={{ ...cell, textAlign: 'center' }}>{r.done ? ticked : box}</td>
+                <td style={{ ...cell, textAlign: 'center' }}>{box}</td>
+                <td style={cell} />
+              </tr>
+            );
+          })}
           {/* Three blank lines for whatever comes up during the day. */}
           {[0, 1, 2].map(n => (
             <tr key={`blank-${n}`} style={{ height: 30 }}>
-              <td style={cell}>{rows.length + n + 1}</td><td style={cell} /><td style={cell} /><td style={cell} /><td style={cell} />
+              <td style={cell}>{rows.length + mine.length + n + 1}</td><td style={cell} /><td style={cell} /><td style={cell} /><td style={cell} />
               <td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={{ ...cell, textAlign: 'center' }}>{box}</td><td style={cell} />
             </tr>
           ))}
@@ -311,7 +430,7 @@ function PrintSheet({ rows, extra, day, department }: { rows: TodoRow[]; extra: 
         <span>اطّلعت عليه المديرة: ............................</span>
         <span>التاريخ: ............................</span>
       </div>
-      <div style={{ marginTop: 8, fontSize: '8pt', color: '#555' }}>أعدّ ETaske هذه القائمة من السجلات المدوّنة، ولا تشمل المهام الخاصة.</div>
+      <div style={{ marginTop: 8, fontSize: '8pt', color: '#555' }}>أعدّ ETaske هذه القائمة من السجلات المدوّنة، ولا تشمل المهام الخاصة؛ أمّا «مهامي اليومية» فيُضيفها مُعِدّ القائمة بنفسه.</div>
     </div>
   );
 }

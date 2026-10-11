@@ -31,6 +31,7 @@ const check = (name, cond, detail = '') => {
 const isoDay = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const NOW = new Date();
 const THIS_SUN = isoDay(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - NOW.getDay()));
+const THIS_DAY = isoDay(NOW);
 const LAST_SUN = isoDay(new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() - NOW.getDay() - 7));
 
 const FIREBASE_STUB = `
@@ -90,6 +91,10 @@ __seed('correspondences', 'l2', { subject: 'Request for site access', sentFrom: 
 __seed('correspondences', 'l3', { subject: 'Closed letter', status: 'Closed', deadline: dayOffset(-1), serialNumber: 'CR000303', createdAt: ts(-5) });
 __seed('opportunities', 'o1', { title: 'Tank cleaning 2026', client: 'AGIBA', stage: 'Bid Preparation', ownerName: 'Tariq Salama', submissionDeadline: dayOffset(1), serialNumber: 'OP000021', createdAt: ts(-30), visibility: 'all', approval: { status: 'requested', amount: 100, currency: 'USD', requestedById: 'u-mona', requestedByName: 'Mona Fathy', requestedAt: 1, log: [] } });
 __seed('opportunities', 'o2', { title: 'Pipeline survey', client: 'Khalda', stage: 'Submitted', ownerName: 'Mona Fathy', nextActionDate: today, nextStep: 'Call the client about the technical clarification', serialNumber: 'OP000022', createdAt: ts(-30), visibility: 'all' });
+// My daily tasks: one still open from 3 days ago (carries over), one ticked done yesterday (gone), one of Mona's (never shown).
+__seed('myTodos', 'm-old',  { ownerId: 'u-mgr',  title: 'Call the insurance company', owner: 'Tariq', action: 'Ask for the renewal quote', due: dayOffset(-1), note: '', done: false, addedDay: dayOffset(-3), doneDay: '' });
+__seed('myTodos', 'm-done', { ownerId: 'u-mgr',  title: 'Old finished chore', owner: '', action: '', due: '', note: '', done: true, addedDay: dayOffset(-5), doneDay: dayOffset(-1) });
+__seed('myTodos', 'm-mona', { ownerId: 'u-mona', title: 'Mona private reminder', owner: '', action: '', due: '', note: '', done: false, addedDay: dayOffset(-1), doneDay: '' });
 __seed('opportunities', 'o3', { title: 'Lost one', stage: 'Lost', submissionDeadline: dayOffset(-1), serialNumber: 'OP000023', createdAt: ts(-30), visibility: 'all' });
 
 const me = USERS[0];
@@ -109,6 +114,7 @@ window.__type = (el, value) => {
   Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, value);
   el.dispatchEvent(new Event('input', { bubbles: true }));
 };
+window.__blur = el => el.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
 window.__setLang = l => { applyLanguageToDocument(l); return i18n.changeLanguage(l); };
 `;
 
@@ -245,6 +251,9 @@ const overflow = () => evalJS(`document.documentElement.scrollWidth - document.d
 const remount = async () => { await evalJS(`window.__mount('blank')`); await sleep(100); await evalJS(`window.__mount('wr')`); await sleep(300); };
 const rowTexts = () => evalJS(`[...document.querySelectorAll('[data-dt="row"]')].map(r => r.querySelector('[data-dt="title"]').value + ' | ' + r.querySelector('[data-dt="action"]').value + ' | ' + window.__txt(r))`);
 const ready = () => waitFor(`document.querySelectorAll('[data-dt="row"]').length > 0`, 'the to-do rows');
+const myTexts = () => evalJS(`[...document.querySelectorAll('[data-dt="my-row"]')].map(r => r.querySelector('[data-dt="my-title"]').value + ' | ' + r.querySelector('[data-dt="my-action"]').value + ' | ' + r.dataset.done + ' | ' + window.__txt(r))`);
+const myStore = () => evalJS(`[...(window.__store.get('myTodos') || new Map()).entries()].map(([id, d]) => ({ id, ...d, createdAt: undefined }))`);
+const typeMy = (id, field, value) => evalJS(`(() => { const el = document.querySelector('[data-my-row="${id}"] [data-dt="${field}"]'); window.__type(el, ${JSON.stringify(value)}); window.__blur(el); })()`);
 
 // ═══════════════════════════════════════════════════════════════════════════
 try {
@@ -290,21 +299,50 @@ await sleep(100);
 const before = (await rowTexts()).length;
 await clickEl(`[...document.querySelectorAll('[data-dt="row"]')].find(r => r.querySelector('[data-dt="title"]').value === 'Urgent no date').querySelector('[data-dt="remove"]')`, 'remove a row');
 check('a row was removed', (await rowTexts()).length === before - 1);
-await clickEl(q('[data-dt="add"]'), 'Add a row');
-await evalJS(`(() => { const r = [...document.querySelectorAll('[data-dt="row"]')].pop(); window.__type(r.querySelector('[data-dt="title"]'), 'زيارة موقع العميل'); })()`);
-await sleep(80);
-await evalJS(`(() => { const r = [...document.querySelectorAll('[data-dt="row"]')].pop(); window.__type(r.querySelector('[data-dt="action"]'), 'تأكيد الموعد مع العميل'); })()`);
-await sleep(80);
 await evalJS(`window.__type(${q('[data-dt="extra"]')}, 'اجتماع الإدارة الساعة 11')`);
 await sleep(150);
 rows = await rowTexts();
-check('the added row is there', rows.some(r => r.includes('زيارة موقع العميل | تأكيد الموعد مع العميل')), rows.join(' // '));
 check('the edit stayed', rows[0].includes('Finish it before noon'), rows[0]);
 check('"Start again" appears', await evalJS(`!!${q('[data-dt="reset"]')}`));
+check('the add button now sits in "My daily tasks", not in the generated list', await evalJS(`!!document.querySelector('[data-dt="mine"] [data-dt="add"]') && document.querySelectorAll('[data-dt="add"]').length === 1`));
+
+console.log('\n[3b] My daily tasks — saved to my account, only mine, carried over until done');
+await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length > 0`, 'my tasks');
+let mine = await myTexts();
+check('my open task from 3 days ago is carried over, with "since"', mine.length === 1 && mine[0].includes('Call the insurance company') && mine[0].includes('منذ'), mine.join(' // '));
+check('it shows as late (due yesterday)', mine[0].includes('متأخر يوم واحد'), mine[0]);
+check('a task I ticked done yesterday is gone today', !mine.some(r => r.includes('Old finished chore')));
+check("someone else's task never shows", !mine.some(r => r.includes('Mona private reminder')));
+await clickEl(q('[data-dt="add"]'), 'Add a task');
+await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length === 2`, 'the new task row');
+let st = await myStore();
+const added = st.find(d => !['m-old', 'm-done', 'm-mona'].includes(d.id));
+check('Add a task saves a row to my account straight away', !!added && added.ownerId === 'u-mgr' && added.done === false && added.addedDay === THIS_DAY, JSON.stringify(added));
+await sleep(200);
+check('the new row gets the cursor', await evalJS(`!!document.activeElement && document.activeElement.dataset.dt === 'my-title'`));
+await typeMy(added.id, 'my-title', 'زيارة موقع العميل');
+await sleep(150);
+await typeMy(added.id, 'my-action', 'تأكيد الموعد مع العميل');
+await sleep(150);
+st = await myStore();
+const saved = st.find(d => d.id === added.id);
+check('typing is saved when the box loses focus', saved.title === 'زيارة موقع العميل' && saved.action === 'تأكيد الموعد مع العميل', JSON.stringify(saved));
+await clickEl(`document.querySelector('[data-my-row="m-old"] [data-dt="my-done"]')`, 'tick my old task');
+await sleep(200);
+st = await myStore();
+const tickedDoc = st.find(d => d.id === 'm-old');
+check('ticking it done saves done + today', tickedDoc.done === true && tickedDoc.doneDay === THIS_DAY, JSON.stringify(tickedDoc));
+mine = await myTexts();
+check("the ticked task stays on today's list, marked done, below the open one", mine.length === 2 && mine[1].includes('Call the insurance company | Ask for the renewal quote | yes'), mine.join(' // '));
 await remount();
 await ready();
+await waitFor(`document.querySelectorAll('[data-dt="my-row"]').length === 2`, 'my tasks after reopening');
 rows = await rowTexts();
-check('edits are kept for the day after opening the page again', rows[0].includes('Finish it before noon') && rows.some(r => r.includes('زيارة موقع العميل')));
+mine = await myTexts();
+check('edits to the generated list are kept for the day after opening the page again', rows[0].includes('Finish it before noon'));
+check('my tasks are still there after opening the page again', mine.some(r => r.includes('زيارة موقع العميل')) && mine.some(r => r.includes('Call the insurance company')), mine.join(' // '));
+const writes = await evalJS(`window.__writes.map(w => w.path.split('/')[0])`);
+check('the only database writes are to my own tasks', writes.length > 0 && writes.every(c => c === 'myTodos'), writes.join(','));
 
 console.log('\n[4] the printed sheet');
 await send('Emulation.setEmulatedMedia', { media: 'print' });
@@ -312,7 +350,10 @@ await sleep(200);
 check('in print only the sheet shows (the app is hidden)', await evalJS(`!window.__vis(${q('[data-dt="page"]')}) && window.__vis(${q('[data-dt="print-sheet"]')})`));
 const sheet = await text('[data-dt="print-sheet"]');
 check('sheet has the Arabic title and the columns', sheet.includes('قائمة المتابعة اليومية') && sheet.includes('الإجراء المطلوب') && sheet.includes('لم يتم') && sheet.includes('ملاحظات المدير'), sheet.slice(0, 200));
-check('sheet carries the edits, the added row and the extra notes', sheet.includes('Finish it before noon') && sheet.includes('Call Sami') && sheet.includes('زيارة موقع العميل') && sheet.includes('اجتماع الإدارة الساعة 11'));
+check('sheet carries the edits and the extra notes', sheet.includes('Finish it before noon') && sheet.includes('Call Sami') && sheet.includes('اجتماع الإدارة الساعة 11'));
+check('sheet has a "My daily tasks" part with my tasks', sheet.includes('مهامي اليومية') && sheet.includes('زيارة موقع العميل') && sheet.includes('Call the insurance company'), sheet.slice(-600));
+check('my done task prints with a tick', await evalJS(`[...document.querySelectorAll('[data-dt="print-mine"]')].some(r => r.textContent.includes('Call the insurance company') && r.textContent.includes('✓'))`));
+check("someone else's task is not on the sheet", !sheet.includes('Mona private reminder'));
 check('sheet does not carry the removed row', !sheet.includes('Urgent no date'));
 check('sheet has a sign-off line', sheet.includes('اطّلعت عليه المديرة'));
 await shot('2-print');
@@ -333,8 +374,11 @@ check('Excel download confirms', (await text('[data-dt="message"]')).includes('E
 await clickEl(q('[data-dt="reset"]'), 'Start again');
 await sleep(200);
 rows = await rowTexts();
-check('Start again drops the edits', !rows.some(r => r.includes('زيارة موقع العميل')) && !rows[0].includes('Finish it before noon'));
-check('nothing was written to the database', await evalJS(`!window.__writes || window.__writes.length === 0`));
+check('Start again drops the edits', !rows[0].includes('Finish it before noon'));
+check('Start again leaves my own tasks alone', (await myTexts()).length === 2);
+await clickEl(`document.querySelector('[data-my-row="${added.id}"] [data-dt="my-remove"]')`, 'remove my task');
+await sleep(200);
+check('removing my task deletes it from my account', !(await myStore()).some(d => d.id === added.id));
 
 console.log('\n[6] Arabic + 390 px, and back to the weekly tab');
 await evalJS(`window.__setLang('ar')`);
