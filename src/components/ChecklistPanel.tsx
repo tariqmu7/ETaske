@@ -102,7 +102,7 @@ export default function ChecklistPanel({ target, recordId, items, anchorDate, ap
       <div className="card" style={{ padding: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <ListChecks className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10 }}>
             {t('Checklist')}
           </span>
         </div>

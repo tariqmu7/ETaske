@@ -58,7 +58,7 @@ export default function EarlierWithClient({ memory, onOpenBid }: Props) {
 
   const Block = ({ id, icon, title, count, children }: { id: string; icon: React.ReactNode; title: string; count: number; children: React.ReactNode }) => (
     <div data-memory={`block-${id}`} style={{ display: 'grid', gap: 8 }}>
-      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0 }}>
+      <h4 style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0 }}>
         <span style={{ color: 'var(--blue-600)', display: 'flex' }}>{icon}</span>{title}
         <span className="ltr-data" style={{ color: 'var(--text-muted)' }}>{count}</span>
       </h4>

@@ -68,7 +68,7 @@ function ExportBackupCard() {
     <div className="card" style={{ padding: '20px 24px', marginBottom: 28 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <Download className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           {t('Export & Backup')}
         </h2>
       </div>
@@ -158,7 +158,7 @@ export default function AdminDashboard({ users }: Props) {
         ].map(s => (
           <div key={s.label} className={`card ${s.cls}`} style={{ padding: '20px 24px' }}>
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
+            <div style={{ fontSize: 11, color: 'var(--label)', display: 'inline-block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{s.label}</div>
           </div>
         ))}
       </div>
@@ -192,7 +192,7 @@ export default function AdminDashboard({ users }: Props) {
       )}
 
       {/* All users table */}
-      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>{t('All Users')}</h2>
+      <h2 style={{ fontSize: 14, fontWeight: 700, color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 14 }}>{t('All Users')}</h2>
       {/* ★ `overflow: hidden` CLIPPED the five-column table on a phone (128px
           cut off at 390px, cells stranded outside the viewport) — the same
           treatment the financials table already uses: let the card scroll. */}

@@ -116,7 +116,7 @@ export default function LinkedRecordsPanel({
     <div className="card" style={{ padding: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
         <Link2 className="w-4 h-4" style={{ color: 'var(--accent)' }} />
-        <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0 }}>
+        <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0 }}>
           {t('Linked Records')}
         </h3>
       </div>
@@ -223,7 +223,7 @@ export default function LinkedRecordsPanel({
 
 function GroupTitle({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', marginBottom: 8 }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 8 }}>
       {icon}{children}
     </div>
   );

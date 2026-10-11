@@ -1326,7 +1326,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
       {isManager && (
         <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className="card" style={{ padding: 20 }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 16 }}>
               {t('Team Workload')}
             </div>
             {targetUsers.length === 0 ? (
@@ -1365,11 +1365,11 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                       <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                         <div style={{ flex: 1, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: inProgress > 0 ? '#fbbf24' : 'var(--text-muted)', lineHeight: 1 }}>{inProgress}</div>
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginTop: 2 }}>{t('Active')}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--label)', display: 'inline-block', marginTop: 2 }}>{t('Active')}</div>
                         </div>
                         <div style={{ flex: 1, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                           <div style={{ fontSize: 16, fontWeight: 800, color: done > 0 ? '#4ade80' : 'var(--text-muted)', lineHeight: 1 }}>{done}</div>
-                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginTop: 2 }}>{t('Done')}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--label)', display: 'inline-block', marginTop: 2 }}>{t('Done')}</div>
                         </div>
                       </div>
                       {total > 0 && (
@@ -1552,7 +1552,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 {/* ── Section: Classification ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 14 }}>{t('Classification')}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 14 }}>{t('Classification')}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
                   {/* Department */}
                   <div>
@@ -1625,7 +1625,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 {/* ── Section: Workflow ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 14 }}>{t('Workflow')}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 14 }}>{t('Workflow')}</div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 20 }}>
                   {/* Date received */}
                   <div>
@@ -1712,7 +1712,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 {/* ── Section: Linked records (queue task 5) ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 14 }}>{t('Linked Records')}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 14 }}>{t('Linked Records')}</div>
                   {isViewing ? (
                     <div style={{ display: 'grid', gap: 8, fontSize: 13, color: 'var(--text-primary)' }}>
                       <div>
@@ -1743,7 +1743,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 {/* ── Section: Files & Notes ── */}
                 <div style={{ borderTop: '1px solid var(--border)', padding: '16px 24px 0', marginTop: 4 }}>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 14 }}>{t('Files & Notes')}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 14 }}>{t('Files & Notes')}</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
 
                   {/* Shared Folder Paths */}
@@ -2067,7 +2067,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
-                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Correspondence Body')}</h3>
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Correspondence Body')}</h3>
                    </div>
                    <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }}>
                     {selectedCorrForDetails.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t('No content provided.')}</span>}
@@ -2076,7 +2076,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Sent From')}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Sent From')}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
                       <span>{selectedCorrForDetails.sentFrom || '—'}</span>
@@ -2087,7 +2087,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Dates')}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Dates')}</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4" style={{ color: 'var(--text-secondary)', flexShrink: 0 }} />
@@ -2103,7 +2103,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Assignment')}</span>
+                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', display: 'inline-block', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t('Assignment')}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedCorrForDetails.assignedToId);
@@ -2139,7 +2139,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <ExternalLink className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Shared Folders / Links')}</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Shared Folders / Links')}</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorrForDetails.filePaths.map((path, idx) => {
@@ -2176,7 +2176,7 @@ export default function CorrespondingsDashboard({ user, appUser, projectUsers, o
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Paperclip className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Attachment')}</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t('Attachment')}</h3>
                     </div>
                     <a 
                       href={selectedCorrForDetails.attachedFile} onClick={attachmentClick(selectedCorrForDetails.attachedFile, selectedCorrForDetails.attachedFileName)} 

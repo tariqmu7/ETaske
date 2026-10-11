@@ -215,7 +215,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       <div className="card" style={{ padding: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <Flag className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10 }}>
             {t('Bid gates')}
           </span>
         </div>

@@ -33,10 +33,10 @@
 
   --surface:   #ffffff;
   /* Page sits a shade darker than the white cards; info boxes inside a card
-     (surface-2) carry a light blue tint so every section reads as its own block. */
+     (surface-2) are a calm near-white grey, framed by their border. */
   --page-bg:   #e7ecf4;
-  --surface-2: #edf3fc;
-  --surface-3: #e3eaf5;
+  --surface-2: #f6f8fb;
+  --surface-3: #eef2f7;
   /* due-soon / warning tinted surfaces (theme-aware — never hardcode the light values) */
   --surface-warn:        #fffcf9;
   --surface-warn-strong: #fff7ed;
@@ -48,11 +48,11 @@
   --text-primary:   #0f172a;
   --text-secondary: #334155;
   --text-muted:     #64748b;
-  /* Section titles and field labels sit on a filled navy band with white text
-     (--head-*), so the eye finds them before the information under them.
-     --label is the navy text colour left for form labels above inputs. */
+  /* Section titles and field labels are navy text (--label), no fill.
+     Section titles also carry a thin accent line on their start side (--head-bg).
+     --head-text is unused now; kept so nothing breaks if an old spot still names it. */
   --label:          #1e3a8a;
-  --head-bg:        #1e3a8a;
+  --head-bg:        #2563eb;
   --head-text:      #ffffff;
 
   --success: var(--green-500);
@@ -76,8 +76,8 @@
 [data-theme="dark"] {
   --surface:   #1e2433;
   --page-bg:   #10141f;
-  --surface-2: #22304d;
-  --surface-3: #2a3754;
+  --surface-2: #192031;
+  --surface-3: #252d40;
   --surface-warn:        #2a2620;
   --surface-warn-strong: #2e2519;
   --surface-warn-border: rgba(249,115,22,0.30);
@@ -89,7 +89,7 @@
   --text-secondary: #a8b4c8;
   --text-muted:     #6b7a90;
   --label:          #93c5fd;
-  --head-bg:        #1d4ed8;
+  --head-bg:        #60a5fa;
   --head-text:      #ffffff;
 
   --blue-50:  #1a2236;

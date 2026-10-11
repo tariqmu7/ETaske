@@ -299,7 +299,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
             onClick={() => setFilter(s.label)}
           >
             <div style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
+            <div style={{ fontSize: 11, color: 'var(--label)', display: 'inline-block', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
           </div>
         ))}
       </div>
@@ -440,7 +440,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
       {/* Right: team workload panel */}
       <div className="inbox-workload" style={{ position: 'sticky', top: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div className="card" style={{ padding: 20 }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 16 }}>
             {t('Team Workload')}
           </div>
           {targetUsers.length === 0 ? (
@@ -479,11 +479,11 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
                     <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
                       <div style={{ flex: 1, background: 'rgba(245,158,11,0.12)', border: '1px solid rgba(245,158,11,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: inProgress > 0 ? '#fbbf24' : 'var(--text-muted)', lineHeight: 1 }}>{inProgress}</div>
-                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginTop: 2 }}>{t('Active')}</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--label)', display: 'inline-block', marginTop: 2 }}>{t('Active')}</div>
                       </div>
                       <div style={{ flex: 1, background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.2)', padding: '5px 8px', textAlign: 'center' }}>
                         <div style={{ fontSize: 16, fontWeight: 800, color: done > 0 ? '#4ade80' : 'var(--text-muted)', lineHeight: 1 }}>{done}</div>
-                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '2px 8px', display: 'inline-block', marginTop: 2 }}>{t('Done')}</div>
+                        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--label)', display: 'inline-block', marginTop: 2 }}>{t('Done')}</div>
                       </div>
                     </div>
                     {total > 0 && (
@@ -591,7 +591,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
               {/* Body */}
               <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 10 }}>{t('Content')}</div>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 10 }}>{t('Content')}</div>
                 <p style={{ fontSize: 14, color: 'var(--text-primary)', lineHeight: 1.7, whiteSpace: 'pre-wrap', margin: 0 }}>{selectedCorr.body}</p>
               </div>
 
@@ -622,7 +622,7 @@ export default function ManagerInbox({ user, appUser, projectUsers, onNavigate }
 
               {/* Assignment form */}
               <div style={{ padding: '20px 24px' }}>
-                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 16 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 16 }}>
                   {hasTask ? t('Reassign Task') : t('Assign as Task')}
                 </div>
 

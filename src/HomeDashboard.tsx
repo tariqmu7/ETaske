@@ -316,7 +316,7 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
     else { requestOpen({ type: 'project', id: r.id, label: r.label, serial: r.serial }); onNavigate('projects'); }
   };
 
-  const sectionHeading: React.CSSProperties = { fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', margin: 0 };
+  const sectionHeading: React.CSSProperties = { fontSize: 13, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, margin: 0 };
 
   return (
     <div>

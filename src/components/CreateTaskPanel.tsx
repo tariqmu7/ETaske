@@ -513,7 +513,7 @@ export default function CreateTaskPanel({
               </div>
 
               {/* Divider: When & Urgency */}
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{t('When & Urgency')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
@@ -531,7 +531,7 @@ export default function CreateTaskPanel({
               </div>
 
               {/* Divider: Who */}
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{t('Who')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
@@ -571,7 +571,7 @@ export default function CreateTaskPanel({
               </div>
 
               {/* Divider: Visibility */}
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{t('Visibility')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
@@ -583,7 +583,7 @@ export default function CreateTaskPanel({
               </div>
 
               {/* Divider: Classification */}
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{t('Classification')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>
@@ -626,7 +626,7 @@ export default function CreateTaskPanel({
               {/* Divider: Linked records */}
               {!hideLinkPicker && (
                 <>
-                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <span>{t('Linked Records')}</span>
                     <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                   </div>
@@ -643,7 +643,7 @@ export default function CreateTaskPanel({
               )}
 
               {/* Divider: Attachment */}
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span>{t('Attachment')}</span>
                 <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
               </div>

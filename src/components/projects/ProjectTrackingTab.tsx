@@ -102,7 +102,7 @@ export default function ProjectTrackingTab({ project, user, appUser }: Props) {
       <div className="card stat-indigo" style={{ padding: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
           <Activity className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--head-text)', background: 'var(--head-bg)', padding: '6px 12px' }}>{t('Current Status')}</span>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)', borderInlineStart: '3px solid var(--head-bg)', paddingInlineStart: 10 }}>{t('Current Status')}</span>
         </div>
         <div style={{ fontSize: 22, fontWeight: 800, color: 'var(--text-primary)' }}>{dl(project.currentStatus || project.status)}</div>
         {project.lastUpdateText && (
