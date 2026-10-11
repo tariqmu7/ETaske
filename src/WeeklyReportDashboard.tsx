@@ -3,8 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { User } from 'firebase/auth';
 import { collection, getDocs } from 'firebase/firestore';
 import {
-  FileText, ChevronLeft, ChevronRight, Copy, Download, Mail, RotateCcw, RefreshCw, Info, Check,
+  FileText, ChevronLeft, ChevronRight, Copy, Download, Mail, RotateCcw, RefreshCw, Info, Check, ListChecks,
 } from 'lucide-react';
+import DailyTodoSheet from './components/DailyTodoSheet';
 import { db } from './lib/firebase';
 import { getVisibleTasks } from './lib/taskVisibility';
 import { getVisibleBids } from './lib/bidReads';
@@ -25,6 +26,10 @@ interface Props {
 }
 
 const rows = (snap: any) => snap.docs.filter((d: any) => d.id !== '--stats--').map((d: any) => ({ id: d.id, ...d.data() }));
+
+/** `#/weekly-report?tab=daily` → the daily to-do sheet; anything else → the weekly report. */
+const tabFromHash = (hash: string): 'weekly' | 'daily' =>
+  new URLSearchParams(hash.split('?')[1] || '').get('tab') === 'daily' ? 'daily' : 'weekly';
 
 /** `#/weekly-report?w=2026-09-16` → that week; anything else → null (the default week). */
 function weekFromHash(hash: string): WeekRange | null {
@@ -67,6 +72,7 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
   const { t } = useTranslation();
   const fmt = useFormat();
 
+  const [tab, setTab] = useState<'weekly' | 'daily'>(() => tabFromHash(window.location.hash));
   const [week, setWeek] = useState<WeekRange>(() => weekFromHash(window.location.hash) || defaultWeek());
   const [data, setData] = useState<WeeklyInput | null>(null);
   const [unreadable, setUnreadable] = useState<string[]>([]);
@@ -101,7 +107,10 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
 
   // Back / Forward and a pasted `#/weekly-report?w=…` link.
   useEffect(() => {
-    const onHash = () => { const w = weekFromHash(window.location.hash); if (w) { setWeek(w); setDraft(null); } };
+    const onHash = () => {
+      setTab(tabFromHash(window.location.hash));
+      const w = weekFromHash(window.location.hash); if (w) { setWeek(w); setDraft(null); }
+    };
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -187,12 +196,28 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
     <div style={{ maxWidth: 'var(--read-max)', margin: '0 auto', padding: '20px 16px' }} data-wr="page">
       <div style={{ marginBottom: 14 }}>
         <h1 style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 24, fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>
-          <FileText size={22} style={{ color: 'var(--blue-600)' }} /> {t('Weekly report')}
+          {tab === 'daily' ? <ListChecks size={22} style={{ color: 'var(--blue-600)' }} /> : <FileText size={22} style={{ color: 'var(--blue-600)' }} />} {tab === 'daily' ? t('Daily to-do list') : t('Weekly report')}
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', margin: '4px 0 0' }}>
-          {t('The department’s week, written in Arabic from what was recorded — ready to send.')}
+          {tab === 'daily'
+            ? t('Today’s pending items and the action each one needs — print it for the manager’s desk.')
+            : t('The department’s week, written in Arabic from what was recorded — ready to send.')}
         </p>
       </div>
+
+      <div role="tablist" aria-label={t('Report type')} data-wr="tabs" style={{ display: 'flex', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+        {([['weekly', t('Weekly report'), <FileText key="i" size={14} />], ['daily', t('Daily to-do list'), <ListChecks key="i" size={14} />]] as const).map(([id, label, icon]) => (
+          <button key={id} type="button" role="tab" aria-selected={tab === id} data-wr={`tab-${id}`}
+            onClick={() => { setTab(id); window.location.hash = id === 'daily' ? '/weekly-report?tab=daily' : `/weekly-report?w=${week.start}`; }}
+            style={tab === id ? primary : small}>
+            {icon} {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'daily' ? (
+        <DailyTodoSheet data={data} department={dept} onDepartment={v => { setDept(v); saveDept(v); setDraft(null); }} onReload={() => void load()} />
+      ) : (<>
 
       <section className="card" style={{ padding: 14, marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
         <div role="group" aria-label={t('Week')} style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -294,6 +319,7 @@ export default function WeeklyReportDashboard({ user, appUser, projectUsers }: P
           </p>
         </>
       )}
+      </>)}
     </div>
   );
 }

@@ -2206,6 +2206,32 @@ const en = {
   "Managers, admins and the bid team can see it.": "Managers, admins and the bid team can see it.",
   "Everyone in the department can see it.": "Everyone in the department can see it.",
 
+  // Daily to-do sheet (Weekly report page, second tab)
+  "Day": "Day",
+  "Include": "Include",
+  "Due today and late": "Due today and late",
+  "Next 3 days and late": "Next 3 days and late",
+  "Next 7 days and late": "Next 7 days and late",
+  "The list below has your edits; changing “Include” only shows once you start again.": "The list below has your edits; changing “Include” only shows once you start again.",
+  "Items on the list": "Items on the list",
+  "Need the manager": "Need the manager",
+  "Print": "Print",
+  "Download Excel": "Download Excel",
+  "Add a row": "Add a row",
+  "Start again from the records": "Start again from the records",
+  "Saved as an Excel file — add more to it and print it from Excel.": "Saved as an Excel file — add more to it and print it from Excel.",
+  "Could not make the Excel file.": "Could not make the Excel file.",
+  "Nothing is pending for this day. Add your own rows if you need a sheet anyway.": "Nothing is pending for this day. Add your own rows if you need a sheet anyway.",
+  "Item": "Item",
+  "Required action": "Required action",
+  "Note": "Note",
+  "Extra notes for the printed sheet": "Extra notes for the printed sheet",
+  "Your edits are kept in this browser for this day only. Nothing is saved to the boards.": "Your edits are kept in this browser for this day only. Nothing is saved to the boards.",
+  "The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.": "The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.",
+  "Today’s pending items and the action each one needs — print it for the manager’s desk.": "Today’s pending items and the action each one needs — print it for the manager’s desk.",
+  "Report type": "Report type",
+  "Daily to-do list": "Daily to-do list",
+
 } as const;
 
 export default en;

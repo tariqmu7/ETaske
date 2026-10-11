@@ -2148,6 +2148,32 @@ const ar: Record<keyof typeof en, string> = {
   "Managers, admins and the bid team can see it.": "يطّلع عليه المديرون ومدير النظام وفريق العطاء.",
   "Everyone in the department can see it.": "يطّلع عليه جميع أفراد القسم.",
 
+  // Daily to-do sheet (Weekly report page, second tab)
+  "Day": "اليوم",
+  "Include": "يشمل",
+  "Due today and late": "المستحق اليوم والمتأخر",
+  "Next 3 days and late": "الأيام الثلاثة المقبلة والمتأخر",
+  "Next 7 days and late": "الأيام السبعة المقبلة والمتأخر",
+  "The list below has your edits; changing “Include” only shows once you start again.": "تحمل القائمة أدناه تعديلاتك، ولن يظهر أثر تغيير «يشمل» إلا إذا بدأت من جديد.",
+  "Items on the list": "بنود القائمة",
+  "Need the manager": "تحتاج المديرة",
+  "Print": "اطبع",
+  "Download Excel": "نزّل ملف Excel",
+  "Add a row": "أضف بندًا",
+  "Start again from the records": "ابدأ من جديد من السجلات",
+  "Saved as an Excel file — add more to it and print it from Excel.": "حُفظ ملف Excel، فأضف إليه ما تشاء واطبعه منه.",
+  "Could not make the Excel file.": "تعذّر إنشاء ملف Excel.",
+  "Nothing is pending for this day. Add your own rows if you need a sheet anyway.": "لا شيء معلّق في هذا اليوم، ويمكنك إضافة بنودك إن احتجت إلى قائمة رغم ذلك.",
+  "Item": "البند",
+  "Required action": "الإجراء المطلوب",
+  "Note": "ملاحظة",
+  "Extra notes for the printed sheet": "ملاحظات إضافية تُطبع أسفل القائمة",
+  "Your edits are kept in this browser for this day only. Nothing is saved to the boards.": "تُحفظ تعديلاتك في هذا المتصفح لهذا اليوم فقط، ولا يُكتب شيء في اللوحات.",
+  "The list holds open tasks and letters that are late or due soon, every urgent task, unread letters, bids waiting for price sign-off and bids whose deadline or next step is near. Private tasks are never included.": "تضم القائمة المهام والخطابات المفتوحة المتأخرة أو القريبة الموعد، وكل مهمة عاجلة، والخطابات التي لم تُفتح بعد، والعطاءات المنتظرة اعتماد السعر، والعطاءات التي اقترب موعد تقديمها أو خطوتها التالية. ولا تضم المهام الخاصة أبدًا.",
+  "Today’s pending items and the action each one needs — print it for the manager’s desk.": "البنود المعلّقة اليوم والإجراء المطلوب في كل منها، جاهزة للطباعة ووضعها على مكتب المديرة.",
+  "Report type": "نوع التقرير",
+  "Daily to-do list": "قائمة المتابعة اليومية",
+
 };
 
 export default ar;
