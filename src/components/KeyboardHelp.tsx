@@ -67,7 +67,7 @@ export default function KeyboardHelp({ open, onClose }: { open: boolean; onClose
         <div style={{ padding: 18, display: 'grid', gap: 20 }}>
           {GROUPS.map(group => (
             <div key={group.title}>
-              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 10 }}>{t(group.title)}</div>
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 10 }}>{t(group.title)}</div>
               <div style={{ display: 'grid', gap: 8 }}>
                 {group.rows.map(([keys, desc]) => (
                   <div key={keys} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>

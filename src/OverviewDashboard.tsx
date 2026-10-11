@@ -97,7 +97,7 @@ function StatCard({ label, value, sub, color, onClick }: { label: string; value:
       onMouseLeave={onClick ? (e) => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = ''; } : undefined}
     >
       <div style={{ fontSize: 26, fontWeight: 800, color: 'var(--text-primary)' }}>{value}</div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 2 }}>{label}</div>
       {sub && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 3 }}>{sub}</div>}
     </div>
   );
@@ -811,19 +811,19 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 {/* Body: Stats Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, background: 'var(--surface-2)', padding: 16, borderRadius: 8 }}>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Active Corrs")}</div>
+                    <div style={{ fontSize: 11, color: 'var(--label)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Active Corrs")}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-secondary)' }}>{t('{{count}} pts', { count: kpi.activeCorrs })}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Total Workload")}</div>
+                    <div style={{ fontSize: 11, color: 'var(--label)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Total Workload")}</div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--text-primary)' }}>{t('{{count}} pts', { count: kpi.totalTasks })}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Completed")}</div>
+                    <div style={{ fontSize: 11, color: 'var(--label)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("Completed")}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#16a34a' }}>{t('{{count}} pts', { count: kpi.completedTasks })}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("In Progress")}</div>
+                    <div style={{ fontSize: 11, color: 'var(--label)', fontWeight: 700, textTransform: 'uppercase', marginBottom: 4 }}>{t("In Progress")}</div>
                     <div style={{ fontSize: 16, fontWeight: 700, color: '#d97706' }}>{t('{{count}} pts', { count: kpi.inProgressTasks })}</div>
                   </div>
                   {kpi.overdueTasks > 0 && (
@@ -904,7 +904,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)', gap: 16, marginBottom: 24, padding: '16px', background: 'var(--surface-3)', borderRadius: 0, border: '1px solid var(--border)' }}>
                   <div style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned To")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned To")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedToId);
@@ -918,7 +918,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned By")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Assigned By")}</span>
                     <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedTask.assignedById);
@@ -932,12 +932,12 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                     </div>
                   </div>
                   <div style={{ minWidth: 0 }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Due Date")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Due Date")}</span>
                     <span style={{ fontSize: 14, fontWeight: 600, color: isOverdue(selectedTask.dueDate) && selectedTask.status !== 'Done' ? '#dc2626' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 6 }}><Calendar className="w-4 h-4" /> <span className="ltr-data">{selectedTask.dueDate || t('No deadline')}</span></span>
                   </div>
                   {(selectedTask.correspondingSerialNumber || selectedTask.correspondingSubject) && (
                     <div style={{ minWidth: 0 }}>
-                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Linked Corresponding")}</span>
+                      <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 4 }}>{t("Linked Corresponding")}</span>
                       <span style={{ fontSize: 13, fontWeight: 600, color: '#3b82f6', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={selectedTask.correspondingSubject}>
                         <Link2 className="w-4 h-4 flex-shrink-0" /> 
                         {(() => {
@@ -1053,7 +1053,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                 <div style={{ marginBottom: 32 }}>
                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                      <FileText className="w-4 h-4 text-primary" />
-                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Correspondence Body")}</h3>
+                     <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Correspondence Body")}</h3>
                    </div>
                    <div style={{ padding: '20px', background: 'var(--surface-3)', border: '1px solid var(--border)', borderRadius: 0, color: 'var(--text-secondary)', fontSize: 15, lineHeight: 1.7, whiteSpace: 'pre-wrap' }} className={fmt.bidiFor(selectedCorr.body)}>
                     {selectedCorr.body || <span style={{ fontStyle: 'italic', color: 'var(--text-muted)' }}>{t("No content provided.")}</span>}
@@ -1062,7 +1062,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
 
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 20, marginBottom: 32 }}>
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Sent From")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Sent From")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, fontWeight: 700, color: 'var(--text-primary)' }}>
                       <Building2 className="w-4 h-4 text-muted" />
                       {selectedCorr.sentFrom || '—'}
@@ -1073,7 +1073,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Dates")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Dates")}</span>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 8 }}>
                         <Calendar className="w-4 h-4 text-muted" />
@@ -1089,7 +1089,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   </div>
 
                   <div className="card-minimal" style={{ padding: '16px', background: 'var(--surface-3)', border: 'none' }}>
-                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Assignment")}</span>
+                    <span style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 8, letterSpacing: '0.05em' }}>{t("Assignment")}</span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                       {(() => {
                         const u = projectUsers.find(pu => pu.id === selectedCorr.assignedToId);
@@ -1119,7 +1119,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Link2 className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Shared Folders / Links")}</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Shared Folders / Links")}</h3>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {selectedCorr.filePaths.map((path, idx) => (
@@ -1147,7 +1147,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Paperclip className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Attachment")}</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Attachment")}</h3>
                     </div>
                     <a 
                       href={selectedCorr.attachedFile} onClick={attachmentClick(selectedCorr.attachedFile, selectedCorr.attachedFileName)} 
@@ -1177,7 +1177,7 @@ export default function OverviewDashboard({ user, appUser, projectUsers, onNavig
                   <div style={{ marginBottom: 32 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                       <Briefcase className="w-4 h-4 text-primary" />
-                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Internal Notes")}</h3>
+                      <h3 style={{ fontSize: 14, fontWeight: 800, color: 'var(--label)', margin: 0, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{t("Internal Notes")}</h3>
                     </div>
                     <div style={{ padding: '16px', background: 'var(--surface-warn-strong)', border: '1px solid var(--surface-warn-border)', borderRadius: 0, color: 'var(--surface-warn-text)', fontSize: 14, fontStyle: 'italic' }} className={fmt.bidiFor(selectedCorr.notes)}>
                       "{selectedCorr.notes}"

@@ -526,7 +526,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
               {/* Language — a segmented pair, not a toggle: the label of a toggle
                   has to be written in one language and reads as broken in the other. */}
               <div style={{ padding: '10px 12px 8px', borderBottom: '1px solid var(--border)' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7, fontSize: 11, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)' }}>
                   <Languages className="w-3.5 h-3.5" /> {t('Language')}
                 </div>
                 <div style={{ display: 'flex', border: '1px solid var(--border-md)' }}>

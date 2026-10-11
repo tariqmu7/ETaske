@@ -157,7 +157,7 @@ export default function ProjectFinancialsTab({ project, user }: Props) {
             const net = sums.income - sums.expense;
             return (
               <div key={cur} className="card stat-green" style={{ padding: 14 }}>
-                <div className="ltr-data" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-secondary)', textTransform: 'uppercase' }}>{cur}</div>
+                <div className="ltr-data" style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.05em', color: 'var(--label)', textTransform: 'uppercase' }}>{cur}</div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--text-secondary)', marginTop: 6 }}>
                   <span>{t('Income')}</span><b className="ltr-data" style={{ color: '#16a34a' }}>{fmt.number(sums.income)}</b>
                 </div>

@@ -47,7 +47,7 @@ export default function OpportunityGlance({ opportunity: o, onAddUpdate }: Props
       {/* Status line */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-          <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-secondary)', margin: 0 }}>
+          <h2 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', margin: 0 }}>
             {t('At a glance')}
           </h2>
           <span data-glance-status style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 700, color: 'var(--text-primary)' }}>
@@ -106,7 +106,7 @@ const tileStyle: React.CSSProperties = {
 
 function TileLabel({ icon, children }: { icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 800, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)' }}>
       {icon}{children}
     </div>
   );
@@ -114,7 +114,7 @@ function TileLabel({ icon, children }: { icon: React.ReactNode; children: React.
 
 function Value({ text, empty }: { text?: string; empty: string }) {
   if (text && text.trim()) {
-    return <p dir="auto" style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--text-primary)', margin: '4px 0 0', lineHeight: 1.45, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</p>;
+    return <p dir="auto" style={{ fontSize: 14.5, fontWeight: 500, color: 'var(--text-primary)', margin: '4px 0 0', lineHeight: 1.45, whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{text}</p>;
   }
   if (!empty) return null;
   return <p style={{ fontSize: 14, color: 'var(--text-muted)', margin: '4px 0 0' }}>{empty}</p>;

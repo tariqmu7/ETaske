@@ -215,7 +215,7 @@ export default function OpportunityMilestonesTab({ opportunity, user, appUser }:
       <div className="card" style={{ padding: 22 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
           <Flag className="w-5 h-5" style={{ color: 'var(--accent)' }} />
-          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-secondary)' }}>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--label)' }}>
             {t('Bid gates')}
           </span>
         </div>
@@ -426,5 +426,5 @@ const inputStyle: React.CSSProperties = {
 };
 
 const labelStyle: React.CSSProperties = {
-  fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)',
+  fontSize: 11, fontWeight: 700, color: 'var(--label)',
 };

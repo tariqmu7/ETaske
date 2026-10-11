@@ -114,7 +114,7 @@ export default function ProjectDetail({ project, user, appUser, projectUsers, on
             style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '11px 16px',
               background: 'none', border: 'none', borderBottom: tab === t.id ? '2px solid var(--accent)' : '2px solid transparent',
-              color: tab === t.id ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 700, fontSize: 14,
+              color: tab === t.id ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, fontSize: 14,
               fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
             }}
           >

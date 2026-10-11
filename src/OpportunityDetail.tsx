@@ -148,7 +148,7 @@ export default function OpportunityDetail({ opportunity, user, appUser, projectU
             style={{
               display: 'flex', alignItems: 'center', gap: 7, padding: '11px 16px',
               background: 'none', border: 'none', borderBottom: tab === tb.id ? '2px solid var(--accent)' : '2px solid transparent',
-              color: tab === tb.id ? 'var(--accent)' : 'var(--text-secondary)', fontWeight: 700, fontSize: 14,
+              color: tab === tb.id ? 'var(--accent)' : 'var(--text-muted)', fontWeight: 700, fontSize: 14,
               fontFamily: 'inherit', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1,
             }}
           >
@@ -278,7 +278,7 @@ function Metric({ label, value, icon }: { label: string; value: string; icon?: R
       <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 17, fontWeight: 800, color: 'var(--text-primary)', lineHeight: 1.2 }}>
         {icon}<span className={fmt.bidiFor(value)}>{value}</span>
       </div>
-      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--text-muted)', marginTop: 3 }}>{label}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 700, color: 'var(--label)', marginTop: 3 }}>{label}</div>
     </div>
   );
 }
@@ -287,7 +287,7 @@ function Row({ label, value }: { label: string; value?: string }) {
   const fmt = useFormat();
   return (
     <div>
-      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--label)' }}>{label}</div>
       <div style={{ fontSize: 14, color: 'var(--text-primary)', marginTop: 2 }}>
         <span className={fmt.bidiFor(value)}>{value || '—'}</span>
       </div>
@@ -297,7 +297,7 @@ function Row({ label, value }: { label: string; value?: string }) {
 
 function SectionTitle({ children }: { children: React.ReactNode }) {
   return (
-    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--text-secondary)', margin: '0 0 14px' }}>
+    <h3 style={{ fontSize: 13, fontWeight: 800, letterSpacing: '0.05em', textTransform: 'uppercase', color: 'var(--label)', margin: '0 0 14px' }}>
       {children}
     </h3>
   );

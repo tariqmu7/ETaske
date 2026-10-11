@@ -291,7 +291,7 @@ export default function ComboBox({
               <div
                 style={{
                   padding: '7px 12px 4px', fontSize: 10, fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)',
+                  letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)',
                 }}
               >
                 {listLabel}

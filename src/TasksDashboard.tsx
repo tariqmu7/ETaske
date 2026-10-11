@@ -1565,7 +1565,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
 
                                 {isExpanded && task.attachedFile && (
                                   <div style={{ marginTop: 24 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Attachment')}</div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Attachment')}</div>
                                     <div style={{ 
                                       borderRadius: 0,                                     overflow: 'hidden', 
                                       border: '1px solid var(--border)',
@@ -1634,7 +1634,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                 {/* Shared Folder Paths Display */}
                                 {isExpanded && task.filePaths && task.filePaths.length > 0 && (
                                   <div style={{ marginTop: 24 }}>
-                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Shared Folders / Links')}</div>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', letterSpacing: '0.05em', marginBottom: 12, textTransform: 'uppercase' }}>{t('Shared Folders / Links')}</div>
                                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                                       {task.filePaths.map((path, idx) => (
                                         <div key={idx} style={{ 
@@ -1668,7 +1668,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                                     </div>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                        <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
+                                        <h4 style={{ fontWeight: 700, fontSize: 13, color: 'var(--label)', textTransform: 'uppercase', letterSpacing: '0.06em', margin: 0 }}>
                                           <Target className="w-3.5 h-3.5" style={{ display: 'inline', marginInlineEnd: 6 }} />
                                           {t('Milestones')}
                                         </h4>
@@ -1995,7 +1995,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   />
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('When & Urgency')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -2012,7 +2012,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   </div>
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('Who')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -2052,7 +2052,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   />
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('Visibility')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -2063,7 +2063,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   />
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('Classification')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -2103,7 +2103,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   </div>
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('Linked Records')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>
@@ -2111,7 +2111,7 @@ export default function TasksDashboard({ user, appUser, projectUsers, initialSta
                   <RecordLinkPicker viewer={{ id: appUser.id, role: appUser.role }} value={editLinks} onChange={setEditLinks} active={!!editingTask} />
                 </div>
 
-                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--label)', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span>{t('Attachment')}</span>
                   <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
                 </div>

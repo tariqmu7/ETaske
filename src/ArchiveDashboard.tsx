@@ -103,7 +103,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
         ].map(s => (
           <div key={s.label} className={`card ${s.cls}`} style={{ padding: '20px 24px' }}>
             <div style={{ fontSize: 32, fontWeight: 800, color: 'var(--text-primary)' }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
+            <div style={{ fontSize: 11, color: 'var(--label)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 4 }}>{t(s.label)}</div>
           </div>
         ))}
       </div>
@@ -225,7 +225,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
 
                 {(viewingTask.correspondingSerialNumber || viewingTask.correspondingSubject) && (
                   <div style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 0, padding: 14, marginBottom: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Source Corresponding')}</div>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 6 }}>{t('Source Corresponding')}</div>
                     <div style={{ fontSize: 14, color: 'var(--accent-light)', display: 'flex', alignItems: 'center', gap: 6 }}>
                       <Link2 className="w-4 h-4" /> 
                       {(() => {
@@ -247,7 +247,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                     { label: 'Due Date', value: viewingTask.dueDate },
                   ].filter(i => i.value).map(i => (
                     <div key={i.label} style={{ background: 'var(--surface-2)', borderRadius: 0, padding: '12px 14px', border: '1px solid var(--border)' }}>
-                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>{t(i.label)}</div>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 4 }}>{t(i.label)}</div>
                       <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-primary)' }}>{i.value}</div>
                     </div>
                   ))}
@@ -322,7 +322,7 @@ export default function ArchiveDashboard({ user, appUser, projectUsers }: Props)
                 {/* Milestone history */}
                 {getTaskMilestones(viewingTask.id).length > 0 && (
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Milestone History')}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--label)', textTransform: 'uppercase', marginBottom: 12 }}>{t('Milestone History')}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                       {getTaskMilestones(viewingTask.id).map(ms => (
                         <div key={ms.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'var(--surface-2)', borderRadius: 0, padding: '10px 14px', border: '1px solid var(--border)' }}>
