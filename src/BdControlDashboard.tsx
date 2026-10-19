@@ -26,9 +26,9 @@ interface Tile {
  * BD control (queue E5a) — the CEO page over every client contract, supplier
  * contract and AGIBA site contract loaded from BD's Excel files. Every figure
  * is worked out from the rows as of today (lib/bdControl.ts); nothing on the
- * page is typed in. So far: the data-date strip, the KPI tiles and charts 3–6
- * (E5b, components/bdcontrol/OverviewCharts.tsx); charts 7–12 (E5c), browse
- * tabs (E6a) and editing (E6b) come next.
+ * page is typed in. So far: the data-date strip, the KPI tiles and charts 3–12
+ * (E5b + E5c, components/bdcontrol/OverviewCharts.tsx + OverviewMoreCharts.tsx);
+ * browse tabs (E6a) and editing (E6b) come next.
  * Gated by `canViewBdControl` in App/TopNav/More/Home/palette, and by the rules.
  */
 export default function BdControlDashboard(_props: Props) {
@@ -140,7 +140,7 @@ export default function BdControlDashboard(_props: Props) {
             ))}
           </div>
 
-          {/* 3–6 — ceilings, renewals, day-rates, reprice list. */}
+          {/* 3–12 — ceilings, renewals, day-rates, reprice list, suppliers, amendments, AGIBA SOs, changes, data issues, awaited data. */}
           <OverviewCharts data={data} today={today} />
         </>
       )}

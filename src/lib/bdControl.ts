@@ -30,7 +30,8 @@ export interface BdClientContract extends BdRow {
 }
 export interface BdSupplierContract extends BdRow {
   contractNo: string; client?: string | null; contractor?: string | null; costType?: string | null;
-  currentEnd?: string | null; currentValueEgp?: number | null; status?: string | null; valueCurrencyNote?: string | null;
+  currentEnd?: string | null; currentValueEgp?: number | null; originalValueEgp?: number | null;
+  status?: string | null; valueCurrencyNote?: string | null;
 }
 export interface BdAgibaSiteContract extends BdRow { contractNo: string; company?: string | null; currentEnd?: string | null; status?: string | null }
 /** One cell of the CSA day-rate sheet: what a client pays EPROM per man-day for one grade. */
@@ -439,6 +440,184 @@ export function repriceList(data: BdData, today: string, grid: RateGrid = rateGr
     });
   }
   return out.sort((p, q) => (p.days ?? 1e6) - (q.days ?? 1e6) || p.gapPct - q.gapPct);
+}
+
+// ── Overview charts 7–12 (queue E5c) ─────────────────────────────────────────
+
+const txt = (v: unknown) => String(v ?? '').trim();
+/** Groups rows by a text key; a blank key becomes '' (the page names it). */
+function groupBy<T>(xs: T[], key: (x: T) => unknown): Map<string, T[]> {
+  const m = new Map<string, T[]>();
+  for (const x of xs) { const k = txt(key(x)); m.set(k, [...(m.get(k) || []), x]); }
+  return m;
+}
+/** Growth from the original value to today's, %; null without both values. */
+const growthPct = (orig: number | null, cur: number | null) =>
+  orig == null || cur == null || orig <= 0 ? null : (cur / orig - 1) * 100;
+
+export interface SupplierGroup {
+  /** Client code or cost type; '' = not filled in. */
+  key: string;
+  count: number;
+  currentEgp: number;
+  /** Original value over the lines that have one. */
+  originalEgp: number;
+}
+
+export interface SupplierCost {
+  byClient: SupplierGroup[];
+  byCostType: SupplierGroup[];
+  live: number;
+  currentEgp: number;
+  originalEgp: number;
+  /** Growth original → current, over the lines that hold both values. */
+  growthPct: number | null;
+  linesWithBoth: number;
+  otherCurrency: number;
+}
+
+/** Chart 7 — what live supplier contracts cost, per client and per cost type (EGP lines only). */
+export function supplierCost(data: BdData): SupplierCost {
+  const live = data.supplierContracts.filter(isLiveSupplier);
+  const egp = live.filter(isEgpSupplier);
+  const group = (key: (s: BdSupplierContract) => unknown): SupplierGroup[] =>
+    [...groupBy(egp, key)].map(([k, xs]) => ({
+      key: k, count: xs.length, currentEgp: sum(xs, s => s.currentValueEgp), originalEgp: sum(xs, s => s.originalValueEgp),
+    })).sort((a, b) => b.currentEgp - a.currentEgp || b.count - a.count || a.key.localeCompare(b.key));
+  const both = egp.filter(s => num(s.originalValueEgp) != null && num(s.currentValueEgp) != null);
+  return {
+    byClient: group(s => s.client), byCostType: group(s => s.costType),
+    live: live.length, currentEgp: sum(egp, s => s.currentValueEgp), originalEgp: sum(egp, s => s.originalValueEgp),
+    growthPct: growthPct(sum(both, s => s.originalValueEgp) || null, sum(both, s => s.currentValueEgp)),
+    linesWithBoth: both.length, otherCurrency: live.length - egp.length,
+  };
+}
+
+export interface GrowthRow {
+  id: string;
+  contractNo: string;
+  contractor: string;
+  client: string;
+  originalEgp: number;
+  currentEgp: number;
+  growthPct: number;
+  /** Amendments on file for the contract, and how many of them raised the value. */
+  amendments: number;
+  valueIncreases: number;
+}
+
+/** Chart 8 — the live EGP supplier contracts that grew most from their original value through amendments. */
+export function amendmentGrowth(data: BdData, top = 10): { rows: GrowthRow[]; types: { type: string; count: number }[]; amendments: number } {
+  const byNo = groupBy(data.supplierAmendments, a => a.contractNo);
+  const live = data.supplierContracts.filter(s => isLiveSupplier(s) && isEgpSupplier(s));
+  const rows: GrowthRow[] = [];
+  for (const s of live) {
+    const g = growthPct(num(s.originalValueEgp), num(s.currentValueEgp));
+    if (g == null) continue;
+    const am = byNo.get(txt(s.contractNo)) || [];
+    rows.push({
+      id: s.id, contractNo: s.contractNo, contractor: txt(s.contractor), client: txt(s.client),
+      originalEgp: s.originalValueEgp as number, currentEgp: s.currentValueEgp as number, growthPct: g,
+      amendments: am.length, valueIncreases: am.filter(a => txt(a.type) === 'Value Increase').length,
+    });
+  }
+  rows.sort((a, b) => b.growthPct - a.growthPct || b.amendments - a.amendments || a.contractNo.localeCompare(b.contractNo));
+  // The kind of every amendment on those same live contracts, most frequent first.
+  const liveNos = new Set(live.map(s => txt(s.contractNo)));
+  const ams = data.supplierAmendments.filter(a => liveNos.has(txt(a.contractNo)));
+  const types = [...groupBy(ams, a => (txt(a.type) === 'N/A' ? '' : a.type))].map(([type, xs]) => ({ type, count: xs.length }))
+    .sort((a, b) => (a.type ? 0 : 1) - (b.type ? 0 : 1) || b.count - a.count || a.type.localeCompare(b.type));
+  return { rows: rows.slice(0, top), types, amendments: ams.length };
+}
+
+/** An SO still to be delivered: not Completed / Cancelled, and not marked CANCELLED in the SO / SR column. */
+export const isOpenSO = (s: BdRow) =>
+  !['Completed', 'Cancelled'].includes(txt(s.status)) && txt(s.soSr).toUpperCase() !== 'CANCELLED';
+
+/** "Ending soon" window for open AGIBA SOs. */
+export const SO_SOON_DAYS = 60;
+
+export interface SoItem { id: string; so: string; item: string; contractor: string; status: string; expiry: string | null; days: number | null }
+
+export interface AgibaSos {
+  total: number;
+  open: number;
+  /** Status as written ('' = blank), the open ones first. */
+  byStatus: { status: string; count: number }[];
+  /** All SOs per contractor: count, open count and EGP amount. */
+  byContractor: { contractor: string; count: number; open: number; egp: number }[];
+  /** Open SOs ending within 60 days, soonest first. */
+  soon: SoItem[];
+  /** Open SOs already past their expiry date, longest overdue first. */
+  past: SoItem[];
+  /** SOs whose amount is in another currency (kept out of the EGP sums). */
+  otherCurrency: number;
+}
+
+/** Chart 9 — AGIBA service orders: status, who holds them, and the open ones ending soon or overdue. */
+export function agibaSos(data: BdData, today: string): AgibaSos {
+  const sos = data.agibaSOs;
+  const isEgp = (s: BdRow) => !txt(s.currency) || txt(s.currency).toUpperCase() === 'EGP';
+  const STATUS_ORDER = ['In Progress', 'Pending', '', 'Completed', 'Cancelled'];
+  const rank = (s: string) => { const i = STATUS_ORDER.indexOf(s); return i < 0 ? 1.5 : i; };
+  const byStatus = [...groupBy(sos, s => s.status)].map(([status, xs]) => ({ status, count: xs.length }))
+    .sort((a, b) => rank(a.status) - rank(b.status) || b.count - a.count || a.status.localeCompare(b.status));
+  const byContractor = [...groupBy(sos, s => s.contractor)].map(([contractor, xs]) => ({
+    contractor, count: xs.length, open: xs.filter(isOpenSO).length, egp: sum(xs.filter(isEgp), s => s.amount),
+  })).sort((a, b) => b.count - a.count || b.egp - a.egp || a.contractor.localeCompare(b.contractor));
+  const items: SoItem[] = sos.filter(isOpenSO).map(s => ({
+    id: s.id, so: txt(s.so) || s.id, item: txt(s.item), contractor: txt(s.contractor), status: txt(s.status),
+    expiry: txt(s.expiry) || null, days: daysUntil(s.expiry, today),
+  }));
+  return {
+    total: sos.length, open: items.length, byStatus, byContractor,
+    soon: items.filter(x => x.days != null && x.days >= 0 && x.days <= SO_SOON_DAYS).sort((a, b) => (a.days as number) - (b.days as number)),
+    past: items.filter(x => x.days != null && x.days < 0).sort((a, b) => (a.days as number) - (b.days as number)),
+    otherCurrency: sos.filter(s => num(s.amount) != null && !isEgp(s)).length,
+  };
+}
+
+const CHANGE_KEYS = new Set(['id', 'client', 'type', 'field', 'appEdits', 'lastEditedBy', 'lastEditedAt']);
+const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
+
+/** "march2026" -> "2026-03-01"; null for a key that is not month + year. */
+export function periodDate(key: string): string | null {
+  const m = /^([a-z]+)(\d{4})$/.exec(key.toLowerCase());
+  const i = m ? MONTHS.indexOf(m[1]) : -1;
+  return m && i >= 0 ? `${m[2]}-${String(i + 1).padStart(2, '0')}-01` : null;
+}
+
+export interface ChangeRow { id: string; type: string; field: string; from: unknown; to: unknown }
+export interface ChangesByClient { client: string; changes: ChangeRow[]; fields: string[] }
+
+/**
+ * Chart 10 — what moved between two copies of the CSA report, per client. The two
+ * copies are whatever month columns the loader stored (march2026 / september2026
+ * today), read from the rows — a later pair of reports needs no code change.
+ */
+export function changesByClient(rows: BdRow[]): { from: string | null; to: string | null; clients: ChangesByClient[]; total: number } {
+  const periods = new Set<string>();
+  for (const r of rows) for (const k of Object.keys(r)) if (!CHANGE_KEYS.has(k) && periodDate(k)) periods.add(k);
+  const [from = null, to = null] = [...periods].sort((a, b) => (periodDate(a) as string).localeCompare(periodDate(b) as string)).slice(-2);
+  const clients = [...groupBy(rows, r => r.client)].map(([client, xs]) => {
+    const changes = xs.map(r => ({ id: r.id, type: txt(r.type), field: txt(r.field), from: from ? r[from] ?? null : null, to: to ? r[to] ?? null : null }))
+      .sort((a, b) => a.type.localeCompare(b.type) || a.field.localeCompare(b.field));
+    return { client, changes, fields: [...new Set(changes.map(c => c.field).filter(Boolean))] };
+  }).sort((a, b) => b.changes.length - a.changes.length || a.client.localeCompare(b.client));
+  return { from, to, clients, total: rows.length };
+}
+
+/** Chart 11 — data issues per sheet, most first, with how many records they touch. */
+export function issuesByTable(rows: BdDataIssue[]): { table: string; count: number; records: number }[] {
+  return [...groupBy(rows, r => r.table)].map(([table, xs]) => ({
+    table, count: xs.length, records: new Set(xs.map(x => txt(x.record))).size,
+  })).sort((a, b) => b.count - a.count || a.table.localeCompare(b.table));
+}
+
+/** Chart 12 — the measures the request pack will bring; flips as `received` turns true on the meta doc. */
+export function awaitedData(meta: BdMeta | null): { listed: boolean; items: BdAwaited[]; received: number } {
+  const items = Array.isArray(meta?.awaited) ? meta!.awaited!.filter(a => txt(a?.measure)) : [];
+  return { listed: Array.isArray(meta?.awaited), items, received: items.filter(a => a.received === true).length };
 }
 
 export const emptyBdData = (): BdData => ({

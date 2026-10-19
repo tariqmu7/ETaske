@@ -6,6 +6,7 @@ import {
   type BdData, type Benchmark, type RenewalBucket, type RenewalKind, type RepriceWindow,
 } from '../../lib/bdControl';
 import { useFormat, DATE_MEDIUM } from '../../lib/format';
+import OverviewMoreCharts from './OverviewMoreCharts';
 
 interface Props { data: BdData; today: string }
 
@@ -43,7 +44,8 @@ const gapTone = (g: number | null) => (g == null ? '' : g <= -25 ? 'lo' : g <= -
  * renewal timeline, day-rates against a benchmark, and the reprice-at-renewal
  * list. Every bar and figure comes from lib/bdControl.ts, worked out from the
  * rows as of today. Rows are not clickable yet — the client page arrives with
- * the browse tabs (E6a).
+ * the browse tabs (E6a). Charts 7–12 (E5c) sit in the same grid, from
+ * OverviewMoreCharts.tsx.
  */
 export default function OverviewCharts({ data, today }: Props) {
   const { t, i18n } = useTranslation();
@@ -239,6 +241,7 @@ export default function OverviewCharts({ data, today }: Props) {
       {chart4}
       {chart5}
       {chart6}
+      <OverviewMoreCharts data={data} today={today} />
     </div>
   );
 }
