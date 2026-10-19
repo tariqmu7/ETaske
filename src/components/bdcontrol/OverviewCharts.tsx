@@ -7,8 +7,14 @@ import {
 } from '../../lib/bdControl';
 import { useFormat, DATE_MEDIUM } from '../../lib/format';
 import OverviewMoreCharts from './OverviewMoreCharts';
+import { GRADE_SHORT } from './shared';
 
-interface Props { data: BdData; today: string }
+interface Props {
+  data: BdData;
+  today: string;
+  /** Opens a client's page (the browse tabs, E6a). */
+  onClient: (code: string) => void;
+}
 
 /** Long lists start short. */
 const FIRST = 10;
@@ -30,11 +36,6 @@ const WINDOW_LABEL: Record<RepriceWindow, string> = {
   later: 'Next window at renewal',
   noDate: 'No expiry on file — raise at the next price review',
 };
-/** Chip labels for the grades on the CSA sheet; any other grade shows as written. */
-const GRADE_SHORT: Record<string, string> = {
-  'General Manager': 'GM', 'Assistant GM': 'Asst GM', 'Department Manager': 'Dept Mgr',
-  'Section Head': 'Section Head', 'Senior Engineer': 'Sr Eng', 'Operator': 'Operator',
-};
 
 /** A gap this far below the benchmark is red / amber on the bars and pills. */
 const gapTone = (g: number | null) => (g == null ? '' : g <= -25 ? 'lo' : g <= -10 ? 'mid' : g >= 10 ? 'hi' : '');
@@ -43,11 +44,11 @@ const gapTone = (g: number | null) => (g == null ? '' : g <= -25 ? 'lo' : g <= -
  * BD control Overview charts 3–6 (queue E5b): contract ceiling by client, the
  * renewal timeline, day-rates against a benchmark, and the reprice-at-renewal
  * list. Every bar and figure comes from lib/bdControl.ts, worked out from the
- * rows as of today. Rows are not clickable yet — the client page arrives with
- * the browse tabs (E6a). Charts 7–12 (E5c) sit in the same grid, from
+ * rows as of today. A client row opens the client page (E6a). Charts 7–12
+ * (E5c) sit in the same grid, from
  * OverviewMoreCharts.tsx.
  */
-export default function OverviewCharts({ data, today }: Props) {
+export default function OverviewCharts({ data, today, onClient }: Props) {
   const { t, i18n } = useTranslation();
   const F = useFormat();
   const ar = i18n.language === 'ar';
@@ -96,14 +97,14 @@ export default function OverviewCharts({ data, today }: Props) {
         ? <p className="bdc-empty" data-bdc-empty="ceiling">{t('No client line has a ceiling on file.')}</p>
         : <div className="bdc-list">
             {ceilRows.map(r => (
-              <div key={r.client} className="bdc-row" data-bdc-row="ceiling" data-bdc-key={r.client}>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-bdc-row="ceiling" data-bdc-key={r.client}>
                 <span className="bdc-name">
                   <span className={F.bidiFor(nameOf(r.client))}>{nameOf(r.client)}</span>
                   <span className="bdc-sub">{t('{{types}} · lines: {{n}}', { types: r.types.join(sep) || '—', n: F.number(r.lines) })}</span>
                 </span>
                 <span className="bdc-track"><span className="bdc-fill" style={{ width: `${(r.ceilingEgp / ceilMax) * 100}%` }} /></span>
                 <span className="bdc-num" data-bdc-value>{egpM(r.ceilingEgp)}</span>
-              </div>
+              </button>
             ))}
           </div>}
       {ceil.rows.length > FIRST && (
@@ -148,7 +149,9 @@ export default function OverviewCharts({ data, today }: Props) {
         ? <p className="bdc-empty" data-bdc-empty="next">{t('Nothing is due from today on.')}</p>
         : <div className="bdc-list">
             {tl.next.map(it => (
-              <div key={it.kind + it.id} className="bdc-row bdc-row-dated" data-bdc-row="next" data-bdc-key={it.name}>
+              <div key={it.kind + it.id} className={`bdc-row bdc-row-dated${it.kind === 'client' ? ' bdc-click' : ''}`} data-bdc-row="next" data-bdc-key={it.name}
+                {...(it.kind === 'client' ? { role: 'button', tabIndex: 0, onClick: () => onClient(it.name),
+                  onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClient(it.name); } } } : {})}>
                 <span className="bdc-name">
                   <span><span className={`bdc-key bdc-${it.kind}`} aria-hidden /> <span className={F.bidiFor(shown(it))}>{shown(it)}</span></span>
                   <span className="bdc-sub">{[t(KIND_ONE[it.kind]), it.sub].filter(Boolean).join(' · ')}</span>
@@ -186,7 +189,7 @@ export default function OverviewCharts({ data, today }: Props) {
           {gc.rows.map(r => {
             const isBase = bench === 'anopc' && r.client === BENCHMARK_CLIENT;
             return (
-              <div key={r.client} className="bdc-row bdc-row-rate" data-bdc-row="rate" data-bdc-key={r.client}>
+              <button key={r.client} type="button" className="bdc-row bdc-row-rate bdc-click" onClick={() => onClient(r.client)} data-bdc-row="rate" data-bdc-key={r.client}>
                 <span className="bdc-name"><span><span className={F.bidiFor(nameOf(r.client))}>{nameOf(r.client)}</span>{warn(r.client)}</span></span>
                 <span className="bdc-track bdc-track-mark">
                   <span className={`bdc-fill bdc-fill-${gapTone(isBase ? null : r.gap) || 'base'}`} style={{ width: `${(r.rate / gcMax) * 100}%` }} />
@@ -194,7 +197,7 @@ export default function OverviewCharts({ data, today }: Props) {
                 </span>
                 <span className="bdc-num" data-bdc-value>{F.number(r.rate, { maximumFractionDigits: 1 })}</span>
                 <span className={`bdc-gap bdc-gap-${gapTone(isBase ? null : r.gap) || 'flat'}`} data-bdc-gap>{isBase ? t('benchmark') : pct(r.gap)}</span>
-              </div>
+              </button>
             );
           })}
         </div>
@@ -215,7 +218,7 @@ export default function OverviewCharts({ data, today }: Props) {
         ? <p className="bdc-empty" data-bdc-empty="reprice">{t('No client pays 10% or more below {{name}}.', { name: nameOf(BENCHMARK_CLIENT) })}</p>
         : <div className="bdc-list">
             {reprice.map(r => (
-              <div key={r.client} className="bdc-row bdc-row-reprice" data-bdc-row="reprice" data-bdc-key={r.client}>
+              <button key={r.client} type="button" className="bdc-row bdc-row-reprice bdc-click" onClick={() => onClient(r.client)} data-bdc-row="reprice" data-bdc-key={r.client}>
                 <span className="bdc-name">
                   <span><span className={F.bidiFor(nameOf(r.client))}>{nameOf(r.client)}</span>{warn(r.client)}</span>
                   <span className="bdc-sub">{[r.line?.contractType, r.line?.status].filter(Boolean).join(' · ') || t('No client line on file')}</span>
@@ -228,7 +231,7 @@ export default function OverviewCharts({ data, today }: Props) {
                   <span className={`bdc-window bdc-window-${r.window}`} data-bdc-window={r.window}>{t(WINDOW_LABEL[r.window])}</span>
                   <span className="bdc-sub">{ends(r.line?.expiryDate || null, r.days)}</span>
                 </span>
-              </div>
+              </button>
             ))}
           </div>}
       <p className="bdc-foot">{t('Gap = average over the grades on the sheet. The money effect needs man-days per grade, which the files do not hold yet.')}</p>

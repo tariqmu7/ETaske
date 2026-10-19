@@ -1,4 +1,4 @@
-// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12).
+// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs).
 //
 // Proves src/BdControlDashboard.tsx + src/lib/bdControl.ts + src/hooks/useBdControl.ts
 // in real Edge: the pure maths (days, flags, live/EGP rules, millions, edits since
@@ -7,8 +7,9 @@
 // rows with no reload, charts 3–6 (ceilings, renewal timeline, day-rate vs
 // ANOPC/median with grade chips, reprice list), charts 7–12 (supplier cost, amendment growth, AGIBA SOs,
 // report-to-report changes, data issues per sheet, awaited data flipping as it arrives), the empty and
-// permission-denied states, the role gate and the 6 nav entries, Arabic + RTL, a 390 px phone and dark
-// mode. The page writes nothing.
+// permission-denied states, the role gate and the 6 nav entries, the browse tabs (Contracts + client page,
+// Pricing grid, Suppliers, Data quality, and the tiles / chart rows that open them), Arabic + RTL, a 390 px
+// phone and dark mode. The page writes nothing.
 // The rows are MADE UP — the real data must never be in this public repo.
 //
 //   node scripts/harness/bdcontrolui.mjs   (--headed to watch it, --shot to write PNGs)
@@ -531,6 +532,184 @@ check('10 bars + "Show all 13"', (await evalJS(`document.querySelectorAll('[data
 await click('[data-bdc-more="ceiling"]');
 check('show all -> 13, smallest last; again -> 10', (await evalJS(`document.querySelectorAll('[data-bdc-row="ceiling"]').length`)) === 13
   && (await keys('ceiling')).endsWith(',X01') && (await click('[data-bdc-more="ceiling"]'), (await evalJS(`document.querySelectorAll('[data-bdc-row="ceiling"]').length`)) === 10));
+
+console.log('\n[6c] browse tabs (queue E6a): Contracts + client page, Pricing, Suppliers, Data quality');
+const typeIn = (sel, v) => evalJS(`(() => { const e = ${q(sel)}; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+  set.call(e, ${JSON.stringify(v)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`).then(() => sleep(150));
+const count = sel => evalJS(`document.querySelectorAll(${JSON.stringify(sel)}).length`);
+const pressed = sel => evalJS(`${q(sel)}?.getAttribute('aria-pressed')`);
+const L3 = JSON.parse(await evalJS(`(() => { const L = window.__lib;
+  const codes = new Set(['ALPHA', 'BETA']);
+  return JSON.stringify({
+    m: [L.matches('', 'x'), L.matches('alp gas', 'ALPHA', 'Alpha Gas Co.'), L.matches('alp oil', 'ALPHA', 'Alpha Gas Co.'), L.matches('ألفا', null, 'ألفا للغاز')],
+    tg: [L.issueTarget({ table: 'Client Contracts', record: 'BETA O&M' }, codes), L.issueTarget({ table: 'Day Rates', record: 'ALPHA' }, codes),
+         L.issueTarget({ table: 'Day Rates', record: 'EPS' }, codes), L.issueTarget({ table: 'Supplier Contracts', record: '398/2018' }, codes),
+         L.issueTarget({ table: 'AGIBA SOs', record: 'SO 70-2024' }, codes), L.issueTarget({ table: 'AGIBA Site Contracts', record: '549/2023 B' }, codes),
+         L.issueTarget({ table: 'Supplier Amendments', record: '9 rows' }, codes), L.issueTarget({ table: 'Client Contracts', record: '' }, codes)],
+  }); })()`));
+check('matches: empty = all, every word must appear, Arabic too', J(L3.m) === J([true, true, false, true]), J(L3.m));
+check('issueTarget: client line / day-rate column -> client page, supplier / SO / site -> search, a whole-sheet note -> nowhere',
+  J(L3.tg) === J([{ kind: 'client', code: 'BETA' }, { kind: 'client', code: 'ALPHA' }, null, { kind: 'supplier', query: '398/2018' },
+    { kind: 'agibaSO', query: 'SO 70-2024' }, { kind: 'agibaSite', query: '549/2023' }, null, null]), J(L3.tg));
+
+await evalJS(`window.__seedAll()`);
+await remount();
+await waitFor(q('[data-bd="tiles"]'), 'tiles');
+check('tab bar: Overview · Contracts · Pricing · Suppliers · Data quality, Overview selected',
+  (await texts('[data-bd-tab]')) === 'Overview|Contracts|Pricing|Suppliers|Data quality'
+  && (await evalJS(`${q('[data-bd-tab="overview"]')}.getAttribute('aria-selected')`)) === 'true');
+
+// Contracts
+await click('[data-bd-tab="contracts"]');
+check('Contracts: tiles and charts give way to the list', !(await has('[data-bd="tiles"]')) && !(await has('[data-bd="charts"]')) && (await has('[data-bdc-tab="contracts"]'))
+  && (await has('[data-bd="date-strip"]')));
+check('every line, soonest expiry first, no date last', (await keys('contract')) === 'BETA_3_TSA,BETA_2_CSA,GAMMA_4_O-M,ALPHA_1_CSA,ALPHA_5_TSA', await keys('contract'));
+check('chip counts: all 5 · expired 1 · ≤90 d 1 · ≤6 months 2 · no date 1',
+  (await texts('[data-bdc-chip^="contracts:"] .bdc-chip-n')) === '5|1|1|2|1', await texts('[data-bdc-chip^="contracts:"] .bdc-chip-n'));
+check('line shows status, value and flag: BETA TSA blank status, expired, no ceiling',
+  (await text('[data-bdc-row="contract"][data-bdc-key="BETA_3_TSA"] .bdc-sub')).includes('Status blank')
+  && (await text('[data-bdc-row="contract"][data-bdc-key="BETA_3_TSA"] [data-bdc-flag]')) === 'Expired on paper'
+  && (await text('[data-bdc-row="contract"][data-bdc-key="GAMMA_4_O-M"] .bdc-sub')).includes('350,000 EGP a month'),
+  await text('[data-bdc-row="contract"][data-bdc-key="GAMMA_4_O-M"] .bdc-sub'));
+await click('[data-bdc-chip="contracts:expired"]');
+check('chip "Expired on paper" -> the one line', (await keys('contract')) === 'BETA_3_TSA' && (await text('[data-bdc-count="contracts"]')) === 'Showing 1 of 5');
+await click('[data-bdc-chip="contracts:all"]');
+await typeIn('[data-bdc-search="contracts"]', 'ألفا');
+check('search by the Arabic name finds ALPHA\'s two lines', (await keys('contract')) === 'ALPHA_1_CSA,ALPHA_5_TSA', await keys('contract'));
+await typeIn('[data-bdc-search="contracts"]', 'zzz');
+check('no match -> a sentence', (await text('[data-bdc-empty="contracts"]')) === 'No contract line matches.');
+await typeIn('[data-bdc-search="contracts"]', '');
+
+// Client page
+await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page');
+check('a line opens its client page: BETA, both lines, 800.5 m EGP ceiling', (await evalJS(`${q('[data-bdc-tab="client"]')}.dataset.bdcCode`)) === 'BETA'
+  && (await text('[data-bdc-fig="lines"]')) === '2' && (await text('[data-bdc-fig="ceiling"]')) === '800.5 m EGP'
+  && (await keys('clientline')) === 'BETA_3_TSA,BETA_2_CSA', `${await text('[data-bdc-fig="ceiling"]')} ${await keys('clientline')}`);
+check('client day-rates in grade order with the gap to ANOPC; average −20.0%',
+  (await keys('clientrate')) === 'General Manager,Senior Engineer,Operator'
+  && (await text('[data-bdc-row="clientrate"][data-bdc-key="General Manager"] [data-bdc-gap]')) === '−30.0%'
+  && (await text('[data-bdc-fig="gap"]')) === '−20.0%', `${await keys('clientrate')} ${await text('[data-bdc-fig="gap"]')}`);
+check('its supplier contracts (live first, completed shows Ended), its changes and its data issue',
+  (await keys('clientsupplier')) === 'S/2,S/3' && (await text('[data-bdc-row="clientsupplier"][data-bdc-key="S/3"] [data-bdc-flag]')) === 'Ended'
+  && (await count('[data-bdc-row="clientchange"]')) === 2 && (await count('[data-bdc-row="clientissue"]')) === 1 && (await text('[data-bdc-fig="issues"]')) === '1',
+  `${await keys('clientsupplier')} ${await count('[data-bdc-row="clientchange"]')} ${await count('[data-bdc-row="clientissue"]')}`);
+check('Contracts tab stays selected on the client page', (await evalJS(`${q('[data-bd-tab="contracts"]')}.getAttribute('aria-selected')`)) === 'true');
+await click('[data-bdc-row="clientsupplier"][data-bdc-key="S/2"]');
+await waitFor(q('[data-bdc-tab="suppliers"]'), 'suppliers tab');
+check('a supplier row opens Suppliers searched to that contract, opened, with its amendment',
+  (await evalJS(`${q('[data-bdc-search="suppliers"]')}.value`)) === 'S/2' && (await keys('supplier')) === 'S/2'
+  && (await evalJS(`${q('[data-bdc-row="supplier"]')}.open`)) === true && (await count('[data-bdc-row="amendment"]')) === 1
+  && (await pressed('[data-bdc-chip="supfilter:all"]')) === 'true', await keys('supplier'));
+check('supplier details: client link, cost type, growth since signing +25.0%',
+  (await text('[data-bdc-fields="supplier"]')).includes('EPROM overhead') && (await text('[data-bdc-fields="supplier"]')).includes('+25.0%'),
+  await text('[data-bdc-fields="supplier"]'));
+await click('[data-bdc-fields="supplier"] .bdc-link');
+check('the client link goes back to the BETA page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
+await click('[data-bdc="back"]');
+check('back -> the list, search kept clear', (await has('[data-bdc-tab="contracts"]')) && (await count('[data-bdc-row="contract"]')) === 5);
+
+// Pricing
+await click('[data-bd-tab="pricing"]');
+check('Pricing grid: columns = graded rates only (no Section Head), rows furthest below ANOPC first',
+  (await evalJS(`[...document.querySelectorAll('[data-bdc-grade-col]')].map(e => e.dataset.bdcGradeCol).join(',')`)) === 'General Manager,Senior Engineer,Operator'
+  && (await keys('price')) === 'BETA,DELTA,GAMMA,ANOPC,ALPHA', await keys('price'));
+check('cells coloured by gap: BETA GM red (−30%), DELTA GM amber (−20%), ALPHA GM green (+20%), DELTA has no Operator rate',
+  (await evalJS(`${q('[data-bdc-row="price"][data-bdc-key="BETA"] [data-bdc-cell="General Manager"]')}.className`)).includes('bdc-cell-lo')
+  && (await evalJS(`${q('[data-bdc-row="price"][data-bdc-key="DELTA"] [data-bdc-cell="General Manager"]')}.className`)).includes('bdc-cell-mid')
+  && (await evalJS(`${q('[data-bdc-row="price"][data-bdc-key="ALPHA"] [data-bdc-cell="General Manager"]')}.className`)).includes('bdc-cell-hi')
+  && (await text('[data-bdc-row="price"][data-bdc-key="DELTA"] [data-bdc-cell="Operator"]')) === '—');
+check('average gap column + benchmark row + ⚠ on BETA', (await text('[data-bdc-row="price"][data-bdc-key="BETA"] [data-bdc-avg]')) === '−20.0%'
+  && (await text('[data-bdc-row="benchrow"]')).startsWith('ANOPC10,0005,0003,000') && (await has('[data-bdc-row="price"][data-bdc-key="BETA"] [data-bdc-warn]')),
+  await text('[data-bdc-row="benchrow"]'));
+await click('[data-bdc-chip="bench:median"]');
+check('median benchmark: row says "Median client", GM median 9,500', (await text('[data-bdc-row="benchrow"]')).startsWith('Median client9,500'), await text('[data-bdc-row="benchrow"]'));
+await click('[data-bdc-chip="bench:anopc"]');
+await click('[data-bdc-open="DELTA"]');
+check('a name opens the client page — DELTA has rates but no client line', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'DELTA'
+  && (await count('[data-bdc-row="clientrate"]')) === 2 && (await text('[data-bdc-client="lines"] .bdc-empty')) === 'No client line on file');
+
+// Suppliers
+await click('[data-bd-tab="suppliers"]');
+await typeIn('[data-bdc-search="suppliers"]', '');
+check('Suppliers chip counts: running 4 · ≤90 d 1 · past date 1 · ended/on hold 3 · all 6',
+  (await texts('[data-bdc-chip^="supfilter:"] .bdc-chip-n')) === '4|1|1|3|6', await texts('[data-bdc-chip^="supfilter:"] .bdc-chip-n'));
+await click('[data-bdc-chip="supfilter:ended"]');
+check('ended: the On Hold one first (still listed live), then completed / cancelled', (await keys('supplier')) === 'S/5,S/3,S/6', await keys('supplier'));
+await click('[data-bdc-chip="supfilter:live"]');
+check('running: soonest end first, the USD one shows its note not an EGP value', (await keys('supplier')) === 'S/5,S/2,S/1,S/4'
+  && (await text('[data-bdc-row="supplier"][data-bdc-key="S/4"] .bdc-sub')).includes('20,000 USD'), await keys('supplier'));
+await click('[data-bdc-chip="supview:agibaSite"]');
+check('AGIBA site contracts, soonest end first, no date last', (await keys('site')) === 'A/1,A/2,A/3', await keys('site'));
+await click('[data-bdc-chip="supview:agibaSO"]');
+await click('[data-bdc-chip="soopen:open"]');
+check('open AGIBA SOs (cancelled + completed left out), past-date one first and red',
+  (await keys('so')) === 'SO 3-2026,SO 1-2026,SO 6-2026,SO 4-2026'
+  && (await evalJS(`${q('[data-bdc-row="so"][data-bdc-key="SO 3-2026"] [data-bdc-so]')}.className`)).includes('bdc-pill-lo'), await keys('so'));
+await click('[data-bdc-chip="soopen:all"]');
+check('all SOs: 6, open ones first', (await count('[data-bdc-row="so"]')) === 6 && (await keys('so')).endsWith('SO 2-2026,SO 5-2026'), await keys('so'));
+
+// Data quality
+await click('[data-bd-tab="quality"]');
+check('Data quality: every issue, chips per sheet', (await count('[data-bdc-row="dq"]')) === 6
+  && (await texts('[data-bdc-chip^="sheet:"]')) === 'All sheets6|Client Contracts4|Day Rates2', await texts('[data-bdc-chip^="sheet:"]'));
+await click('[data-bdc-chip="sheet:Day Rates"]');
+check('Day Rates: BETA opens (button), EPS has no client so it is plain text',
+  (await keys('dq')) === 'Day-Rates_1,Day-Rates_2'
+  && (await evalJS(`${q('[data-bdc-row="dq"][data-bdc-key="Day-Rates_1"]')}.tagName`)) === 'BUTTON'
+  && (await evalJS(`${q('[data-bdc-row="dq"][data-bdc-key="Day-Rates_2"]')}.tagName`)) === 'DIV', await keys('dq'));
+await typeIn('[data-bdc-search="quality"]', 'lower grade');
+check('search within the sheet', (await keys('dq')) === 'Day-Rates_1');
+await click('[data-bdc-row="dq"][data-bdc-key="Day-Rates_1"]');
+check('an issue opens its record: BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
+
+// Tiles and overview rows lead into the tabs
+await click('[data-bd-tab="overview"]');
+await click('[data-bd-kpi="renewals"]');
+check('Renewals tile -> Contracts, "within 90 days" chip on', (await has('[data-bdc-tab="contracts"]')) && (await pressed('[data-bdc-chip="contracts:d90"]')) === 'true'
+  && (await keys('contract')) === 'BETA_2_CSA');
+await click('[data-bd-tab="overview"]');
+await click('[data-bd-kpi="suppliers"]');
+check('Live suppliers tile -> Suppliers, running', (await has('[data-bdc-tab="suppliers"]')) && (await pressed('[data-bdc-chip="supfilter:live"]')) === 'true'
+  && (await pressed('[data-bdc-chip="supview:supplier"]')) === 'true');
+await click('[data-bd-tab="overview"]');
+await click('[data-bd-kpi="issues"]');
+check('Data issues tile -> Data quality, all sheets', (await has('[data-bdc-tab="quality"]')) && (await pressed('[data-bdc-chip="sheet:"]')) === 'true');
+await click('[data-bd-tab="overview"]');
+await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
+check('ceiling chart row -> ALPHA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'ALPHA');
+await click('[data-bd-tab="overview"]');
+await click('[data-bdc-row="reprice"][data-bdc-key="BETA"]');
+check('reprice row -> BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
+await click('[data-bd-tab="overview"]');
+await click('[data-bdc-row="next"][data-bdc-key="BETA"]');
+check('a client in "next to come up" -> its page; supplier items are not clickable', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
+await click('[data-bd-tab="overview"]');
+check('… and a supplier item there has no button role', (await evalJS(`${q('[data-bdc-row="next"][data-bdc-key="S/1"]')}.getAttribute('role')`)) === null);
+await shot('7-tabs-en');
+
+// Phone width on the browse tabs
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await sleep(250);
+for (const tb of ['contracts', 'pricing', 'suppliers', 'quality']) {
+  await click(`[data-bd-tab="${tb}"]`);
+  if (tb === 'suppliers') await click('[data-bdc-chip="supview:supplier"]');
+  check(`390 px ${tb}: no sideways scroll (the grid scrolls inside its box)`, (await overflow()) <= 1, String(await overflow()));
+}
+await click('[data-bd-tab="contracts"]');
+await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
+check('390 px client page: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
+await shot('8-client-mobile');
+await send('Emulation.clearDeviceMetricsOverride');
+
+// Arabic labels on the tabs
+await evalJS(`window.__setLang('ar')`);
+await sleep(200);
+check('Arabic tab names', (await texts('[data-bd-tab]')) === 'نظرة عامة|العقود|التسعير|الموردون|جودة البيانات', await texts('[data-bd-tab]'));
+check('Arabic client page: Arabic name as title, flag in Arabic', (await text('.bdc-title')) === 'بيتا للتكرير'
+  && (await text('[data-bdc-row="clientline"][data-bdc-key="BETA_3_TSA"] [data-bdc-flag]')) === 'انتهى على الورق');
+await evalJS(`window.__setLang('en')`);
+await sleep(150);
 
 console.log('\n[7] Arabic + RTL, then a 390 px phone');
 await evalJS(`window.__seedAll()`);

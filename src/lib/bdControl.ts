@@ -620,6 +620,219 @@ export function awaitedData(meta: BdMeta | null): { listed: boolean; items: BdAw
   return { listed: Array.isArray(meta?.awaited), items, received: items.filter(a => a.received === true).length };
 }
 
+// ── Browse tabs (queue E6a) ──────────────────────────────────────────────────
+
+export const BD_TABS = ['overview', 'contracts', 'pricing', 'suppliers', 'quality'] as const;
+export type BdTab = typeof BD_TABS[number];
+
+/** Every word of the query appears somewhere in the given values (case-insensitive). Empty query = match. */
+export function matches(query: string, ...values: unknown[]): boolean {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return true;
+  const hay = values.map(v => txt(v).toLowerCase()).join(' ');
+  return words.every(w => hay.includes(w));
+}
+
+/** Rows someone has changed in eTaske (they carry an edit note or stamp). */
+export const isEdited = (r: BdRow) => !!r.lastEditedAt || Object.keys(r.appEdits || {}).length > 0;
+
+export const CONTRACT_FILTERS = ['all', 'expired', 'd90', 'd180', 'noDate'] as const;
+export type ContractFilter = typeof CONTRACT_FILTERS[number];
+
+export interface ContractLine { row: BdClientContract; days: number | null; flag: ExpiryFlag; edited: boolean }
+
+const byDays = (a: { days: number | null }, b: { days: number | null }) => (a.days ?? 1e9) - (b.days ?? 1e9);
+
+const contractLine = (row: BdClientContract, today: string): ContractLine => {
+  const days = daysUntil(row.expiryDate, today);
+  return { row, days, flag: expiryFlag(days), edited: isEdited(row) };
+};
+
+/** Contracts tab — every client line, soonest expiry first (no date last), filtered and searched. */
+export function contractLines(data: BdData, today: string, filter: ContractFilter = 'all', query = ''): ContractLine[] {
+  const client = new Map(data.clients.map(c => [c.code, c]));
+  const keep: Record<ContractFilter, (l: ContractLine) => boolean> = {
+    all: () => true,
+    expired: l => l.flag === 'Expired on paper',
+    d90: l => l.flag === 'Within 90 days',
+    d180: l => l.flag === 'Within 90 days' || l.flag === 'Within 180 days',
+    noDate: l => l.flag === 'No date',
+  };
+  return data.clientContracts.map(r => contractLine(r, today))
+    .filter(keep[filter])
+    .filter(l => {
+      const c = client.get(l.row.client);
+      return matches(query, l.row.client, c?.name, c?.arabicName, l.row.contractType, l.row.status, l.row.comments);
+    })
+    .sort((a, b) => byDays(a, b) || a.row.client.localeCompare(b.row.client) || txt(a.row.contractType).localeCompare(txt(b.row.contractType)));
+}
+
+/** How many lines each contract filter holds (for the chip counts). */
+export function contractCounts(data: BdData, today: string): Record<ContractFilter, number> {
+  return Object.fromEntries(CONTRACT_FILTERS.map(f => [f, contractLines(data, today, f).length])) as Record<ContractFilter, number>;
+}
+
+export interface SupplierLine {
+  row: BdSupplierContract;
+  days: number | null;
+  flag: ExpiryFlag;
+  live: boolean;
+  egp: boolean;
+  growthPct: number | null;
+  /** Its amendments, in number order. */
+  amendments: BdRow[];
+  edited: boolean;
+}
+
+export const SUPPLIER_FILTERS = ['live', 'soon', 'past', 'ended', 'all'] as const;
+export type SupplierFilter = typeof SUPPLIER_FILTERS[number];
+
+function supplierLine(s: BdSupplierContract, today: string, amendments: BdRow[]): SupplierLine {
+  const egp = isEgpSupplier(s);
+  return {
+    row: s, days: daysUntil(s.currentEnd, today), flag: supplierFlag(s, today), live: isLiveSupplier(s), egp,
+    growthPct: egp ? growthPct(num(s.originalValueEgp), num(s.currentValueEgp)) : null,
+    amendments: [...amendments].sort((a, b) => (num(a.amendmentNo) ?? 0) - (num(b.amendmentNo) ?? 0)),
+    edited: isEdited(s),
+  };
+}
+
+const keepSupplier: Record<SupplierFilter, (l: SupplierLine) => boolean> = {
+  live: l => l.live,
+  soon: l => l.live && l.flag === 'Within 90 days',
+  past: l => l.live && l.flag === 'Expired on paper',
+  ended: l => !l.live || l.flag === 'Ended',
+  all: () => true,
+};
+
+/** Suppliers tab — supplier contracts with their amendments; running ones first, soonest end first. */
+export function supplierLines(data: BdData, today: string, filter: SupplierFilter = 'live', query = ''): SupplierLine[] {
+  const am = groupBy(data.supplierAmendments, a => a.contractNo);
+  return data.supplierContracts.map(s => supplierLine(s, today, am.get(txt(s.contractNo)) || []))
+    .filter(keepSupplier[filter])
+    .filter(l => matches(query, l.row.contractNo, l.row.contractor, l.row.client, l.row.subject, l.row.project, l.row.costType, l.row.status))
+    .sort((a, b) => (a.live ? 0 : 1) - (b.live ? 0 : 1) || byDays(a, b) || txt(a.row.contractNo).localeCompare(txt(b.row.contractNo)));
+}
+
+export function supplierCounts(data: BdData, today: string): Record<SupplierFilter, number> {
+  return Object.fromEntries(SUPPLIER_FILTERS.map(f => [f, supplierLines(data, today, f).length])) as Record<SupplierFilter, number>;
+}
+
+export interface SiteLine { row: BdAgibaSiteContract; days: number | null; flag: ExpiryFlag; edited: boolean }
+
+/** AGIBA site contracts, soonest end first. */
+export function siteLines(data: BdData, today: string, query = ''): SiteLine[] {
+  return data.agibaSiteContracts.map(row => {
+    const days = daysUntil(row.currentEnd, today);
+    return { row, days, flag: expiryFlag(days), edited: isEdited(row) };
+  }).filter(l => matches(query, l.row.contractNo, l.row.company, l.row.subject, l.row.status, l.row.inCharge))
+    .sort((a, b) => byDays(a, b) || txt(a.row.contractNo).localeCompare(txt(b.row.contractNo)));
+}
+
+export interface SoLine { row: BdRow; open: boolean; days: number | null; edited: boolean }
+
+/** AGIBA service orders: open ones first, soonest expiry first. */
+export function soLines(data: BdData, today: string, openOnly = true, query = ''): SoLine[] {
+  return data.agibaSOs.map(row => ({ row, open: isOpenSO(row), days: daysUntil(row.expiry, today), edited: isEdited(row) }))
+    .filter(l => !openOnly || l.open)
+    .filter(l => matches(query, l.row.so, l.row.item, l.row.contractor, l.row.status, l.row.inCharge))
+    .sort((a, b) => (a.open ? 0 : 1) - (b.open ? 0 : 1) || byDays(a, b) || txt(a.row.so).localeCompare(txt(b.row.so)));
+}
+
+export interface PricingRow {
+  client: string;
+  /** One cell per grade in grid order; null = no rate on the sheet. */
+  cells: { grade: string; rate: number | null; gap: number | null }[];
+  avgGap: number | null;
+}
+
+/** Pricing tab — the whole day-rate sheet as a client × grade grid, against a benchmark. */
+export function pricingRows(grid: RateGrid, b: Benchmark): { base: { grade: string; rate: number | null }[]; rows: PricingRow[] } {
+  return {
+    base: grid.grades.map(g => ({ grade: g, rate: benchmarkRate(grid, g, b) })),
+    rows: grid.clients.map(c => ({
+      client: c,
+      cells: grid.grades.map(g => ({ grade: g, rate: grid.rate(c, g), gap: gapPct(grid, c, g, b) })),
+      avgGap: avgGapPct(grid, c, b),
+    })).sort((x, y) => (x.avgGap ?? 1e9) - (y.avgGap ?? 1e9) || x.client.localeCompare(y.client)),
+  };
+}
+
+/**
+ * Where a data issue points: a client page (client line / day-rate column), a supplier
+ * contract, an AGIBA SO or site contract — or nowhere (a whole-sheet note such as "9 rows").
+ */
+export type IssueTarget =
+  | { kind: 'client'; code: string }
+  | { kind: 'supplier' | 'agibaSO' | 'agibaSite'; query: string }
+  | null;
+
+export function issueTarget(i: BdDataIssue, clientCodes: Set<string>): IssueTarget {
+  const rec = txt(i.record);
+  if (!rec) return null;
+  const table = txt(i.table);
+  if (table === 'Client Contracts' || table === 'Day Rates') {
+    const code = clientCodes.has(rec) ? rec : rec.split(/\s+/)[0];
+    return clientCodes.has(code) ? { kind: 'client', code } : null;
+  }
+  if (table === 'Supplier Contracts') return { kind: 'supplier', query: rec };
+  if (table === 'AGIBA SOs') return { kind: 'agibaSO', query: rec };
+  if (table === 'AGIBA Site Contracts') return { kind: 'agibaSite', query: rec.split(/\s+/)[0] };
+  return null;
+}
+
+/** Data quality tab — issues filtered by sheet ('' = all) and searched, in sheet then record order. */
+export function issueRows(rows: BdDataIssue[], table = '', query = ''): BdDataIssue[] {
+  return rows.filter(i => !table || txt(i.table) === table)
+    .filter(i => matches(query, i.table, i.record, i.issue, i.whatToDo))
+    .sort((a, b) => txt(a.table).localeCompare(txt(b.table)) || txt(a.record).localeCompare(txt(b.record), undefined, { numeric: true }) || a.id.localeCompare(b.id));
+}
+
+export interface ClientProfile {
+  code: string;
+  client: BdClient | null;
+  lines: ContractLine[];
+  ceilingEgp: number;
+  monthlyEgp: number;
+  /** Its day-rates against ANOPC, in grid order; empty when it has no column on the sheet. */
+  rates: { grade: string; rate: number; gap: number | null }[];
+  avgGap: number | null;
+  suppliers: SupplierLine[];
+  liveSuppliers: number;
+  liveSupplierEgp: number;
+  changes: ChangeRow[];
+  changeFrom: string | null;
+  changeTo: string | null;
+  issues: BdDataIssue[];
+}
+
+/** The client page — everything on file for one client code. */
+export function clientProfile(data: BdData, code: string, today: string, grid: RateGrid = rateGrid(data.dayRates)): ClientProfile {
+  const lines = data.clientContracts.filter(c => c.client === code).map(r => contractLine(r, today)).sort(byDays);
+  const am = groupBy(data.supplierAmendments, a => a.contractNo);
+  const suppliers = data.supplierContracts.filter(s => txt(s.client) === code)
+    .map(s => supplierLine(s, today, am.get(txt(s.contractNo)) || []))
+    .sort((a, b) => (a.live ? 0 : 1) - (b.live ? 0 : 1) || byDays(a, b));
+  const live = suppliers.filter(l => l.live);
+  const rates = grid.grades.map(g => ({ grade: g, rate: grid.rate(code, g), gap: gapPct(grid, code, g, 'anopc') }))
+    .filter((x): x is { grade: string; rate: number; gap: number | null } => x.rate != null);
+  const ch = changesByClient(data.changes);
+  const codes = new Set(data.clients.map(c => c.code));
+  const supNos = new Set(suppliers.map(l => txt(l.row.contractNo)));
+  const issues = issueRows(data.dataIssues.filter(i => {
+    const tg = issueTarget(i, codes);
+    return (tg?.kind === 'client' && tg.code === code) || (txt(i.table) === 'Supplier Contracts' && supNos.has(txt(i.record)));
+  }));
+  return {
+    code, client: data.clients.find(c => c.code === code) || null, lines,
+    ceilingEgp: sum(lines, l => l.row.ceilingEgp), monthlyEgp: sum(lines, l => l.row.monthlyValueEgp),
+    rates, avgGap: rates.length ? avgGapPct(grid, code, 'anopc') : null,
+    suppliers, liveSuppliers: live.length, liveSupplierEgp: sum(live.filter(l => l.egp), l => l.row.currentValueEgp),
+    changes: ch.clients.find(c => c.client === code)?.changes || [], changeFrom: ch.from, changeTo: ch.to,
+    issues,
+  };
+}
+
 export const emptyBdData = (): BdData => ({
   meta: null, clients: [], clientContracts: [], changes: [], dayRates: [], supplierContracts: [],
   supplierAmendments: [], agibaSOs: [], agibaSiteContracts: [], dataIssues: [],
