@@ -416,6 +416,70 @@ service cloud.firestore {
       }
     }
 
+    // ─── BD control (queue E4) ───────────────────────────────────────────────
+    // Every client contract, supplier contract, day rate and AGIBA order, loaded
+    // from BD's Excel files by an outside script (owner token, not bound by these
+    // rules). ALL managers + admins read; the same people may EDIT a row of the
+    // tables below, only the listed fields, and every edited field must carry an
+    // appEdits.<field> note so the next Excel load keeps it. Nobody creates or
+    // deletes rows from the app; meta, changes and dataIssues are loader-only.
+    // Mirrors src/lib/bdControlAccess.ts — keep both in step.
+    function bdControlFields() {
+      return {
+        'clients': ['code', 'name', 'arabicName', 'kind'],
+        'clientContracts': ['sr', 'client', 'clientAsWritten', 'contractType', 'amendment', 'expiryDate',
+          'ceilingEgp', 'valueBasis', 'monthlyValueEgp', 'status', 'comments'],
+        'dayRates': ['client', 'rateSheetHeading', 'level', 'grade', 'dayRateEgp'],
+        'supplierContracts': ['contractNo', 'subject', 'contractor', 'project', 'client', 'projectOwnerAsWritten',
+          'costType', 'requestingDept', 'method', 'approvedBudgetEgp', 'originalStart', 'originalEnd',
+          'originalValueEgp', 'latestAmendment', 'currentValueEgp', 'currentEnd', 'status', 'admin', 'remarks',
+          'valueCurrencyNote'],
+        'supplierAmendments': ['contractNo', 'amendmentNo', 'type', 'start', 'previousEnd', 'newEnd',
+          'previousValueEgp', 'variationPct', 'variationValueEgp', 'valueAfterEgp', 'status', 'remarks'],
+        'agibaSOs': ['so', 'item', 'contractor', 'budgetAsWritten', 'amount', 'currency', 'duration', 'start',
+          'expiry', 'soSr', 'completionCertificate', 'status', 'inCharge', 'remarks', 'budgetNote'],
+        'agibaSiteContracts': ['contractNo', 'subject', 'company', 'requestingDept', 'srValue',
+          'contractValueAsWritten', 'start', 'originalEnd', 'startEndNote', 'method', 'status', 'inCharge',
+          'remarks', 'amendments', 'currentEnd', 'latestAmendment', 'valueNote']
+      };
+    }
+    function bdControlReadable(table) {
+      return table in bdControlFields() || table in ['changes', 'dataIssues'];
+    }
+    function bdControlEditOk(table) {
+      let before = resource.data;
+      let after = request.resource.data;
+      let changed = after.diff(before).affectedKeys().difference(['appEdits', 'lastEditedBy', 'lastEditedAt'].toSet());
+      return table in bdControlFields() &&
+        after.keys().hasOnly(bdControlFields()[table].concat(['appEdits', 'lastEditedBy', 'lastEditedAt'])) &&
+        changed.size() > 0 &&
+        after.get('appEdits', {}) is map &&
+        changed.hasOnly(after.get('appEdits', {}).keys()) &&
+        after.get('appEdits', {}).keys().hasAll(before.get('appEdits', {}).keys()) &&
+        after.lastEditedBy == request.auth.uid &&
+        after.lastEditedAt == request.time;
+    }
+    match /bdControl/meta {
+      allow read: if isManagerOrAdmin();
+      allow write: if false;
+    }
+    match /bdControl/{table}/rows/{id} {
+      allow read: if bdControlReadable(table) && isManagerOrAdmin();
+      allow update: if isManagerOrAdmin() && bdControlEditOk(table);
+      allow create, delete: if false;
+      // One doc per change, append-only: who changed which field from what to what.
+      match /history/{h} {
+        allow read: if bdControlReadable(table) && isManagerOrAdmin();
+        allow create: if isManagerOrAdmin() && table in bdControlFields() &&
+          exists(/databases/$(database)/documents/bdControl/$(table)/rows/$(id)) &&
+          request.resource.data.keys().hasOnly(['field', 'from', 'to', 'byUid', 'byName', 'at']) &&
+          request.resource.data.field in bdControlFields()[table] &&
+          request.resource.data.byUid == request.auth.uid &&
+          request.resource.data.at == request.time;
+        allow update, delete: if false;
+      }
+    }
+
     // ─── My daily tasks (daily to-do sheet) ──────────────────────────────────
     // Each person's own hand-typed to-do rows (src/lib/myTodos.ts). OWNER ONLY —
     // no manager or admin reads someone else's list. A query must be filtered
