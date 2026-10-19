@@ -77,6 +77,8 @@ node scripts/harness/weeklyreport.mjs # src/lib/weeklyReport.ts -> weekly Arabic
                                       #   week's end, letters/bids/projects/meetings, per person, Arabic counts + wording (99; --print)
 node scripts/harness/weeklyreportui.mjs # Weekly report page in a browser: text, tiles, week arrows + URL, department heading kept,
                                       #   edit + undo, copy/download, private task out, AR/RTL, 390 px (39; --shot)
+node scripts/harness/bdcontrolui.mjs   # BD control page (E5a) in a browser: the maths, every KPI tile from made-up rows,
+                                      #   date strip + stale + edits since load, live follow, empty/denied, nav gates, AR/RTL, 390 px (51; --shot)
 ```
 
 ## Logic harnesses (Opportunities module)
