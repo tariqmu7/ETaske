@@ -1977,6 +1977,23 @@ h1, h2, h3, h4, p, span, div {
 .bdc-cell-none { color: var(--text-muted); }
 .bdc-hi-key { background: var(--bdc-hi); }
 .bdc-link { background: none; border: 0; padding: 0; font: inherit; font-weight: 700; color: var(--accent); cursor: pointer; text-align: start; text-decoration: underline; text-underline-offset: 2px; }
+/* BD control editing (queue E6b). */
+.bdc-pill-edit { color: var(--accent); border-style: dashed; }
+.bdc-item-tags { display: inline-flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; }
+.bdc-item-actions { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+.bdc-edit { padding: 3px 8px; gap: 4px; }
+.bdc-editmark { font-size: 11px; color: var(--accent); margin-inline-start: 3px; }
+.bdc-modal { max-width: 720px; padding: 18px 20px; }
+.bdc-modal-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 6px; }
+.bdc-form { display: grid; gap: 10px 14px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); margin-top: 10px; }
+.bdc-formrow { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.bdc-formrow-wide { grid-column: 1 / -1; }
+.bdc-formrow label { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
+.bdc-formrow [aria-invalid="true"] { border-color: var(--bdc-lo); }
+.bdc-field-err { font-size: 12px; font-weight: 700; color: var(--bdc-lo); }
+.bdc-field-note { font-size: 11.5px; color: var(--text-muted); line-height: 1.5; }
+.bdc-modal-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+.bdc-modal-foot .bdc-sub { margin-inline-end: auto; }
 @media (max-width: 560px) {
   .bdc-row { grid-template-columns: minmax(0, 1fr) auto; }
   .bdc-row .bdc-track { grid-column: 1 / -1; grid-row: 2; }

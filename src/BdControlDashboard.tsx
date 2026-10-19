@@ -10,6 +10,8 @@ import ClientPage from './components/bdcontrol/ClientPage';
 import PricingTab from './components/bdcontrol/PricingTab';
 import SuppliersTab, { type SuppliersState } from './components/bdcontrol/SuppliersTab';
 import DataQualityTab, { type QualityState } from './components/bdcontrol/DataQualityTab';
+import { BdEditProvider } from './components/bdcontrol/EditRecord';
+import { canEditBdControl } from './lib/bdControlAccess';
 import { AppUser } from './types';
 import type { AppView } from './App';
 
@@ -41,16 +43,18 @@ const TAB_LABEL: Record<BdTab, string> = {
  * (E5b + E5c, components/bdcontrol/OverviewCharts.tsx + OverviewMoreCharts.tsx),
  * then the browse tabs (E6a): Contracts + the client page, Pricing, Suppliers,
  * Data quality. The tiles, the ceiling / day-rate / reprice rows and every data
- * issue open the matching tab. Editing (E6b) comes next.
+ * issue open the matching tab. Managers and admin can correct a record in place
+ * (E6b, components/bdcontrol/EditRecord.tsx); each change keeps its Excel value and a log.
  * Gated by `canViewBdControl` in App/TopNav/More/Home/palette, and by the rules.
  */
-export default function BdControlDashboard(_props: Props) {
+export default function BdControlDashboard({ appUser }: Props) {
   const { t } = useTranslation();
   const F = useFormat();
   const { data, loading, error } = useBdControl();
   const today = useMemo(() => todayISO(), []);
   const k = useMemo(() => overviewKpis(data, today), [data, today]);
   const dd = useMemo(() => dataDate(data, today), [data, today]);
+  const who = useMemo(() => ({ uid: appUser.id, name: appUser.displayName || appUser.email }), [appUser.id, appUser.displayName, appUser.email]);
 
   // Where the reader is. Each tab keeps its search and filters while you move between tabs.
   const [tab, setTab] = useState<BdTab>('overview');
@@ -167,6 +171,7 @@ export default function BdControlDashboard(_props: Props) {
             ))}
           </div>
 
+          <BdEditProvider data={data} canEdit={canEditBdControl(appUser)} who={who}>
           {tab === 'contracts' ? (client
             ? <ClientPage key={client} data={data} today={today} code={client} onBack={() => openTab('contracts')}
                 onSupplier={no => openSuppliers({ view: 'supplier', q: no })} />
@@ -192,6 +197,7 @@ export default function BdControlDashboard(_props: Props) {
           {/* 3–12 — ceilings, renewals, day-rates, reprice list, suppliers, amendments, AGIBA SOs, changes, data issues, awaited data. */}
           <OverviewCharts data={data} today={today} onClient={openClient} />
           </>}
+          </BdEditProvider>
         </>
       )}
     </div>

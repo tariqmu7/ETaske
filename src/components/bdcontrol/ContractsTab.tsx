@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react';
 import { contractCounts, contractLines, type BdData, type ContractFilter } from '../../lib/bdControl';
 import { BROWSE_FIRST, Chips, MoreButton, SearchBox, useBdWords } from './shared';
+import { EditedBadge } from './EditRecord';
 
 export interface ContractsState { filter: ContractFilter; q: string }
 
@@ -58,6 +59,7 @@ export default function ContractsTab({ data, today, state, onState, onClient }: 
                     <span className="bdc-sub">{[w.ar ? c?.name : c?.arabicName, r.status ? w.word(r.status) : t('Status blank'), value].filter(Boolean).join(' · ')}</span>
                   </span>
                   <span className="bdc-line-when">
+                    <EditedBadge row={r} />
                     {w.flag(l.flag)}
                     <span className="bdc-sub">{w.ends(r.expiryDate, l.days)}</span>
                   </span>

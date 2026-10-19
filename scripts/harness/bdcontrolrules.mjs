@@ -131,5 +131,37 @@ expect('Manager adds a line under a data issue', await addHistory('bdControl/dat
 expect('Manager rewrites a history line', await edit(`${CC}/history/h0`, { to: 'Closed' }, MGR, { stamp: [] }), false);
 expect('admin deletes a history line', await del(`${CC}/history/h0`, BOOT), false);
 
+// [4] The app's own save (queue E6b, src/lib/bdControlSave.ts): ONE commit = the row update (the whole
+// appEdits map written back, each note's `at` + lastEditedAt = server time) + one history doc per field.
+async function appSave(rowPath, changed, notes, uid, auth, history) {
+  const appEdits = Object.fromEntries(Object.entries(notes).map(([f, n]) => [f, { excelValue: n.excelValue, byName: n.byName }]));
+  const writes = [{
+    update: { name: `${ROOT}/${rowPath}`, fields: fields({ ...changed, appEdits, lastEditedBy: uid }) },
+    updateMask: { fieldPaths: [...Object.keys(changed), 'appEdits', 'lastEditedBy'] },
+    updateTransforms: [...Object.keys(notes).map(f => ({ fieldPath: `appEdits.${f}.at`, setToServerValue: 'REQUEST_TIME' })),
+      { fieldPath: 'lastEditedAt', setToServerValue: 'REQUEST_TIME' }],
+    currentDocument: { exists: true },
+  }, ...history.map((h, i) => ({
+    update: { name: `${ROOT}/${rowPath}/history/app${Date.now()}_${i}`, fields: fields(h) },
+    updateTransforms: [{ fieldPath: 'at', setToServerValue: 'REQUEST_TIME' }],
+    currentDocument: { exists: false },
+  }))];
+  return (await fetch(`${BASE}:commit`, { method: 'POST', headers: H(auth), body: JSON.stringify({ writes }) })).status;
+}
+const SC = 'bdControl/supplierContracts/rows/T-9';
+await put(SC, { contractNo: 'T/9', status: 'In Progress', currentEnd: '2027-01-01', currentValueEgp: 100 }, OWNER);
+const hl = (field, from, to, uid = 'u-mgr') => ({ field, from, to, byUid: uid, byName: 'Manager' });
+const n3 = by => ({ status: { excelValue: 'In Progress', byName: by }, currentEnd: { excelValue: '2027-01-01', byName: by }, currentValueEgp: { excelValue: 100, byName: by } });
+console.log("\n[4] The app's save: row + history in one batch");
+expect('Manager saves two fields + two history lines in one batch', await appSave(SC, { status: 'Completed', currentEnd: '2027-06-30' },
+  { status: { excelValue: 'In Progress', byName: 'Manager' }, currentEnd: { excelValue: '2027-01-01', byName: 'Manager' } }, 'u-mgr', MGR,
+  [hl('status', 'In Progress', 'Completed'), hl('currentEnd', '2027-01-01', '2027-06-30')]), true);
+expect('… a later save keeps both notes and adds one', await appSave(SC, { currentValueEgp: 150 }, n3('Manager'), 'u-mgr', MGR,
+  [hl('currentValueEgp', 100, 150)]), true);
+expect('… one bad history line refuses the WHOLE batch', await appSave(SC, { currentValueEgp: 175 }, n3('Manager'), 'u-mgr', MGR,
+  [hl('currentValueEgp', 150, 175, 'u-admin')]), false);
+expect('… and an Employee cannot run the same batch', await appSave(SC, { currentValueEgp: 175 }, n3('E'), 'u-emp', EMP,
+  [hl('currentValueEgp', 150, 175, 'u-emp')]), false);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

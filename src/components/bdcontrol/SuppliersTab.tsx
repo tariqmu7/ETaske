@@ -5,6 +5,7 @@ import {
   type BdData, type SupplierFilter,
 } from '../../lib/bdControl';
 import { BROWSE_FIRST, Chips, Fields, MoreButton, SearchBox, useBdWords } from './shared';
+import { EditButton, EditedBadge } from './EditRecord';
 
 export type SupplierView = 'supplier' | 'agibaSite' | 'agibaSO';
 export interface SuppliersState { view: SupplierView; filter: SupplierFilter; soOpen: boolean; q: string }
@@ -25,7 +26,8 @@ const FILTER_LABEL: Record<SupplierFilter, string> = {
  * Suppliers tab (queue E6a): supplier contracts with their amendments, AGIBA
  * site contracts and AGIBA service orders. Each row opens to everything on file.
  * A search typed here (or handed over from a data issue / client page) filters
- * the list on contract number, contractor, client and subject.
+ * the list on contract number, contractor, client and subject. Managers can
+ * edit a supplier contract, AGIBA site contract or SO from its open row (E6b).
  */
 export default function SuppliersTab({ data, today, state, onState, onClient }: Props) {
   const w = useBdWords(data);
@@ -81,11 +83,13 @@ export default function SuppliersTab({ data, today, state, onState, onClient }: 
                   r.status ? w.word(r.status) : t('Status blank')].filter(Boolean).join(' · ')}</span>
               </span>
               <span className="bdc-line-when">
+                <EditedBadge row={r} />
                 {l.live && l.flag !== 'Ended' ? w.flag(l.flag) : w.flag('Ended')}
                 <span className="bdc-sub">{w.ends(r.currentEnd, l.days)}</span>
               </span>
             </summary>
             <div className="bdc-item-body">
+              <div className="bdc-item-actions"><EditButton table="supplierContracts" row={r} title={t('supplier contract {{no}}', { no: r.contractNo })} /></div>
               <Fields attr="supplier" items={[
                 [t('Subject'), val(r.subject)],
                 [t('Client'), r.client ? <button type="button" className="bdc-link" onClick={() => onClient(String(r.client))}>{w.bidi(w.nameOf(String(r.client)))}</button> : null],
@@ -141,11 +145,13 @@ export default function SuppliersTab({ data, today, state, onState, onClient }: 
                 <span className="bdc-sub">{[r.company, r.status].filter(Boolean).join(' · ')}</span>
               </span>
               <span className="bdc-line-when">
+                <EditedBadge row={r} />
                 {w.flag(l.flag)}
                 <span className="bdc-sub">{w.ends(r.currentEnd, l.days)}</span>
               </span>
             </summary>
             <div className="bdc-item-body">
+              <div className="bdc-item-actions"><EditButton table="agibaSiteContracts" row={r} title={t('AGIBA site contract {{no}}', { no: r.contractNo })} /></div>
               <Fields attr="site" items={[
                 [t('Subject'), val(r.subject)],
                 [t('Company'), val(r.company)],
@@ -177,6 +183,7 @@ export default function SuppliersTab({ data, today, state, onState, onClient }: 
                 <span className="bdc-sub">{[r.contractor ? String(r.contractor) : t('No contractor named'), r.status ? w.word(r.status) : t('Status blank')].join(' · ')}</span>
               </span>
               <span className="bdc-line-when">
+                <EditedBadge row={r} />
                 {l.open
                   ? <span className={`bdc-pill bdc-pill-${l.days != null && l.days < 0 ? 'lo' : 'wait'}`} data-bdc-so="open">{t('Still open')}</span>
                   : <span className="bdc-pill bdc-pill-flat" data-bdc-so="closed">{t('Closed')}</span>}
@@ -184,6 +191,7 @@ export default function SuppliersTab({ data, today, state, onState, onClient }: 
               </span>
             </summary>
             <div className="bdc-item-body">
+              <div className="bdc-item-actions"><EditButton table="agibaSOs" row={r} title={t('service order {{no}}', { no: so })} /></div>
               <Fields attr="so" items={[
                 [t('Amount'), typeof r.amount === 'number' ? `${F.number(r.amount, { maximumFractionDigits: 0 })} ${String(r.currency || '')}`.trim() : null],
                 [t('Budget as written'), val(r.budgetAsWritten)],

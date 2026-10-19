@@ -1,4 +1,4 @@
-// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs).
+// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs + E6b editing).
 //
 // Proves src/BdControlDashboard.tsx + src/lib/bdControl.ts + src/hooks/useBdControl.ts
 // in real Edge: the pure maths (days, flags, live/EGP rules, millions, edits since
@@ -9,7 +9,9 @@
 // report-to-report changes, data issues per sheet, awaited data flipping as it arrives), the empty and
 // permission-denied states, the role gate and the 6 nav entries, the browse tabs (Contracts + client page,
 // Pricing grid, Suppliers, Data quality, and the tiles / chart rows that open them), Arabic + RTL, a 390 px
-// phone and dark mode. The page writes nothing.
+// phone and dark mode. Editing (E6b): the form per record type, what a save writes (field + appEdits note with the
+// Excel value + stamps + one history doc per field, in one batch), the badge, the change log, bad input, a refused
+// save, figures following an edit, no Edit button for someone who may not edit, Arabic + phone.
 // The rows are MADE UP — the real data must never be in this public repo.
 //
 //   node scripts/harness/bdcontrolui.mjs   (--headed to watch it, --shot to write PNGs)
@@ -48,6 +50,28 @@ const STUB = FIRESTORE_STUB.replace(HOOK, `${HOOK}
     return () => { const i = listeners.indexOf(l); if (i >= 0) listeners.splice(i, 1); };
   }`);
 if (STUB === FIRESTORE_STUB) throw new Error('onSnapshot hook not applied');
+const BATCH_NOOP = 'export function writeBatch() { return { set() {}, update() {}, delete() {}, commit: async () => {} }; }';
+if (!STUB.includes(BATCH_NOOP)) throw new Error('writeBatch stub not found');
+const STUB2 = STUB.replace(BATCH_NOOP, `
+const deep = v => (v && v.__serverTimestamp) ? stamp() : (v && typeof v === 'object' && !Array.isArray(v) && typeof v.seconds !== 'number')
+  ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, deep(x)])) : v;
+export function writeBatch() {
+  const ops = [];
+  return {
+    set(ref, data) { ops.push(['set', ref, data]); },
+    update(ref, data) { ops.push(['update', ref, data]); },
+    delete(ref) { ops.push(['delete', ref]); },
+    commit: async () => {
+      if (globalThis.__batchFail) { const e = new Error('refused'); e.code = globalThis.__batchFail; throw e; }
+      globalThis.__batches = (globalThis.__batches || 0) + 1;
+      for (const [op, ref, data] of ops) {
+        if (op === 'update') await updateDoc(ref, deep(data));
+        else if (op === 'set') await setDoc(ref, deep(data));
+        else await deleteDoc(ref);
+      }
+    },
+  };
+}`);
 
 const FIREBASE_STUB = `
 export const app = {};
@@ -62,7 +86,7 @@ const stubPlugin = {
     b.onResolve({ filter: /^firebase\/(auth|app|messaging)$/ }, () => ({ path: 'stub-empty', namespace: 'stub' }));
     b.onResolve({ filter: /\/firebase$/ }, () => ({ path: 'stub-firebase', namespace: 'stub' }));
     b.onLoad({ filter: /.*/, namespace: 'stub' }, args => ({
-      contents: args.path === 'stub-firestore' ? STUB
+      contents: args.path === 'stub-firestore' ? STUB2
         : args.path === 'stub-firebase' ? FIREBASE_STUB
         : 'export {};',
       loader: 'js',
@@ -78,6 +102,7 @@ import './src/i18n';
 import BdControlDashboard from './src/BdControlDashboard';
 import * as lib from './src/lib/bdControl';
 import * as access from './src/lib/bdControlAccess';
+import * as edit from './src/lib/bdControlEdit';
 import i18n, { applyLanguageToDocument } from './src/i18n';
 
 const iso = off => { const d = new Date(); d.setDate(d.getDate() + off); return lib.todayISO(d); };
@@ -139,7 +164,7 @@ window.__seedAll = () => {
 };
 window.__seedAll();
 
-window.__lib = lib; window.__access = access; window.__iso = iso; window.__ts = ts; window.__ago = ago;
+window.__lib = lib; window.__edit = edit; window.__access = access; window.__iso = iso; window.__ts = ts; window.__ago = ago;
 window.__denied = new Set();
 window.__user = { id: 'u-mgr', displayName: 'Mona Manager', role: 'Manager', status: 'Approved' };
 const root = createRoot(document.getElementById('root'));
@@ -791,6 +816,186 @@ await remount();
 await waitFor(q('[data-bd="error"]'), 'error card (one table)');
 check('one table refused is enough to show the error (no half totals)', !(await has('[data-bd="tiles"]')));
 await evalJS(`window.__denied = new Set()`);
+
+console.log('\n[10] editing (E6b)');
+await evalJS(`window.__seedAll(); window.__writes.length = 0; window.__batches = 0; window.__batchFail = null`);
+await remount();
+await waitFor(q('[data-bd="tiles"]'), 'tiles (edit)');
+const E = JSON.parse(await evalJS(`(() => { const E = window.__edit, i = window.__iso;
+  const beta = window.__store.get('bdControl/clientContracts/rows').get('BETA_2_CSA');
+  const row = { id: 'BETA_2_CSA', ...beta };
+  const d0 = E.diffForm('clientContracts', row, { expiryDate: i(45), ceilingEgp: '800,500,000', status: 'Valid' });
+  const d1 = E.diffForm('clientContracts', row, { expiryDate: i(50), ceilingEgp: '900000000', status: 'Valid' });
+  const d2 = E.diffForm('clientContracts', row, { ceilingEgp: 'abc', expiryDate: '31/12/2026' });
+  const pl = E.planEdit(row, d1.changes, { uid: 'u-x', name: 'Sam' }, 'STAMP');
+  return JSON.stringify({
+    n: ['1,250,000', '١٢٣', '-4.5', 'abc', '', '  '].map(x => E.fromInput(x, 'number')),
+    d: [E.fromInput('2027-01-31', 'date'), E.fromInput('31/01/2027', 'date')],
+    ti: [E.toInput('2027-01-31T00:00:00', 'date'), E.toInput(null, 'text'), E.toInput(12.5, 'number')],
+    d0: d0.changes.length, d1: d1.changes.map(c => c.field + ':' + c.to), bad: d2.bad,
+    ae: pl.update.appEdits, by: pl.update.lastEditedBy, at: pl.update.lastEditedAt, h: pl.history,
+    tables: E.EDIT_TABLES, sug: E.suggestions([{ s: 'A' }, { s: 'B' }, { s: 'A' }, { s: null }, { s: ' ' }], 's'),
+  }); })()`));
+check('number input: commas and Arabic digits read, words refused, blank = null',
+  J(E.n) === J([{ ok: true, value: 1250000 }, { ok: true, value: 123 }, { ok: true, value: -4.5 }, { ok: false }, { ok: true, value: null }, { ok: true, value: null }]), J(E.n));
+check('date input: ISO only; stored ISO-with-time shows as the date', J(E.d) === J([{ ok: true, value: '2027-01-31' }, { ok: false }]) && J(E.ti) === J(['2027-01-31', '', '12.5']), J(E.ti));
+check('an untouched form (or the same number typed with commas) changes nothing', E.d0 === 0, String(E.d0));
+check('changed fields found, bad number + bad date reported', J(E.d1) === J(['expiryDate:' + await evalJS(`window.__iso(50)`), 'ceilingEgp:900000000']) && J(E.bad) === J(['expiryDate', 'ceilingEgp']), J(E.d1) + J(E.bad));
+check('plan: earlier note kept with its FIRST Excel value; new field remembers what Excel had; stamps = uid + server time',
+  E.ae.expiryDate.excelValue === await evalJS(`window.__iso(40)`) && E.ae.expiryDate.byName === 'Sam' && E.ae.ceilingEgp.excelValue === 800500000
+  && E.ae.ceilingEgp.at === 'STAMP' && E.by === 'u-x' && E.at === 'STAMP', J(E.ae));
+check('plan: one history doc per field {field, from, to, byUid, byName, at} (the rules\' key list)',
+  E.h.length === 2 && J(Object.keys(E.h[0]).sort()) === J(['at', 'byName', 'byUid', 'field', 'from', 'to']) && E.h[1].from === 800500000 && E.h[1].to === 900000000, J(E.h));
+check('editable tables: client lines, day-rates, supplier contracts, AGIBA site contracts, AGIBA SOs', J(E.tables) === J(['clientContracts', 'dayRates', 'supplierContracts', 'agibaSiteContracts', 'agibaSOs']), J(E.tables));
+check('suggestions: distinct values, most used first, blanks dropped', J(E.sug) === J(['A', 'B']), J(E.sug));
+const ruleKeys = src('firestore.rules');
+const fieldsOk = await evalJS(`JSON.stringify(Object.entries(window.__edit.EDIT_FIELDS).flatMap(([t, fs]) => fs.map(f => t + '.' + f.key)))`);
+const missing = JSON.parse(fieldsOk).filter(tk => { const [t, k] = tk.split('.'); const m = ruleKeys.match(new RegExp(`'${t}': \\[([^\\]]*)\\]`)); return !m || !m[1].includes(`'${k}'`); });
+check('every field the form offers is on the rules\' edit list for its table', missing.length === 0, missing.join(', '));
+
+const setVal = (sel, v) => evalJS(`(() => { const e = ${q(sel)}; const P = e.tagName === 'TEXTAREA' ? HTMLTextAreaElement : HTMLInputElement;
+  Object.getOwnPropertyDescriptor(P.prototype, 'value').set.call(e, ${JSON.stringify(v)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`).then(() => sleep(120));
+const dlg = '[data-bdc-dialog]';
+const row = (t, id) => evalJS(`JSON.stringify(window.__store.get('bdControl/${t}/rows').get(${JSON.stringify(id)}))`).then(JSON.parse);
+const hist = (t, id) => evalJS(`JSON.stringify([...(window.__store.get('bdControl/${t}/rows/${id}/history') || new Map()).values()])`).then(JSON.parse);
+
+const ceil0 = await tile('ceiling');
+const edits0 = await text('[data-bd="edits"]');
+await click('[data-bd-tab="contracts"]');
+check('Contracts list: "Edited in eTaske" badge on the edited line only', (await keys('contract')).includes('BETA_2_CSA')
+  && (await has('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"] [data-bdc-edited]')) && !(await has('[data-bdc-row="contract"][data-bdc-key="ALPHA_1_CSA"] [data-bdc-edited]')));
+check('… and no Edit button inside the clickable list rows', !(await has('[data-bdc-row="contract"] [data-bdc-edit]')));
+await click('[data-bdc-row="contract"][data-bdc-key="ALPHA_1_CSA"]');
+check('client page: an Edit button on each contract line and each day-rate', (await count('[data-bdc-row="clientline"] [data-bdc-edit]')) === 2
+  && (await count('[data-bdc-row="clientrate"] [data-bdc-edit]')) === 3, `${await count('[data-bdc-row="clientline"] [data-bdc-edit]')} ${await count('[data-bdc-row="clientrate"] [data-bdc-edit]')}`);
+await click('[data-bdc-edit="clientContracts:ALPHA_1_CSA"]');
+await waitFor(q(dlg), 'edit dialog');
+check('form: title names the line, fields filled from the row, nothing changed yet, Save off',
+  (await text('#bdc-edit-title')) === 'Edit ALPHA · CSA' && (await evalJS(`${q('[data-bdc-field="ceilingEgp"]')}.value`)) === '1200000000'
+  && (await evalJS(`${q('[data-bdc-field="expiryDate"]')}.value`)) === await evalJS(`window.__iso(200)`)
+  && (await text('[data-bdc="change-count"]')) === 'Nothing changed yet' && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === true, await text('#bdc-edit-title'));
+check('form: the status field suggests the words already used', (await evalJS(`[...document.querySelectorAll('#bdc-l-status option')].map(o => o.value).join(',')`)) === 'Valid,Signing');
+check('change log: empty sentence for a never-edited line', (await text('[data-bdc-empty="log"]')) === 'No changes made in eTaske yet.');
+await setVal('[data-bdc-field="ceilingEgp"]', '1,3OO');
+check('a number with letters: field marked, message, Save off', (await has('[data-bdc-bad="ceilingEgp"]')) && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === true);
+await setVal('[data-bdc-field="ceilingEgp"]', '1,300,000,000');
+await setVal('[data-bdc-field="comments"]', 'Renewal letter sent');
+check('two fields changed, Save on', (await text('[data-bdc="change-count"]')) === 'Fields changed: 2' && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === false);
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'dialog closes after save');
+const a1 = await row('clientContracts', 'ALPHA_1_CSA');
+check('saved: new values on the row', a1.ceilingEgp === 1300000000 && a1.comments === 'Renewal letter sent' && a1.status === 'Valid', J(a1));
+check('saved: a note per field with the Excel value + editor name, stamps = uid + server time',
+  a1.appEdits.ceilingEgp.excelValue === 1200000000 && a1.appEdits.comments.excelValue === null && a1.appEdits.ceilingEgp.byName === 'Mona Manager'
+  && typeof a1.appEdits.ceilingEgp.at?.seconds === 'number' && a1.lastEditedBy === 'u-mgr' && typeof a1.lastEditedAt?.seconds === 'number'
+  && J(Object.keys(a1.appEdits).sort()) === J(['ceilingEgp', 'comments']), J(a1.appEdits));
+const h1 = await hist('clientContracts', 'ALPHA_1_CSA');
+check('saved: two history docs (field, from, to, who) in ONE batch', h1.length === 2 && (await evalJS(`window.__batches`)) === 1
+  && h1.some(h => h.field === 'ceilingEgp' && h.from === 1200000000 && h.to === 1300000000 && h.byUid === 'u-mgr' && h.byName === 'Mona Manager'), J(h1));
+check('the line now shows the badge on the client page', await has('[data-bdc-row="clientline"][data-bdc-key="ALPHA_1_CSA"] [data-bdc-edited]'));
+await click('[data-bdc-edit="clientContracts:ALPHA_1_CSA"]');
+await waitFor(q(dlg), 'edit dialog again');
+check('re-open: each edited field shows the Excel value and who changed it', (await text('[data-bdc-note="ceilingEgp"]')).startsWith('Excel file: 1,200,000,000 · changed by Mona Manager'),
+  await text('[data-bdc-note="ceilingEgp"]'));
+check('re-open: the change log lists both changes', (await count('[data-bdc-row="log"]')) === 2 && (await texts('[data-bdc-row="log"]')).includes('1,200,000,000 → 1,300,000,000'), await texts('[data-bdc-row="log"]'));
+await click('[data-bdc-revert="ceilingEgp"]');
+check('"Use the Excel value" puts the Excel figure back in the box', (await evalJS(`${q('[data-bdc-field="ceilingEgp"]')}.value`)) === '1200000000'
+  && (await text('[data-bdc="change-count"]')) === 'Fields changed: 1');
+await evalJS(`window.__batchFail = 'permission-denied'`);
+await click('[data-bdc="save"]');
+await waitFor(q('[data-bdc="save-error"]'), 'save error');
+check('a refused save: managers-only message, form stays open, nothing written', (await text('[data-bdc="save-error"]')).startsWith('Not saved: only managers')
+  && (await has(dlg)) && (await row('clientContracts', 'ALPHA_1_CSA')).ceilingEgp === 1300000000);
+await evalJS(`window.__batchFail = null`);
+await evalJS(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })); window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
+await sleep(150);
+check('Escape closes the form', !(await has(dlg)));
+await click('[data-bd-tab="overview"]');
+check('figures follow the edit: total ceiling 2,250.5 -> 2,350.5 m, edits line counts it', ceil0 === '2,250.5' && (await tile('ceiling')) === '2,350.5'
+  && (await text('[data-bd="edits"]')) !== edits0, `${ceil0} -> ${await tile('ceiling')} | ${await text('[data-bd="edits"]')}`);
+
+// A day-rate
+await click('[data-bdc-row="ceiling"][data-bdc-key="BETA"]');
+await click('[data-bdc-edit="dayRates:BETA_General-Manager"]');
+await waitFor(q(dlg), 'day-rate dialog');
+check('day-rate form: one field, title names client and grade', (await count('[data-bdc-field]')) === 1 && (await text('#bdc-edit-title')) === 'Edit BETA day rate · GM', await text('#bdc-edit-title'));
+await setVal('[data-bdc-field="dayRateEgp"]', '7500');
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'day-rate saved');
+check('day-rate saved, badge on the rate row', (await row('dayRates', 'BETA_General-Manager')).dayRateEgp === 7500
+  && (await has('[data-bdc-row="clientrate"][data-bdc-key="General Manager"] [data-bdc-edited]')));
+await click('[data-bd-tab="pricing"]');
+check('Pricing grid: the edited cell shows 7,500 with a ✎ mark and the legend explains it',
+  (await text('[data-bdc-row="price"][data-bdc-key="BETA"] [data-bdc-cell="General Manager"]')).startsWith('7,500✎')
+  && (await has('[data-bdc-editmark="BETA|General Manager"]')) && (await texts('.bdc-legend li')).includes('✎ = changed in eTaske'), await text('[data-bdc-row="price"][data-bdc-key="BETA"] [data-bdc-cell="General Manager"]'));
+
+// A supplier contract: closing it moves it out of "running"
+await click('[data-bd-tab="suppliers"]');
+await click('[data-bdc-chip="supview:supplier"]');
+await click('[data-bdc-chip="supfilter:live"]');
+check('S/1 already carries the badge (edited before the load)', await has('[data-bdc-row="supplier"][data-bdc-key="S/1"] summary [data-bdc-edited]'));
+await evalJS(`${q('[data-bdc-row="supplier"][data-bdc-key="S/2"]')}.open = true`);
+await click('[data-bdc-edit="supplierContracts:S-2"]');
+await waitFor(q(dlg), 'supplier dialog');
+check('supplier form: title, client box suggests client codes, cost type suggests the words used',
+  (await text('#bdc-edit-title')) === 'Edit supplier contract S/2'
+  && (await evalJS(`[...document.querySelectorAll('#bdc-l-client option')].map(o => o.value).join(',')`)) === 'ALPHA,BETA,GAMMA,SUPX'
+  && (await evalJS(`[...document.querySelectorAll('#bdc-l-costType option')].map(o => o.value)[0]`)) === 'Client project');
+await setVal('[data-bdc-field="status"]', 'Completed');
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'supplier saved');
+check('closed in eTaske -> no longer running', !(await keys('supplier')).split(',').includes('S/2') && (await row('supplierContracts', 'S-2')).appEdits.status.excelValue === 'In Progress', await keys('supplier'));
+
+// An AGIBA SO and a site contract
+await click('[data-bdc-chip="supview:agibaSO"]');
+await click('[data-bdc-chip="soopen:all"]');
+await evalJS(`${q('[data-bdc-row="so"][data-bdc-key="SO 1-2026"]')}.open = true`);
+await click('[data-bdc-edit="agibaSOs:SO-1-2026"]');
+await waitFor(q(dlg), 'SO dialog');
+await setVal('[data-bdc-field="expiry"]', await evalJS(`window.__iso(120)`));
+await setVal('[data-bdc-field="remarks"]', 'Extended by site');
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'SO saved');
+const so1 = await row('agibaSOs', 'SO-1-2026');
+check('SO saved (date + long text), badge on the SO row', so1.expiry === await evalJS(`window.__iso(120)`) && so1.remarks === 'Extended by site'
+  && (await has('[data-bdc-row="so"][data-bdc-key="SO 1-2026"] [data-bdc-edited]')));
+await click('[data-bdc-chip="supview:agibaSite"]');
+await evalJS(`${q('[data-bdc-row="site"][data-bdc-key="A/3"]')}.open = true`);
+await click('[data-bdc-edit="agibaSiteContracts:A-3"]');
+await waitFor(q(dlg), 'site dialog');
+await setVal('[data-bdc-field="currentEnd"]', await evalJS(`window.__iso(20)`));
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'site saved');
+check('site contract given an end date -> now first, ending within 90 days', (await keys('site')).startsWith('A/3')
+  && (await text('[data-bdc-row="site"][data-bdc-key="A/3"] [data-bdc-flag]')) === 'Ends within 90 days', await keys('site'));
+
+// Arabic + phone
+await evalJS(`window.__setLang('ar')`);
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await sleep(250);
+await click('[data-bdc-edit="agibaSiteContracts:A-3"]');
+await waitFor(q(dlg), 'site dialog (ar)');
+check('Arabic form: title, labels, Excel note, log in Arabic', (await text('#bdc-edit-title')) === 'تعديل عقد موقع عجيبة A/3'
+  && (await text('label[for="bdc-f-currentEnd"]')) === 'تاريخ الانتهاء الحالي' && (await text('[data-bdc-note="currentEnd"]')).startsWith('في ملف الإكسل: فارغ')
+  && (await text('h3.bdc-h3')) === 'سجل التعديلات', `${await text('#bdc-edit-title')} | ${await text('[data-bdc-note="currentEnd"]')}`);
+check('390 px: the form fits (no sideways scroll, inside the screen)', (await overflow()) <= 1
+  && (await evalJS(`${q(dlg)}.getBoundingClientRect().width <= 390`)), String(await overflow()));
+await shot('9-edit-ar-mobile');
+await click('[data-bdc-dialog] .bdc-modal-head button');
+await send('Emulation.clearDeviceMetricsOverride');
+await evalJS(`window.__setLang('en')`);
+await sleep(150);
+
+// Someone who may not edit sees no Edit button (the page itself is gated for them anyway)
+check('canEditBdControl: managers + admin, Approved only', J(await evalJS(`[{ role: 'Manager', status: 'Approved' }, { role: 'Admin', status: 'Approved' },
+  { role: 'Employee', status: 'Approved' }, { role: 'Manager', status: 'Pending' }].map(window.__access.canEditBdControl)`)) === J([true, true, false, false]));
+await evalJS(`window.__user = { ...window.__user, role: 'Employee' }`);
+await remount();
+await waitFor(q('[data-bd="tiles"]'), 'tiles (employee)');
+await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
+check('no Edit button without edit rights; badges still shown', (await count('[data-bdc-edit]')) === 0 && (await has('[data-bdc-edited]')));
+await evalJS(`window.__user = { ...window.__user, role: 'Manager' }`);
+await shot('10-edit-en');
 check('no page errors', pageErrors.length === 0, pageErrors.join(' || ').slice(0, 400));
 
 } catch (err) {

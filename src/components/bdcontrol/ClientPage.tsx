@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { BENCHMARK_CLIENT, clientProfile, rateGrid, type BdData } from '../../lib/bdControl';
 import { Fields, GRADE_SHORT, useBdWords } from './shared';
+import { EditButton, EditedBadge } from './EditRecord';
 
 interface Props {
   data: BdData;
@@ -16,7 +17,8 @@ interface Props {
  * The client page (queue E6a): one client's contract lines, day-rates against
  * ANOPC, supplier contracts, what changed between the two CSA reports and the
  * data issues that touch it. Reached from the Contracts tab, the Pricing grid,
- * the Overview ceiling / reprice charts and the Data quality list.
+ * the Overview ceiling / reprice charts and the Data quality list. Lines and
+ * day-rates carry an Edit button for managers (E6b).
  */
 export default function ClientPage({ data, today, code, onBack, onSupplier }: Props) {
   const w = useBdWords(data);
@@ -27,6 +29,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
   const Back = w.ar ? ArrowRight : ArrowLeft;
   const other = p.client ? (w.ar ? p.client.name : p.client.arabicName) : null;
   const val = (v: unknown) => (v == null || v === '' ? null : w.bidi(w.word(v)));
+  const rateRow = useMemo(() => new Map(data.dayRates.filter(r => r.client === code).map(r => [r.grade, r])), [data.dayRates, code]);
+  const gradeName = (g: string) => (GRADE_SHORT[g] ? t(GRADE_SHORT[g]) : g);
 
   const section = (title: string, attr: string, body: React.ReactNode, sub?: string) => (
     <section className="card bdc-card" data-bdc-client={attr}>
@@ -66,7 +70,11 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
                 <div key={l.row.id} className="bdc-item" data-bdc-row="clientline" data-bdc-key={l.row.id}>
                   <div className="bdc-item-head">
                     <b>{l.row.contractType ? w.bidi(String(l.row.contractType)) : t('Type not given')}</b>
-                    {w.flag(l.flag)}
+                    <span className="bdc-item-tags">
+                      <EditedBadge row={l.row} />
+                      {w.flag(l.flag)}
+                      <EditButton table="clientContracts" row={l.row} title={[w.nameOf(code), l.row.contractType].filter(Boolean).join(' · ')} />
+                    </span>
                   </div>
                   <Fields attr="clientline" items={[
                     [t('Expiry'), w.ends(l.row.expiryDate, l.days)],
@@ -86,10 +94,14 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
           : <div className="bdc-list">
               {p.rates.map(r => (
                 <div key={r.grade} className="bdc-row bdc-row-dated" data-bdc-row="clientrate" data-bdc-key={r.grade}>
-                  <span className="bdc-name"><span>{GRADE_SHORT[r.grade] ? t(GRADE_SHORT[r.grade]) : r.grade}</span></span>
+                  <span className="bdc-name"><span>{gradeName(r.grade)}</span></span>
                   <span className="bdc-line-when">
                     <span className="bdc-num">{F.number(r.rate, { maximumFractionDigits: 1 })}</span>
                     {code !== BENCHMARK_CLIENT && <span className={`bdc-gap bdc-gap-${w.gapTone(r.gap)}`} data-bdc-gap>{w.pct(r.gap)}</span>}
+                    {rateRow.get(r.grade) && <>
+                      <EditedBadge row={rateRow.get(r.grade)!} />
+                      <EditButton table="dayRates" row={rateRow.get(r.grade)!} title={t('{{client}} day rate · {{grade}}', { client: w.nameOf(code), grade: gradeName(r.grade) })} />
+                    </>}
                   </span>
                 </div>
               ))}

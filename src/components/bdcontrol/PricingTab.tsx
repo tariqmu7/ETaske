@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BENCHMARK_CLIENT, pricingRows, rateGrid, rateWarnings, type BdData, type Benchmark } from '../../lib/bdControl';
+import { BENCHMARK_CLIENT, isEdited, pricingRows, rateGrid, rateWarnings, type BdData, type Benchmark } from '../../lib/bdControl';
 import { Chips, GRADE_SHORT, useBdWords } from './shared';
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
  * Pricing tab (queue E6a): the whole CSA day-rate sheet as one grid — a row per
  * client, a column per grade — every cell coloured by its gap to ANOPC or to
  * the median client. Clients furthest below come first; a name opens the
- * client page.
+ * client page. A rate changed in eTaske (E6b) carries a ✎ mark.
  */
 export default function PricingTab({ data, bench, onBench, onClient }: Props) {
   const w = useBdWords(data);
@@ -26,6 +26,7 @@ export default function PricingTab({ data, bench, onBench, onClient }: Props) {
   const pr = useMemo(() => pricingRows(grid, bench), [grid, bench]);
   const benchName = bench === 'anopc' ? w.nameOf(BENCHMARK_CLIENT) : t('Median client');
   const rate = (v: number | null) => (v == null ? '—' : F.number(v, { maximumFractionDigits: 0 }));
+  const edited = useMemo(() => new Set(data.dayRates.filter(isEdited).map(r => `${r.client}|${r.grade}`)), [data.dayRates]);
 
   return (
     <section className="card bdc-card" data-bdc-tab="pricing">
@@ -61,6 +62,7 @@ export default function PricingTab({ data, bench, onBench, onClient }: Props) {
                         <td key={c.grade} className={`bdc-numcol bdc-cell-${c.rate == null ? 'none' : w.gapTone(c.gap)}`} data-bdc-cell={c.grade}
                           title={c.gap == null ? undefined : w.pct(c.gap)}>
                           {rate(c.rate)}
+                          {edited.has(`${r.client}|${c.grade}`) && <span className="bdc-editmark" title={t('Edited in eTaske')} data-bdc-editmark={`${r.client}|${c.grade}`}>✎</span>}
                           {c.rate != null && c.gap != null && Math.abs(c.gap) >= 0.05 && <span className="bdc-cellgap">{w.pct(c.gap)}</span>}
                         </td>
                       ))}
@@ -75,6 +77,7 @@ export default function PricingTab({ data, bench, onBench, onClient }: Props) {
               <li><span className="bdc-key bdc-fill-mid" aria-hidden />{t('10–25% below')}</li>
               <li><span className="bdc-key bdc-hi-key" aria-hidden />{t('10%+ above')}</li>
               <li>{t('— = no rate on the sheet')}</li>
+              {edited.size > 0 && <li>{t('✎ = changed in eTaske since the Excel load')}</li>}
               {warns.size > 0 && <li>{t('⚠ = odd value on the rate sheet — confirm it before quoting')}</li>}
             </ul>
           </>}
