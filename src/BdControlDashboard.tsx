@@ -4,6 +4,7 @@ import { AlertTriangle, Gauge } from 'lucide-react';
 import { useBdControl } from './hooks/useBdControl';
 import { dataDate, hasData, millions, overviewKpis, todayISO } from './lib/bdControl';
 import { useFormat, DATE_MEDIUM, DATETIME_SHORT } from './lib/format';
+import OverviewCharts from './components/bdcontrol/OverviewCharts';
 import { AppUser } from './types';
 import type { AppView } from './App';
 
@@ -25,8 +26,9 @@ interface Tile {
  * BD control (queue E5a) — the CEO page over every client contract, supplier
  * contract and AGIBA site contract loaded from BD's Excel files. Every figure
  * is worked out from the rows as of today (lib/bdControl.ts); nothing on the
- * page is typed in. This task is the data-date strip + the KPI tiles; the
- * charts (E5b/E5c), browse tabs (E6a) and editing (E6b) come next.
+ * page is typed in. So far: the data-date strip, the KPI tiles and charts 3–6
+ * (E5b, components/bdcontrol/OverviewCharts.tsx); charts 7–12 (E5c), browse
+ * tabs (E6a) and editing (E6b) come next.
  * Gated by `canViewBdControl` in App/TopNav/More/Home/palette, and by the rules.
  */
 export default function BdControlDashboard(_props: Props) {
@@ -137,6 +139,9 @@ export default function BdControlDashboard(_props: Props) {
               </div>
             ))}
           </div>
+
+          {/* 3–6 — ceilings, renewals, day-rates, reprice list. */}
+          <OverviewCharts data={data} today={today} />
         </>
       )}
     </div>

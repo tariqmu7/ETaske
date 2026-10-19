@@ -32,7 +32,9 @@ export interface BdSupplierContract extends BdRow {
   contractNo: string; client?: string | null; contractor?: string | null; costType?: string | null;
   currentEnd?: string | null; currentValueEgp?: number | null; status?: string | null; valueCurrencyNote?: string | null;
 }
-export interface BdAgibaSiteContract extends BdRow { contractNo: string; currentEnd?: string | null; status?: string | null }
+export interface BdAgibaSiteContract extends BdRow { contractNo: string; company?: string | null; currentEnd?: string | null; status?: string | null }
+/** One cell of the CSA day-rate sheet: what a client pays EPROM per man-day for one grade. */
+export interface BdDayRate extends BdRow { client: string; grade: string; level?: number | null; dayRateEgp?: number | null }
 export interface BdDataIssue extends BdRow { table?: string; record?: string; issue?: string; whatToDo?: string }
 
 export interface BdAwaited { measure: string; form?: string; received?: boolean }
@@ -48,7 +50,7 @@ export interface BdData {
   clients: BdClient[];
   clientContracts: BdClientContract[];
   changes: BdRow[];
-  dayRates: BdRow[];
+  dayRates: BdDayRate[];
   supplierContracts: BdSupplierContract[];
   supplierAmendments: BdRow[];
   agibaSOs: BdRow[];
@@ -235,6 +237,208 @@ export function millions(egp: number): number {
   const m = egp / 1e6;
   const d = Math.abs(m) >= 10000 ? 0 : 1;
   return Math.round(m * 10 ** d) / 10 ** d;
+}
+
+// ── Overview charts 3–6 (queue E5b) ──────────────────────────────────────────
+
+export interface CeilingRow { client: string; ceilingEgp: number; lines: number; types: string[] }
+
+/** Chart 3 — contract ceiling per client, biggest first. Clients with no ceiling are named, not dropped. */
+export function ceilingByClient(data: BdData): { rows: CeilingRow[]; monthlyOnly: string[]; noValue: string[] } {
+  const by = new Map<string, BdClientContract[]>();
+  for (const c of data.clientContracts) by.set(c.client, [...(by.get(c.client) || []), c]);
+  const rows: CeilingRow[] = [];
+  const monthlyOnly: string[] = [], noValue: string[] = [];
+  for (const [client, lines] of by) {
+    const withCeiling = lines.filter(l => num(l.ceilingEgp) != null);
+    if (withCeiling.length) {
+      rows.push({
+        client, ceilingEgp: sum(withCeiling, l => l.ceilingEgp), lines: withCeiling.length,
+        types: [...new Set(withCeiling.map(l => String(l.contractType || '').trim()).filter(Boolean))],
+      });
+    } else if (lines.some(l => num(l.monthlyValueEgp) != null)) monthlyOnly.push(client);
+    else noValue.push(client);
+  }
+  rows.sort((a, b) => b.ceilingEgp - a.ceilingEgp || a.client.localeCompare(b.client));
+  return { rows, monthlyOnly: monthlyOnly.sort(), noValue: noValue.sort() };
+}
+
+export const RENEWAL_BUCKETS = ['overdue', 'd30', 'd90', 'd180', 'd365', 'later', 'noDate'] as const;
+export type RenewalBucket = typeof RENEWAL_BUCKETS[number];
+export const RENEWAL_KINDS = ['client', 'supplier', 'agibaSite'] as const;
+export type RenewalKind = typeof RENEWAL_KINDS[number];
+
+/** Past / ≤30 / 31–90 / 91–180 / 181–365 / more than a year / no date. */
+export function renewalBucket(days: number | null): RenewalBucket {
+  if (days == null) return 'noDate';
+  if (days < 0) return 'overdue';
+  if (days <= 30) return 'd30';
+  if (days <= 90) return 'd90';
+  if (days <= 180) return 'd180';
+  if (days <= 365) return 'd365';
+  return 'later';
+}
+
+export interface RenewalItem { kind: RenewalKind; id: string; name: string; sub: string; end: string | null; days: number | null }
+
+/**
+ * Everything with an end date: every client line, every live supplier contract
+ * still running (an On Hold one past its date counts as ended, as on the tiles)
+ * and every AGIBA site contract.
+ */
+export function renewalItems(data: BdData, today: string): RenewalItem[] {
+  const j = (...xs: unknown[]) => xs.map(x => String(x ?? '').trim()).filter(Boolean).join(' · ');
+  return [
+    ...data.clientContracts.map(c => ({
+      kind: 'client' as const, id: c.id, name: c.client, sub: j(c.contractType, c.status),
+      end: c.expiryDate || null, days: daysUntil(c.expiryDate, today),
+    })),
+    ...data.supplierContracts.filter(s => isLiveSupplier(s) && supplierFlag(s, today) !== 'Ended').map(s => ({
+      kind: 'supplier' as const, id: s.id, name: s.contractNo, sub: j(s.contractor, s.client),
+      end: s.currentEnd || null, days: daysUntil(s.currentEnd, today),
+    })),
+    ...data.agibaSiteContracts.map(a => ({
+      kind: 'agibaSite' as const, id: a.id, name: a.contractNo, sub: j(a.company),
+      end: a.currentEnd || null, days: daysUntil(a.currentEnd, today),
+    })),
+  ];
+}
+
+export interface RenewalTimeline {
+  buckets: Record<RenewalBucket, Record<RenewalKind, number> & { total: number }>;
+  /** The soonest still to come (today or later), earliest first. */
+  next: RenewalItem[];
+  total: number;
+}
+
+/** Chart 4 — when contracts come up, stacked by client / supplier / AGIBA site. */
+export function renewalTimeline(data: BdData, today: string, nextCount = 10): RenewalTimeline {
+  const items = renewalItems(data, today);
+  const buckets = Object.fromEntries(RENEWAL_BUCKETS.map(b => [b, { client: 0, supplier: 0, agibaSite: 0, total: 0 }])) as RenewalTimeline['buckets'];
+  for (const it of items) { const b = buckets[renewalBucket(it.days)]; b[it.kind]++; b.total++; }
+  const next = items.filter(it => it.days != null && it.days >= 0)
+    .sort((a, b) => (a.days as number) - (b.days as number) || a.name.localeCompare(b.name))
+    .slice(0, nextCount);
+  return { buckets, next, total: items.length };
+}
+
+/** The rate sheet's comparison column, and the code the reprice list measures against. */
+export const BENCHMARK_CLIENT = 'ANOPC';
+export type Benchmark = 'anopc' | 'median';
+/** A client this far below the benchmark on average is a reprice candidate. */
+export const REPRICE_GAP_PCT = -10;
+
+export function median(xs: number[]): number | null {
+  if (!xs.length) return null;
+  const s = [...xs].sort((a, b) => a - b), m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+export interface RateGrid {
+  /** Senior first (level 10 = General Manager), grades with no level last, in sheet order. */
+  grades: string[];
+  /** Clients with at least one rate, A–Z. */
+  clients: string[];
+  rate: (client: string, grade: string) => number | null;
+}
+
+export function rateGrid(rows: BdDayRate[]): RateGrid {
+  const cell = new Map<string, number>();
+  const level = new Map<string, number | null>();
+  const order: string[] = [];
+  const rated = new Set<string>();
+  for (const r of rows) {
+    const g = String(r.grade || '').trim(), c = String(r.client || '').trim(), v = num(r.dayRateEgp);
+    if (!g || !c) continue;
+    if (!level.has(g)) { order.push(g); level.set(g, num(r.level)); }
+    else if (level.get(g) == null && num(r.level) != null) level.set(g, num(r.level));
+    if (v != null) { cell.set(c + '\u0000' + g, v); rated.add(g); }
+  }
+  // A grade with no rate anywhere (a blank row on the sheet) gets no chip.
+  const grades = order.filter(g => rated.has(g))
+    .map((g, i) => ({ g, i, l: level.get(g) }))
+    .sort((a, b) => (a.l == null ? 1 : 0) - (b.l == null ? 1 : 0) || (b.l ?? 0) - (a.l ?? 0) || a.i - b.i)
+    .map(x => x.g);
+  const clients = [...new Set([...cell.keys()].map(k => k.split('\u0000')[0]))].sort();
+  return { grades, clients, rate: (c, g) => cell.get(c + '\u0000' + g) ?? null };
+}
+
+export function benchmarkRate(grid: RateGrid, grade: string, b: Benchmark): number | null {
+  if (b === 'anopc') return grid.rate(BENCHMARK_CLIENT, grade);
+  return median(grid.clients.map(c => grid.rate(c, grade)).filter((v): v is number => v != null));
+}
+
+/** % a client's rate sits above (+) or below (−) the benchmark for one grade. */
+export function gapPct(grid: RateGrid, client: string, grade: string, b: Benchmark): number | null {
+  const r = grid.rate(client, grade), base = benchmarkRate(grid, grade, b);
+  return r == null || !base ? null : (r / base - 1) * 100;
+}
+
+/** Mean of the per-grade gaps the client has. */
+export function avgGapPct(grid: RateGrid, client: string, b: Benchmark): number | null {
+  const gs = grid.grades.map(g => gapPct(grid, client, g, b)).filter((v): v is number => v != null);
+  return gs.length ? gs.reduce((a, x) => a + x, 0) / gs.length : null;
+}
+
+export interface GradeBar { client: string; rate: number; gap: number | null }
+
+/** Chart 5 — every client's rate for one grade, highest first, against the benchmark. */
+export function gradeChart(grid: RateGrid, grade: string, b: Benchmark): { base: number | null; rows: GradeBar[] } {
+  const rows = grid.clients
+    .map(c => ({ client: c, rate: grid.rate(c, grade), gap: gapPct(grid, c, grade, b) }))
+    .filter((x): x is GradeBar => x.rate != null)
+    .sort((x, y) => y.rate - x.rate || x.client.localeCompare(y.client));
+  return { base: benchmarkRate(grid, grade, b), rows };
+}
+
+/** Clients whose rate column has an odd value (lower grade not cheaper, …) — confirm before negotiating. */
+export function rateWarnings(data: BdData): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  for (const i of data.dataIssues) {
+    if (i.table !== 'Day Rates' || !i.record || /no rates/i.test(String(i.issue || ''))) continue;
+    m.set(i.record, [...(m.get(i.record) || []), String(i.issue || '')]);
+  }
+  return m;
+}
+
+export type RepriceWindow = 'overdue' | 'within180' | 'within365' | 'later' | 'noDate';
+export const repriceWindow = (days: number | null): RepriceWindow =>
+  days == null ? 'noDate' : days < 0 ? 'overdue' : days <= 180 ? 'within180' : days <= 365 ? 'within365' : 'later';
+
+export interface RepriceRow {
+  client: string;
+  /** Average gap vs the benchmark client, % (negative = below). */
+  gapPct: number;
+  /** Average EGP per man-day below the benchmark over the grades on the sheet. */
+  belowPerDay: number;
+  /** Days to the client's nearest expiry (negative = already past), null when no line has a date. */
+  days: number | null;
+  window: RepriceWindow;
+  /** The client line that expires first. */
+  line: BdClientContract | null;
+}
+
+/** Chart 6 — day-rate clients 10 %+ below ANOPC, the soonest renewal window first. */
+export function repriceList(data: BdData, today: string, grid: RateGrid = rateGrid(data.dayRates)): RepriceRow[] {
+  const out: RepriceRow[] = [];
+  for (const c of grid.clients) {
+    if (c === BENCHMARK_CLIENT) continue;
+    const g = avgGapPct(grid, c, 'anopc');
+    if (g == null || g > REPRICE_GAP_PCT) continue;
+    const diffs = grid.grades.map(gr => {
+      const r = grid.rate(c, gr), a = grid.rate(BENCHMARK_CLIENT, gr);
+      return r != null && a != null ? a - r : null;
+    }).filter((v): v is number => v != null);
+    const lines = data.clientContracts.filter(l => l.client === c)
+      .map(l => ({ l, d: daysUntil(l.expiryDate, today) }))
+      .sort((p, q) => (p.d ?? 1e9) - (q.d ?? 1e9));
+    const days = lines.length ? lines[0].d : null;
+    out.push({
+      client: c, gapPct: g, belowPerDay: diffs.reduce((a, x) => a + x, 0) / diffs.length,
+      days, window: repriceWindow(days), line: lines[0]?.l ?? null,
+    });
+  }
+  return out.sort((p, q) => (p.days ?? 1e6) - (q.days ?? 1e6) || p.gapPct - q.gapPct);
 }
 
 export const emptyBdData = (): BdData => ({

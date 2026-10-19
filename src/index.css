@@ -1829,6 +1829,84 @@ h1, h2, h3, h4, p, span, div {
   .ms-row-dated .ms-row-when { grid-column: 1 / -1; grid-row: 2; text-align: start; }
 }
 
+/* ── BD control Overview charts (queue E5b) ───────────────────────────────── */
+/* Same build as the medical statistics: CSS bars, every bar labelled with its
+   number. Kinds of contract separate by lightness as well as hue; gaps below the
+   benchmark go amber then red, the benchmark itself is a dark tick. */
+.bdc {
+  --bdc-client: #1e3a8a; --bdc-supplier: #0d9488; --bdc-agibaSite: #d97706;
+  --bdc-bar: #64748b; --bdc-lo: #b91c1c; --bdc-mid: #d97706; --bdc-hi: #15803d; --bdc-mark: #0f172a;
+}
+[data-theme="dark"] .bdc {
+  --bdc-client: #93c5fd; --bdc-supplier: #2dd4bf; --bdc-agibaSite: #fbbf24;
+  --bdc-bar: #94a3b8; --bdc-lo: #f87171; --bdc-mid: #fbbf24; --bdc-hi: #4ade80; --bdc-mark: #f8fafc;
+}
+.bdc-grid { display: grid; gap: 12px; margin-top: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); align-items: start; }
+.bdc-card { padding: 14px 16px; min-width: 0; }
+.bdc-h { font-size: 15px; font-weight: 800; margin: 0 0 2px; color: var(--text-primary); }
+.bdc-h3 { font-size: 13.5px; font-weight: 800; margin: 14px 0 4px; color: var(--text-primary); }
+.bdc-cap { font-size: 12px; color: var(--text-muted); margin: 0 0 10px; line-height: 1.5; }
+.bdc-foot { font-size: 12px; color: var(--text-muted); margin: 8px 0 0; line-height: 1.5; }
+.bdc-empty { font-size: 13px; color: var(--text-muted); margin: 0; }
+.bdc-list { display: grid; }
+.bdc-row {
+  display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(60px, 1.4fr) auto; gap: 10px; align-items: center;
+  padding: 7px 4px; border-bottom: 1px solid var(--border); color: var(--text-primary);
+}
+.bdc-row-rate { grid-template-columns: minmax(0, 0.8fr) minmax(60px, 1.6fr) auto 58px; }
+.bdc-row-dated { grid-template-columns: minmax(0, 1fr) auto; }
+.bdc-row-reprice { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.3fr); align-items: start; }
+.bdc-zero { color: var(--text-muted); }
+.bdc-name { display: flex; flex-direction: column; min-width: 0; font-size: 13.5px; font-weight: 700; }
+.bdc-name > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bdc-sub { display: block; font-size: 11.5px; font-weight: 500; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bdc-num { font-size: 13.5px; font-weight: 800; text-align: end; white-space: nowrap; }
+.bdc-when { font-size: 12px; color: var(--text-secondary); text-align: end; }
+.bdc-red { color: var(--bdc-lo); }
+.bdc-track { position: relative; display: block; min-width: 0; height: 12px; }
+.bdc-fill { display: block; height: 100%; min-width: 3px; background: var(--bdc-client); }
+.bdc-fill-base { background: var(--bdc-bar); }
+.bdc-fill-hi { background: var(--bdc-bar); }
+.bdc-fill-mid { background: var(--bdc-mid); }
+.bdc-fill-lo { background: var(--bdc-lo); }
+.bdc-track-mark { height: 14px; }
+.bdc-mark { position: absolute; top: -3px; bottom: -3px; width: 2px; margin-inline-start: -1px; background: var(--bdc-mark); }
+.bdc-stack { display: flex; gap: 2px; height: 100%; min-width: 3px; }
+.bdc-seg { display: block; min-width: 3px; height: 100%; }
+.bdc-client { background: var(--bdc-client); }
+.bdc-supplier { background: var(--bdc-supplier); }
+.bdc-agibaSite { background: var(--bdc-agibaSite); }
+.bdc-legend { list-style: none; margin: 8px 0 6px; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-secondary); }
+.bdc-legend li { display: flex; align-items: center; gap: 6px; }
+.bdc-key { width: 11px; height: 11px; display: inline-block; flex-shrink: 0; vertical-align: -1px; }
+.bdc-key-mark { width: 2px; height: 14px; background: var(--bdc-mark); }
+.bdc-gap { font-size: 12.5px; font-weight: 800; text-align: end; white-space: nowrap; }
+.bdc-gap-lo { color: var(--bdc-lo); }
+.bdc-gap-mid { color: var(--surface-warn-text); }
+.bdc-gap-hi { color: var(--bdc-hi); }
+.bdc-gap-flat { color: var(--text-secondary); }
+.bdc-warn { margin-inline-start: 5px; color: var(--surface-warn-text); cursor: help; }
+.bdc-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin-bottom: 6px; }
+.bdc-chips-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-inline-end: 4px; }
+.bdc-chip {
+  padding: 4px 10px; min-height: 32px; border: 1px solid var(--border); background: var(--surface); color: var(--text-secondary);
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+}
+.bdc-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.bdc-reprice-figs { display: flex; flex-direction: column; align-items: flex-end; }
+.bdc-reprice-when { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.bdc-window { font-size: 12px; font-weight: 700; line-height: 1.35; color: var(--text-secondary); }
+.bdc-window-overdue { color: var(--bdc-lo); }
+.bdc-window-within180 { color: var(--surface-warn-text); }
+@media (max-width: 560px) {
+  .bdc-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .bdc-row .bdc-track { grid-column: 1 / -1; grid-row: 2; }
+  .bdc-row-rate { grid-template-columns: minmax(0, 1fr) auto auto; }
+  .bdc-row-dated .bdc-when { grid-column: 1 / -1; grid-row: 2; text-align: start; }
+  .bdc-row-reprice { grid-template-columns: minmax(0, 1fr) auto; }
+  .bdc-row-reprice .bdc-reprice-when { grid-column: 1 / -1; grid-row: 2; }
+}
+
 /* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
    Quiet: shown only for Managers only / Private — an "Everyone" bid says nothing. */
 .opp-row-private { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-secondary); }
