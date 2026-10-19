@@ -421,9 +421,13 @@ service cloud.firestore {
     // from BD's Excel files by an outside script (owner token, not bound by these
     // rules). ALL managers + admins read; the same people may EDIT a row of the
     // tables below, only the listed fields, and every edited field must carry an
-    // appEdits.<field> note so the next Excel load keeps it. Nobody creates or
-    // deletes rows from the app; meta, changes and dataIssues are loader-only.
-    // Mirrors src/lib/bdControlAccess.ts — keep both in step.
+    // appEdits.<field> note so the next Excel load keeps it. The same people may
+    // ADD a record to the five tables in bdControlCreateKeys() (queue E6c): the id
+    // starts `app_` so it can never clash with a loader id, the record's key
+    // fields must be there, and createdBy/createdByName/createdAt are stamped and
+    // never change afterwards. Nobody deletes rows from the app; meta, changes and
+    // dataIssues are loader-only.
+    // Mirrors src/lib/bdControlAccess.ts + src/lib/bdControlEdit.ts — keep them in step.
     function bdControlFields() {
       return {
         'clients': ['code', 'name', 'arabicName', 'kind'],
@@ -446,12 +450,34 @@ service cloud.firestore {
     function bdControlReadable(table) {
       return table in bdControlFields() || table in ['changes', 'dataIssues'];
     }
+    // The key fields a record added in the app must carry, per table that allows adding.
+    function bdControlCreateKeys() {
+      return {
+        'clientContracts': ['client', 'sr', 'contractType'],
+        'dayRates': ['client', 'grade'],
+        'supplierContracts': ['contractNo'],
+        'agibaSiteContracts': ['contractNo'],
+        'agibaSOs': ['so']
+      };
+    }
+    function bdControlCreateOk(table, id) {
+      let d = request.resource.data;
+      return table in bdControlCreateKeys() &&
+        id.matches('^app_.+$') && id.size() <= 200 &&
+        d.keys().hasOnly(bdControlFields()[table].concat(['createdBy', 'createdByName', 'createdAt'])) &&
+        d.keys().hasAll(bdControlCreateKeys()[table]) &&
+        d.createdBy == request.auth.uid &&
+        d.createdByName is string && d.createdByName.size() <= 200 &&
+        d.createdAt == request.time;
+    }
     function bdControlEditOk(table) {
       let before = resource.data;
       let after = request.resource.data;
-      let changed = after.diff(before).affectedKeys().difference(['appEdits', 'lastEditedBy', 'lastEditedAt'].toSet());
+      let stamps = ['appEdits', 'lastEditedBy', 'lastEditedAt', 'createdBy', 'createdByName', 'createdAt'];
+      let changed = after.diff(before).affectedKeys().difference(stamps.toSet());
       return table in bdControlFields() &&
-        after.keys().hasOnly(bdControlFields()[table].concat(['appEdits', 'lastEditedBy', 'lastEditedAt'])) &&
+        after.keys().hasOnly(bdControlFields()[table].concat(stamps)) &&
+        !after.diff(before).affectedKeys().hasAny(['createdBy', 'createdByName', 'createdAt']) &&
         changed.size() > 0 &&
         after.get('appEdits', {}) is map &&
         changed.hasOnly(after.get('appEdits', {}).keys()) &&
@@ -466,7 +492,8 @@ service cloud.firestore {
     match /bdControl/{table}/rows/{id} {
       allow read: if bdControlReadable(table) && isManagerOrAdmin();
       allow update: if isManagerOrAdmin() && bdControlEditOk(table);
-      allow create, delete: if false;
+      allow create: if isManagerOrAdmin() && bdControlCreateOk(table, id);
+      allow delete: if false;
       // One doc per change, append-only: who changed which field from what to what.
       match /history/{h} {
         allow read: if bdControlReadable(table) && isManagerOrAdmin();

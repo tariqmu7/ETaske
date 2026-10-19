@@ -2519,6 +2519,27 @@ const en = {
   "AGIBA site contract {{no}}": "AGIBA site contract {{no}}",
   "service order {{no}}": "service order {{no}}",
   "✎ = changed in eTaske since the Excel load": "✎ = changed in eTaske since the Excel load",
+  // BD control: adding a record (queue E6c).
+  "Contract type": "Contract type",
+  "Line no. in the CSA report": "Line no. in the CSA report",
+  "Contract no.": "Contract no.",
+  "SO number": "SO number",
+  "Added in eTaske": "Added in eTaske",
+  "Added in eTaske by {{name}}": "Added in eTaske by {{name}}",
+  "Add a contract line": "Add a contract line",
+  "Add a client contract line": "Add a client contract line",
+  "Add a supplier contract": "Add a supplier contract",
+  "Add an AGIBA site contract": "Add an AGIBA site contract",
+  "Add a service order": "Add a service order",
+  "Add an AGIBA service order": "Add an AGIBA service order",
+  "Add a line": "Add a line",
+  "Add a contract line for {{client}}": "Add a contract line for {{client}}",
+  "Add a day rate": "Add a day rate",
+  "Add a day rate for {{client}}": "Add a day rate for {{client}}",
+  "The new record is saved in eTaske with your name and shows in every chart at once. The next Excel refresh keeps it; add it to the Excel file too so the two match.": "The new record is saved in eTaske with your name and shows in every chart at once. The next Excel refresh keeps it; add it to the Excel file too so the two match.",
+  "This record is already on file. Close this form, open the record and use Edit.": "This record is already on file. Close this form, open the record and use Edit.",
+  "Still to fill in: {{list}}": "Still to fill in: {{list}}",
+  "Ready to add": "Ready to add",
 } as const;
 
 export default en;

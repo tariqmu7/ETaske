@@ -163,5 +163,39 @@ expect('… one bad history line refuses the WHOLE batch', await appSave(SC, { c
 expect('… and an Employee cannot run the same batch', await appSave(SC, { currentValueEgp: 175 }, n3('E'), 'u-emp', EMP,
   [hl('currentValueEgp', 150, 175, 'u-emp')]), false);
 
+// [5] Adding a record from the app (queue E6c, saveBdCreate): ONE create, id `app_…`, key fields present,
+// createdBy = own uid, createdAt = server time; the stamps never change afterwards.
+const add = (path, data, auth, stamp = ['createdAt']) => edit(path, data, auth, { stamp, exists: false });
+const NEWCC = { client: 'TESTCO', sr: 99, contractType: 'TSA', expiryDate: '2028-01-31', status: 'Active', createdBy: 'u-mgr', createdByName: 'Manager' };
+const omit = (o, k) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k));
+const APPCC = 'bdControl/clientContracts/rows/app_TESTCO_99_TSA';
+console.log('\n[5] Adding a record from the app');
+expect('Employee adds a contract line', await add('bdControl/clientContracts/rows/app_E_1_TSA', { ...NEWCC, createdBy: 'u-emp' }, EMP), false);
+expect('Pending Manager adds a contract line', await add('bdControl/clientContracts/rows/app_P_1_TSA', { ...NEWCC, createdBy: 'u-pmgr' }, PMGR), false);
+expect('Manager adds with an id that looks like the loader\'s', await add('bdControl/clientContracts/rows/TESTCO_99_TSA', NEWCC, MGR), false);
+expect('Manager adds with no contract type (key field missing)', await add('bdControl/clientContracts/rows/app_X_1', omit(NEWCC, 'contractType'), MGR), false);
+expect('Manager adds a field that is not on the list', await add('bdControl/clientContracts/rows/app_X_2', { ...NEWCC, secretMargin: 25 }, MGR), false);
+expect('Manager adds with an appEdits note (not for new records)', await add('bdControl/clientContracts/rows/app_X_3', { ...NEWCC, appEdits: {} }, MGR), false);
+expect('Manager adds signed as someone else', await add('bdControl/clientContracts/rows/app_X_4', { ...NEWCC, createdBy: 'u-admin' }, MGR), false);
+expect('Manager adds with own time (not server time)', await add('bdControl/clientContracts/rows/app_X_5', { ...NEWCC, createdAt: new Date('2020-01-01') }, MGR, []), false);
+expect('Manager adds with no name', await add('bdControl/clientContracts/rows/app_X_6', omit(NEWCC, 'createdByName'), MGR), false);
+expect('Manager adds a data issue (loader-only)', await add('bdControl/dataIssues/rows/app_1', { table: 'x', createdBy: 'u-mgr', createdByName: 'M' }, MGR), false);
+expect('Manager adds a client (not offered)', await add('bdControl/clients/rows/app_NEWCO', { code: 'NEWCO', createdBy: 'u-mgr', createdByName: 'M' }, MGR), false);
+expect('Manager adds a contract line correctly', await add(APPCC, NEWCC, MGR), true);
+// The app's set() carries no "must not exist" precondition, so a clash is judged as an UPDATE — and refused.
+const plainSet = async (path, data, auth) => (await fetch(`${BASE}:commit`, { method: 'POST', headers: H(auth), body: JSON.stringify({ writes: [{
+  update: { name: `${ROOT}/${path}`, fields: fields(data) }, updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }] }] }) })).status;
+expect('Manager adds over an existing added line (plain set, no precondition)', await plainSet(APPCC, { ...NEWCC, status: 'Draft' }, MGR), false);
+expect('Manager adds over a LOADER row with a plain set', await plainSet(CC, { ...NEWCC }, MGR), false);
+expect('admin adds a supplier contract', await add('bdControl/supplierContracts/rows/app_T-10', { contractNo: 'T/10', status: 'In Progress', createdBy: 'u-admin', createdByName: 'Second admin' }, ADMIN), true);
+expect('Manager adds a day rate', await add('bdControl/dayRates/rows/app_TESTCO_Operator', { client: 'TESTCO', grade: 'Operator', dayRateEgp: 3000, createdBy: 'u-mgr', createdByName: 'Manager' }, MGR), true);
+expect('Manager adds an AGIBA site contract', await add('bdControl/agibaSiteContracts/rows/app_77-2026', { contractNo: '77/2026', createdBy: 'u-mgr', createdByName: 'Manager' }, MGR), true);
+expect('Manager adds an AGIBA SO', await add('bdControl/agibaSOs/rows/app_SO-9-2026', { so: 'SO 9/2026', amount: 5, createdBy: 'u-mgr', createdByName: 'Manager' }, MGR), true);
+expect('Manager adds an SO with no SO number', await add('bdControl/agibaSOs/rows/app_SO-10', { amount: 5, createdBy: 'u-mgr', createdByName: 'Manager' }, MGR), false);
+expect('… then edits the added line the normal way', await edit(APPCC, { status: 'Closed', appEdits: note('status', 'Active'), lastEditedBy: 'u-mgr' }, MGR), true);
+expect('… but cannot rewrite who added it', await edit(APPCC, { status: 'Open', createdBy: 'u-admin', appEdits: { ...note('status', 'Active') }, lastEditedBy: 'u-mgr' }, MGR), false);
+expect('… nor stamp "added by" onto a loader row', await edit(CC, { status: 'Open', createdByName: 'Manager', appEdits: { ...note('ceilingEgp', 1000000), ...note('status', 'Active') }, lastEditedBy: 'u-mgr' }, MGR), false);
+expect('… and nobody deletes it', await del(APPCC, MGR), false);
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

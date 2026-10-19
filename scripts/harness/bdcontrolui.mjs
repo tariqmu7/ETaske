@@ -1,4 +1,4 @@
-// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs + E6b editing).
+// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs + E6b editing + E6c adding).
 //
 // Proves src/BdControlDashboard.tsx + src/lib/bdControl.ts + src/hooks/useBdControl.ts
 // in real Edge: the pure maths (days, flags, live/EGP rules, millions, edits since
@@ -986,6 +986,160 @@ await send('Emulation.clearDeviceMetricsOverride');
 await evalJS(`window.__setLang('en')`);
 await sleep(150);
 
+console.log('\n[11] adding a record (E6c)');
+const C = JSON.parse(await evalJS(`(() => { const E = window.__edit, who = { uid: 'u-x', name: 'Sam' };
+  const cc = [...window.__store.get('bdControl/clientContracts/rows').entries()].map(([id, r]) => ({ id, ...r }));
+  const dr = [...window.__store.get('bdControl/dayRates/rows').entries()].map(([id, r]) => ({ id, ...r }));
+  const L = window.__lib;
+  return JSON.stringify({
+    keys: Object.fromEntries(Object.entries(E.KEY_FIELDS).map(([t, fs]) => [t, fs.map(f => f.key)])),
+    ids: [E.loaderId('clientContracts', { client: 'ALPHA', sr: 7, contractType: 'O&M' }), E.loaderId('supplierContracts', { contractNo: ' 112/2010 ' }),
+      E.loaderId('agibaSOs', { so: 'SO 45-2024' }), E.loaderId('dayRates', { client: 'ANOPC', grade: 'General Manager' })],
+    sr: E.nextSr(cc),
+    miss: E.planCreate('clientContracts', cc, { client: 'ALPHA', sr: '' }, who, 'T'),
+    bad: E.planCreate('clientContracts', cc, { client: 'ALPHA', sr: 'x', contractType: 'CSA', ceilingEgp: '1O' }, who, 'T'),
+    clashX: E.planCreate('clientContracts', cc, { client: 'ALPHA', sr: '1', contractType: 'CSA' }, who, 'T').clash?.id,
+    clashA: E.planCreate('clientContracts', [...cc, { id: 'app_ALPHA_9_CSA' }], { client: 'ALPHA', sr: '9', contractType: 'CSA' }, who, 'T').clash?.id,
+    ok: E.planCreate('clientContracts', cc, { client: ' ALPHA ', sr: '6', contractType: 'O&M', ceilingEgp: '1,000', comments: '' }, who, 'T'),
+    rate: E.planCreate('dayRates', [...dr, { id: 'x', client: 'GAMMA', grade: 'Senior Engineer', rateSheetHeading: 'GAMMA heading' }], { client: 'GAMMA', grade: 'Section Head', dayRateEgp: '6000' }, who, 'T'),
+    added: [E.isAppAdded({ id: 'app_x' }), E.isAppAdded({ id: 'ALPHA_1_CSA' }), E.isAppAdded({ id: 'y', createdAt: 'T' })],
+    since: L.editsSinceLoad({ ...L.emptyBdData(), meta: { loadedAt: '2026-01-02T00:00:00Z' }, supplierContracts: [{ id: 'app_n', createdAt: { seconds: 1767312000 + 5 } }] }),
+  }); })()`));
+check('key fields per table (contract line = client + line no. + type, in the loader\'s id order)', J(C.keys) === J({ clientContracts: ['client', 'sr', 'contractType'],
+  dayRates: ['client', 'grade'], supplierContracts: ['contractNo'], agibaSiteContracts: ['contractNo'], agibaSOs: ['so'] }), J(C.keys));
+const createKeys = src('firestore.rules').match(/function bdControlCreateKeys\(\) \{[\s\S]*?\};/)[0];
+check('… and the same lists as the rules\' bdControlCreateKeys()', Object.entries(C.keys).every(([t, ks]) => {
+  const m = createKeys.match(new RegExp(`'${t}': \\[([^\\]]*)\\]`)); return m && J(m[1].split(',').map(s => s.trim().replace(/'/g, ''))) === J(ks); }), createKeys);
+check('loaderId cleans like the loader: ALPHA_7_O-M · 112-2010 · SO-45-2024 · ANOPC_General-Manager', J(C.ids) === J(['ALPHA_7_O-M', '112-2010', 'SO-45-2024', 'ANOPC_General-Manager']), J(C.ids));
+check('next free line no. = highest + 1', C.sr === 6, String(C.sr));
+check('plan: missing key fields listed, nothing to write', C.miss.ok === false && J(C.miss.missing) === J(['sr', 'contractType']), J(C.miss));
+check('plan: a bad number (key or not) is reported', C.bad.ok === false && J(C.bad.bad) === J(['sr', 'ceilingEgp']), J(C.bad));
+check('plan: refused when the record is on file — from Excel or added earlier', C.clashX === 'ALPHA_1_CSA' && C.clashA === 'app_ALPHA_9_CSA', `${C.clashX} ${C.clashA}`);
+check('plan: id app_<loader id>, typed values only (blanks left out), stamped uid + name + server time, no appEdits',
+  C.ok.ok && C.ok.id === 'app_ALPHA_6_O-M' && J(C.ok.doc) === J({ client: 'ALPHA', sr: 6, contractType: 'O&M', ceilingEgp: 1000, createdBy: 'u-x', createdByName: 'Sam', createdAt: 'T' }), J(C.ok));
+check('plan: a new day rate copies the grade\'s level and the client\'s rate-sheet heading', C.rate.ok && C.rate.doc.level === 7 && C.rate.doc.rateSheetHeading === 'GAMMA heading', J(C.rate));
+const ruleFields = src('firestore.rules');
+const notAllowed = Object.keys(C.rate.doc).concat(Object.keys(C.ok.doc)).filter(k => !['createdBy', 'createdByName', 'createdAt'].includes(k)
+  && !ruleFields.match(/'(clientContracts|dayRates)': \[([^\]]*)\]/g).join(' ').includes(`'${k}'`));
+check('every field a new record writes is on the rules\' list', notAllowed.length === 0, notAllowed.join(', '));
+check('isAppAdded: app_ id or a createdAt stamp', J(C.added) === J([true, false, true]));
+check('a record added after the load counts in "edited since load"', C.since === 1, String(C.since));
+
+// A new contract line from the Contracts tab
+await evalJS(`window.__writes.length = 0; window.__batches = 0`);
+await click('[data-bd-tab="contracts"]');
+await click('[data-bdc-add="clientContracts"]');
+await waitFor(q('[data-bdc-dialog="add:clientContracts"]'), 'add dialog');
+check('add form: title, key fields first and starred, line no. offered (6), Save says Add and is off',
+  (await text('#bdc-edit-title')) === 'Add a client contract line'
+  && (await evalJS(`[...document.querySelectorAll('[data-bdc-field]')].slice(0, 3).map(e => e.dataset.bdcField).join(',')`)) === 'client,sr,contractType'
+  && (await count('.bdc-req')) === 3 && (await evalJS(`${q('[data-bdc-field="sr"]')}.value`)) === '6'
+  && (await text('[data-bdc="save"]')) === 'Add' && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === true
+  && (await text('[data-bdc="change-count"]')) === 'Still to fill in: Client, Contract type', await text('[data-bdc="change-count"]'));
+check('add form: no change log, no Excel notes', !(await has('h3.bdc-h3')) && !(await has('[data-bdc-note]')));
+check('add form: client box suggests the client codes, type box the types used', (await evalJS(`[...document.querySelectorAll('#bdc-l-client option')].map(o => o.value).join(',')`)) === 'ALPHA,BETA,GAMMA,SUPX'
+  && (await evalJS(`[...document.querySelectorAll('#bdc-l-contractType option')].map(o => o.value).join(',')`)).includes('CSA'));
+await setVal('[data-bdc-field="client"]', 'ALPHA');
+await setVal('[data-bdc-field="contractType"]', 'CSA');
+await setVal('[data-bdc-field="sr"]', '1');
+check('typing a record already on file: message, Add stays off', (await text('[data-bdc="clash"]')).startsWith('This record is already on file')
+  && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === true);
+await setVal('[data-bdc-field="sr"]', '6');
+await setVal('[data-bdc-field="expiryDate"]', await evalJS(`window.__iso(30)`));
+await setVal('[data-bdc-field="ceilingEgp"]', '500,000,000');
+await setVal('[data-bdc-field="status"]', 'Valid');
+check('all keys filled: "Ready to add", Add on', (await text('[data-bdc="change-count"]')) === 'Ready to add' && !(await has('[data-bdc="clash"]'))
+  && (await evalJS(`${q('[data-bdc="save"]')}.disabled`)) === false);
+await click('[data-bdc="save"]');
+await waitFor(`!${q('[data-bdc-dialog]')}`, 'add dialog closes');
+const n1 = await row('clientContracts', 'app_ALPHA_6_CSA');
+check('saved as app_ALPHA_6_CSA: typed values, createdBy/Name + server time, no edit notes, no history',
+  n1 && n1.client === 'ALPHA' && n1.sr === 6 && n1.contractType === 'CSA' && n1.ceilingEgp === 500000000 && n1.status === 'Valid'
+  && n1.createdBy === 'u-mgr' && n1.createdByName === 'Mona Manager' && typeof n1.createdAt?.seconds === 'number' && !n1.appEdits && !('comments' in n1)
+  && (await hist('clientContracts', 'app_ALPHA_6_CSA')).length === 0, J(n1));
+check('… one write only (a set, not a batch)', (await evalJS(`window.__writes.filter(w => w.op === 'set').length`)) === 1 && (await evalJS(`window.__batches`)) === 0);
+check('… and it is in the Contracts list with an "Added in eTaske" badge', (await keys('contract')).split(',').includes('app_ALPHA_6_CSA')
+  && (await text('[data-bdc-row="contract"][data-bdc-key="app_ALPHA_6_CSA"] [data-bdc-added]')) === 'Added in eTaske');
+await click('[data-bd-tab="overview"]');
+check('the figures take it in at once: total ceiling 2,350.5 -> 2,850.5 m', (await tile('ceiling')) === '2,850.5', await tile('ceiling'));
+
+// The client page: add a line + a day rate for this client (client filled in)
+await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
+check('client page: Add buttons on the lines and the day-rates', (await has('[data-bdc-client="lines"] [data-bdc-add="clientContracts"]'))
+  && (await has('[data-bdc-client="rates"] [data-bdc-add="dayRates"]')));
+check('… the added line shows there with its badge and an Edit button', (await has('[data-bdc-row="clientline"][data-bdc-key="app_ALPHA_6_CSA"] [data-bdc-added]'))
+  && (await has('[data-bdc-edit="clientContracts:app_ALPHA_6_CSA"]')));
+await click('[data-bdc-edit="clientContracts:app_ALPHA_6_CSA"]');
+await waitFor(q(dlg), 'edit an added line');
+check('editing an added line: "Added in eTaske by …" shown, key fields not offered', (await text('[data-bdc="added-by"]')).startsWith('Added in eTaske by Mona Manager')
+  && !(await has('[data-bdc-field="sr"]')) && !(await has('[data-bdc-field="client"]')), await text('[data-bdc="added-by"]'));
+await setVal('[data-bdc-field="status"]', 'Signing');
+await click('[data-bdc="save"]');
+await waitFor(`!${q(dlg)}`, 'added line edited');
+const n2 = await row('clientContracts', 'app_ALPHA_6_CSA');
+check('… the edit goes the normal way (note + history), the "added by" stamp untouched', n2.status === 'Signing' && n2.appEdits.status.excelValue === 'Valid'
+  && n2.createdByName === 'Mona Manager' && (await hist('clientContracts', 'app_ALPHA_6_CSA')).length === 1, J(n2));
+await click('[data-bdc-client="rates"] [data-bdc-add="dayRates"]');
+await waitFor(q('[data-bdc-dialog="add:dayRates"]'), 'add day-rate dialog');
+check('day-rate add form: client already filled in, title names the client', (await evalJS(`${q('[data-bdc-field="client"]')}.value`)) === 'ALPHA'
+  && (await text('#bdc-edit-title')) === 'Add a day rate for ALPHA', await text('#bdc-edit-title'));
+await setVal('[data-bdc-field="grade"]', 'Section Head');
+check('a grade already on the sheet for this client is refused', await has('[data-bdc="clash"]'));
+await setVal('[data-bdc-field="grade"]', 'Assistant GM');
+await setVal('[data-bdc-field="dayRateEgp"]', '9000');
+await click('[data-bdc="save"]');
+await waitFor(`!${q('[data-bdc-dialog]')}`, 'day rate added');
+check('new day rate saved and listed on the client page', (await row('dayRates', 'app_ALPHA_Assistant-GM'))?.dayRateEgp === 9000
+  && (await has('[data-bdc-row="clientrate"][data-bdc-key="Assistant GM"] [data-bdc-added]')));
+
+// Suppliers tab: one Add button per list
+await click('[data-bd-tab="suppliers"]');
+await click('[data-bdc-chip="supview:supplier"]');
+await click('[data-bdc-chip="supfilter:live"]');
+check('Suppliers: the Add button follows the list shown', (await count('[data-bdc-add]')) === 1 && (await has('[data-bdc-add="supplierContracts"]')));
+await click('[data-bdc-add="supplierContracts"]');
+await waitFor(q('[data-bdc-dialog="add:supplierContracts"]'), 'add supplier dialog');
+await setVal('[data-bdc-field="contractNo"]', 'S/1');
+check('supplier contract S/1 is on file -> refused', await has('[data-bdc="clash"]'));
+await setVal('[data-bdc-field="contractNo"]', 'S/10');
+await setVal('[data-bdc-field="status"]', 'In Progress');
+await setVal('[data-bdc-field="currentEnd"]', await evalJS(`window.__iso(15)`));
+await setVal('[data-bdc-field="client"]', 'BETA');
+await setVal('[data-bdc-field="currentValueEgp"]', '250000');
+await click('[data-bdc="save"]');
+await waitFor(`!${q('[data-bdc-dialog]')}`, 'supplier added');
+check('new supplier contract app_S-10 is running and badged', (await row('supplierContracts', 'app_S-10'))?.contractNo === 'S/10'
+  && (await keys('supplier')).split(',').includes('S/10') && (await has('[data-bdc-row="supplier"][data-bdc-key="S/10"] summary [data-bdc-added]')), await keys('supplier'));
+await click('[data-bdc-chip="supview:agibaSO"]');
+await click('[data-bdc-add="agibaSOs"]');
+await waitFor(q('[data-bdc-dialog="add:agibaSOs"]'), 'add SO dialog');
+check('SO add form: SO number first, title', (await evalJS(`${q('[data-bdc-field]')}.dataset.bdcField`)) === 'so' && (await text('#bdc-edit-title')) === 'Add an AGIBA service order');
+await setVal('[data-bdc-field="so"]', 'SO 9-2026');
+await setVal('[data-bdc-field="status"]', 'In Progress');
+await setVal('[data-bdc-field="expiry"]', await evalJS(`window.__iso(40)`));
+await click('[data-bdc="save"]');
+await waitFor(`!${q('[data-bdc-dialog]')}`, 'SO added');
+check('new SO saved (id app_SO-9-2026) and listed as still open', (await row('agibaSOs', 'app_SO-9-2026'))?.so === 'SO 9-2026'
+  && (await has('[data-bdc-row="so"][data-bdc-key="SO 9-2026"] [data-bdc-so="open"]')));
+await click('[data-bdc-chip="supview:agibaSite"]');
+check('AGIBA site list has its own Add button', await has('[data-bdc-add="agibaSiteContracts"]'));
+
+// Arabic + phone
+await evalJS(`window.__setLang('ar')`);
+await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
+await sleep(250);
+await click('[data-bdc-add="agibaSiteContracts"]');
+await waitFor(q('[data-bdc-dialog="add:agibaSiteContracts"]'), 'add site dialog (ar)');
+check('Arabic add form: title, starred label, "still to fill in" line, Add button', (await text('#bdc-edit-title')) === 'إضافة عقد لموقع عجيبة'
+  && (await text('label[for="bdc-f-contractNo"]')) === 'رقم العقد *' && (await text('[data-bdc="change-count"]')) === 'حقول مطلوبة لم تُملأ بعد: رقم العقد'
+  && (await text('[data-bdc="save"]')) === 'إضافة', `${await text('#bdc-edit-title')} | ${await text('label[for="bdc-f-contractNo"]')} | ${await text('[data-bdc="change-count"]')}`);
+check('390 px: the add form fits', (await overflow()) <= 1 && (await evalJS(`${q('[data-bdc-dialog]')}.getBoundingClientRect().width <= 390`)), String(await overflow()));
+await shot('11-add-ar-mobile');
+await click('[data-bdc-dialog] .bdc-modal-head button');
+await send('Emulation.clearDeviceMetricsOverride');
+await evalJS(`window.__setLang('en')`);
+await sleep(150);
+
 // Someone who may not edit sees no Edit button (the page itself is gated for them anyway)
 check('canEditBdControl: managers + admin, Approved only', J(await evalJS(`[{ role: 'Manager', status: 'Approved' }, { role: 'Admin', status: 'Approved' },
   { role: 'Employee', status: 'Approved' }, { role: 'Manager', status: 'Pending' }].map(window.__access.canEditBdControl)`)) === J([true, true, false, false]));
@@ -994,6 +1148,7 @@ await remount();
 await waitFor(q('[data-bd="tiles"]'), 'tiles (employee)');
 await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
 check('no Edit button without edit rights; badges still shown', (await count('[data-bdc-edit]')) === 0 && (await has('[data-bdc-edited]')));
+check('… and no Add button either; "Added in eTaske" badges still shown', (await count('[data-bdc-add]')) === 0 && (await has('[data-bdc-added]')));
 await evalJS(`window.__user = { ...window.__user, role: 'Manager' }`);
 await shot('10-edit-en');
 check('no page errors', pageErrors.length === 0, pageErrors.join(' || ').slice(0, 400));

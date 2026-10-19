@@ -8,7 +8,9 @@
 //     kept on later edits, so the loader can still spot an Excel-side change;
 //   · `lastEditedBy` = the editor's uid, `lastEditedAt` = server time;
 //   · one history doc per changed field `{field, from, to, byUid, byName, at}`.
-// Only existing rows are edited here; adding a new record is a later task (E6c).
+// Adding a new record (queue E6c) is `planCreate` at the bottom: the id starts
+// `app_` so it never clashes with a loader id, and the row is stamped
+// createdBy / createdByName / createdAt instead of carrying appEdits notes.
 import type { BdRow, BdTable } from './bdControl';
 
 export type EditKind = 'text' | 'long' | 'number' | 'date';
@@ -173,4 +175,77 @@ export function editNotes(row: BdRow): { field: string; excelValue: unknown; byN
   return Object.entries(row.appEdits || {}).map(([field, n]) => ({
     field, excelValue: n?.excelValue ?? null, byName: n?.byName || null, at: n?.at ?? null,
   }));
+}
+
+/**
+ * The fields that name a record. Asked for only when a record is ADDED (queue
+ * E6c) — never edited afterwards, as the Excel loader builds its ids from them.
+ * Must match bdControlCreateKeys() in firestore.rules.
+ */
+export const KEY_FIELDS: Record<EditTable, EditField[]> = {
+  clientContracts: [
+    // Same order as the loader's id: Client_Sr_Type.
+    f('client', 'Client', 'text', { clients: true }),
+    f('sr', 'Line no. in the CSA report', 'number'),
+    f('contractType', 'Contract type', 'text', { suggest: true }),
+  ],
+  dayRates: [
+    f('client', 'Client', 'text', { clients: true }),
+    f('grade', 'Grade', 'text', { suggest: true }),
+  ],
+  supplierContracts: [f('contractNo', 'Contract no.')],
+  agibaSiteContracts: [f('contractNo', 'Contract no.')],
+  agibaSOs: [f('so', 'SO number')],
+};
+
+/** Same cleaning as the loader (upload_bd_control.mjs): "O&M" -> O-M, "112/2010" -> 112-2010. */
+export const cleanIdPart = (s: unknown) => String(s).trim().replace(/[^\p{L}\p{N}._-]+/gu, '-');
+
+/** The id the Excel loader would give a record with these key values. */
+export function loaderId(table: EditTable, keys: Record<string, unknown>): string {
+  return KEY_FIELDS[table].map(fd => cleanIdPart(keys[fd.key])).join('_');
+}
+
+/** A record added in eTaske (not loaded from Excel). */
+export const isAppAdded = (r: BdRow) => r.id.startsWith('app_') || r.createdAt != null;
+
+/** Next free CSA line number, offered when a contract line is added. */
+export const nextSr = (rows: BdRow[]) => rows.reduce((m, r) => (typeof r.sr === 'number' && r.sr > m ? r.sr : m), 0) + 1;
+
+export type CreatePlan =
+  | { ok: true; id: string; doc: Record<string, unknown> }
+  | { ok: false; missing: string[]; bad: string[]; clash: BdRow | null };
+
+/**
+ * A new record from the add form. Every key field is required; numbers and
+ * dates must read. The id is `app_` + the loader's id, so a record added here
+ * and later typed into Excel is easy to match up. Refused (clash) when the
+ * same record is already on file, from Excel or from eTaske. A day rate copies
+ * the grade's `level` and the client's rate-sheet heading from rows on file,
+ * so it sorts and labels like the rest of the sheet.
+ */
+export function planCreate(table: EditTable, rows: BdRow[], form: Record<string, string>, who: EditWho, stamp: unknown): CreatePlan {
+  const missing: string[] = [], bad: string[] = [];
+  const doc: Record<string, unknown> = {};
+  for (const fd of [...KEY_FIELDS[table], ...EDIT_FIELDS[table]]) {
+    const isKey = KEY_FIELDS[table].includes(fd);
+    const p = fromInput(form[fd.key] ?? '', fd.kind);
+    if (!p.ok) { bad.push(fd.key); continue; }
+    if (p.value == null) { if (isKey) missing.push(fd.key); continue; }
+    doc[fd.key] = p.value;
+  }
+  if (missing.length || bad.length) return { ok: false, missing, bad, clash: null };
+  const base = loaderId(table, doc);
+  const clash = rows.find(r => r.id === base || r.id === `app_${base}`) || null;
+  if (clash) return { ok: false, missing, bad, clash };
+  if (table === 'dayRates') {
+    const level = rows.find(r => r.grade === doc.grade && typeof r.level === 'number')?.level;
+    const heading = rows.find(r => r.client === doc.client && r.rateSheetHeading)?.rateSheetHeading;
+    if (level != null) doc.level = level;
+    if (heading != null) doc.rateSheetHeading = heading;
+  }
+  doc.createdBy = who.uid;
+  doc.createdByName = who.name;
+  doc.createdAt = stamp;
+  return { ok: true, id: `app_${base}`.slice(0, 200), doc };
 }

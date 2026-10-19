@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { BENCHMARK_CLIENT, clientProfile, rateGrid, type BdData } from '../../lib/bdControl';
 import { Fields, GRADE_SHORT, useBdWords } from './shared';
-import { EditButton, EditedBadge } from './EditRecord';
+import { AddButton, EditButton, EditedBadge } from './EditRecord';
 
 interface Props {
   data: BdData;
@@ -18,7 +18,8 @@ interface Props {
  * ANOPC, supplier contracts, what changed between the two CSA reports and the
  * data issues that touch it. Reached from the Contracts tab, the Pricing grid,
  * the Overview ceiling / reprice charts and the Data quality list. Lines and
- * day-rates carry an Edit button for managers (E6b).
+ * day-rates carry an Edit button for managers (E6b), and both sections an Add
+ * button that opens the form with this client filled in (E6c).
  */
 export default function ClientPage({ data, today, code, onBack, onSupplier }: Props) {
   const w = useBdWords(data);
@@ -32,9 +33,9 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
   const rateRow = useMemo(() => new Map(data.dayRates.filter(r => r.client === code).map(r => [r.grade, r])), [data.dayRates, code]);
   const gradeName = (g: string) => (GRADE_SHORT[g] ? t(GRADE_SHORT[g]) : g);
 
-  const section = (title: string, attr: string, body: React.ReactNode, sub?: string) => (
+  const section = (title: string, attr: string, body: React.ReactNode, sub?: string, action?: React.ReactNode) => (
     <section className="card bdc-card" data-bdc-client={attr}>
-      <h2 className="bdc-h">{title}</h2>
+      {action ? <div className="bdc-head-row"><h2 className="bdc-h">{title}</h2>{action}</div> : <h2 className="bdc-h">{title}</h2>}
       {sub && <p className="bdc-cap">{sub}</p>}
       {body}
     </section>
@@ -87,7 +88,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
                   ]} />
                 </div>
               ))}
-            </div>)}
+            </div>, undefined,
+          <AddButton table="clientContracts" label={t('Add a line')} title={t('Add a contract line for {{client}}', { client: w.nameOf(code) })} preset={{ client: code }} />)}
 
         {section(t('Day-rates'), 'rates', p.rates.length === 0
           ? <p className="bdc-empty" data-bdc-empty="clientrates">{t('This client has no column on the day-rate sheet.')}</p>
@@ -107,7 +109,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
               ))}
             </div>,
           code === BENCHMARK_CLIENT ? t('EGP per man-day · this is the benchmark client')
-            : t('EGP per man-day · gap against {{name}}', { name: w.nameOf(BENCHMARK_CLIENT) }))}
+            : t('EGP per man-day · gap against {{name}}', { name: w.nameOf(BENCHMARK_CLIENT) }),
+          <AddButton table="dayRates" label={t('Add a day rate')} title={t('Add a day rate for {{client}}', { client: w.nameOf(code) })} preset={{ client: code }} />)}
 
         {section(t('Supplier contracts'), 'suppliers', p.suppliers.length === 0
           ? <p className="bdc-empty" data-bdc-empty="clientsuppliers">{t('No supplier contract is booked to this client.')}</p>

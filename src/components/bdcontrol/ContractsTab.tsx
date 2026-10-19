@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight } from 'lucide-react';
 import { contractCounts, contractLines, type BdData, type ContractFilter } from '../../lib/bdControl';
 import { BROWSE_FIRST, Chips, MoreButton, SearchBox, useBdWords } from './shared';
-import { EditedBadge } from './EditRecord';
+import { AddButton, EditedBadge } from './EditRecord';
 
 export interface ContractsState { filter: ContractFilter; q: string }
 
@@ -38,6 +38,7 @@ export default function ContractsTab({ data, today, state, onState, onClient }: 
       <p className="bdc-cap">{t('From the CSA & O&M report · the soonest expiry first · open a line for everything on file for that client')}</p>
       <div className="bdc-tools">
         <SearchBox value={state.q} onChange={q => onState({ ...state, q })} placeholder={t('Search a client, contract type, status or comment')} attr="contracts" />
+        <AddButton table="clientContracts" label={t('Add a contract line')} title={t('Add a client contract line')} />
       </div>
       <Chips attr="contracts" label={t('Show')} value={state.filter} onChange={filter => onState({ ...state, filter })}
         options={(Object.keys(FILTER_LABEL) as ContractFilter[]).map(k => ({ key: k, label: t(FILTER_LABEL[k]), count: counts[k] }))} />

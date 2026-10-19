@@ -5,7 +5,7 @@ import {
   type BdData, type SupplierFilter,
 } from '../../lib/bdControl';
 import { BROWSE_FIRST, Chips, Fields, MoreButton, SearchBox, useBdWords } from './shared';
-import { EditButton, EditedBadge } from './EditRecord';
+import { AddButton, EditButton, EditedBadge } from './EditRecord';
 
 export type SupplierView = 'supplier' | 'agibaSite' | 'agibaSO';
 export interface SuppliersState { view: SupplierView; filter: SupplierFilter; soOpen: boolean; q: string }
@@ -56,6 +56,9 @@ export default function SuppliersTab({ data, today, state, onState, onClient }: 
       <div className="bdc-tools">
         <SearchBox value={state.q} onChange={q => set({ q })} attr="suppliers"
           placeholder={state.view === 'agibaSO' ? t('Search an SO number, item, contractor or status') : t('Search a contract number, contractor, client or subject')} />
+        {state.view === 'supplier' && <AddButton table="supplierContracts" label={t('Add a supplier contract')} title={t('Add a supplier contract')} />}
+        {state.view === 'agibaSite' && <AddButton table="agibaSiteContracts" label={t('Add an AGIBA site contract')} title={t('Add an AGIBA site contract')} />}
+        {state.view === 'agibaSO' && <AddButton table="agibaSOs" label={t('Add a service order')} title={t('Add an AGIBA service order')} />}
       </div>
       {state.view === 'supplier' && (
         <Chips attr="supfilter" label={t('Status')} value={state.filter} onChange={filter => set({ filter })}

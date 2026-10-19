@@ -20,6 +20,10 @@ export interface BdRow {
   appEdits?: Record<string, { excelValue?: unknown; byName?: string; at?: unknown }>;
   lastEditedBy?: string;
   lastEditedAt?: unknown;
+  /** Set only on a record added in eTaske (queue E6c). */
+  createdBy?: string;
+  createdByName?: string;
+  createdAt?: unknown;
   [field: string]: unknown;
 }
 
@@ -132,13 +136,13 @@ export function timeOf(v: unknown): number | null {
 
 const EDITABLE: BdTable[] = ['clients', 'clientContracts', 'dayRates', 'supplierContracts', 'supplierAmendments', 'agibaSOs', 'agibaSiteContracts'];
 
-/** Rows someone changed in eTaske after the last Excel load. */
+/** Rows someone changed or added in eTaske after the last Excel load. */
 export function editsSinceLoad(data: BdData): number {
   const loaded = timeOf(data.meta?.loadedAt);
   let n = 0;
   for (const t of EDITABLE) {
     for (const r of data[t] as BdRow[]) {
-      const at = timeOf(r.lastEditedAt);
+      const at = timeOf(r.lastEditedAt) ?? timeOf(r.createdAt);
       if (at != null && (loaded == null || at > loaded)) n++;
     }
   }

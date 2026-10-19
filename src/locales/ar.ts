@@ -2461,6 +2461,27 @@ const ar: Record<keyof typeof en, string> = {
   "AGIBA site contract {{no}}": "عقد موقع عجيبة {{no}}",
   "service order {{no}}": "أمر الخدمة {{no}}",
   "✎ = changed in eTaske since the Excel load": "✎ = عُدِّل في eTaske بعد التحميل من الإكسل",
+  // BD control: adding a record (queue E6c).
+  "Contract type": "نوع العقد",
+  "Line no. in the CSA report": "رقم البند في تقرير العقود",
+  "Contract no.": "رقم العقد",
+  "SO number": "رقم أمر الخدمة",
+  "Added in eTaske": "أُضيف في eTaske",
+  "Added in eTaske by {{name}}": "أضافه {{name}} في eTaske",
+  "Add a contract line": "إضافة بند عقد",
+  "Add a client contract line": "إضافة بند إلى عقود العملاء",
+  "Add a supplier contract": "إضافة عقد مورد",
+  "Add an AGIBA site contract": "إضافة عقد لموقع عجيبة",
+  "Add a service order": "إضافة أمر خدمة",
+  "Add an AGIBA service order": "إضافة أمر خدمة في عجيبة",
+  "Add a line": "إضافة بند",
+  "Add a contract line for {{client}}": "إضافة بند عقد لـ{{client}}",
+  "Add a day rate": "إضافة فئة يومية",
+  "Add a day rate for {{client}}": "إضافة فئة يومية لـ{{client}}",
+  "The new record is saved in eTaske with your name and shows in every chart at once. The next Excel refresh keeps it; add it to the Excel file too so the two match.": "يُحفَظ السجل الجديد في eTaske باسمك ويظهر في جميع الرسوم البيانية فورًا، ويبقى كما هو عند التحديث التالي من ملفات الإكسل؛ فأضِفه إلى ملف الإكسل أيضًا كي يتطابق المصدران.",
+  "This record is already on file. Close this form, open the record and use Edit.": "هذا السجل موجود بالفعل. أغلق النموذج، وافتح السجل، ثم اضغط «تعديل».",
+  "Still to fill in: {{list}}": "حقول مطلوبة لم تُملأ بعد: {{list}}",
+  "Ready to add": "جاهز للإضافة",
 };
 
 export default ar;

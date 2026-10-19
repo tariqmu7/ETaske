@@ -1,9 +1,10 @@
 // Writes one BD control edit (queue E6b): the row update + one history doc per
-// changed field, in ONE batch so the log can never miss a change. The shapes
+// changed field, in ONE batch so the log can never miss a change. Adding a new
+// record (queue E6c) is one set() of the doc planCreate built. The shapes
 // come from lib/bdControlEdit.ts; firestore.rules (`bdControl` block) checks them.
-import { collection, doc, onSnapshot, serverTimestamp, writeBatch } from 'firebase/firestore';
+import { collection, doc, onSnapshot, serverTimestamp, setDoc, writeBatch } from 'firebase/firestore';
 import { db } from './firebase';
-import { planEdit, type EditTable, type EditWho, type FieldChange } from './bdControlEdit';
+import { planCreate, planEdit, type CreatePlan, type EditTable, type EditWho, type FieldChange } from './bdControlEdit';
 import type { BdRow } from './bdControl';
 
 const rowPath = (table: EditTable) => `bdControl/${table}/rows`;
@@ -17,6 +18,17 @@ export async function saveBdEdit(table: EditTable, row: BdRow, changes: FieldCha
   const base = `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
   history.forEach((h, i) => batch.set(doc(db, historyPath(table, row.id), `${base}_${i}`), h));
   await batch.commit();
+}
+
+/**
+ * Adds a record. Returns the plan: when it is not ok (a key missing, a bad
+ * number, or the record is already on file) nothing is written. A plain set()
+ * on an id that exists is judged as an edit by the rules and refused.
+ */
+export async function saveBdCreate(table: EditTable, rows: BdRow[], form: Record<string, string>, who: EditWho): Promise<CreatePlan> {
+  const plan = planCreate(table, rows, form, who, serverTimestamp());
+  if (plan.ok) await setDoc(doc(db, rowPath(table), plan.id), plan.doc);
+  return plan;
 }
 
 export interface BdHistoryEntry { id: string; field: string; from: unknown; to: unknown; byName?: string; at?: unknown }
