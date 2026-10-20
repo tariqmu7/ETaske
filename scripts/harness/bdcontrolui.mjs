@@ -381,7 +381,7 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: 18 answered from today’s data (P1–P4, P6, M1, M5, A1–A5, R1–R3, S1–S3) · 28 waiting for data', (await text('[data-ac="summary"]')) === '18 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('board summary: 22 answered from today’s data (P1–P4, P6, M1, M5, A1–A5, H3, R1–R3, S1–S3, G1, G4, O2) · 28 waiting for data', (await text('[data-ac="summary"]')) === '22 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
 check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
 check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
@@ -558,6 +558,77 @@ await evalJS(`window.__setLang('ar')`); await sleep(250);
 check('Arabic: strip heading + tile label + an R3 rule in Arabic', (await text('.ac-headline-h')) === 'الموقف باختصار'
   && (await text('[data-ac-tile="R2"] .ac-tile-label')) === 'تجاوزت تاريخ انتهائها' && (await text('[data-ac-q="R1"] [data-ac-title]')) === 'أي العقود تنتهي خلال 30 و90 و180 يومًا القادمة؟');
 await shot('a3-ar');
+await evalJS(`window.__setLang('en')`); await sleep(250);
+await evalJS(`window.__seedAll(); __emit()`);
+await sleep(200);
+
+console.log('\n[2e] Analysis center: people H3, growth G1 + G4, opportunity O2 (queue A4)');
+check('the four new cards show as charts; the rest of People, Growth and Opportunity stay grey',
+  (await evalJS(`['H3','G1','G4','O2','H1','H2','H4','G2','G3','O1','O3','O7'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
+  === 'H3:chart,G1:chart,G4:chart,O2:chart,H1:need,H2:need,H4:need,G2:need,G3:need,O1:need,O3:need,O7:need');
+check('H3 per grade, senior first: our clients’ median (ANOPC left out) GM 8,750 · Sr Eng 4,650 · Operator 3,000',
+  (await acRows('grade')) === 'General Manager=8,750,Senior Engineer=4,650,Operator=3,000', await acRows('grade'));
+check('H3 gap to ANOPC: −12.5% (amber) · −7.0% · 0.0%; ANOPC rate + client count under each grade',
+  (await texts('[data-ac-row="grade"] [data-ac-gap]')) === '−12.5%|−7.0%|0.0%' && (await has('[data-ac-row="grade"][data-ac-key="General Manager"] .bdc-fill-mid'))
+  && (await text('[data-ac-row="grade"][data-ac-key="General Manager"] .bdc-sub')) === 'ANOPC: 10,000 · clients: 4', await texts('[data-ac-row="grade"] [data-ac-gap]'));
+check('H3 tick sits at ANOPC’s rate on the scale', (await evalJS(`(() => { const r = document.querySelector('[data-ac-row="grade"][data-ac-key="Operator"]');
+  const f = r.querySelector('.bdc-fill').getBoundingClientRect(), m = r.querySelector('.bdc-mark').getBoundingClientRect();
+  return Math.abs((m.left + 1) - f.right) <= 2; })()`)));
+check('H3 foot keeps the reprice list: BETA (−20% on average) then DELTA (−15%)',
+  (await text('[data-ac-q="H3"] [data-ac-foot="below"]')) === 'Paying 10%+ below ANOPC on average — reprice at renewal: BETA, DELTA', await text('[data-ac-q="H3"] [data-ac-foot="below"]'));
+await click('[data-ac-row="grade"][data-ac-key="General Manager"]');
+check('H3: a grade opens every client’s rate, highest first, gaps to ANOPC, ⚠ on BETA',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="gradeClient"]')].map(e => e.dataset.acKey).join(',')`)) === 'ALPHA,ANOPC,GAMMA,DELTA,BETA'
+  && (await texts('[data-ac-row="gradeClient"] [data-ac-gap]')) === '+20.0%|benchmark|−5.0%|−20.0%|−30.0%'
+  && (await has('[data-ac-row="gradeClient"][data-ac-key="BETA"] [data-ac-warn]')) && (await evalJS(`document.querySelectorAll('[data-ac-row="gradeClient"] [data-ac-warn]').length`)) === 1,
+  await texts('[data-ac-row="gradeClient"] [data-ac-gap]'));
+await click('[data-ac-row="gradeClient"][data-ac-key="BETA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from H3');
+check('an H3 client row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('BETA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+check('O2 per level, highest first: Level 10 ≈9,500 EGP (7,000–12,000, 5 clients) · Level 6 ≈4,800; both hatched',
+  (await acRows('level')) === '10=≈ 9,500 EGP,6=≈ 4,800 EGP' && (await text('[data-ac-row="level"][data-ac-key="10"] .bdc-name')) === 'Level 10 · GMLowest 7,000 · highest 12,000 · clients: 5'
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="O2"] [data-ac-assumed-seg]').length`)) === 2, `${await acRows('level')} | ${await text('[data-ac-row="level"][data-ac-key="10"] .bdc-name')}`);
+check('O2: a grade with no level named apart, the matching rule stated, requested from HR + BD',
+  (await text('[data-ac-q="O2"] [data-ac-foot="noLevel"]')) === 'Grades with no level on the rate sheet: Operator'
+  && (await text('[data-ac-q="O2"] [data-ac-assumed]')).endsWith('each grade is taken as one competency level, by the level number on the day-rate sheet')
+  && (await text('[data-ac-q="O2"] [data-ac-still]')) === 'Requested from HR, BD: Each grade matched to a competency level', await text('[data-ac-q="O2"] [data-ac-still]'));
+check('G1 service list ≈3 (CSA, TSA, O&M — most held first); GAMMA could add 2, ALPHA and BETA 1 each',
+  (await acRows('serviceGap')) === 'GAMMA=≈ 2,ALPHA=≈ 1,BETA=≈ 1' && (await texts('[data-ac-q="G1"] [data-ac-fig]')) === '≈ 3|3'
+  && (await text('[data-ac-row="serviceGap"][data-ac-key="GAMMA"] [data-ac-could]')) === 'Could add: CSA, TSA', `${await acRows('serviceGap')} | ${await texts('[data-ac-q="G1"] [data-ac-fig]')}`);
+check('G1: hatched, rule names the list, requested from BD', (await evalJS(`document.querySelectorAll('[data-ac-q="G1"] [data-ac-assumed-seg]').length`)) === 3
+  && (await text('[data-ac-q="G1"] [data-ac-assumed]')).endsWith('our service list = the contract forms our clients hold today (CSA, TSA, O&M)')
+  && (await text('[data-ac-q="G1"] [data-ac-still]')) === 'Requested from BD: Services list per client', await text('[data-ac-q="G1"] [data-ac-assumed]'));
+check('G4 with no start date anywhere: no row, all three clients named under the chart',
+  (await texts('[data-ac-q="G4"] [data-ac-fig]')) === '0|0' && (await has('[data-ac-q="G4"] [data-ac-empty="noNewWork"]'))
+  && (await text('[data-ac-q="G4"] [data-ac-foot="noDate"]')) === 'No start date on file: ALPHA, BETA, GAMMA', await text('[data-ac-q="G4"] [data-ac-foot="noDate"]'));
+await evalJS(`(() => { const i = window.__iso, sp = 'bdControl/supplierContracts/rows', s = __store.get(sp), cp = 'bdControl/clientContracts/rows', c = __store.get(cp);
+  __seed(sp, 'S-1', { ...s.get('S-1'), originalStart: i(-100) }); __seed(sp, 'S-5', { ...s.get('S-5'), originalStart: i(-900) });
+  __seed(sp, 'S-2', { ...s.get('S-2'), originalStart: i(-800) }); __seed(sp, 'S-3', { ...s.get('S-3'), originalStart: i(-2000) });
+  __seed(cp, 'GAMMA_4_O-M', { ...c.get('GAMMA_4_O-M'), startDate: i(-500) });
+  const dp = 'bdControl/dayRates/rows';
+  for (const k of ['ANOPC', 'ALPHA', 'BETA', 'GAMMA', 'DELTA']) { const id = k + '_General-Manager'; __seed(dp, id, { ...__store.get(dp).get(id), competencyLevel: 4 }); }
+  __emit(); })()`);
+await sleep(250);
+check('G4: BETA ≈26 months (newest supplier contract, hatched) · GAMMA 16 months REAL (line start date); ALPHA recent (3 months)',
+  (await acRows('noNewWork')) === 'BETA=≈ 26 mo,GAMMA=16 mo' && (await texts('[data-ac-q="G4"] [data-ac-fig]')) === '2|1'
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="G4"] [data-ac-assumed-seg]').length`)) === 1
+  && (await text('[data-ac-q="G4"] [data-ac-assumed]')).endsWith('the newest supplier contract we signed for that client'), `${await acRows('noNewWork')} | ${await texts('[data-ac-q="G4"] [data-ac-fig]')}`);
+check('O2 follows the rows: GM matched to competency level 4 → real (no ≈), sorted below level 6',
+  (await acRows('level')) === '6=≈ 4,800 EGP,4=9,500 EGP' && (await evalJS(`document.querySelectorAll('[data-ac-q="O2"] [data-ac-assumed-seg]').length`)) === 1, await acRows('level'));
+await click('[data-ac-row="noNewWork"][data-ac-key="GAMMA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from G4');
+check('a G4 row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('GAMMA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+await sleep(300);
+check('no tall empty space between charts with People / Growth / Opportunity filled (desktop)', (await holes()) === '', await holes());
+await evalJS(`window.__setLang('ar')`); await sleep(250);
+check('Arabic: H3 title, an O2 level row, a G4 figure label', (await text('[data-ac-q="H3"] [data-ac-title]')) === 'كيف تقارن فئاتنا اليومية بالسوق لكل درجة وظيفية؟'
+  && (await text('[data-ac-row="level"][data-ac-key="6"] .bdc-name > span')) === 'المستوى 6 · مهندس أول'
+  && (await text('[data-ac-q="G4"] [data-ac-figs] span')).startsWith('بلا عمل جديد منذ 12 شهرًا'), await text('[data-ac-row="level"][data-ac-key="6"] .bdc-name > span'));
+await shot('a4-ar');
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await evalJS(`window.__seedAll(); __emit()`);
 await sleep(200);

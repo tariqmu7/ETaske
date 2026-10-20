@@ -6,7 +6,8 @@
 // project like any other (Tariq, 19 Oct 2026) — no special case here.
 
 import {
-  daysUntil, isEgpSupplier, isLiveSupplier, periodDate, supplierFlag, type BdClientContract, type BdData, type BdSupplierContract,
+  BENCHMARK_CLIENT, REPRICE_GAP_PCT, avgGapPct, daysUntil, isEgpSupplier, isLiveSupplier, periodDate, supplierFlag,
+  type BdClientContract, type BdData, type BdDayRate, type BdSupplierContract, type RateGrid,
 } from './bdControl';
 
 /** Lines that are a real client's (the CSA report also carries no other kind, but a supplier-side code must never count). */
@@ -487,4 +488,125 @@ export function topContractorShare(data: BdData, top = 5): {
     rows, topPct: rows.reduce((a, r) => a + r.pct, 0), totalEgp: total, assumed: s.assumedEgp > 0,
     others: { count: rest.length, pct: pct(rest.reduce((a, r) => a + r.totalEgp, 0)) },
   };
+}
+
+// ── People, growth, opportunity (queue A4) ───────────────────────────────────
+
+export interface GradeVsMarket {
+  grade: string;
+  level: number | null;
+  /** Median rate over our clients other than the reference client. */
+  median: number | null;
+  /** The reference client's rate (the rate sheet's comparison column). */
+  reference: number | null;
+  /** % the median sits above (+) or below (−) the reference. */
+  gap: number | null;
+  clients: number;
+}
+
+/**
+ * H3 — per grade, senior first: our clients' median day rate against the
+ * reference client (ANOPC). Plus the clients paying 10 %+ below it on average —
+ * the ones to reprice at renewal.
+ */
+export function ratesVsMarket(data: BdData, grid: RateGrid): { rows: GradeVsMarket[]; below: string[] } {
+  const level = new Map<string, number>();
+  for (const r of data.dayRates) { const l = num(r.level); if (l != null && !level.has(txt(r.grade))) level.set(txt(r.grade), l); }
+  const rows = grid.grades.map(grade => {
+    const rates = grid.clients.filter(c => c !== BENCHMARK_CLIENT).map(c => grid.rate(c, grade)).filter((v): v is number => v != null);
+    const median = medianOf(rates), reference = grid.rate(BENCHMARK_CLIENT, grade);
+    return { grade, level: level.get(grade) ?? null, median, reference, gap: median != null && reference ? (median / reference - 1) * 100 : null, clients: rates.length };
+  });
+  const below = grid.clients.filter(c => c !== BENCHMARK_CLIENT)
+    .map(c => ({ c, g: avgGapPct(grid, c, 'anopc') }))
+    .filter((x): x is { c: string; g: number } => x.g != null && x.g <= REPRICE_GAP_PCT)
+    .sort((a, b) => a.g - b.g || a.c.localeCompare(b.c)).map(x => x.c);
+  return { rows, below };
+}
+
+export interface LevelValue { level: number; grades: string[]; median: number; low: number; high: number; clients: number; assumed: boolean }
+
+/**
+ * O2 — what each competency level is worth per day: the median of every client's
+ * day rate for the grades at that level, with the lowest and highest. Real when a
+ * rate row carries `competencyLevel` (once HR and BD match each grade to a level);
+ * until then assumed: one grade = one level, the rate sheet's own level number.
+ * Grades with neither are named apart.
+ */
+export function levelValues(rows: BdDayRate[]): { rows: LevelValue[]; noLevel: string[] } {
+  const byGrade = new Map<string, { real: number | null; sheet: number | null }>();
+  for (const r of rows) {
+    const g = txt(r.grade); if (!g) continue;
+    const e = byGrade.get(g) || { real: null, sheet: null };
+    e.real ??= num(r.competencyLevel); e.sheet ??= num(r.level);
+    byGrade.set(g, e);
+  }
+  const at = new Map<number, { grades: Set<string>; rates: number[]; clients: Set<string>; assumed: boolean }>();
+  const noLevel = new Set<string>();
+  for (const r of rows) {
+    const g = txt(r.grade), v = num(r.dayRateEgp);
+    if (!g || v == null) continue;
+    const e = byGrade.get(g)!, lvl = e.real ?? e.sheet;
+    if (lvl == null) { noLevel.add(g); continue; }
+    const x = at.get(lvl) || { grades: new Set<string>(), rates: [], clients: new Set<string>(), assumed: false };
+    x.grades.add(g); x.rates.push(v); x.clients.add(txt(r.client)); if (e.real == null) x.assumed = true;
+    at.set(lvl, x);
+  }
+  const out = [...at].map(([level, x]) => ({
+    level, grades: [...x.grades], median: medianOf(x.rates) as number, low: Math.min(...x.rates), high: Math.max(...x.rates), clients: x.clients.size, assumed: x.assumed,
+  })).sort((a, b) => b.level - a.level);
+  return { rows: out, noLevel: [...noLevel] };
+}
+
+export interface ServiceGap { client: string; buys: string[]; couldAdd: string[] }
+
+/**
+ * G1 — per client, the services on our list it does not buy from us yet. Until BD
+ * sends the services list per client, the list is assumed: the contract forms our
+ * clients hold today (CSA, O&M, TSA…), most common first.
+ */
+export function serviceGaps(data: BdData): { list: string[]; rows: ServiceGap[]; full: number } {
+  const lines = projectLines(data).filter(r => typeOf(r) !== 'No type on file');
+  const count = new Map<string, number>();
+  for (const r of lines) count.set(typeOf(r), (count.get(typeOf(r)) || 0) + 1);
+  const list = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(x => x[0]);
+  const buys = new Map<string, Set<string>>();
+  for (const r of projectLines(data)) {
+    const s = buys.get(r.client) || new Set<string>();
+    if (typeOf(r) !== 'No type on file') s.add(typeOf(r));
+    buys.set(r.client, s);
+  }
+  const all = [...buys].map(([client, s]) => ({ client, buys: list.filter(x => s.has(x)), couldAdd: list.filter(x => !s.has(x)) }));
+  const rows = all.filter(r => r.couldAdd.length > 0)
+    .sort((a, b) => b.couldAdd.length - a.couldAdd.length || b.buys.length - a.buys.length || a.client.localeCompare(b.client));
+  return { list, rows, full: all.length - rows.length };
+}
+
+/** G4 — a client counts as "no new work" when its newest work started this many months ago or more. */
+export const NO_NEW_WORK_MONTHS = 12;
+
+export interface LastWork { client: string; start: string; months: number; assumed: boolean }
+
+/**
+ * G4 — clients whose newest work with us started 12+ months ago, longest first.
+ * Real when a client line holds its start date (`startDate`); otherwise assumed:
+ * the newest supplier contract we signed for that client (its original start).
+ */
+export function lastNewWork(data: BdData, today: string): { rows: LastWork[]; recent: number; noDate: string[]; clients: number } {
+  const real = new Map<string, string>(), proxy = new Map<string, string>();
+  const later = (m: Map<string, string>, k: string, d: string | null) => { if (d && (!m.has(k) || d > (m.get(k) as string))) m.set(k, d); };
+  const clients = [...new Set(projectLines(data).map(r => r.client))];
+  for (const r of projectLines(data)) later(real, r.client, isoOf(r.startDate));
+  for (const s of data.supplierContracts) later(proxy, txt(s.client), isoOf(s.originalStart));
+  const rows: LastWork[] = [], noDate: string[] = [];
+  let recent = 0;
+  for (const client of clients) {
+    const start = real.get(client) ?? proxy.get(client);
+    if (!start || start > today) { if (!start) noDate.push(client); else recent++; continue; }
+    const months = Math.floor(monthsBetween(start, today));
+    if (months < NO_NEW_WORK_MONTHS) { recent++; continue; }
+    rows.push({ client, start, months, assumed: !real.has(client) });
+  }
+  rows.sort((a, b) => b.months - a.months || a.client.localeCompare(b.client));
+  return { rows, recent, noDate: noDate.sort(), clients: clients.length };
 }

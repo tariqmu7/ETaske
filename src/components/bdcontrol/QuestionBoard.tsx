@@ -8,11 +8,12 @@ import {
 import { PROJECT_CHARTS, type ChartCtx } from './ProjectCharts';
 import { MONEY_AMEND_CHARTS } from './MoneyAmendCharts';
 import { RENEW_SUPPLY_CHARTS } from './RenewSupplyCharts';
+import { PEOPLE_GROWTH_CHARTS } from './PeopleGrowthCharts';
 import Headline from './Headline';
 import { useMasonry } from './shared';
 
 /** Every question chart built so far, by question id. */
-const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS };
+const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS, ...PEOPLE_GROWTH_CHARTS };
 
 /** How a question shows today: its chart, a grey "data needed" box, or not yet (chart still to be built). */
 export type QShow = 'chart' | 'need' | null;
