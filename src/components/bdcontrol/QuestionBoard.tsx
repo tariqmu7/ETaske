@@ -6,9 +6,11 @@ import {
   GROUP_LABEL, OWNER_LABEL, QUESTION_GROUPS, pick, questionsIn, type CeoQuestion, type QGroup,
 } from '../../lib/ceoQuestions';
 import { PROJECT_CHARTS, type ChartCtx } from './ProjectCharts';
+import { MONEY_AMEND_CHARTS } from './MoneyAmendCharts';
+import { useMasonry } from './shared';
 
 /** Every question chart built so far, by question id. */
-const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS };
+const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS };
 
 /** How a question shows today: its chart, a grey "data needed" box, or not yet (chart still to be built). */
 export type QShow = 'chart' | 'need' | null;
@@ -51,7 +53,7 @@ export default function QuestionBoard(ctx: ChartCtx) {
             {CHARTS[q.id](ctx)}
             {q.data === 'part' && q.missing && (
               <p className="ac-still" data-ac-still>
-                {t('Still to collect: {{what}}', { what: pick(q.missing, ar) })}{who && <> · {t('Who has it: {{who}}', { who })}</>}
+                {who ? t('Requested from {{who}}: {{what}}', { who, what: pick(q.missing, ar) }) : t('Requested: {{what}}', { what: pick(q.missing, ar) })}
               </p>
             )}
           </>
@@ -89,12 +91,18 @@ export default function QuestionBoard(ctx: ChartCtx) {
               {t('Answered: {{a}} · data needed: {{w}}', { a: F.number(x.charts), w: F.number(x.needs) })}
             </span>
           </h2>
-          <div className="ac-grid" data-ac-order={i}>
+          <Grid order={i}>
             {/* Answered questions first, grey boxes after them. */}
             {[...x.qs.filter(q => showOf(q) === 'chart'), ...x.qs.filter(q => showOf(q) === 'need')].map(card)}
-          </div>
+          </Grid>
         </section>
       ))}
     </div>
   );
+}
+
+/** One group's cards, packed with no tall holes between them. */
+function Grid({ order, children }: { order: number; children: React.ReactNode }) {
+  const ref = useMasonry<HTMLDivElement>();
+  return <div ref={ref} className="ac-grid" data-ac-order={order}>{children}</div>;
 }

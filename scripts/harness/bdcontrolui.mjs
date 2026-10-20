@@ -381,7 +381,7 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: 5 answered from today’s data · 28 waiting for data', (await text('[data-ac="summary"]')) === '5 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('board summary: 12 answered from today’s data (P1–P4, P6, M1, M5, A1–A5) · 28 waiting for data', (await text('[data-ac="summary"]')) === '12 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
 check('group chips in order; Suppliers hidden (no chart or grey box yet)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,growth,opportunity');
 check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
@@ -389,7 +389,7 @@ check('each card is titled by its question + carries its fixed note', (await tex
   && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
 check('grey box: "Data needed", what is missing, who has it', (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd')) === 'Data needed|What is missing|Collections and open invoices|Who has it|Finance', await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd'));
 check('… two owners joined', (await text('[data-ac-q="M4"] [data-ac-need] dd:last-child')) === 'HR, Finance', await text('[data-ac-q="M4"] [data-ac-need] dd:last-child'));
-check('a "part" chart says what is still to collect (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Still to collect: A project type for every project (decision D1) · Who has it: BD', await text('[data-ac-q="P3"] [data-ac-still]'));
+check('a "part" chart says what was requested and from whom (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Requested from BD: A project type for every project (decision D1)', await text('[data-ac-q="P3"] [data-ac-still]'));
 const acStats = () => evalJS(`[...document.querySelectorAll('[data-ac-q="P1"] [data-ac-stat]')].map(e => e.dataset.acStat + '=' + window.__txt(e.querySelector('[data-ac-value]'))).join(',')`);
 check('P1 one number per tile: projects 5, CSA 2, TSA 2, O&M 1, amendments 0', (await acStats()) === 'projects=5,type:CSA=2,type:TSA=2,type:O&M=1,amendments=0', await acStats());
 const acRows = (r, sel = '[data-bdc-value]') => evalJS(`[...document.querySelectorAll('[data-ac-row="${r}"]')].map(e => e.dataset.acKey + '=' + window.__txt(e.querySelector('${sel}'))).join(',')`);
@@ -416,6 +416,92 @@ check('P4 client row opens that client’s page', (await text('[data-bdc-tab="cl
 await click('[data-bd-tab="overview"]');
 await waitFor(q('[data-ac="board"]'), 'board again');
 check('the earlier tiles + charts stay below the board, under "More figures"', (await has('[data-ac="legacy"] [data-bd="tiles"]')) && (await text('[data-ac="legacy"] > h2')) === 'More figures');
+
+console.log('\n[2c] Analysis center: Money M1 + M5, amendments A1–A5, assumed figures, gap-free grid (queue A2)');
+const QA = JSON.parse(await evalJS(`(() => { const A = window.__ac;
+  return JSON.stringify({ q: ['2026-01-01', '2026-03-31', '2026-04-01', '2026-12-31'].map(A.quarterOf), l: A.lastQuarters('2026-02-10', 3) }); })()`));
+check('quarterOf: Jan/Mar = Q1, Apr = Q2, Dec = Q4 · lastQuarters crosses the year, oldest first',
+  J(QA.q) === J(['2026-Q1', '2026-Q1', '2026-Q2', '2026-Q4']) && J(QA.l) === J(['2025-Q3', '2025-Q4', '2026-Q1']), J(QA));
+// Amendment-shaped rows: 3 value increases (10 %, "20" written as a percent, 100 -> 130 = 30 %), 1 time extension of
+// ~12 months with no start date, 1 N/A with no dates. Client lines get amendment counts and a few REAL original values.
+await evalJS(`(() => { const i = window.__iso, cp = 'bdControl/clientContracts/rows', c = __store.get(cp);
+  for (const k of [...__store.keys()]) if (k === 'bdControl/supplierAmendments/rows') __store.delete(k);
+  const AM = (no, n, o) => __seed('bdControl/supplierAmendments/rows', no.replace('/', '-') + '_' + n, { contractNo: no, amendmentNo: n, ...o });
+  AM('S/1', 1, { type: 'Value Increase', variationPct: 0.1, start: i(-400) });
+  AM('S/1', 2, { type: 'Time Extension', previousEnd: i(-300), newEnd: i(65) });
+  AM('S/1', 3, { type: 'Value Increase', variationPct: 20, start: i(-10) });
+  AM('S/2', 1, { type: 'N/A' });
+  AM('S/3', 1, { type: 'Value Increase', previousValueEgp: 100, valueAfterEgp: 130, start: i(-2000) });
+  __seed(cp, 'ALPHA_1_CSA', { ...c.get('ALPHA_1_CSA'), amendment: 'Amend. 9' });
+  __seed(cp, 'BETA_2_CSA', { ...c.get('BETA_2_CSA'), amendment: 'Amend.' });
+  __seed(cp, 'GAMMA_4_O-M', { ...c.get('GAMMA_4_O-M'), amendment: 'Amend. 2' });
+  __seed(cp, 'ALPHA_5_TSA', { ...c.get('ALPHA_5_TSA'), originalValueEgp: 200000000, timeExtensions: 3 });
+  __seed(cp, 'BETA_3_TSA', { ...c.get('BETA_3_TSA'), originalExpiryDate: i(-200) });
+  __seed('bdControl/clients/rows', 'EPROM', { code: 'EPROM', name: 'EPROM', kind: 'internal' });
+  __seed('bdControl/supplierContracts/rows', 'S-7', { contractNo: 'S/7', status: 'In Progress', currentEnd: i(90), currentValueEgp: 400000, client: 'EPROM' });
+  __emit(); })()`);
+await sleep(250);
+const Y = JSON.parse(await evalJS(`JSON.stringify(window.__ac.amendmentYardstick({ supplierAmendments: [...__store.get('bdControl/supplierAmendments/rows').values()] }))`));
+const nowQ = (d => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`)(new Date());
+check('yardstick from supplier amendments: 4 typed (N/A left out), 25 % extend time, 75 % raise value, ~12 months per extension, median rise 20 %',
+  Y.typed === 4 && Y.timeShare === 0.25 && Y.valueShare === 0.75 && Math.round(Y.monthsPerExtension) === 12 && Math.round(Y.pctPerIncrease) === 20, J(Y));
+check('the 7 new cards show as charts (no grey box), A6 stays grey', (await evalJS(`['M1','M5','A1','A2','A3','A4','A5','A6'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
+  === 'M1:chart,M5:chart,A1:chart,A2:chart,A3:chart,A4:chart,A5:chart,A6:need');
+check('M1 value per client, all lines: ALPHA 1,450 real · BETA ≈1,050.5 (TSA with no value = median TSA ceiling 250) · GAMMA ≈4.2 (12 × 350,000 a month)',
+  (await acRows('values')) === 'ALPHA=1,450 m EGP,BETA=≈ 1,050.5 m EGP,GAMMA=≈ 4.2 m EGP', await acRows('values'));
+check('M1 totals: 2,504.7 m EGP, of which assumed ≈254.2 m', (await text('[data-ac-q="M1"] [data-ac-fig="total"]')) === '2,504.7 m EGP'
+  && (await text('[data-ac-q="M1"] [data-ac-fig="assumed"]')) === '≈ 254.2 m EGP', await texts('[data-ac-q="M1"] [data-ac-fig]'));
+check('M1: the assumed part is hatched and the key names both rules', (await evalJS(`document.querySelectorAll('[data-ac-q="M1"] [data-ac-assumed-seg]').length`)) === 2
+  && (await text('[data-ac-q="M1"] [data-ac-assumed]')) === 'Hatched and ≈ = assumed: a line paid by the month = 12 × its monthly value, a line with no value = the median ceiling of its contract form',
+  await text('[data-ac-q="M1"] [data-ac-assumed]'));
+check('M1 says the real values are requested, and from whom', (await text('[data-ac-q="M1"] [data-ac-still]')) === 'Requested from Contracts: Contract value of the lines paid by the month or with no value on file');
+check('M5 per client project: GAMMA ≈25 (USD line × 50) · BETA 2 · ALPHA 1.3 (On Hold still live); completed / cancelled left out',
+  (await acRows('subcontract')) === 'GAMMA=≈ 25 m EGP,BETA=2 m EGP,ALPHA=1.3 m EGP', await acRows('subcontract'));
+check('M5: EPROM’s own needs summed apart, USD rule in the key, two owners in the request line',
+  (await text('[data-ac-q="M5"] [data-ac-foot="own"]')) === 'EPROM’s own needs, not a client project: 0.4 m EGP · contracts: 1'
+  && (await text('[data-ac-q="M5"] [data-ac-assumed]')).endsWith('a contract in US dollars at 50 EGP per dollar')
+  && (await text('[data-ac-q="M5"] [data-ac-still]')).startsWith('Requested from Contracts, Finance:'), await texts('[data-ac-q="M5"] .bdc-foot, [data-ac-q="M5"] [data-ac-assumed]'));
+check('A1 amendments per line, most first; bare "Amend." = ≈1 hatched; 2 lines with none', (await acRows('amendments')) === 'ALPHA_1_CSA=9,GAMMA_4_O-M=2,BETA_2_CSA=≈ 1'
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="A1"] [data-ac-assumed-seg]').length`)) === 1
+  && (await text('[data-ac-q="A1"] [data-ac-foot="none"]')) === 'Projects with no amendment on file: 2', await acRows('amendments'));
+const qs = JSON.parse(await evalJS(`JSON.stringify([...document.querySelectorAll('[data-ac-row="quarters"]')].map(e => ({ k: e.dataset.acKey, n: window.__txt(e.querySelector('[data-bdc-value]')), h: !!e.querySelector('[data-ac-assumed-seg]') })))`));
+check('A2 columns: 8 quarters oldest first, ending with today’s; 3 dated in range (1 of them assumed from the end date it extends, hatched)',
+  qs.length === 8 && qs[7].k === nowQ && qs.reduce((a, x) => a + Number(x.n.replace('≈ ', '')), 0) === 3 && qs.filter(x => x.h).length === 1, J(qs));
+check('A2 foot: 1 before the window, 1 with no date', (await text('[data-ac-q="A2"] [data-ac-foot="quarters"]')) === `Before ${qs[0].k.replace(/^(\d{4})-Q(\d)$/, 'Q$2 $1')}: 1, No date on file: 1`, await text('[data-ac-q="A2"] [data-ac-foot="quarters"]'));
+check('A3 growth: ALPHA CSA ≈+258 % (7 value amendments × 20 %) · GAMMA ≈+44 % · ALPHA TSA +25 % REAL (200 → 250 m) · BETA ≈+20 %',
+  (await acRows('growth')) === 'ALPHA_1_CSA=≈ +258%,GAMMA_4_O-M=≈ +44%,ALPHA_5_TSA=+25%,BETA_2_CSA=≈ +20%', await acRows('growth'));
+check('A3 key states the rule with the live yardstick', (await text('[data-ac-q="A3"] [data-ac-assumed]')).endsWith('75% of our supplier amendments raise the value, by 20% each (median), applied to each project’s amendment count'),
+  await text('[data-ac-q="A3"] [data-ac-assumed]'));
+check('A4 months added: ALPHA CSA ≈+24 (2 extensions × 12) · GAMMA ≈+12 · BETA TSA +6 REAL (original end on file); 2 with none',
+  (await acRows('months')) === 'ALPHA_1_CSA=≈ +24,GAMMA_4_O-M=≈ +12,BETA_3_TSA=+6' && (await text('[data-ac-q="A4"] [data-ac-foot="flat"]')) === 'Projects with no months added to show: 2', await acRows('months'));
+check('A5 extensions: ALPHA TSA 3 REAL · ALPHA CSA ≈2 · GAMMA ≈1 · BETA CSA 0 but tagged (end date moved 8 months between the two reports)',
+  (await acRows('extensions')) === 'ALPHA_5_TSA=3,ALPHA_1_CSA=≈ 2,GAMMA_4_O-M=≈ 1,BETA_2_CSA=0'
+  && (await text('[data-ac-row="extensions"][data-ac-key="BETA_2_CSA"] [data-ac-moved]')) === 'Extended in the latest report (months: +8)', await acRows('extensions'));
+await click('[data-ac-row="growth"][data-ac-key="GAMMA_4_O-M"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from A3');
+check('an A3 row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('GAMMA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+await sleep(300);
+// Gap-free grid: no card sits more than one gap (12 px) + one row unit (4 px) below the card above it in its column.
+const holes = () => evalJS(`(() => { const out = [];
+  for (const g of document.querySelectorAll('.ac-grid, [data-bd="charts"]')) {
+    const cs = [...g.children].map(e => ({ id: e.dataset.acQ || e.dataset.bd || e.className, r: e.getBoundingClientRect() }));
+    for (const c of cs) {
+      const above = cs.filter(o => o !== c && o.r.bottom <= c.r.top + 1 && o.r.left < c.r.right - 1 && o.r.right > c.r.left + 1);
+      if (!above.length) continue;
+      const gap = c.r.top - Math.max(...above.map(o => o.r.bottom));
+      if (gap > 17) out.push(c.id + ':' + Math.round(gap));
+    }
+  }
+  return out.join(','); })()`);
+check('grids are packed (masonry on): every question grid + the older charts', (await evalJS(`[...document.querySelectorAll('.ac-grid, [data-bd="charts"]')].every(g => g.classList.contains('is-masonry'))`)));
+check('no tall empty space between charts (desktop): every card ≤ 16 px below the card above it', (await holes()) === '', await holes());
+await shot('a2-desktop');
+await evalJS(`window.__seedAll(); __emit()`);
+await sleep(200);
+check('A2 with no dated amendment: one line, no empty columns', (await text('[data-ac-q="A2"] [data-ac-empty="quarters"]')) === 'No amendment starts in the last 8 quarters.'
+  && !(await has('[data-ac-q="A2"] .ac-cols')) && (await text('[data-ac-q="A2"] [data-ac-foot="quarters"]')) === 'No date on file: 5');
 
 console.log('\n[3] the tiles, from the made-up rows');
 await waitFor(q('[data-bd="tiles"]'), 'tiles');

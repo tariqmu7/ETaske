@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useLayoutEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Search, X } from 'lucide-react';
 import { millions, type BdData, type ExpiryFlag } from '../../lib/bdControl';
@@ -20,6 +20,40 @@ const FLAG_LABEL: Record<ExpiryFlag, string> = {
 const FLAG_TONE: Record<ExpiryFlag, string> = {
   'Expired on paper': 'lo', 'Within 90 days': 'mid', 'Within 180 days': 'mid', OK: 'ok', 'No date': 'flat', Ended: 'flat',
 };
+
+/** Grid row unit for useMasonry, px (matches `.is-masonry` in index.css). */
+const MASONRY_ROW = 4;
+
+/**
+ * Packs a card grid with no tall holes (queue A2, Tariq: "no wide empty spaces
+ * between charts"). A plain grid makes every card in a row as tall as the
+ * tallest one; here each card spans as many 4 px rows as its own height needs,
+ * so a short card sits right under the one above it. Re-measures whenever a card
+ * or the grid changes size. Without ResizeObserver the grid stays a plain grid.
+ */
+export function useMasonry<T extends HTMLElement>() {
+  const ref = useRef<T>(null);
+  useLayoutEffect(() => {
+    const grid = ref.current;
+    if (!grid || typeof ResizeObserver === 'undefined') return;
+    grid.classList.add('is-masonry');
+    const fit = () => {
+      const gap = parseFloat(getComputedStyle(grid).columnGap) || 0;
+      for (const el of Array.from(grid.children) as HTMLElement[]) {
+        const span = `span ${Math.max(1, Math.ceil((el.getBoundingClientRect().height + gap) / MASONRY_ROW))}`;
+        if (el.style.gridRowEnd !== span) el.style.gridRowEnd = span;
+      }
+    };
+    fit();
+    // Next frame, so a re-fit never runs inside the observer's own loop.
+    let raf = 0;
+    const ro = new ResizeObserver(() => { cancelAnimationFrame(raf); raf = requestAnimationFrame(fit); });
+    ro.observe(grid);
+    for (const el of Array.from(grid.children)) ro.observe(el);
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
+  });
+  return ref;
+}
 
 /** The words and number formats every browse tab shares (queue E6a). */
 export function useBdWords(data: BdData) {

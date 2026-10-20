@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
 import { BENCHMARK_CLIENT, clientProfile, rateGrid, type BdData } from '../../lib/bdControl';
-import { Fields, GRADE_SHORT, useBdWords } from './shared';
+import { Fields, GRADE_SHORT, useBdWords, useMasonry } from './shared';
 import { AddButton, EditButton, EditedBadge } from './EditRecord';
 
 interface Props {
@@ -23,6 +23,7 @@ interface Props {
  */
 export default function ClientPage({ data, today, code, onBack, onSupplier }: Props) {
   const w = useBdWords(data);
+  const packed = useMasonry<HTMLDivElement>();
   const { t } = useTranslation();
   const { F } = w;
   const grid = useMemo(() => rateGrid(data.dayRates), [data.dayRates]);
@@ -63,7 +64,7 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
         </div>
       </section>
 
-      <div className="bdc-grid">
+      <div ref={packed} className="bdc-grid">
         {section(t('Contract lines'), 'lines', p.lines.length === 0
           ? <p className="bdc-empty">{t('No client line on file')}</p>
           : <div className="bdc-stackl">

@@ -7,7 +7,7 @@ import {
 } from '../../lib/bdControl';
 import { useFormat, DATE_MEDIUM } from '../../lib/format';
 import OverviewMoreCharts from './OverviewMoreCharts';
-import { GRADE_SHORT } from './shared';
+import { GRADE_SHORT, useMasonry } from './shared';
 
 interface Props {
   data: BdData;
@@ -52,6 +52,7 @@ export default function OverviewCharts({ data, today, onClient }: Props) {
   const { t, i18n } = useTranslation();
   const F = useFormat();
   const ar = i18n.language === 'ar';
+  const packed = useMasonry<HTMLDivElement>();
   const sep = ar ? '، ' : ', ';
 
   const ceil = useMemo(() => ceilingByClient(data), [data]);
@@ -239,7 +240,7 @@ export default function OverviewCharts({ data, today, onClient }: Props) {
   ));
 
   return (
-    <div className="bdc bdc-grid" data-bd="charts">
+    <div ref={packed} className="bdc bdc-grid" data-bd="charts">
       {chart3}
       {chart4}
       {chart5}

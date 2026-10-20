@@ -2057,6 +2057,23 @@ h1, h2, h3, h4, p, span, div {
 .ac-legend b { color: var(--text-primary); font-weight: 800; text-align: end; }
 .ac-legend-pct { font-size: 12px; color: var(--text-muted); text-align: end; }
 .ac-legacy { margin-top: 28px; }
+/* Queue A2: card grids packed with no tall holes (useMasonry sets each card's row span). */
+.ac-grid.is-masonry, .bdc-grid.is-masonry { grid-auto-rows: 4px; row-gap: 0; grid-auto-flow: row dense; align-items: start; }
+/* Assumed figures: the bar colour in diagonal hatching, outlined, so it reads as "not yet real". */
+.ac-hatch {
+  background: repeating-linear-gradient(135deg, var(--bdc-client) 0 2px, transparent 2px 5px);
+  box-shadow: inset 0 0 0 1px var(--bdc-client);
+}
+.ac-assumed { display: flex; align-items: flex-start; gap: 7px; font-size: 12px; line-height: 1.5; color: var(--text-secondary); margin: 8px 0 0; }
+.ac-assumed .bdc-key { width: 14px; height: 11px; margin-top: 3px; }
+.ac-more { margin-top: 6px; }
+.ac-tag { align-self: flex-start; margin-top: 3px; font-size: 11px; padding: 1px 6px; white-space: normal; }
+.ac-cols { display: grid; grid-template-columns: repeat(var(--ac-n, 8), minmax(0, 1fr)); gap: 6px; align-items: end; }
+.ac-col { display: flex; flex-direction: column; align-items: stretch; min-width: 0; text-align: center; }
+.ac-col-n { font-size: 13px; font-weight: 800; color: var(--text-primary); white-space: nowrap; }
+.ac-col-bar { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 120px; margin: 3px 0 4px; border-bottom: 1px solid var(--border); }
+.ac-col-bar > span { display: block; min-height: 3px; }
+.ac-col-l { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
 .ac-legacy > h2 { font-size: 16px; font-weight: 800; margin: 0 0 2px; color: var(--text-primary); }
 
 /* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
