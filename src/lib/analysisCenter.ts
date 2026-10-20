@@ -1045,3 +1045,292 @@ export function incomePerStaffDay(data: BdData): { rows: IncomeRow[]; noRate: st
     .sort((a, b) => b.rate - a.rate || a.client.localeCompare(b.client));
   return { rows, noRate: clients.filter(c => !by.has(c)).sort() };
 }
+
+// ── Projects, amendments, opportunity cost (queue A7c) ───────────────────────
+//
+// The last ten grey boxes. P7 and O6 read the app's own bid register (real bids);
+// A6 reads the two CSA report copies and the end dates (real, with a stated
+// median for the amendments that carry no dates). P5, P8, O1, O3–O5 and O7 are
+// ASSUMED by the rules below (agreed with Tariq, 20 Oct 2026) and drawn hatched.
+
+/** P5 — the three areas of the oil & gas chain. */
+export const AREAS = ['upstream', 'midstream', 'downstream'] as const;
+export type Area = typeof AREAS[number];
+
+/**
+ * A client's area until BD gives one per project (decision D2): what each client
+ * mainly does. A client not listed is read from its name; one that matches no word
+ * is "area not known" and named under the chart.
+ */
+export const ASSUMED_CLIENT_AREA: Record<string, Area> = {
+  AGIBA: 'upstream', PETROBEL: 'upstream',
+  PPC: 'midstream', PETROGAS: 'midstream', EGPC: 'midstream',
+  AMOC: 'downstream', 'E.STYRENICS': 'downstream', ELAB: 'downstream', ERC: 'downstream', MIDOR: 'downstream', ANOPC: 'downstream',
+  ASORC: 'downstream', APRC: 'downstream', APC: 'downstream', REDSEA: 'downstream', ETHYDCO: 'downstream', SOPC: 'downstream', NPC: 'downstream',
+};
+
+/** An area typed on a line or a client ("Upstream", «التكرير»…), or read from a client's name. */
+export function areaWord(v: unknown): Area | null {
+  const s = txt(v).toLowerCase();
+  if (!s) return null;
+  if (/refin|process|petrochem|styren|ethylen|alkyl|mineral oil|downstream|تكرير|بتروكيم/.test(s)) return 'downstream';
+  if (/gas|pipeline|berth|terminal|midstream|غاز|أنابيب/.test(s)) return 'midstream';
+  if (/explor|production|upstream|field|استكشاف|إنتاج/.test(s)) return 'upstream';
+  return null;
+}
+
+/**
+ * P5 — project lines per area. Real when the line (or its client) carries `area`;
+ * otherwise assumed from ASSUMED_CLIENT_AREA, then from the client's name.
+ */
+export function projectsByArea(data: BdData): { rows: { area: Area; count: number; assumed: number }[]; unknown: string[]; total: number } {
+  const client = new Map(data.clients.map(c => [c.code, c]));
+  const at = new Map(AREAS.map(a => [a, { area: a, count: 0, assumed: 0 }]));
+  const unknown = new Set<string>();
+  const lines = projectLines(data);
+  for (const r of lines) {
+    const c = client.get(r.client);
+    const real = areaWord(r.area) ?? areaWord(c?.area);
+    const a = real ?? ASSUMED_CLIENT_AREA[r.client] ?? areaWord(c?.name);
+    if (!a) { unknown.add(r.client); continue; }
+    const e = at.get(a)!; e.count++; if (!real) e.assumed++;
+  }
+  return { rows: AREAS.map(a => at.get(a)!), unknown: [...unknown].sort(), total: lines.length };
+}
+
+/** The bid fields P7 and O6 read beyond G2's. */
+export interface ClosedBid extends PipelineBid { decisionDate?: string; updatedAt?: unknown }
+
+/** A bid's decision day: its decision date, else the day it was last changed (`assumed`). */
+function bidDay(b: ClosedBid): { day: string; assumed: boolean } | null {
+  const d = isoOf(b.decisionDate);
+  if (d) return { day: d, assumed: false };
+  const u = b.updatedAt as { seconds?: number; toDate?: () => Date } | string | undefined;
+  const ms = typeof u === 'string' ? Date.parse(u)
+    : u && typeof u.seconds === 'number' ? u.seconds * 1000
+      : u && typeof u.toDate === 'function' ? u.toDate().getTime() : NaN;
+  return isFinite(ms) ? { day: new Date(ms).toISOString().slice(0, 10), assumed: true } : null;
+}
+
+/** A bid's value in EGP (USD at ASSUMED_USD_EGP); null when there is none or it is in another currency. */
+function bidEgp(b: PipelineBid): number | null {
+  const v = typed(b.estimatedValue), cur = txt(b.currency).toUpperCase() || 'EGP';
+  return v == null || v <= 0 ? null : cur === 'EGP' ? v : cur === 'USD' ? v * ASSUMED_USD_EGP : null;
+}
+
+/** P7 shows this many quarters, today's included. */
+export const BID_QUARTERS = 6;
+
+export interface WinLossQuarter { quarter: string; won: number; lost: number; wonEgp: number; lostEgp: number; assumed: number }
+
+/**
+ * P7 — bids won and lost per quarter of their decision date (the last change
+ * when no decision date is typed in — counted in `assumed`), with their values.
+ */
+export function bidsWonLost(bids: ClosedBid[], today: string, n = BID_QUARTERS): {
+  rows: WinLossQuarter[]; earlier: number; noDate: number; won: number; lost: number; wonEgp: number; lostEgp: number; assumed: number;
+} {
+  const qs = lastQuarters(today, n);
+  const at = new Map(qs.map(q => [q, { quarter: q, won: 0, lost: 0, wonEgp: 0, lostEgp: 0, assumed: 0 }]));
+  let earlier = 0, noDate = 0;
+  for (const b of bids) {
+    const s = txt(b.stage);
+    if (s !== 'Won' && s !== 'Lost') continue;
+    const d = bidDay(b);
+    if (!d) { noDate++; continue; }
+    const e = at.get(quarterOf(d.day));
+    if (!e) { earlier++; continue; }
+    const v = bidEgp(b) ?? 0;
+    if (s === 'Won') { e.won++; e.wonEgp += v; } else { e.lost++; e.lostEgp += v; }
+    if (d.assumed) e.assumed++;
+  }
+  const rows = qs.map(q => at.get(q)!);
+  const sum = (k: 'won' | 'lost' | 'wonEgp' | 'lostEgp' | 'assumed') => rows.reduce((a, r) => a + r[k], 0);
+  return { rows, earlier, noDate, won: sum('won'), lost: sum('lost'), wonEgp: sum('wonEgp'), lostEgp: sum('lostEgp'), assumed: sum('assumed') };
+}
+
+/** P8 — how our staff split by category until HR sends the staff list (shares add up to 1). */
+export const STAFF_CATEGORY_SPLIT = { operation: 0.4, maintenance: 0.3, inspection: 0.15, engineering: 0.15 } as const;
+export type StaffCategory = keyof typeof STAFF_CATEGORY_SPLIT;
+
+/** Whole people from shares of a total, adding up to the total (largest remainder; ties to the first). */
+function apportion(total: number, weights: number[]): number[] {
+  const sum = weights.reduce((a, w) => a + w, 0);
+  if (!sum || total <= 0) return weights.map(() => 0);
+  const raw = weights.map(w => (total * w) / sum), out = raw.map(Math.floor);
+  let left = total - out.reduce((a, x) => a + x, 0);
+  const order = raw.map((_, i) => i).sort((a, b) => (raw[b] - out[b]) - (raw[a] - out[a]) || a - b);
+  for (const i of order) { if (left <= 0) break; out[i]++; left--; }
+  return out;
+}
+
+/** P8 — all our staff (H2's total) split by STAFF_CATEGORY_SPLIT. */
+export function staffByCategory(data: BdData, today: string): { total: number; rows: { category: StaffCategory; staff: number; share: number }[] } {
+  const total = benchStaff(data, today).total;
+  const cats = Object.keys(STAFF_CATEGORY_SPLIT) as StaffCategory[];
+  const n = apportion(total, cats.map(c => STAFF_CATEGORY_SPLIT[c]));
+  return { total, rows: cats.map((category, i) => ({ category, staff: n[i], share: STAFF_CATEGORY_SPLIT[category] })) };
+}
+
+export type PaperKind = 'pastEnd' | 'signedLate' | 'assumed';
+export interface PaperLine { id: string; client: string; type: string; kind: PaperKind; days: number; amendments: number }
+
+/**
+ * A6 — days of work without a signed paper, per line. Real: a line still in the
+ * report past its end date (days since the end date — still open), and an end
+ * date moved later between the two report copies when the old end date had
+ * already passed by the later copy (at least the days from the old end date to
+ * that copy). Assumed: any other line with amendments takes the median of those
+ * signed-late delays. `onTime` = end dates moved before the old one ran out.
+ */
+export function paperDelays(data: BdData, today: string): { rows: PaperLine[]; onTime: number; median: number | null; noDates: number } {
+  const lines = projectLines(data);
+  const periods = new Set<string>();
+  for (const r of data.changes) for (const k of Object.keys(r)) if (periodDate(k)) periods.add(k);
+  const [from, to] = [...periods].sort((a, b) => (periodDate(a) as string).localeCompare(periodDate(b) as string)).slice(-2);
+  const copyDay = to ? periodDate(to) : null;
+  const byKey = new Map(lines.map(r => [`${r.client}|${typeOf(r)}`, r]));
+  const byId = new Map(lines.map(r => [r.id, r]));
+  const rows: PaperLine[] = [], seen = new Set<string>(), late: number[] = [];
+  let onTime = 0;
+  for (const l of pastEnd(data, today).lines) {
+    rows.push({ id: l.id, client: l.client, type: l.type, kind: 'pastEnd', days: -l.days, amendments: amendmentCount(byId.get(l.id)?.amendment).n });
+    seen.add(l.id);
+  }
+  if (from && to && copyDay) {
+    for (const c of data.changes) {
+      if (txt(c.field) !== 'Expiry date') continue;
+      const a = isoOf(c[from]), b = isoOf(c[to]), line = byKey.get(`${txt(c.client)}|${txt(c.type)}`);
+      if (!a || !b || b <= a || !line) continue;
+      seen.add(line.id);
+      if (a >= copyDay) { onTime++; continue; }
+      const days = Math.round(dayOf(copyDay) - dayOf(a));
+      late.push(days);
+      rows.push({ id: `${line.id}~late`, client: line.client, type: typeOf(line), kind: 'signedLate', days, amendments: amendmentCount(line.amendment).n });
+    }
+  }
+  const median = medianOf(late);
+  let noDates = 0;
+  for (const r of lines) {
+    const n = amendmentCount(r.amendment).n;
+    if (n <= 0 || seen.has(r.id)) continue;
+    if (median == null) { noDates++; continue; }
+    rows.push({ id: r.id, client: r.client, type: typeOf(r), kind: 'assumed', days: Math.round(median), amendments: n });
+  }
+  rows.sort((a, b) => b.days - a.days || a.client.localeCompare(b.client));
+  return { rows, onTime, median, noDates };
+}
+
+export interface LevelStaff { key: string; level: number | null; grades: string[]; staff: number; rate: number | null }
+
+/**
+ * O1 — all our staff (H2's total) spread over the competency levels on the rate
+ * sheet (O2's), top level first, as a pyramid: the k-th step from the top takes
+ * k shares. Grades with no level (Operator) are the bottom step. `rate` is the
+ * median day rate at that step, for O3.
+ */
+export function staffByLevel(data: BdData, today: string): { total: number; rows: LevelStaff[] } {
+  const total = benchStaff(data, today).total;
+  const lv = levelValues(data.dayRates);
+  const steps: Omit<LevelStaff, 'staff'>[] = lv.rows.map(r => ({ key: String(r.level), level: r.level, grades: r.grades, rate: r.median }));
+  if (lv.noLevel.length) {
+    const rates = data.dayRates.filter(r => lv.noLevel.includes(txt(r.grade))).map(r => num(r.dayRateEgp)).filter((v): v is number => v != null);
+    steps.push({ key: 'other', level: null, grades: lv.noLevel, rate: medianOf(rates) });
+  }
+  const n = apportion(total, steps.map((_, i) => i + 1));
+  return { total, rows: steps.map((s, i) => ({ ...s, staff: n[i] })) };
+}
+
+/** O3 — what one person at each step earns in a year: its median day rate × WORK_DAYS_PER_PERSON. */
+export function valuePerPerson(data: BdData, today: string): { rows: (LevelStaff & { yearEgp: number })[]; totalEgp: number } {
+  const rows = staffByLevel(data, today).rows.filter(r => r.rate != null).map(r => ({ ...r, yearEgp: (r.rate as number) * WORK_DAYS_PER_PERSON }));
+  return { rows, totalEgp: rows.reduce((a, r) => a + r.yearEgp * r.staff, 0) };
+}
+
+/**
+ * O4 — income lost to the bench per completed quarter: the bench (H2's share)
+ * would bill at the same day rates as the staff placed, so lost = what we billed
+ * × bench share ÷ placed share.
+ */
+export function benchLossByQuarter(data: BdData, today: string, n = MONEY_QUARTERS): { quarter: string; lostEgp: number }[] {
+  const k = ASSUMED_BENCH_SHARE / (1 - ASSUMED_BENCH_SHARE);
+  return billingByQuarter(data, today, n).map(q => ({ quarter: q.quarter, lostEgp: q.invoicedEgp * k }));
+}
+
+/** O5 — share of our staff placed (and paid for) one grade below their level. */
+export const UNDER_PLACED_SHARE = 0.1;
+
+/**
+ * Per client: the mean step in EGP from one grade to the next up on its rate
+ * sheet (highest rate − lowest, ÷ the steps between); a client with fewer than
+ * two different rates takes the median step of the others (`assumed`).
+ */
+function gradeSteps(data: BdData): (client: string) => { step: number; assumed: boolean } | null {
+  const own = new Map<string, number>();
+  for (const [c, xs] of ratesByClient(data)) {
+    const s = [...new Set(xs)].sort((a, b) => a - b);
+    if (s.length >= 2) own.set(c, (s[s.length - 1] - s[0]) / (s.length - 1));
+  }
+  const fallback = medianOf([...own.values()]);
+  return c => (own.has(c) ? { step: own.get(c) as number, assumed: false } : fallback != null ? { step: fallback, assumed: true } : null);
+}
+
+export interface UnderRow { client: string; manDays: number; step: number; stepAssumed: boolean; lostEgp: number }
+
+/** O5 — per client project over the last 12 months: H1's man-days × UNDER_PLACED_SHARE × the client's grade step. */
+export function underPlacement(data: BdData, today: string): { rows: UnderRow[]; totalEgp: number } {
+  const stepOf = gradeSteps(data);
+  const rows: UnderRow[] = [];
+  for (const s of staffByProject(data, today).rows) {
+    const st = stepOf(s.client);
+    if (!st) continue;
+    rows.push({ client: s.client, manDays: s.manDays, step: st.step, stepAssumed: st.assumed, lostEgp: s.manDays * UNDER_PLACED_SHARE * st.step });
+  }
+  rows.sort((a, b) => b.lostEgp - a.lostEgp || a.client.localeCompare(b.client));
+  return { rows, totalEgp: rows.reduce((a, r) => a + r.lostEgp, 0) };
+}
+
+/** O5 per completed quarter (for O7): each client's billing that quarter ÷ its day rate × the share × its step. */
+function underPlacementByQuarter(data: BdData, today: string, n: number): { quarter: string; lostEgp: number }[] {
+  const model = moneyModel(data), rateOf = clientDayRate(data), stepOf = gradeSteps(data);
+  return doneQuarters(today, n).map(q => {
+    const [from, to] = quarterSpan(q);
+    let lost = 0;
+    for (const m of moneyBetween(model, from, to).rows) {
+      const r = rateOf(m.client), st = stepOf(m.client);
+      if (r && st && m.invoicedEgp > 0) lost += (m.invoicedEgp / r.rate) * UNDER_PLACED_SHARE * st.step;
+    }
+    return { quarter: q, lostEgp: lost };
+  });
+}
+
+/**
+ * O6 — work turned down for lack of qualified staff, per completed quarter:
+ * until BD logs the reason, every "No Bid" bid in the register counts, at its
+ * value, in the quarter of its decision date (its last change when none).
+ */
+export function turnedDownByQuarter(bids: ClosedBid[], today: string, n = MONEY_QUARTERS): {
+  rows: { quarter: string; count: number; egp: number }[]; noValue: number; assumedDate: number;
+} {
+  const qs = doneQuarters(today, n);
+  const at = new Map(qs.map(q => [q, { quarter: q, count: 0, egp: 0 }]));
+  let noValue = 0, assumedDate = 0;
+  for (const b of bids) {
+    if (txt(b.stage) !== 'No Bid') continue;
+    const d = bidDay(b), e = d ? at.get(quarterOf(d.day)) : undefined;
+    if (!d || !e) continue;
+    e.count++;
+    if (d.assumed) assumedDate++;
+    const v = bidEgp(b);
+    if (v == null) noValue++; else e.egp += v;
+  }
+  return { rows: qs.map(q => at.get(q)!), noValue, assumedDate };
+}
+
+/** O7 — per completed quarter, the three parts: bench (O4), under-placement (O5), turned down (O6; null while the bids load). */
+export function opportunityCost(data: BdData, today: string, bids: ClosedBid[] | null, n = MONEY_QUARTERS): {
+  quarter: string; benchEgp: number; underEgp: number; turnedEgp: number | null;
+}[] {
+  const b = benchLossByQuarter(data, today, n), u = underPlacementByQuarter(data, today, n), t = bids ? turnedDownByQuarter(bids, today, n).rows : null;
+  return b.map((x, i) => ({ quarter: x.quarter, benchEgp: x.lostEgp, underEgp: u[i].lostEgp, turnedEgp: t ? t[i].egp : null }));
+}

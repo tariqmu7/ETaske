@@ -378,13 +378,15 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: 40 answered from today’s data (P1–P4, P6, M1–M11, A1–A5, H1–H6, R1–R5, S1–S3, G1–G4, O2) · 10 waiting for data', (await text('[data-ac="summary"]')) === '40 questions answered from today’s data · 10 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('board summary: all 50 answered from today’s data (since A7c), the hatched-means-assumed reminder instead of a waiting count', (await text('[data-ac="summary"]')) === '50 questions answered from today’s data (hatched figures are assumed until the real data arrives)', await text('[data-ac="summary"]'));
 check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
-check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
-  === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
+check('group 1: all eight as charts, in question order (P5, P7, P8 since A7c)', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
+  === 'P1:chart,P2:chart,P3:chart,P4:chart,P5:chart,P6:chart,P7:chart,P8:chart');
 check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
   && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
-check('grey box: "Data needed", what is missing, who has it', (await texts('[data-ac-q="P7"] .ac-need-tag, [data-ac-q="P7"] dt, [data-ac-q="P7"] dd')) === 'Data needed|What is missing|Bid register with the result and value of each bid|Who has it|BD, Tenders', await texts('[data-ac-q="P7"] .ac-need-tag, [data-ac-q="P7"] dt, [data-ac-q="P7"] dd'));
+check('no grey "data needed" box left on the board; every group says data needed: 0', (await evalJS(`document.querySelectorAll('[data-ac-need], [data-ac-show="need"]').length`)) === 0
+  && (await evalJS(`[...document.querySelectorAll('.ac-group-sub')].every(e => e.textContent.endsWith('data needed: 0'))`)), await evalJS(`document.querySelectorAll('[data-ac-need]').length`));
+check('a former grey box (P7) says what is still requested and from whom', (await text('[data-ac-q="P7"] [data-ac-still]')) === 'Requested from BD, Tenders: A decision date and value on every closed bid', await text('[data-ac-q="P7"] [data-ac-still]'));
 check('… two owners joined (a part chart, H4)', (await text('[data-ac-q="H4"] [data-ac-still]')) === 'Requested from HR, Finance: Average cost per grade (no names)', await text('[data-ac-q="H4"] [data-ac-still]'));
 check('a "part" chart says what was requested and from whom (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Requested from BD: A project type for every project (decision D1)', await text('[data-ac-q="P3"] [data-ac-still]'));
 const acStats = () => evalJS(`[...document.querySelectorAll('[data-ac-q="P1"] [data-ac-stat]')].map(e => e.dataset.acStat + '=' + window.__txt(e.querySelector('[data-ac-value]'))).join(',')`);
@@ -445,8 +447,8 @@ const Y = JSON.parse(await evalJS(`JSON.stringify(window.__ac.amendmentYardstick
 const nowQ = (d => `${d.getFullYear()}-Q${Math.floor(d.getMonth() / 3) + 1}`)(new Date());
 check('yardstick from supplier amendments: 4 typed (N/A left out), 25 % extend time, 75 % raise value, ~12 months per extension, median rise 20 %',
   Y.typed === 4 && Y.timeShare === 0.25 && Y.valueShare === 0.75 && Math.round(Y.monthsPerExtension) === 12 && Math.round(Y.pctPerIncrease) === 20, J(Y));
-check('the 7 new cards show as charts (no grey box), A6 stays grey', (await evalJS(`['M1','M5','A1','A2','A3','A4','A5','A6'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
-  === 'M1:chart,M5:chart,A1:chart,A2:chart,A3:chart,A4:chart,A5:chart,A6:need');
+check('the 7 new cards show as charts (no grey box); A6 too since A7c', (await evalJS(`['M1','M5','A1','A2','A3','A4','A5','A6'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
+  === 'M1:chart,M5:chart,A1:chart,A2:chart,A3:chart,A4:chart,A5:chart,A6:chart');
 check('M1 value per client, all lines: ALPHA 1,450 real · BETA ≈1,050.5 (TSA with no value = median TSA ceiling 250) · GAMMA ≈4.2 (12 × 350,000 a month)',
   (await acRows('values')) === 'ALPHA=1,450 m EGP,BETA=≈ 1,050.5 m EGP,GAMMA=≈ 4.2 m EGP', await acRows('values'));
 check('M1 totals: 2,504.7 m EGP, of which assumed ≈254.2 m', (await text('[data-ac-q="M1"] [data-ac-fig="total"]')) === '2,504.7 m EGP'
@@ -565,9 +567,9 @@ await evalJS(`window.__seedAll(); __emit()`);
 await sleep(200);
 
 console.log('\n[2e] Analysis center: people H3, growth G1 + G4, opportunity O2 (queue A4)');
-check('the four new cards show as charts (H1, H2, H4, G2, G3 too since A7b); Opportunity O1, O3, O7 stay grey',
+check('the four new cards show as charts (H1, H2, H4, G2, G3 too since A7b; O1, O3, O7 since A7c)',
   (await evalJS(`['H3','G1','G4','O2','H1','H2','H4','G2','G3','O1','O3','O7'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
-  === 'H3:chart,G1:chart,G4:chart,O2:chart,H1:chart,H2:chart,H4:chart,G2:chart,G3:chart,O1:need,O3:need,O7:need');
+  === 'H3:chart,G1:chart,G4:chart,O2:chart,H1:chart,H2:chart,H4:chart,G2:chart,G3:chart,O1:chart,O3:chart,O7:chart');
 check('H3 per grade, senior first: our clients’ median (ANOPC left out) GM 8,750 · Sr Eng 4,650 · Operator 3,000',
   (await acRows('grade')) === 'General Manager=8,750,Senior Engineer=4,650,Operator=3,000', await acRows('grade'));
 check('H3 gap to ANOPC: −12.5% (amber) · −7.0% · 0.0%; ANOPC rate + client count under each grade',
@@ -789,7 +791,7 @@ check('the eight assumed cards show as charts, each hatched (or an empty sentenc
   (await evalJS(`${J(a7b)}.every(k => { const c = document.querySelector('[data-ac-q="' + k + '"]');
     return c && c.dataset.acShow === 'chart' && c.querySelector('[data-ac-assumed]') && c.querySelector('[data-ac-still]') && (c.querySelector('[data-ac-assumed-seg]') || c.querySelector('.bdc-empty') || k === 'H2'); })`)),
   await evalJS(`${J(a7b)}.map(k => { const c = document.querySelector('[data-ac-q="' + k + '"]'); return k + ':' + !!c?.querySelector('[data-ac-assumed]') + !!c?.querySelector('[data-ac-still]') + !!c?.querySelector('[data-ac-assumed-seg]') + !!c?.querySelector('.bdc-empty'); }).join(',')`));
-check('board summary after A7b: 40 answered · 10 waiting', (await text('[data-ac="summary"]')) === '40 questions answered from today’s data · 10 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('board summary after A7b + A7c: 50 answered', (await text('[data-ac="summary"]')).startsWith('50 questions answered from today’s data'), await text('[data-ac="summary"]'));
 check('G2 with no bids in the register: empty sentence, headline tile 0', (await has('[data-ac-q="G2"] [data-ac-empty="pipeline"]')) && (await text('[data-ac-tile="G2"] [data-ac-value]')) === '0',
   await text('[data-ac-tile="G2"] [data-ac-value]'));
 await evalJS(`(() => {
@@ -831,6 +833,119 @@ check('Arabic: H1 figure label, an R4 sign, a G2 stage', (await text('[data-ac-q
 await shot('a7b-ar');
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await evalJS(`(() => { for (const id of ['o1', 'o2', 'o3', 'o4']) __store.get('opportunities')?.delete(id); window.__seedAll(); __emit(); })()`);
+await sleep(200);
+
+console.log('\n[2h] Analysis center: projects P5, P7, P8, amendments A6, opportunity cost O1, O3–O7 (queue A7c)');
+// Pure maths on [2g]'s fixed set plus client names, an area typed on Z's line, a U line with no value,
+// an Operator rate on Y (no level), two report copies and closed bids; today = 2026-10-20.
+// Staff stay X 84 · Z 16 · Y 2 (102 placed, 107 in all): Y's average is now 1,750 and Z's median rate 3,375.
+const PH = await evalJS(`(() => { const A = window.__ac, T = '2026-10-20';
+  const F = { meta: null, supplierAmendments: [], agibaSOs: [], agibaSiteContracts: [], dataIssues: [],
+    clients: [{ id: 'X', code: 'X', kind: 'client', name: 'X Refining Co.' }, { id: 'Y', code: 'Y', kind: 'client', name: 'Y Pipelines Co.' },
+      { id: 'Z', code: 'Z', kind: 'client', name: 'Z Services' }, { id: 'U', code: 'U', kind: 'client', name: 'U Holding' }],
+    dayRates: [{ id: 'r1', client: 'X', grade: 'General Manager', level: 10, dayRateEgp: 6000 }, { id: 'r2', client: 'X', grade: 'Senior Engineer', level: 6, dayRateEgp: 4000 },
+      { id: 'r3', client: 'Y', grade: 'Senior Engineer', level: 6, dayRateEgp: 2000 }, { id: 'r4', client: 'Y', grade: 'Operator', level: null, dayRateEgp: 1500 }],
+    clientContracts: [
+      { id: 'X1', client: 'X', contractType: 'CSA', ceilingEgp: 300e6, startDate: '2024-10-20', expiryDate: '2027-10-20' },
+      { id: 'X2', client: 'X', contractType: 'TSA', ceilingEgp: 50e6, expiryDate: '2026-09-20', amendment: 'Amend.' },
+      { id: 'Y1', client: 'Y', contractType: 'CSA', ceilingEgp: 1e6, startDate: '2025-10-20', expiryDate: '2026-12-20' },
+      { id: 'Z1', client: 'Z', contractType: 'O&M', monthlyValueEgp: 1e6, expiryDate: '2027-06-30', area: 'Upstream', amendment: 'Amend. 2' },
+      { id: 'U1', client: 'U', contractType: 'TSA' }],
+    changes: [
+      { id: 'c1', client: 'X', type: 'CSA', field: 'Expiry date', march2026: '2026-04-01', september2026: '2027-10-20' },
+      { id: 'c2', client: 'Y', type: 'CSA', field: 'Expiry date', march2026: '2026-10-01', september2026: '2026-12-20' }],
+    supplierContracts: [{ id: 'P-2', contractNo: 'P/2', client: 'Z', status: 'In Progress', currentValueEgp: 20e6, originalStart: '2026-01-20', currentEnd: '2027-01-20' }] };
+  const sec = d => ({ seconds: Date.parse(d + 'T00:00:00Z') / 1000 });
+  const bids = [
+    { id: 'w1', stage: 'Won', decisionDate: '2026-10-05', estimatedValue: 3e6 },
+    { id: 'w2', stage: 'Won', decisionDate: '2026-02-14', estimatedValue: 10000, currency: 'USD' },
+    { id: 'w3', stage: 'Won' },
+    { id: 'l1', stage: 'Lost', decisionDate: '2026-08-01', estimatedValue: 1e6 },
+    { id: 'l2', stage: 'Lost', updatedAt: '2026-04-15T10:00:00Z', estimatedValue: 4e6 },
+    { id: 'l3', stage: 'Lost', decisionDate: '2024-01-01' },
+    { id: 'n1', stage: 'No Bid', decisionDate: '2026-08-10', estimatedValue: '2,000,000' },
+    { id: 'n2', stage: 'No Bid', updatedAt: sec('2026-05-05'), estimatedValue: 1000, currency: 'USD' },
+    { id: 'n3', stage: 'No Bid', decisionDate: '2026-10-01', estimatedValue: 9e6 },
+    { id: 'n4', stage: 'No Bid', decisionDate: '2026-07-01', estimatedValue: 5000, currency: 'EUR' },
+    { id: 'o1', stage: 'Submitted', estimatedValue: 7e6 }];
+  const ar = A.projectsByArea(F), wl = A.bidsWonLost(bids, T), cat = A.staffByCategory(F, T), pd = A.paperDelays(F, T);
+  const lv = A.staffByLevel(F, T), pv = A.valuePerPerson(F, T), bl = A.benchLossByQuarter(F, T), bq = A.billingByQuarter(F, T);
+  const un = A.underPlacement(F, T), td = A.turnedDownByQuarter(bids, T), oc = A.opportunityCost(F, T, bids), oc0 = A.opportunityCost(F, T, null);
+  return {
+    staff: A.staffByProject(F, T).rows.map(x => x.client + '=' + x.staff).join(','),
+    area: ar.rows.map(r => r.area + '=' + r.count + '/' + r.assumed).join(',') + '/' + ar.unknown.join(',') + '/' + ar.total,
+    words: ['Downstream', 'التكرير', 'Gas plant', 'Exploration', 'Holding'].map(A.areaWord).join(','),
+    wl: wl.rows.map(r => r.quarter + '=' + r.won + '/' + r.lost + (r.assumed ? '≈' : '')).join(','),
+    wlT: [wl.won, wl.lost, wl.wonEgp, wl.lostEgp, wl.earlier, wl.noDate, wl.assumed],
+    cat: cat.rows.map(r => r.category + '=' + r.staff).join(',') + '/' + cat.total,
+    pd: pd.rows.map(r => r.id + ':' + r.kind + ':' + r.days).join(',') + '/' + pd.onTime + '/' + pd.median + '/' + pd.noDates,
+    lv: lv.rows.map(r => r.key + '=' + r.staff + '@' + r.rate).join(',') + '/' + lv.total,
+    pv: pv.rows.map(r => r.key + '=' + r.yearEgp).join(',') + '/' + Math.round(pv.totalEgp),
+    bench: bl.every((x, i) => x.quarter === bq[i].quarter && Math.abs(x.lostEgp - bq[i].invoicedEgp * 5 / 95) < 1e-6) && bl.length === 6 && bl.some(x => x.lostEgp > 0),
+    under: un.rows.map(r => r.client + '=' + Math.round(r.lostEgp) + (r.stepAssumed ? '≈' : '') + '@' + r.step).join(',') + '/' + Math.round(un.totalEgp),
+    td: td.rows.map(r => r.quarter + '=' + r.count + ':' + r.egp).join(',') + '/' + td.noValue + '/' + td.assumedDate,
+    oc: oc.every((x, i) => x.benchEgp === bl[i].lostEgp && x.turnedEgp === td.rows[i].egp && x.underEgp >= 0) && oc0.every(x => x.turnedEgp === null)
+      && oc.reduce((a, x) => a + x.underEgp, 0) > 0,
+  }; })()`);
+check('[2h] fixed set keeps the staff of [2g] (X 84, Z 16, Y 2)', PH.staff === 'X=84,Z=16,Y=2', PH.staff);
+check('P5 areas: a typed area wins (Z upstream, real); X refining = downstream ×2, Y pipelines = midstream (assumed from the name); U named as not known',
+  PH.area === 'upstream=1/0,midstream=1/1,downstream=2/2/U/5' && PH.words === 'downstream,downstream,midstream,upstream,', `${PH.area} | ${PH.words}`);
+check('P7 won / lost per quarter of the decision (6 quarters to today’s): no-date Lost goes to its last change (≈); earlier and no-date counted apart; USD × 50',
+  PH.wl === '2025-Q3=0/0,2025-Q4=0/0,2026-Q1=1/0,2026-Q2=0/1≈,2026-Q3=0/1,2026-Q4=1/0' && J(PH.wlT) === J([2, 2, 3500000, 5000000, 1, 1, 1]), `${PH.wl} | ${J(PH.wlT)}`);
+check('P8 107 staff split 40/30/15/15, whole people adding up (largest remainder): 43 · 32 · 16 · 16', PH.cat === 'operation=43,maintenance=32,inspection=16,engineering=16/107', PH.cat);
+check('A6: X extended 153 days after its old end (signed late), Z’s amendments take that median (≈153), X2 30 days past its end; Y extended in time',
+  PH.pd === 'X1~late:signedLate:153,Z1:assumed:153,X2:pastEnd:30/1/153/0', PH.pd);
+check('O1 pyramid 1 : 2 : 3 over Level 10, Level 6 and the no-level Operator: 18 · 36 · 53 of 107, with each step’s median rate',
+  PH.lv === '10=18@6000,6=36@3000,other=53@1500/107', PH.lv);
+check('O3 yearly value = median rate × 220: 1.32 m · 0.66 m · 0.33 m; all staff 65.01 m', PH.pv === '10=1320000,6=660000,other=330000/65010000', PH.pv);
+check('O4 lost to the bench = each completed quarter’s billing × 5 ÷ 95 (6 quarters)', PH.bench === true);
+check('O5 10% under-placed × man-days × grade step: X step 2,000, Y 500, Z takes the median 1,250 (≈)',
+  PH.under === 'X=3689051@2000,Z=444444≈@1250,Y=19584@500/4153080', PH.under);
+check('O6 “No Bid” bids per completed quarter: Q3 2 m (EUR one counted, not added), Q2 USD 1,000 × 50 by its last change; today’s quarter left out',
+  PH.td === '2025-Q2=0:0,2025-Q3=0:0,2025-Q4=0:0,2026-Q1=0:0,2026-Q2=1:50000,2026-Q3=2:2000000/1/1', PH.td);
+check('O7 per quarter = O4 bench + O5 under-placement + O6 turned down; no turned-down part while the bids load', PH.oc === true);
+
+// On the page, with the shared made-up rows (no bids yet).
+const a7c = ['P5', 'P7', 'P8', 'A6', 'O1', 'O3', 'O4', 'O5', 'O6', 'O7'];
+check('the ten former grey boxes show as charts, each with a "Requested from" line',
+  (await evalJS(`${J(a7c)}.every(k => { const c = document.querySelector('[data-ac-q="' + k + '"]'); return c && c.dataset.acShow === 'chart' && c.querySelector('[data-ac-still]'); })`)),
+  await evalJS(`${J(a7c)}.map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`));
+check('the assumed ones are hatched and state their rules (P8, O1, O3, O4, O5, O7)',
+  (await evalJS(`['P8','O1','O3','O4','O5','O7'].every(k => { const c = document.querySelector('[data-ac-q="' + k + '"]'); return c.querySelector('[data-ac-assumed]') && (c.querySelector('[data-ac-assumed-seg]') || c.querySelector('.bdc-empty')); })`)));
+check('P7 + O6 with no closed bids: their empty sentences; O7 still draws bench + under-placement',
+  (await has('[data-ac-q="P7"] [data-ac-empty="winLoss"]')) && (await has('[data-ac-q="O6"] [data-ac-empty="turnedDown"]')) && (await evalJS(`document.querySelectorAll('[data-ac-row="oppCost"]').length`)) === 6);
+check('P5 three areas on the page, upstream first; P8 total tile ≈; O1 rule names the pyramid',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="area"]')].map(e => e.dataset.acKey).join(',')`)) === 'upstream,midstream,downstream'
+  && (await text('[data-ac-q="P8"] [data-ac-fig="total"]')).startsWith('≈ ') && (await text('[data-ac-q="O1"] [data-ac-assumed]')).includes('as a pyramid'), await text('[data-ac-q="P8"] [data-ac-fig="total"]'));
+check('A6 on the page: BETA’s line past its end date is listed as still open, in red',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="paper"]')].some(e => e.querySelector('[data-ac-kind="pastEnd"]') && e.querySelector('.bdc-num.bdc-red') && e.textContent.includes('BETA'))`)),
+  await acRows('paper'));
+await evalJS(`(() => {
+  __seed('opportunities', 'o1', { title: 'Won 1', stage: 'Won', decisionDate: '2026-08-02', estimatedValue: 6000000, currency: 'EGP', visibility: 'all', userId: 'u-x' });
+  __seed('opportunities', 'o2', { title: 'Lost 1', stage: 'Lost', decisionDate: '2026-07-20', estimatedValue: 2000000, visibility: 'all', userId: 'u-x' });
+  __seed('opportunities', 'o3', { title: 'No bid 1', stage: 'No Bid', decisionDate: '2026-08-15', estimatedValue: 3000000, visibility: 'all', userId: 'u-x' });
+  __emit(); })()`);
+await sleep(250);
+check('P7 reads the bid register: one won, one lost in Q3 2026, win rate 50%, value won 6 m',
+  (await texts('[data-ac-q="P7"] [data-ac-fig]')) === '1|1|50%|6 m EGP' && (await text('[data-ac-row="winLoss"][data-ac-key="2026-Q3"] [data-bdc-value]')) === '11',
+  `${await texts('[data-ac-q="P7"] [data-ac-fig]')} | ${await text('[data-ac-row="winLoss"][data-ac-key="2026-Q3"] [data-bdc-value]')}`);
+check('O6 + O7: the “No Bid” bid shows as 3 m turned down in Q3 2026, in O7’s red part too',
+  (await texts('[data-ac-q="O6"] [data-ac-fig]')) === '≈ 1|≈ 3 m EGP' && (await text('[data-ac-row="turnedDown"][data-ac-key="2026-Q3"] [data-bdc-value]')) === '≈ 3'
+  && (await has('[data-ac-row="oppCost"][data-ac-key="2026-Q3"] .ac-hatch-lo')), await texts('[data-ac-q="O6"] [data-ac-fig]'));
+await click('[data-ac-q="A6"] [data-ac-row="paper"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from A6');
+check('an A6 line opens its client', (await text('[data-bdc-tab="client"]')).length > 0);
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+await sleep(300);
+check('no tall empty space between charts with every group filled (desktop)', (await holes()) === '', await holes());
+if (SHOT) {
+  for (const g of ['projects', 'opportunity']) {
+    await evalJS(`document.getElementById('ac-group-${g}').scrollIntoView({ block: 'start' })`); await sleep(200);
+    await shot(`a7c-${g}`);
+  }
+}
+await evalJS(`(() => { for (const id of ['o1', 'o2', 'o3']) __store.get('opportunities')?.delete(id); window.__seedAll(); __emit(); })()`);
 await sleep(200);
 
 console.log('\n[3] the data-date strip');
@@ -1127,13 +1242,19 @@ await remount();
 await waitFor(q('[data-ac="board"]'), 'board (ar)');
 check('page is RTL', (await evalJS(`document.documentElement.dir`)) === 'rtl');
 check('title «مركز التحليل»', (await text('h1')) === 'مركز التحليل');
-check('Arabic board: question title, fixed note, group name and grey box all in Arabic',
+check('Arabic board: question title, fixed note, group name, "Requested from" line and summary all in Arabic',
   (await text('[data-ac-q="P4"] [data-ac-title]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
   && (await text('[data-ac-q="P6"] [data-ac-note]')).startsWith('أكبر عشرة بنود وفق الحد الأقصى للعقد')
   && (await text('[data-ac-jump="opportunity"]')).startsWith('تكلفة الفرصة البديلة')
-  && (await texts('[data-ac-q="P7"] .ac-need-tag, [data-ac-q="P7"] dd')) === 'بيانات مطلوبة|سجل العطاءات بنتيجة كل عطاء وقيمته|تطوير الأعمال، المناقصات'
+  && (await text('[data-ac-q="P7"] [data-ac-still]')).endsWith('تاريخ القرار وقيمة كل عطاء مغلق')
+  && (await text('[data-ac="summary"]')).startsWith('أسئلة أُجيب عنها من بيانات اليوم: 50')
   && (await text('[data-ac-stat="type:CSA"] .ac-stat-label')) === 'عقود الخدمات المستمرة',
-  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await texts('[data-ac-q="P7"] .ac-need-tag, [data-ac-q="P7"] dd')}`);
+  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await text('[data-ac-q="P7"] [data-ac-still]')} | ${await text('[data-ac="summary"]')}`);
+check('Arabic A7c: P5 area name, O7 legend, A6 figure label',
+  (await text('[data-ac-row="area"][data-ac-key="downstream"] .bdc-name > span')) === 'أنشطة المصب'
+  && (await texts('[data-ac-q="O7"] .bdc-legend li')).startsWith('أيام عمل غير مفوترة|موضوعون دون مستواهم|أعمال مرفوضة')
+  && (await text('[data-ac-q="A6"] [data-ac-figs] span')).startsWith('نعمل الآن دون سند'),
+  `${await text('[data-ac-row="area"][data-ac-key="downstream"] .bdc-name > span')} | ${await texts('[data-ac-q="O7"] .bdc-legend li')}`);
 check('Arabic money chart (A7a): M9 title, figure label, the cost rule', (await text('[data-ac-q="M9"] [data-ac-title]')) === 'ما ربح كل مشروع، وأي المشروعات يحقق خسارة؟'
   && (await text('[data-ac-q="M9"] [data-ac-figs] span')).startsWith('الربح خلال آخر 12 شهرًا')
   && (await text('[data-ac-q="M9"] [data-ac-assumed]')).includes('تكلفتنا المباشرة = الفوترة ÷ 1.6875'), await text('[data-ac-q="M9"] [data-ac-assumed]'));

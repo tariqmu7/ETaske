@@ -14,7 +14,7 @@ import DataQualityTab, { type QualityState } from './components/bdcontrol/DataQu
 import { BdEditProvider } from './components/bdcontrol/EditRecord';
 import { canEditBdControl } from './lib/bdControlAccess';
 import { subscribeVisibleBids } from './lib/bidReads';
-import type { PipelineBid } from './lib/analysisCenter';
+import type { ClosedBid } from './lib/analysisCenter';
 import { AppUser } from './types';
 import type { AppView } from './App';
 
@@ -61,7 +61,7 @@ export default function BdControlDashboard({ appUser }: Props) {
   const [contracts, setContracts] = useState<ContractsState>({ filter: 'all', q: '' });
   const [bench, setBench] = useState<Benchmark>('anopc');
   // The app's own bid register, for the pipeline question (G2, queue A7b) — only the bids this person may see.
-  const [bids, setBids] = useState<PipelineBid[] | null | 'error'>(null);
+  const [bids, setBids] = useState<ClosedBid[] | null | 'error'>(null);
   useEffect(() => subscribeVisibleBids({ id: appUser.id, role: appUser.role }, setBids, () => setBids('error')), [appUser.id, appUser.role]);
   const [sup, setSup] = useState<SuppliersState>({ filter: 'live', q: '' });
   const [quality, setQuality] = useState<QualityState>({ sheet: '', q: '' });

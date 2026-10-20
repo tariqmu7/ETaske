@@ -30,7 +30,7 @@ function ShowMore({ total, all, onToggle, attr }: { total: number; all: boolean;
 }
 
 /** The staff rule sentences shared by H1, H2, H5 and H6. */
-function useStaffRules(anyRateAssumed: boolean) {
+export function useStaffRules(anyRateAssumed: boolean) {
   const { t } = useTranslation();
   const money = useMoneyRules();
   return [

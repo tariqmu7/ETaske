@@ -11,11 +11,12 @@ import { RENEW_SUPPLY_CHARTS } from './RenewSupplyCharts';
 import { PEOPLE_GROWTH_CHARTS } from './PeopleGrowthCharts';
 import { MONEY_CHARTS } from './MoneyCharts';
 import { PEOPLE_RISK_CHARTS } from './PeopleRiskCharts';
+import { PROJECT_OPP_CHARTS } from './ProjectOppCharts';
 import Headline from './Headline';
 import { useMasonry } from './shared';
 
 /** Every question chart built so far, by question id. */
-const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS, ...PEOPLE_GROWTH_CHARTS, ...MONEY_CHARTS, ...PEOPLE_RISK_CHARTS };
+const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS, ...PEOPLE_GROWTH_CHARTS, ...MONEY_CHARTS, ...PEOPLE_RISK_CHARTS, ...PROJECT_OPP_CHARTS };
 
 /** How a question shows today: its chart, a grey "data needed" box, or not yet (chart still to be built). */
 export type QShow = 'chart' | 'need' | null;
@@ -79,7 +80,9 @@ export default function QuestionBoard(ctx: ChartCtx) {
     <div className="ac-board" data-ac="board">
       <Headline {...ctx} />
       <p className="ac-summary" data-ac="summary">
-        {t('{{a}} questions answered from today’s data · {{w}} waiting for data from other departments', { a: F.number(answered), w: F.number(waiting) })}
+        {waiting
+          ? t('{{a}} questions answered from today’s data · {{w}} waiting for data from other departments', { a: F.number(answered), w: F.number(waiting) })
+          : t('{{a}} questions answered from today’s data (hatched figures are assumed until the real data arrives)', { a: F.number(answered) })}
       </p>
       <nav className="bdc-chips ac-jump" aria-label={t('Question groups')} data-ac="jump">
         {groups.map(x => (
