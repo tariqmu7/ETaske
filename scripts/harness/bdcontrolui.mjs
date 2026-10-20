@@ -103,6 +103,8 @@ import BdControlDashboard from './src/BdControlDashboard';
 import * as lib from './src/lib/bdControl';
 import * as access from './src/lib/bdControlAccess';
 import * as edit from './src/lib/bdControlEdit';
+import * as ac from './src/lib/analysisCenter';
+import * as cq from './src/lib/ceoQuestions';
 import i18n, { applyLanguageToDocument } from './src/i18n';
 
 const iso = off => { const d = new Date(); d.setDate(d.getDate() + off); return lib.todayISO(d); };
@@ -164,6 +166,7 @@ window.__seedAll = () => {
 };
 window.__seedAll();
 
+window.__ac = ac; window.__cq = cq;
 window.__lib = lib; window.__edit = edit; window.__access = access; window.__iso = iso; window.__ts = ts; window.__ago = ago;
 window.__denied = new Set();
 window.__user = { id: 'u-mgr', displayName: 'Mona Manager', role: 'Manager', status: 'Approved' };
@@ -350,13 +353,69 @@ check('Approved Manager + Admin yes; Employee, pending Manager, nobody no', J(A)
 const src = f => fs.readFileSync(path.join(ROOT, f), 'utf8');
 const gate = (f, re) => check(`${f}: bd-control entry gated by canViewBdControl(appUser)`, re.test(src(f)));
 gate('src/App.tsx', /activeView === 'bd-control' && canViewBdControl\(appUser\)/);
-gate('src/App.tsx', /id: 'bd-control',\s+label: 'BD control',[^\n]*show: canViewBdControl\(appUser\)/);
+gate('src/App.tsx', /id: 'bd-control',\s+label: 'Analysis center',[^\n]*show: canViewBdControl\(appUser\)/);
 gate('src/components/Sidebar.tsx', /id: 'bd-control'[^\n]*show: canViewBdControl\(appUser\)/);
 gate('src/HomeDashboard.tsx', /id: 'bd-control'[^\n]*show: canViewBdControl\(appUser\)/);
 gate('src/components/CommandPalette.tsx', /canViewBdControl\(appUser\) \? \[\{ kind: 'nav', id: 'bd-control'/);
 check('useHashRoute knows #/bd-control', /'bd-control'/.test(src('src/hooks/useHashRoute.ts')));
 check('Sidebar lists it under Portfolio, after Medical contracts',
   /portfolioItems[\s\S]*'medical-contracts'[\s\S]*'bd-control'[\s\S]*'opportunities'/.test(src('src/components/Sidebar.tsx')));
+
+console.log('\n[2b] Analysis center: the question catalogue + the question board (queue A1)');
+const CQ = JSON.parse(await evalJS(`(() => { const C = window.__cq, A = window.__ac;
+  const ids = C.CEO_QUESTIONS.map(q => q.id);
+  return JSON.stringify({
+    n: ids.length, unique: new Set(ids).size,
+    perGroup: C.QUESTION_GROUPS.map(g => C.questionsIn(g).length),
+    complete: C.CEO_QUESTIONS.every(q => q.q.en && q.q.ar && q.note.en && q.note.ar && (q.data === 'have' || (q.missing && q.missing.en && q.missing.ar && q.who && q.who.length))),
+    noLatinComma: C.CEO_QUESTIONS.every(q => ![q.q.ar, q.note.ar, q.missing ? q.missing.ar : ''].some(s => /,|\\?/.test(s))),
+    am: ['Amend. 9', 'Amend.', 'مرسي السادات', null, 'ملحق 2'].map(v => A.amendmentCount(v)),
+    st: [-1, 0, 90, 91, null].map(A.projectState),
+  }); })()`));
+check('catalogue: 50 questions, ids unique, groups 8/11/6/6/5/3/4/7 like CEO Questions Rev 1', CQ.n === 50 && CQ.unique === 50 && J(CQ.perGroup) === J([8, 11, 6, 6, 5, 3, 4, 7]), J(CQ));
+check('catalogue: every question has EN + AR title and note; every part/missing one says what is missing (EN + AR) and who has it', CQ.complete);
+check('catalogue: Arabic text uses Arabic commas / question marks only', CQ.noLatinComma);
+check('amendmentCount: "Amend. 9" = 9, bare "Amend." = 1 (unnumbered), a site name / blank = 0, Arabic «ملحق 2» = 2',
+  J(CQ.am) === J([{ n: 9, numbered: true }, { n: 1, numbered: false }, { n: 0, numbered: false }, { n: 0, numbered: false }, { n: 2, numbered: true }]), J(CQ.am));
+check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(CQ.st) === J(['pastEnd', 'endingSoon', 'endingSoon', 'running', 'noDate']), J(CQ.st));
+
+await waitFor(q('[data-ac="board"]'), 'question board');
+check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
+check('board summary: 5 answered from today’s data · 28 waiting for data', (await text('[data-ac="summary"]')) === '5 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('group chips in order; Suppliers hidden (no chart or grey box yet)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,growth,opportunity');
+check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
+  === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
+check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
+  && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
+check('grey box: "Data needed", what is missing, who has it', (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd')) === 'Data needed|What is missing|Collections and open invoices|Who has it|Finance', await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd'));
+check('… two owners joined', (await text('[data-ac-q="M4"] [data-ac-need] dd:last-child')) === 'HR, Finance', await text('[data-ac-q="M4"] [data-ac-need] dd:last-child'));
+check('a "part" chart says what is still to collect (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Still to collect: A project type for every project (decision D1) · Who has it: BD', await text('[data-ac-q="P3"] [data-ac-still]'));
+const acStats = () => evalJS(`[...document.querySelectorAll('[data-ac-q="P1"] [data-ac-stat]')].map(e => e.dataset.acStat + '=' + window.__txt(e.querySelector('[data-ac-value]'))).join(',')`);
+check('P1 one number per tile: projects 5, CSA 2, TSA 2, O&M 1, amendments 0', (await acStats()) === 'projects=5,type:CSA=2,type:TSA=2,type:O&M=1,amendments=0', await acStats());
+const acRows = (r, sel = '[data-bdc-value]') => evalJS(`[...document.querySelectorAll('[data-ac-row="${r}"]')].map(e => e.dataset.acKey + '=' + window.__txt(e.querySelector('${sel}'))).join(',')`);
+check('P2 status from today: running 2, ending ≤90 d 1, past end 1, no date 1', (await acRows('status')) === 'running=2,endingSoon=1,pastEnd=1,noDate=1', await acRows('status'));
+check('P3 donut: 3 slices CSA / TSA / O&M, centre total 5, legend 40% / 40% / 20%', (await evalJS(`[...document.querySelectorAll('[data-ac-slice]')].map(e => e.dataset.acSlice).join(',')`)) === 'CSA,TSA,O&M'
+  && (await text('[data-ac-q="P3"] .ac-donut-n')) === '5' && (await texts('[data-ac-q="P3"] .ac-legend-pct')) === '40%|40%|20%', await texts('[data-ac-q="P3"] .ac-legend-pct'));
+check('P4 projects per client: ALPHA 2, BETA 2, GAMMA 1 (supplier-side code left out)', (await acRows('clients')) === 'ALPHA=2,BETA=2,GAMMA=1', await acRows('clients'));
+check('P6 biggest by ceiling: ALPHA CSA 1,200 · BETA CSA 800.5 · ALPHA TSA 250 (m EGP)', (await acRows('biggest')) === 'ALPHA_1_CSA=1,200 m EGP,BETA_2_CSA=800.5 m EGP,ALPHA_5_TSA=250 m EGP', await acRows('biggest'));
+check('P6 foot: monthly-paid and no-value lines named', (await text('[data-ac-q="P6"] [data-ac-foot="monthly"]')) === 'Paid by the month, not in this chart: GAMMA · O&M'
+  && (await text('[data-ac-q="P6"] [data-ac-foot="novalue"]')) === 'No ceiling or value on file: BETA · TSA', await text('[data-ac-q="P6"] [data-ac-foot="novalue"]'));
+await evalJS(`(() => { const p = 'bdControl/clientContracts/rows', s = __store.get(p);
+  __seed(p, 'BETA_2_CSA', { ...s.get('BETA_2_CSA'), amendment: 'Amend. 3' }); __seed(p, 'ALPHA_1_CSA', { ...s.get('ALPHA_1_CSA'), amendment: 'Amend.', expiryDate: window.__iso(-1) }); __emit(); })()`);
+await sleep(200);
+check('rows change → P1 amendments 4 with "unnumbered: 1", P2 past end goes to 2 (no reload)', (await acStats()).endsWith('amendments=4')
+  && (await text('[data-ac-stat="amendments"] .ac-stat-sub')) === 'Lines marked “Amend.” with no number: 1' && (await acRows('status')) === 'running=1,endingSoon=1,pastEnd=2,noDate=1', `${await acStats()} | ${await acRows('status')}`);
+await evalJS(`window.__seedAll(); __emit()`);
+await sleep(200);
+await click('[data-ac-row="status"][data-ac-key="pastEnd"]');
+check('P2 "past its end date" opens Contracts filtered to expired-on-paper', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:expired"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]');
+await click('[data-ac-row="clients"][data-ac-key="BETA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from P4');
+check('P4 client row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('BETA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+check('the earlier tiles + charts stay below the board, under "More figures"', (await has('[data-ac="legacy"] [data-bd="tiles"]')) && (await text('[data-ac="legacy"] > h2')) === 'More figures');
 
 console.log('\n[3] the tiles, from the made-up rows');
 await waitFor(q('[data-bd="tiles"]'), 'tiles');
@@ -742,7 +801,14 @@ await evalJS(`window.__setLang('ar')`);
 await remount();
 await waitFor(q('[data-bd="tiles"]'), 'tiles (ar)');
 check('page is RTL', (await evalJS(`document.documentElement.dir`)) === 'rtl');
-check('title «لوحة متابعة تطوير الأعمال»', (await text('h1')) === 'لوحة متابعة تطوير الأعمال');
+check('title «مركز التحليل»', (await text('h1')) === 'مركز التحليل');
+check('Arabic board: question title, fixed note, group name and grey box all in Arabic',
+  (await text('[data-ac-q="P4"] [data-ac-title]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
+  && (await text('[data-ac-q="P6"] [data-ac-note]')).startsWith('أكبر عشرة بنود وفق الحد الأقصى للعقد')
+  && (await text('[data-ac-jump="opportunity"]')).startsWith('تكلفة الفرصة البديلة')
+  && (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')) === 'بيانات مطلوبة|التحصيلات والفواتير غير المسددة|الإدارة المالية'
+  && (await text('[data-ac-stat="type:CSA"] .ac-stat-label')) === 'عقود الخدمات المستمرة',
+  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')}`);
 check('tile labels in Arabic', (await text('[data-bd-kpi="ceiling"] div')) === 'إجمالي الحدود القصوى'
   && (await text('[data-bd-kpi="renewals"] div')) === 'تجديدات خلال تسعين يومًا' && (await text('[data-bd-kpi="suppliers"] div')) === 'عقود الموردين السارية');
 check('Western digits in Arabic too, like the rest of the app (ar-EG-u-nu-latn): 3 clients, 2,250.5 ceiling', (await tile('clients')) === '3' && (await tile('ceiling')) === '2,250.5', `${await tile('clients')} ${await tile('ceiling')}`);
@@ -781,6 +847,9 @@ await shot('5-en-mobile');
 await evalJS(`document.documentElement.setAttribute('data-theme', 'dark')`);
 await sleep(150);
 check('dark: chart colours switch to the light-on-dark tokens', (await evalJS(`getComputedStyle(${q('.bdc')}).getPropertyValue('--bdc-supplier').trim()`)) === '#2dd4bf');
+check('dark: donut slices use the dark-stepped series colours', (await evalJS(`getComputedStyle(${q('.bdc')}).getPropertyValue('--ac-s1').trim()`)) === '#3987e5'
+  && (await evalJS(`getComputedStyle(${q('[data-ac-slice="CSA"]')}).stroke`)) === 'rgb(57, 135, 229)');
+check('390 px: question cards fit the screen', (await evalJS(`[...document.querySelectorAll('[data-ac-q]')].every(e => e.getBoundingClientRect().width <= 390)`)));
 check('390 px dark: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
 await shot('6-en-mobile-dark');
 await evalJS(`document.documentElement.removeAttribute('data-theme')`);
@@ -790,7 +859,7 @@ console.log('\n[8] nothing loaded yet');
 await evalJS(`(() => { for (const k of [...__store.keys()]) if (k.startsWith('bdControl')) __store.delete(k); })()`);
 await remount();
 await waitFor(q('[data-bd="empty"]'), 'empty card');
-check('empty: plain sentence, no tiles, no strip', (await text('[data-bd="empty"]')) === 'No BD control data has been loaded yet.'
+check('empty: plain sentence, no tiles, no strip', (await text('[data-bd="empty"]')) === 'No Analysis center data has been loaded yet.'
   && !(await has('[data-bd="tiles"]')) && !(await has('[data-bd="date-strip"]')) && !(await has('[data-bd="charts"]')));
 await evalJS(`(() => { __seed('bdControl', 'meta', { asof: window.__iso(-1) }); __emit(); })()`);
 await waitFor(q('[data-bd="charts"]'), 'charts with meta only');
@@ -809,7 +878,7 @@ console.log('\n[9] someone the rules refuse');
 await evalJS(`window.__seedAll(); ['bdControl', ...window.__lib.BD_TABLES.map(t => 'bdControl/' + t + '/rows')].forEach(c => window.__denied.add(c))`);
 await remount();
 await waitFor(q('[data-bd="error"]'), 'the error card');
-check('permission-denied: managers-only explanation, no tiles', (await text('[data-bd="error"]')).startsWith('The BD control data could not be opened')
+check('permission-denied: managers-only explanation, no tiles', (await text('[data-bd="error"]')).startsWith('The Analysis center data could not be opened')
   && !(await has('[data-bd="tiles"]')));
 await evalJS(`window.__denied = new Set(['bdControl/dataIssues/rows'])`);
 await remount();

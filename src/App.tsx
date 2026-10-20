@@ -731,7 +731,7 @@ export default function App() {
                 { id: 'clients',         label: 'Clients',         icon: <Building2 />,   show: true },
                 { id: 'documents',       label: 'Documents',       icon: <FolderOpen />,  show: true },
                 { id: 'medical-contracts', label: 'Medical contracts', icon: <Stethoscope />, show: canViewMedical(appUser) },
-                { id: 'bd-control',      label: 'BD control',      icon: <Gauge />,       show: canViewBdControl(appUser) },
+                { id: 'bd-control',      label: 'Analysis center', icon: <Gauge />,       show: canViewBdControl(appUser) },
                 { id: 'bid-analytics',   label: 'Bid Analytics',   icon: <BarChart3 />,   show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'duplicates',      label: 'Duplicates',      icon: <Files />,       show: appUser.role === 'Admin' || appUser.role === 'Manager' },
                 { id: 'weekly-report',   label: 'Weekly report',   icon: <FileText />,    show: appUser.role === 'Admin' || appUser.role === 'Manager' },

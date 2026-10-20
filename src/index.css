@@ -2011,6 +2011,54 @@ h1, h2, h3, h4, p, span, div {
   .bdc-dl dd { margin-bottom: 4px; }
 }
 
+/* ── Analysis center question board (queue A1) ────────────────────────────
+   One card per CEO question: the question is the title, a fixed note says how
+   to read it. Missing data = a grey dashed "data needed" box. Donut slices use
+   the dataviz reference categorical order (blue, orange, aqua, yellow), stepped
+   separately for dark; every slice is also named in the legend with its count. */
+.bdc { --ac-s1: #2a78d6; --ac-s2: #eb6834; --ac-s3: #1baf7a; --ac-s4: #eda100; }
+[data-theme="dark"] .bdc { --ac-s1: #3987e5; --ac-s2: #d95926; --ac-s3: #199e70; --ac-s4: #c98500; }
+.bdc-fill-flat { background: var(--bdc-bar); opacity: .55; }
+.ac-summary { font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
+.ac-jump { padding: 2px 0 4px; }
+.ac-group { margin-top: 18px; scroll-margin-top: 120px; }
+.ac-group-h { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; font-size: 18px; font-weight: 800; margin: 0 0 10px; color: var(--text-primary); }
+.ac-group-no { display: inline-grid; place-items: center; min-width: 26px; height: 26px; padding: 0 6px; background: var(--accent); color: #fff; font-size: 13.5px; }
+.ac-group-sub { font-size: 12.5px; font-weight: 600; color: var(--text-muted); }
+.ac-grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); align-items: start; }
+.ac-card { padding: 14px 16px; min-width: 0; scroll-margin-top: 120px; }
+.ac-head { display: flex; align-items: flex-start; gap: 8px; }
+.ac-id { flex-shrink: 0; font-size: 11px; font-weight: 800; padding: 2px 6px; margin-top: 1px; border: 1px solid var(--border); color: var(--text-muted); }
+.ac-q { font-size: 15px; font-weight: 800; line-height: 1.4; margin: 0; color: var(--text-primary); }
+.ac-note { font-size: 12px; line-height: 1.55; color: var(--text-muted); margin: 6px 0 10px; padding-inline-start: 10px; border-inline-start: 2px solid var(--border); }
+.ac-still { font-size: 12px; line-height: 1.5; color: var(--surface-warn-text); margin: 10px 0 0; }
+.ac-need { background: var(--surface-2, var(--surface)); border-style: dashed; }
+.ac-need .ac-q { color: var(--text-secondary); }
+.ac-need-box { display: grid; gap: 6px; }
+.ac-need-tag { display: inline-flex; align-items: center; gap: 5px; justify-self: start; font-size: 11.5px; font-weight: 800; padding: 3px 8px; border: 1px dashed var(--text-muted); color: var(--text-secondary); }
+.ac-need-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 12.5px; }
+.ac-need-dl dt { color: var(--text-muted); font-weight: 600; }
+.ac-need-dl dd { margin: 0; color: var(--text-primary); font-weight: 600; }
+.ac-stats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
+.ac-stat { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid var(--border); min-width: 0; }
+.ac-stat-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+.ac-stat b { font-size: 26px; font-weight: 800; line-height: 1.2; color: var(--text-primary); }
+.ac-stat-sub { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+.ac-donut-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
+.ac-donut { width: 150px; height: 150px; flex-shrink: 0; }
+.ac-donut-hole { fill: none; stroke: var(--border); stroke-width: 6; }
+.ac-slice { fill: none; stroke-width: 6; }
+.ac-s1 { stroke: var(--ac-s1); } .ac-s2 { stroke: var(--ac-s2); } .ac-s3 { stroke: var(--ac-s3); } .ac-s4 { stroke: var(--ac-s4); }
+.ac-s1-bg { background: var(--ac-s1); } .ac-s2-bg { background: var(--ac-s2); } .ac-s3-bg { background: var(--ac-s3); } .ac-s4-bg { background: var(--ac-s4); }
+.ac-donut-n { font-size: 8px; font-weight: 800; fill: var(--text-primary); }
+.ac-donut-l { font-size: 3.6px; font-weight: 600; fill: var(--text-muted); }
+.ac-legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; flex: 1 1 180px; min-width: 0; }
+.ac-legend li { display: grid; grid-template-columns: 11px minmax(0, 1fr) auto 40px; gap: 8px; align-items: center; font-size: 13px; color: var(--text-secondary); }
+.ac-legend b { color: var(--text-primary); font-weight: 800; text-align: end; }
+.ac-legend-pct { font-size: 12px; color: var(--text-muted); text-align: end; }
+.ac-legacy { margin-top: 28px; }
+.ac-legacy > h2 { font-size: 16px; font-weight: 800; margin: 0 0 2px; color: var(--text-primary); }
+
 /* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
    Quiet: shown only for Managers only / Private — an "Everyone" bid says nothing. */
 .opp-row-private { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-secondary); }

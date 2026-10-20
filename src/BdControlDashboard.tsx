@@ -5,6 +5,7 @@ import { useBdControl } from './hooks/useBdControl';
 import { BD_TABS, dataDate, hasData, millions, overviewKpis, todayISO, type BdTab, type Benchmark, type IssueTarget } from './lib/bdControl';
 import { useFormat, DATE_MEDIUM, DATETIME_SHORT } from './lib/format';
 import OverviewCharts from './components/bdcontrol/OverviewCharts';
+import QuestionBoard from './components/bdcontrol/QuestionBoard';
 import ContractsTab, { type ContractsState } from './components/bdcontrol/ContractsTab';
 import ClientPage from './components/bdcontrol/ClientPage';
 import PricingTab from './components/bdcontrol/PricingTab';
@@ -36,6 +37,12 @@ const TAB_LABEL: Record<BdTab, string> = {
 };
 
 /**
+ * Analysis center (renamed from "BD control" in queue A1; view id stays
+ * `bd-control` so links keep working). The Overview is the CEO question board
+ * (components/bdcontrol/QuestionBoard.tsx): one chart per question, grey
+ * "data needed" boxes for the rest. Below it, until queue A4 re-homes them, the
+ * earlier tiles and charts.
+ *
  * BD control (queue E5a) — the CEO page over every client contract, supplier
  * contract and AGIBA site contract loaded from BD's Excel files. Every figure
  * is worked out from the rows as of today (lib/bdControl.ts); nothing on the
@@ -117,24 +124,24 @@ export default function BdControlDashboard({ appUser }: Props) {
     <div ref={top} className="bdc" style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px', scrollMarginTop: 72 }} data-testid="bd-control-page">
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
         <Gauge className="w-6 h-6" style={{ color: 'var(--accent)' }} />
-        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t('BD control')}</h1>
+        <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t('Analysis center')}</h1>
       </div>
       <p style={{ fontSize: 13.5, color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.55 }}>
-        {t('Every client contract, supplier contract and AGIBA site contract from BD’s Excel files. Each figure is worked out from the records as of today.')}
+        {t('The CEO’s questions on our projects, each answered by one chart from BD’s Excel files as of today. A grey box marks data we still have to collect.')}
       </p>
 
       {error ? (
         <div className="card" style={{ padding: 18, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6 }} data-bd="error">
           {error === 'permission-denied'
-            ? t('The BD control data could not be opened: it is for managers only, or the new security rules are not live yet.')
-            : t('The BD control data could not be loaded. Check the connection and reload the page.')}
+            ? t('The Analysis center data could not be opened: it is for managers only, or the new security rules are not live yet.')
+            : t('The Analysis center data could not be loaded. Check the connection and reload the page.')}
         </div>
       ) : loading ? (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }} data-bd="loading">
           {[0, 1, 2, 3].map(i => <div key={i} className="card skeleton" style={{ height: 96 }} />)}
         </div>
       ) : !hasData(data) ? (
-        <div className="card" style={{ padding: 18, fontSize: 13.5, color: 'var(--text-muted)' }} data-bd="empty">{t('No BD control data has been loaded yet.')}</div>
+        <div className="card" style={{ padding: 18, fontSize: 13.5, color: 'var(--text-muted)' }} data-bd="empty">{t('No Analysis center data has been loaded yet.')}</div>
       ) : (
         <>
           {/* 1 — how fresh the figures are. */}
@@ -163,7 +170,7 @@ export default function BdControlDashboard({ appUser }: Props) {
             )}
           </div>
 
-          <div className="ms-tabs bdc-tabs" role="tablist" aria-label={t('BD control')} data-bd="tabs">
+          <div className="ms-tabs bdc-tabs" role="tablist" aria-label={t('Analysis center')} data-bd="tabs">
             {BD_TABS.map(x => (
               <button key={x} type="button" role="tab" aria-selected={tab === x} onClick={() => openTab(x)} data-bd-tab={x}>
                 {t(TAB_LABEL[x])}
@@ -180,6 +187,12 @@ export default function BdControlDashboard({ appUser }: Props) {
           : tab === 'suppliers' ? <SuppliersTab data={data} today={today} state={sup} onState={setSup} onClient={openClient} />
           : tab === 'quality' ? <DataQualityTab data={data} state={quality} onState={setQuality} onTarget={openTarget} />
           : <>
+          <QuestionBoard data={data} today={today} onClient={openClient} onContracts={openContracts} />
+
+          {/* Earlier figures — each moves under its question in queues A2–A4, then this block goes. */}
+          <section className="ac-legacy" data-ac="legacy">
+          <h2>{t('More figures')}</h2>
+          <p className="bdc-cap">{t('The earlier summary tiles and charts. They move under their questions above one group at a time.')}</p>
           {/* 2 — the top figures. Each opens the tab behind it. */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 10 }} data-bd="tiles">
             {tiles.map(x => (
@@ -196,6 +209,7 @@ export default function BdControlDashboard({ appUser }: Props) {
 
           {/* 3–12 — ceilings, renewals, day-rates, reprice list, suppliers, amendments, AGIBA SOs, changes, data issues, awaited data. */}
           <OverviewCharts data={data} today={today} onClient={openClient} />
+          </section>
           </>}
           </BdEditProvider>
         </>

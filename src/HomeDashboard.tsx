@@ -290,7 +290,7 @@ export default function HomeDashboard({ user, appUser, projectUsers, onNavigate,
         { id: 'clients', label: t('Clients'), icon: <Building2 className="w-4 h-4" />, show: true },
         { id: 'documents', label: t('Documents'), icon: <FolderOpen className="w-4 h-4" />, show: true },
         { id: 'medical-contracts', label: t('Medical contracts'), icon: <Stethoscope className="w-4 h-4" />, show: canViewMedical(appUser) },
-        { id: 'bd-control', label: t('BD control'), icon: <Gauge className="w-4 h-4" />, show: canViewBdControl(appUser) },
+        { id: 'bd-control', label: t('Analysis center'), icon: <Gauge className="w-4 h-4" />, show: canViewBdControl(appUser) },
       ] as Section[],
     },
     {

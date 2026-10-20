@@ -196,7 +196,7 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     // Queue M4 — only for people an admin switched on (lib/medicalAccess.ts), not by role.
     { id: 'medical-contracts', label: 'Medical contracts', icon: <Stethoscope className="w-4 h-4" />, show: canViewMedical(appUser) },
     // Queue E5 — contracts, renewals, ceilings and suppliers from BD's Excel files; managers + admin.
-    { id: 'bd-control', label: 'BD control', icon: <Gauge className="w-4 h-4" />, show: canViewBdControl(appUser) },
+    { id: 'bd-control', label: 'Analysis center', icon: <Gauge className="w-4 h-4" />, show: canViewBdControl(appUser) },
     // Badge counts bids at their submission deadline (7 days out or already
     // past), not the whole pipeline — the deadline is the part that can be
     // missed, and it now sits one level down, so the count rides the group too.
