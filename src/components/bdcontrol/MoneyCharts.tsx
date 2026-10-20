@@ -20,7 +20,7 @@ const FIRST = 10;
 const pct = (x: number) => Math.round(x * 100);
 
 /** The rule sentences, worded once for every money chart. */
-function useMoneyRules() {
+export function useMoneyRules() {
   const { t } = useTranslation();
   const F = useFormat();
   const n = (x: number, d = 0) => F.number(x, { maximumFractionDigits: d });
@@ -38,7 +38,7 @@ function useMoneyRules() {
 }
 
 /** One hatched (assumed) bar; `lo` draws it in the loss colour. */
-function HatchBar({ value, max, lo }: { value: number; max: number; lo?: boolean }) {
+export function HatchBar({ value, max, lo }: { value: number; max: number; lo?: boolean }) {
   return (
     <span className="bdc-track">
       <span className="bdc-stack" style={{ width: `${(Math.abs(value) / Math.max(1e-9, max)) * 100}%` }}>

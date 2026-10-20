@@ -5,6 +5,7 @@ import {
   projectTotals, projectStatus, projectsByType, projectsByClient, projectsByValue, type ProjectState,
 } from '../../lib/analysisCenter';
 import { useBdWords } from './shared';
+import type { PipelineBid } from '../../lib/analysisCenter';
 
 /** What every question chart gets from the board. */
 export interface ChartCtx {
@@ -12,6 +13,8 @@ export interface ChartCtx {
   today: string;
   onClient: (code: string) => void;
   onContracts: (f: ContractFilter) => void;
+  /** The app's open and closed bids the viewer may see (G2); null while loading, 'error' when the read failed. */
+  bids?: PipelineBid[] | null | 'error';
 }
 
 const FIRST = 10;

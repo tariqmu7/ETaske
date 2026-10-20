@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Gauge } from 'lucide-react';
 import { useBdControl } from './hooks/useBdControl';
@@ -13,6 +13,8 @@ import SuppliersTab, { type SuppliersState } from './components/bdcontrol/Suppli
 import DataQualityTab, { type QualityState } from './components/bdcontrol/DataQualityTab';
 import { BdEditProvider } from './components/bdcontrol/EditRecord';
 import { canEditBdControl } from './lib/bdControlAccess';
+import { subscribeVisibleBids } from './lib/bidReads';
+import type { PipelineBid } from './lib/analysisCenter';
 import { AppUser } from './types';
 import type { AppView } from './App';
 
@@ -58,6 +60,9 @@ export default function BdControlDashboard({ appUser }: Props) {
   const [focus, setFocus] = useState<AgibaFocus | null>(null);
   const [contracts, setContracts] = useState<ContractsState>({ filter: 'all', q: '' });
   const [bench, setBench] = useState<Benchmark>('anopc');
+  // The app's own bid register, for the pipeline question (G2, queue A7b) — only the bids this person may see.
+  const [bids, setBids] = useState<PipelineBid[] | null | 'error'>(null);
+  useEffect(() => subscribeVisibleBids({ id: appUser.id, role: appUser.role }, setBids, () => setBids('error')), [appUser.id, appUser.role]);
   const [sup, setSup] = useState<SuppliersState>({ filter: 'live', q: '' });
   const [quality, setQuality] = useState<QualityState>({ sheet: '', q: '' });
   const top = useRef<HTMLDivElement>(null);
@@ -138,7 +143,7 @@ export default function BdControlDashboard({ appUser }: Props) {
           : tab === 'pricing' ? <PricingTab data={data} today={today} bench={bench} onBench={setBench} onClient={c => openClient(c)} />
           : tab === 'suppliers' ? <SuppliersTab data={data} today={today} state={sup} onState={setSup} onClient={c => openClient(c)} />
           : tab === 'quality' ? <DataQualityTab data={data} state={quality} onState={setQuality} onTarget={openTarget} />
-          : <QuestionBoard data={data} today={today} onClient={c => openClient(c)} onContracts={openContracts} />}
+          : <QuestionBoard data={data} today={today} onClient={c => openClient(c)} onContracts={openContracts} bids={bids} />}
           </BdEditProvider>
         </>
       )}

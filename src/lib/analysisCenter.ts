@@ -833,3 +833,215 @@ export function ceilingUsed(data: BdData, today: string): { rows: UsedLine[]; no
   rows.sort((a, b) => b.usedPct - a.usedPct || b.ceilingEgp - a.ceilingEgp || a.client.localeCompare(b.client));
   return { rows, noCeiling };
 }
+
+// ── People, renewals, growth (queue A7b) ─────────────────────────────────────
+//
+// HR, Operations and Finance have sent no staff list, vacancies, risk log or
+// guarantees yet, so H1, H2, H4–H6, R4 and R5 are ASSUMED by the rules below
+// (agreed with Tariq, 20 Oct 2026) and drawn hatched. They read the same assumed
+// billing as the money charts, the real day-rate sheet and the real contract
+// lines, so an edit or a new load moves every figure. G2 reads the app's own bid
+// register (real); only a missing win chance is assumed. G3 is the rate sheet.
+
+/** Working days one person gives a project in a year. */
+export const WORK_DAYS_PER_PERSON = 220;
+/** Share of our staff with no project today. */
+export const ASSUMED_BENCH_SHARE = 0.05;
+/** A project with this many staff or fewer hangs on one key person. */
+export const KEY_PERSON_MAX_STAFF = 2;
+/** One open position per this many staff on a project … */
+export const STAFF_PER_VACANCY = 20;
+/** … each open this many days. */
+export const ASSUMED_VACANCY_DAYS = 45;
+/** Each contract carries a performance guarantee of this share of its ceiling … */
+export const ASSUMED_GUARANTEE_SHARE = 0.1;
+/** … that expires this many days after the contract's end date. */
+export const GUARANTEE_DAYS_AFTER_END = 90;
+/** Win chance of an open bid with none typed in, by stage (%), earliest stage first. */
+export const ASSUMED_WIN_CHANCE: Record<string, number> = {
+  Identified: 10, Prequalification: 20, 'Bid Preparation': 30, Submitted: 40, 'Under Evaluation': 50,
+};
+
+/** Every client's day rates on the sheet. */
+function ratesByClient(data: BdData): Map<string, number[]> {
+  const by = new Map<string, number[]>();
+  for (const r of data.dayRates) { const v = num(r.dayRateEgp); if (v != null && v > 0) by.set(txt(r.client), [...(by.get(txt(r.client)) || []), v]); }
+  return by;
+}
+const mean = (xs: number[]) => xs.reduce((a, x) => a + x, 0) / xs.length;
+
+/**
+ * A client's average day rate across the grades on the rate sheet; a client
+ * with no rates gets the median of the other clients' averages (`assumed`).
+ */
+export function clientDayRate(data: BdData): (client: string) => { rate: number; assumed: boolean } | null {
+  const avg = new Map([...ratesByClient(data)].map(([c, xs]) => [c, mean(xs)]));
+  const fallback = medianOf([...avg.values()]);
+  return c => (avg.has(c) ? { rate: avg.get(c) as number, assumed: false } : fallback != null ? { rate: fallback, assumed: true } : null);
+}
+
+export interface StaffRow { client: string; billedEgp: number; rate: number; rateAssumed: boolean; manDays: number; staff: number }
+
+/**
+ * H1 — staff per client project: the last 12 months' assumed billing ÷ the
+ * client's average day rate = man-days, ÷ WORK_DAYS_PER_PERSON = people (at
+ * least one on a project that bills). It counts the people we supply through
+ * subcontractors too — the client pays a day rate for them all.
+ */
+export function staffByProject(data: BdData, today: string): { rows: StaffRow[]; total: number; noRate: number } {
+  const rateOf = clientDayRate(data);
+  const rows: StaffRow[] = [];
+  let noRate = 0;
+  for (const m of moneyLastYear(data, today).rows) {
+    if (m.invoicedEgp <= 0) continue;
+    const r = rateOf(m.client);
+    if (!r) { noRate++; continue; }
+    const manDays = m.invoicedEgp / r.rate;
+    rows.push({ client: m.client, billedEgp: m.invoicedEgp, rate: r.rate, rateAssumed: r.assumed, manDays, staff: Math.max(1, Math.round(manDays / WORK_DAYS_PER_PERSON)) });
+  }
+  rows.sort((a, b) => b.staff - a.staff || a.client.localeCompare(b.client));
+  return { rows, total: rows.reduce((a, r) => a + r.staff, 0), noRate };
+}
+
+/** H2 — staff on the bench today: ASSUMED_BENCH_SHARE of everyone (placed + bench). */
+export function benchStaff(data: BdData, today: string): { bench: number; placed: number; total: number } {
+  const placed = staffByProject(data, today).total;
+  const total = Math.round(placed / (1 - ASSUMED_BENCH_SHARE));
+  return { bench: total - placed, placed, total };
+}
+
+export interface GradeCost { grade: string; rate: number; cost: number; clients: number }
+
+/** H4 — per grade, senior first: the median day rate our clients pay against what that man-day costs us (rate ÷ PRICE_BUILDUP). */
+export function gradeCosts(grid: RateGrid): GradeCost[] {
+  return grid.grades.flatMap(grade => {
+    const rates = grid.clients.map(c => grid.rate(c, grade)).filter((v): v is number => v != null);
+    const rate = medianOf(rates);
+    return rate == null ? [] : [{ grade, rate, cost: rate / PRICE_BUILDUP, clients: rates.length }];
+  });
+}
+
+/** H5 — projects with KEY_PERSON_MAX_STAFF staff or fewer (H1), smallest first. */
+export function keyPersonProjects(data: BdData, today: string): { rows: StaffRow[]; projects: number } {
+  const s = staffByProject(data, today);
+  const rows = s.rows.filter(r => r.staff <= KEY_PERSON_MAX_STAFF).sort((a, b) => a.staff - b.staff || b.billedEgp - a.billedEgp || a.client.localeCompare(b.client));
+  return { rows, projects: s.rows.length };
+}
+
+export interface VacancyRow { client: string; staff: number; open: number; days: number }
+
+/** H6 — open positions per project: one per STAFF_PER_VACANCY staff (H1), each open ASSUMED_VACANCY_DAYS. */
+export function vacancies(data: BdData, today: string): { rows: VacancyRow[]; open: number; none: number } {
+  const s = staffByProject(data, today);
+  const rows = s.rows.map(r => ({ client: r.client, staff: r.staff, open: Math.floor(r.staff / STAFF_PER_VACANCY), days: ASSUMED_VACANCY_DAYS }))
+    .filter(r => r.open > 0).sort((a, b) => b.open - a.open || a.client.localeCompare(b.client));
+  return { rows, open: rows.reduce((a, r) => a + r.open, 0), none: s.rows.length - rows.length };
+}
+
+/** R4 — the warning signs read from the rows; each one counts as an open risk. */
+export const RISK_SIGNS = ['pastEnd', 'endingSoon', 'supplierFirst', 'extended', 'loss'] as const;
+export type RiskSign = typeof RISK_SIGNS[number];
+
+export interface RiskRow { client: string; signs: { sign: RiskSign; n: number }[]; total: number }
+
+/**
+ * R4 — open risks per client project. Until Operations sends the risk log, a
+ * risk is a warning sign in the rows: a line past its end date (R2), a line
+ * ending within ENDING_SOON_DAYS (P2), a supplier contract ending before it
+ * (R3), an end date moved later between the last two report copies (A5), and
+ * an assumed loss over the last 12 months (M9). Most risks first.
+ */
+export function risksByProject(data: BdData, today: string): { rows: RiskRow[]; clean: number } {
+  const at = new Map<string, Map<RiskSign, number>>();
+  const add = (c: string, s: RiskSign) => { const m = at.get(c) || new Map<RiskSign, number>(); m.set(s, (m.get(s) || 0) + 1); at.set(c, m); };
+  const clients = new Set(projectLines(data).map(r => r.client));
+  for (const l of pastEnd(data, today).lines) add(l.client, 'pastEnd');
+  for (const r of projectLines(data)) { const d = daysUntil(r.expiryDate, today); if (d != null && d >= 0 && d <= ENDING_SOON_DAYS) add(r.client, 'endingSoon'); }
+  for (const g of suppliersEndingFirst(data, today).rows) add(g.client, 'supplierFirst');
+  for (const k of endMovedLately(data).keys()) { const c = k.split('|')[0]; if (clients.has(c)) add(c, 'extended'); }
+  for (const m of moneyLastYear(data, today).rows) if (m.invoicedEgp > 0 && m.profitEgp < 0) add(m.client, 'loss');
+  const rows = [...at].map(([client, m]) => {
+    const signs = RISK_SIGNS.filter(s => m.has(s)).map(s => ({ sign: s, n: m.get(s) as number }));
+    return { client, signs, total: signs.reduce((a, s) => a + s.n, 0) };
+  }).sort((a, b) => b.total - a.total || a.client.localeCompare(b.client));
+  return { rows, clean: [...clients].filter(c => !at.has(c)).length };
+}
+
+/** R5 — windows of days left on a guarantee (R1's three, plus everything later). */
+export const GUARANTEE_WINDOWS = ['d30', 'd90', 'd180', 'later'] as const;
+export type GuaranteeWindow = typeof GUARANTEE_WINDOWS[number];
+
+export interface GuaranteeLine { id: string; client: string; type: string; valueEgp: number; expires: string; days: number }
+
+/**
+ * R5 — guarantees by time left. Until Finance sends the list, every line with a
+ * ceiling and an end date has one: ASSUMED_GUARANTEE_SHARE of the ceiling,
+ * expiring GUARANTEE_DAYS_AFTER_END days after the end date. One already past
+ * that date is taken as released and left out.
+ */
+export function guaranteesByExpiry(data: BdData, today: string): { windows: { w: GuaranteeWindow; lines: GuaranteeLine[]; egp: number }[]; noCeiling: number; released: number } {
+  const at = new Map(GUARANTEE_WINDOWS.map(w => [w, [] as GuaranteeLine[]]));
+  let noCeiling = 0, released = 0;
+  for (const r of projectLines(data)) {
+    const c = ceilingOf(r), end = isoOf(r.expiryDate);
+    if (c == null || !end) { noCeiling++; continue; }
+    const expires = plusDays(end, GUARANTEE_DAYS_AFTER_END), days = Math.round(dayOf(expires) - dayOf(today));
+    if (days < 0) { released++; continue; }
+    const w: GuaranteeWindow = days <= 30 ? 'd30' : days <= 90 ? 'd90' : days <= 180 ? 'd180' : 'later';
+    at.get(w)!.push({ id: r.id, client: r.client, type: typeOf(r), valueEgp: c * ASSUMED_GUARANTEE_SHARE, expires, days });
+  }
+  for (const xs of at.values()) xs.sort((a, b) => a.days - b.days || a.client.localeCompare(b.client));
+  return { windows: GUARANTEE_WINDOWS.map(w => ({ w, lines: at.get(w)!, egp: at.get(w)!.reduce((a, x) => a + x.valueEgp, 0) })), noCeiling, released };
+}
+
+/** The bid fields G2 reads (lib/bidReads.ts gives the full Opportunity). */
+export interface PipelineBid { id: string; stage?: string; probability?: number; estimatedValue?: number | string; currency?: string }
+
+/** A number typed into the bid form: a number, or text such as "2,000,000". */
+const typed = (v: unknown): number | null => {
+  if (typeof v === 'string' && v.trim() !== '') { const n = Number(v.replace(/,/g, '').trim()); return isFinite(n) ? n : null; }
+  return num(v);
+};
+
+export interface PipelineStage { stage: string; count: number; valueEgp: number; weightedEgp: number; chanceAssumed: number }
+
+/**
+ * G2 — open bids by stage, earliest stage first: count, value in EGP (USD at
+ * ASSUMED_USD_EGP; any other currency, or no value, is counted but not added)
+ * and the value weighted by the win chance — the bid's own, or ASSUMED_WIN_CHANCE
+ * for its stage when none is typed in. Closed bids (won, lost…) are not pipeline.
+ */
+export function pipelineByStage(bids: PipelineBid[]): { stages: PipelineStage[]; open: number; valueEgp: number; weightedEgp: number; noValue: number; chanceAssumed: number } {
+  const order = Object.keys(ASSUMED_WIN_CHANCE);
+  const at = new Map(order.map(s => [s, { stage: s, count: 0, valueEgp: 0, weightedEgp: 0, chanceAssumed: 0 }]));
+  let noValue = 0;
+  for (const b of bids) {
+    const st = at.get(txt(b.stage));
+    if (!st) continue;
+    st.count++;
+    const v = typed(b.estimatedValue);
+    const cur = txt(b.currency).toUpperCase() || 'EGP';
+    const egp = v == null || v <= 0 ? null : cur === 'EGP' ? v : cur === 'USD' ? v * ASSUMED_USD_EGP : null;
+    if (egp == null) { noValue++; continue; }
+    const p = typed(b.probability), own = p != null && p >= 0 && p <= 100;
+    if (!own) st.chanceAssumed++;
+    st.valueEgp += egp; st.weightedEgp += (egp * (own ? (p as number) : ASSUMED_WIN_CHANCE[st.stage])) / 100;
+  }
+  const stages = order.map(s => at.get(s)!);
+  const sum = (k: 'count' | 'valueEgp' | 'weightedEgp' | 'chanceAssumed') => stages.reduce((a, s) => a + s[k], 0);
+  return { stages, open: sum('count'), valueEgp: sum('valueEgp'), weightedEgp: sum('weightedEgp'), noValue, chanceAssumed: sum('chanceAssumed') };
+}
+
+export interface IncomeRow { client: string; rate: number; grades: number }
+
+/**
+ * G3 — income per staff-day, per client. Until Finance and HR send income and
+ * staff-days, it is what a staff-day earns on the rate sheet: the client's
+ * average day rate over its grades, highest first. Clients with no rates are named apart.
+ */
+export function incomePerStaffDay(data: BdData): { rows: IncomeRow[]; noRate: string[] } {
+  const by = ratesByClient(data), clients = [...new Set(projectLines(data).map(r => r.client))];
+  const rows = clients.filter(c => by.has(c)).map(client => ({ client, rate: mean(by.get(client)!), grades: by.get(client)!.length }))
+    .sort((a, b) => b.rate - a.rate || a.client.localeCompare(b.client));
+  return { rows, noRate: clients.filter(c => !by.has(c)).sort() };
+}
