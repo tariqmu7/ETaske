@@ -1,15 +1,14 @@
-// Click-through harness for the BD control page (queues E5a + E5b charts 3–6 + E5c charts 7–12 + E6a browse tabs + E6b editing + E6c adding).
+// Click-through harness for the Analysis center page (was "BD control": queues E5a–E6c, then the
+// Analysis center queues A1–A4; the earlier KPI tiles and charts 3–12 were removed in A4b).
 //
-// Proves src/BdControlDashboard.tsx + src/lib/bdControl.ts + src/hooks/useBdControl.ts
-// in real Edge: the pure maths (days, flags, live/EGP rules, millions, edits since
-// load), every KPI tile worked out from rows as of today, the data-date strip
-// (loaded by, edits since load, stale warning), figures following a change in the
-// rows with no reload, charts 3–6 (ceilings, renewal timeline, day-rate vs
-// ANOPC/median with grade chips, reprice list), charts 7–12 (supplier cost, amendment growth, AGIBA SOs,
-// report-to-report changes, data issues per sheet, awaited data flipping as it arrives), the empty and
-// permission-denied states, the role gate and the 6 nav entries, the browse tabs (Contracts + client page,
-// Pricing grid, Suppliers, Data quality, and the tiles / chart rows that open them), Arabic + RTL, a 390 px
-// phone and dark mode. Editing (E6b): the form per record type, what a save writes (field + appEdits note with the
+// Proves src/BdControlDashboard.tsx + src/lib/bdControl.ts + src/lib/analysisCenter.ts +
+// src/hooks/useBdControl.ts in real Edge: the pure maths (days, flags, live/EGP rules, millions,
+// edits since load, buckets, rate grid), the CEO question board (catalogue, charts per question,
+// assumed figures, grey "data needed" boxes, headline strip, gap-free grid), the data-date strip
+// (loaded by, edits since load, stale warning), board figures following a change in the rows with
+// no reload, the empty and permission-denied states, the role gate and the 6 nav entries, the
+// browse tabs (Contracts + client page, Pricing grid, Suppliers, Data quality, and the board rows
+// that open them), Arabic + RTL, a 390 px phone and dark mode. Editing (E6b): the form per record type, what a save writes (field + appEdits note with the
 // Excel value + stamps + one history doc per field, in one batch), the badge, the change log, bad input, a refused
 // save, figures following an edit, no Edit button for someone who may not edit, Arabic + phone.
 // The rows are MADE UP — the real data must never be in this public repo.
@@ -288,13 +287,11 @@ const text = sel => evalJS(`window.__txt(${q(sel)})`);
 const has = sel => evalJS(`!!${q(sel)}`);
 const overflow = () => evalJS(`document.documentElement.scrollWidth - document.documentElement.clientWidth`);
 const remount = async () => { await evalJS(`window.__mount('blank')`); await sleep(100); await evalJS(`window.__mount('page')`); await sleep(300); };
-const tile = k => text(`[data-bd-kpi="${k}"] [data-bd-value]`);
-const sub = k => text(`[data-bd-kpi="${k}"] [data-bd-sub]`);
-const tileKeys = () => evalJS(`[...document.querySelectorAll('[data-bd-kpi]')].map(e => e.dataset.bdKpi).join(',')`);
 const J = x => JSON.stringify(x);
 const keys = row => evalJS(`[...document.querySelectorAll('[data-bdc-row="${row}"]')].map(e => e.dataset.bdcKey).join(',')`);
 const texts = sel => evalJS(`[...document.querySelectorAll(${JSON.stringify(sel)})].map(window.__txt).join('|')`);
-const bucket = b => text(`[data-bdc-row="bucket"][data-bdc-key="${b}"] [data-bdc-value]`);
+// M1's "Total contract value" — the board figure that replaced the old Total ceiling tile.
+const total = () => text('[data-ac-q="M1"] [data-ac-fig="total"]');
 const click = sel => evalJS(`${q(sel)}.click()`).then(() => sleep(150));
 
 try {
@@ -415,7 +412,10 @@ await waitFor(q('[data-bdc-tab="client"]'), 'client page from P4');
 check('P4 client row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('BETA'));
 await click('[data-bd-tab="overview"]');
 await waitFor(q('[data-ac="board"]'), 'board again');
-check('the earlier tiles + charts stay below the board, under "More figures"', (await has('[data-ac="legacy"] [data-bd="tiles"]')) && (await text('[data-ac="legacy"] > h2')) === 'More figures');
+check('the "More figures" block is gone: no old tiles, no old charts 3–12 (queue A4b)', !(await has('[data-ac="legacy"]')) && !(await has('[data-bd="tiles"]'))
+  && !(await has('[data-bd-kpi]')) && !(await has('[data-bd="charts"]')) && !(await has('[data-bdc]')));
+check('… and their files are deleted, nothing imports them', !fs.existsSync(path.join(ROOT, 'src/components/bdcontrol/OverviewCharts.tsx'))
+  && !fs.existsSync(path.join(ROOT, 'src/components/bdcontrol/OverviewMoreCharts.tsx')) && !/OverviewCharts|OverviewMoreCharts/.test(src('src/BdControlDashboard.tsx')));
 
 console.log('\n[2c] Analysis center: Money M1 + M5, amendments A1–A5, assumed figures, gap-free grid (queue A2)');
 const QA = JSON.parse(await evalJS(`(() => { const A = window.__ac;
@@ -485,7 +485,7 @@ await waitFor(q('[data-ac="board"]'), 'board again');
 await sleep(300);
 // Gap-free grid: no card sits more than one gap (12 px) + one row unit (4 px) below the card above it in its column.
 const holes = () => evalJS(`(() => { const out = [];
-  for (const g of document.querySelectorAll('.ac-grid, [data-bd="charts"]')) {
+  for (const g of document.querySelectorAll('.ac-grid')) {
     const cs = [...g.children].map(e => ({ id: e.dataset.acQ || e.dataset.bd || e.className, r: e.getBoundingClientRect() }));
     for (const c of cs) {
       const above = cs.filter(o => o !== c && o.r.bottom <= c.r.top + 1 && o.r.left < c.r.right - 1 && o.r.right > c.r.left + 1);
@@ -495,7 +495,7 @@ const holes = () => evalJS(`(() => { const out = [];
     }
   }
   return out.join(','); })()`);
-check('grids are packed (masonry on): every question grid + the older charts', (await evalJS(`[...document.querySelectorAll('.ac-grid, [data-bd="charts"]')].every(g => g.classList.contains('is-masonry'))`)));
+check('grids are packed (masonry on): every question grid', (await evalJS(`(() => { const g = [...document.querySelectorAll('.ac-grid')]; return g.length > 0 && g.every(x => x.classList.contains('is-masonry')); })()`)));
 check('no tall empty space between charts (desktop): every card ≤ 16 px below the card above it', (await holes()) === '', await holes());
 await shot('a2-desktop');
 await evalJS(`window.__seedAll(); __emit()`);
@@ -633,169 +633,26 @@ await evalJS(`window.__setLang('en')`); await sleep(250);
 await evalJS(`window.__seedAll(); __emit()`);
 await sleep(200);
 
-console.log('\n[3] the tiles, from the made-up rows');
-await waitFor(q('[data-bd="tiles"]'), 'tiles');
-check('tiles in order', (await tileKeys()) === 'clients,lines,ceiling,monthly,renewals,suppliers,issues', await tileKeys());
-check('clients = 3 (supplier-side code not counted)', (await tile('clients')) === '3');
-check('client lines = 5, "Expired on paper: 1"', (await tile('lines')) === '5' && (await sub('lines')) === 'Expired on paper: 1', await sub('lines'));
-check('total ceiling 2,250.5 m EGP; "3 of 5"', (await tile('ceiling')) === '2,250.5' && (await text('[data-bd-kpi="ceiling"]')).includes('m EGP')
-  && (await sub('ceiling')) === 'Lines with a ceiling: 3 of 5', `${await tile('ceiling')} | ${await sub('ceiling')}`);
-check('paid monthly 350,000 EGP / month, "GAMMA O&M — not added…"', (await tile('monthly')) === '350,000'
-  && (await sub('monthly')) === 'GAMMA O&M — not added to the ceiling total', `${await tile('monthly')} | ${await sub('monthly')}`);
-check('renewals ≤ 90 days = 3: client 1 · supplier 1 · AGIBA site 1 (cancelled one ignored)', (await tile('renewals')) === '3'
-  && (await sub('renewals')).startsWith('Client 1 · supplier 1 · AGIBA site 1'), await sub('renewals'));
-check('already past their date: 2 (client + In-Progress supplier; On Hold one = ended)', (await text('[data-bd="overdue"]')) === 'Already past their date: 2');
-check('live suppliers 4, 3.3 m EGP, 1 in another currency left out', (await tile('suppliers')) === '4'
-  && (await sub('suppliers')) === '3.3 m EGPIn another currency, left out: 1', await sub('suppliers'));
-check('data issues 6', (await tile('issues')) === '6');
-
-console.log('\n[4] the data-date strip');
+console.log('\n[3] the data-date strip');
+await waitFor(q('[data-ac="board"]'), 'board');
 check('as-of date shown', (await text('[data-bd="asof"]')).startsWith('Excel data as of '), await text('[data-bd="asof"]'));
 check('loaded … by loader@example.test', /^Loaded .+ by loader@example\.test$/.test(await text('[data-bd="loaded"]')), await text('[data-bd="loaded"]'));
 check('1 row edited since the load (the one edited before it not counted)', (await text('[data-bd="edits"]')) === 'Records edited in eTaske since the last load: 1');
 check('3-day-old data: no stale warning', !(await has('[data-bd="stale"]')));
 check('nothing written by the page', (await evalJS(`window.__writes.length`)) === 0);
-await shot('1-tiles');
-
-console.log('\n[4b] chart 3 — contract ceiling by client');
-check('biggest first: ALPHA then BETA (GAMMA has only a monthly value)', (await keys('ceiling')) === 'ALPHA,BETA', await keys('ceiling'));
-check('ALPHA = 1,450 m EGP over 2 lines (CSA, TSA); BETA 800.5 (the no-ceiling TSA left out)',
-  (await text('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]')) === 'ALPHACSA, TSA · lines: 21,450 m EGP'
-  && (await text('[data-bdc-row="ceiling"][data-bdc-key="BETA"] [data-bdc-value]')) === '800.5 m EGP', await text('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]'));
-check('longest bar = biggest ceiling, the other in proportion', (await evalJS(`(() => {
-  const a =document.querySelector('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"] .bdc-fill').getBoundingClientRect().width;
-  const b = document.querySelector('[data-bdc-row="ceiling"][data-bdc-key="BETA"] .bdc-fill').getBoundingClientRect().width;
-  return a > b && Math.abs(b / a - 800.5 / 1450) < 0.02; })()`)));
-check('monthly-only client named under the chart, no "no value" line', (await text('[data-bdc-foot="monthly"]')) === 'Paid by the month, not in this chart: GAMMA'
-  && !(await has('[data-bdc-foot="novalue"]')));
-check('2 clients: no "show all" button', !(await has('[data-bdc-more="ceiling"]')));
-
-console.log('\n[4c] chart 4 — renewal timeline');
-const B4 = await evalJS(`[...document.querySelectorAll('[data-bdc-row="bucket"]')].map(e => e.dataset.bdcKey + '=' + window.__txt(e.querySelector('[data-bdc-value]'))).join(',')`);
-check('buckets: past 2 · ≤30 1 · 31–90 2 · 91–180 1 · 181–365 2 · later 1 · no date 2 (ended / completed / cancelled suppliers out)',
-  B4 === 'overdue=2,d30=1,d90=2,d180=1,d365=2,later=1,noDate=2', B4);
-check('past-their-date row: client 1 · supplier 1 · AGIBA site 0, client + supplier segments only',
-  (await text('[data-bdc-key="overdue"] .bdc-sub')) === 'Client 1 · supplier 1 · AGIBA site 0'
-  && (await evalJS(`[...document.querySelectorAll('[data-bdc-key="overdue"] [data-bdc-seg]')].map(e => e.dataset.bdcSeg).join(',')`)) === 'client,supplier');
-check('within 90 days on the chart (≤30 + 31–90 = 3) matches the renewals tile', (await tile('renewals')) === '3');
-check('next to come up: soonest first, nothing past or ended', (await keys('next')) === 'S/1,BETA,A/1,GAMMA,ALPHA,A/2,S/4', await keys('next'));
-check('next row reads kind · type · status and the days left',
-  (await text('[data-bdc-row="next"][data-bdc-key="BETA"] .bdc-sub')) === 'Client contract · CSA · Valid'
-  && /^Ends .+ · days remaining: 45$/.test(await text('[data-bdc-row="next"][data-bdc-key="BETA"] .bdc-when')),
-  await text('[data-bdc-row="next"][data-bdc-key="BETA"]'));
-check('a supplier row reads kind · contractor · client', (await text('[data-bdc-row="next"][data-bdc-key="S/1"] .bdc-sub')) === 'Supplier contract · Acme · ALPHA', await text('[data-bdc-row="next"][data-bdc-key="S/1"] .bdc-sub'));
-
-console.log('\n[4d] chart 5 — day-rate vs benchmark');
-check('grade chips by level, the empty grade left out: GM · Sr Eng · Operator', (await texts('[data-bdc-grade]')) === 'GM|Sr Eng|Operator', await texts('[data-bdc-grade]'));
-check('GM picked first, ANOPC the benchmark', (await evalJS(`${q('[data-bdc-grade="General Manager"]')}.getAttribute('aria-pressed')`)) === 'true'
-  && (await text('[data-bdc="base"]')) === 'ANOPC: 10,000 EGP per man-day', await text('[data-bdc="base"]'));
-check('bars highest first', (await keys('rate')) === 'ALPHA,ANOPC,GAMMA,DELTA,BETA', await keys('rate'));
-check('gaps: +20.0% · benchmark · −5.0% · −20.0% · −30.0%', (await texts('[data-bdc-row="rate"] [data-bdc-gap]')) === '+20.0%|benchmark|−5.0%|−20.0%|−30.0%', await texts('[data-bdc-row="rate"] [data-bdc-gap]'));
-check('30% below = red bar, 20% below = amber', (await has('[data-bdc-key="BETA"] .bdc-fill-lo')) && (await has('[data-bdc-key="DELTA"] .bdc-fill-mid')) && (await has('[data-bdc-key="GAMMA"] .bdc-fill-base')));
-check('benchmark tick sits at 10,000 on the scale', (await evalJS(`(() => { const r = document.querySelector('[data-bdc-key="ANOPC"]');
-  const f = r.querySelector('.bdc-fill').getBoundingClientRect(), m = r.querySelector('.bdc-mark').getBoundingClientRect();
-  return Math.abs((m.left + 1) - f.right) <= 2; })()`)));
-check('⚠ on BETA only (the "no rates" issue is not an odd value)', (await texts('[data-bdc-row="rate"] [data-bdc-warn]')) === '⚠'
-  && (await has('[data-bdc-row="rate"][data-bdc-key="BETA"] [data-bdc-warn]')));
-await click('[data-bdc-grade="Operator"]');
-check('Operator: only the 3 clients with that rate, ANOPC 3,000', (await keys('rate')) === 'ALPHA,ANOPC,BETA' && (await text('[data-bdc="base"]')) === 'ANOPC: 3,000 EGP per man-day');
-await click('[data-bdc-bench="median"]');
-check('median of 3,300 / 3,000 / 2,700 = 3,000; ANOPC now gets a gap (0.0%)', (await text('[data-bdc="base"]')) === 'Median client: 3,000 EGP per man-day'
-  && (await texts('[data-bdc-row="rate"] [data-bdc-gap]')) === '+10.0%|0.0%|−10.0%', await texts('[data-bdc-row="rate"] [data-bdc-gap]'));
-await click('[data-bdc-grade="General Manager"]');
-check('GM vs median 9,500: BETA −26.3%', (await text('[data-bdc="base"]')) === 'Median client: 9,500 EGP per man-day'
-  && (await text('[data-bdc-row="rate"][data-bdc-key="BETA"] [data-bdc-gap]')) === '−26.3%');
-await click('[data-bdc-bench="anopc"]');
-
-console.log('\n[4e] chart 6 — reprice at renewal');
-check('10%+ below ANOPC on average: BETA (−20%) then DELTA (no date, last); GAMMA (−4.5%) and ALPHA not listed', (await keys('reprice')) === 'BETA,DELTA', await keys('reprice'));
-check('BETA: −20.0%, 1,433 EGP below per man-day, expired-on-paper window (its TSA ended 10 days ago)',
-  (await text('[data-bdc-row="reprice"][data-bdc-key="BETA"] [data-bdc-gap]')) === '−20.0%'
-  && (await text('[data-bdc-key="BETA"] [data-bdc-perday]')) === '1,433 EGP below per man-day'
-  && (await evalJS(`${q('[data-bdc-row="reprice"][data-bdc-key="BETA"] [data-bdc-window]')}.dataset.bdcWindow`)) === 'overdue'
-  && (await text('[data-bdc-row="reprice"][data-bdc-key="BETA"] .bdc-name .bdc-sub')) === 'TSA'
-  && /^Ended .+ · 10 days ago$/.test(await text('[data-bdc-row="reprice"][data-bdc-key="BETA"] .bdc-reprice-when .bdc-sub')),
-  await text('[data-bdc-row="reprice"][data-bdc-key="BETA"]'));
-check('DELTA: no client line → "No client line on file" + raise-at-next-review window',
-  (await text('[data-bdc-row="reprice"][data-bdc-key="DELTA"] .bdc-name .bdc-sub')) === 'No client line on file'
-  && (await text('[data-bdc-row="reprice"][data-bdc-key="DELTA"] [data-bdc-window]')) === 'No expiry on file — raise at the next price review');
-check('nothing written by the charts either', (await evalJS(`window.__writes.length`)) === 0);
-await shot('1b-charts');
-
-console.log('\n[4f] chart 7 — what supplier contracts cost');
-check('figures: 3.3 m today (= the tile), 2.3 m when signed, +43% growth', (await text('[data-bdc-fig="current"]')) === '3.3 m EGP'
-  && (await text('[data-bdc-fig="original"]')) === '2.3 m EGP' && (await text('[data-bdc-fig="growth"]')) === '+43%',
-  `${await text('[data-bdc-fig="current"]')} | ${await text('[data-bdc-fig="original"]')} | ${await text('[data-bdc-fig="growth"]')}`);
-check('by cost type: EPROM overhead 2 m (1), Client project 1.3 m (2)', (await keys('costtype')) === 'EPROM overhead,Client project'
-  && (await text('[data-bdc-row="costtype"][data-bdc-key="Client project"]')) === 'Client projectContracts: 21.3 m EGP', await text('[data-bdc-row="costtype"][data-bdc-key="Client project"]'));
-check('by client: BETA 2 m then ALPHA 1.3 m (completed + USD lines out)', (await keys('supclient')) === 'BETA,ALPHA'
-  && (await text('[data-bdc-row="supclient"][data-bdc-key="ALPHA"] [data-bdc-value]')) === '1.3 m EGP');
-check('foot: growth over 3 contracts, 1 in another currency', (await text('[data-bdc-foot="suppliers"]')) === 'Growth counts only the 3 contracts with both values on file. In another currency, left out: 1', await text('[data-bdc-foot="suppliers"]'));
-
-console.log('\n[4g] chart 8 — growth through amendments');
-check('biggest growth first: S/1 +150% · S/2 +25% · S/5 0%', (await keys('growth')) === 'S/1,S/2,S/5'
-  && (await texts('[data-bdc-row="growth"] [data-bdc-value]')) === '+150%|+25%|0%', await texts('[data-bdc-row="growth"] [data-bdc-value]'));
-check('S/1 reads contractor, 0.4 → 1 m, 3 amendments, client', (await text('[data-bdc-row="growth"][data-bdc-key="S/1"] .bdc-name')) === 'S/1 · Acme0.4 m EGP → 1 m EGP · amendments: 3 · ALPHA',
-  await text('[data-bdc-row="growth"][data-bdc-key="S/1"] .bdc-name'));
-check('doubled = red, 25% = amber, flat = grey', (await has('[data-bdc-key="S/1"] .bdc-fill-lo')) && (await has('[data-bdc-key="S/2"] .bdc-fill-mid')) && (await has('[data-bdc-key="S/5"] .bdc-fill-base')));
-check('amendment kinds on live contracts only (S/3 completed): 4 — value increase 2, time extension 1, type not given 1',
-  (await text('[data-bdc-foot="types"]')) === 'Amendments on live contracts: 4 — Value Increase 2, Time Extension 1, Type not given 1', await text('[data-bdc-foot="types"]'));
-
-console.log('\n[4h] chart 9 — AGIBA service orders');
-check('6 SOs · 4 open · 1 open past its date', (await text('[data-bdc-fig="sototal"]')) === '6' && (await text('[data-bdc-fig="soopen"]')) === '4' && (await text('[data-bdc-fig="sopast"]')) === '1');
-check('by status, open ones first, blank named: In Progress 3 · Pending 1 · blank 1 · Completed 1',
-  (await evalJS(`[...document.querySelectorAll('[data-bdc-row="sostatus"]')].map(e => window.__txt(e)).join('|')`)) === 'In Progress3|Pending1|Status blank1|Completed1',
-  await evalJS(`[...document.querySelectorAll('[data-bdc-row="sostatus"]')].map(e => window.__txt(e)).join('|')`));
-check('by contractor: Petro 3 (open 1, 0.3 m), Lift 2 (USD left out of EGP), no name 1', (await keys('socontractor')) === 'Petro,Lift,'
-  && (await text('[data-bdc-row="socontractor"][data-bdc-key="Petro"] .bdc-sub')) === 'Open: 1 · 0.3 m EGP'
-  && (await text('[data-bdc-row="socontractor"][data-bdc-key="Lift"] .bdc-sub')) === 'Open: 2 · 0.1 m EGP'
-  && (await text('[data-bdc-row="socontractor"][data-bdc-key=""] .bdc-name > span')) === 'No contractor named');
-check('ending within 60 days: SO 1 (20 d) then SO 6 (60 d); cancelled SO 5 and the 90-day one not listed', (await keys('sosoon')) === 'SO 1-2026,SO 6-2026', await keys('sosoon'));
-check('open past their date: SO 3, 15 days ago, in red', (await keys('sopast')) === 'SO 3-2026'
-  && /^Ended .+ · 15 days ago$/.test(await text('[data-bdc-row="sopast"] .bdc-when')) && (await has('[data-bdc-row="sopast"] .bdc-when.bdc-red')));
-check('the USD SO is counted in the foot', (await text('[data-bdc-foot="socur"]')) === 'Amounts in another currency are left out of the EGP figures: 1');
-
-console.log('\n[4i] chart 10 — changes between two CSA reports');
-check('periods read from the rows: "March 2026 → September 2026"', (await text('[data-bdc="changes"] .bdc-cap')).startsWith('March 2026 → September 2026'), await text('[data-bdc="changes"] .bdc-cap'));
-check('per client: ALPHA 2, BETA 2 (tie -> A–Z), fields named', (await keys('change')) === 'ALPHA,BETA'
-  && (await text('[data-bdc-key="BETA"] summary .bdc-sub')) === 'Expiry date, Status', await keys('change'));
-check('rows closed until opened', !(await evalJS(`${q('[data-bdc-row="change"][data-bdc-key="ALPHA"]')}.open`)));
-await click('[data-bdc-row="change"][data-bdc-key="ALPHA"] summary');
-check('opened ALPHA: ceiling 1,000,000,000 → 1,200,000,000 · comments "old note" → blank',
-  (await text('[data-bdc-key="ALPHA"] [data-bdc-change="Ceiling EGP"]')) === 'CSA · Ceiling EGP1,000,000,000 → 1,200,000,000'
-  && (await text('[data-bdc-key="ALPHA"] [data-bdc-change="Comments"]')) === 'CSA · Commentsold note → blank',
-  `${await text('[data-bdc-key="ALPHA"] [data-bdc-change="Ceiling EGP"]')} | ${await text('[data-bdc-key="ALPHA"] [data-bdc-change="Comments"]')}`);
-await click('[data-bdc-row="change"][data-bdc-key="BETA"] summary');
-check('dates shown as dates: BETA expiry moved', /^CSA · Expiry date.+ → .+\d{4}$/.test(await text('[data-bdc-key="BETA"] [data-bdc-change="Expiry date"]')), await text('[data-bdc-key="BETA"] [data-bdc-change="Expiry date"]'));
-
-console.log('\n[4j] chart 11 — data issues by sheet, chart 12 — awaiting data');
-check('issues: Client Contracts 4 (4 records), Day Rates 2', (await keys('issue')) === 'Client Contracts,Day Rates'
-  && (await text('[data-bdc-row="issue"][data-bdc-key="Client Contracts"]')) === 'Client ContractsRecords affected: 44', await text('[data-bdc-row="issue"][data-bdc-key="Client Contracts"]'));
-check('awaited = [] -> "every measure has arrived"', (await text('[data-bdc-empty="awaited"]')) === 'Nothing is awaited: every measure has arrived.');
-await evalJS(`(() => { const m = __store.get('bdControl').get('meta'); __seed('bdControl', 'meta', { ...m, awaited: [
-  { measure: 'Revenue invoiced, per contract per month', form: '01 Finance - Cost Accounting', received: false },
-  { measure: 'Fully-loaded cost per head, per grade', form: '04 HR - Personnel & Payroll', received: true },
-  { measure: 'A measure the app has no words for', received: false }] }); __emit(); })()`);
-await sleep(200);
-check('3 measures listed, received 1 of 3, the rest "Not received"', (await evalJS(`document.querySelectorAll('[data-bdc-row="awaited"]').length`)) === 3
-  && (await text('[data-bdc="awaited"] .bdc-cap')).endsWith('received: 1 of 3')
-  && (await texts('[data-bdc-row="awaited"] .bdc-pill')) === 'Not received|Received|Not received', await texts('[data-bdc-row="awaited"] .bdc-pill'));
-check('an unknown measure shows as written; the margin note is there while any is missing', (await text('[data-bdc-key="A measure the app has no words for"] .bdc-name')) === 'A measure the app has no words for'
-  && (await text('[data-bdc="awaited"] .bdc-foot')).startsWith('Margin, cash and profit'));
-await evalJS(`(() => { const m = __store.get('bdControl').get('meta'); __seed('bdControl', 'meta', { ...m, awaited: m.awaited.map(a => ({ ...a, received: true })) }); __emit(); })()`);
-await sleep(200);
-check('flips on its own when the meta says received: 3 of 3, note gone', (await text('[data-bdc="awaited"] .bdc-cap')).endsWith('received: 3 of 3')
-  && !(await has('[data-bdc="awaited"] .bdc-foot')) && (await evalJS(`document.querySelectorAll('[data-bdc-received="yes"]').length`)) === 3);
 check('lib: periodDate, the latest two periods, isOpenSO, awaitedData with no list', await evalJS(`(() => { const L = window.__lib;
   const c = L.changesByClient([{ id: 'a', client: 'X', field: 'F', june2026: 1, march2026: 0, january2027: 2 }]);
   return L.periodDate('september2026') === '2026-09-01' && L.periodDate('notes') === null && c.from === 'june2026' && c.to === 'january2027'
     && c.clients[0].changes[0].from === 1 && c.clients[0].changes[0].to === 2
     && L.isOpenSO({ status: null }) && !L.isOpenSO({ status: 'Completed' }) && !L.isOpenSO({ status: 'In Progress', soSr: 'Cancelled' })
     && L.awaitedData(null).listed === false && L.awaitedData({ awaited: [] }).listed === true; })()`));
-check('nothing written by charts 7–12', (await evalJS(`window.__writes.length`)) === 0);
-await shot('1c-charts-7-12');
+await shot('1-board');
 
-console.log('\n[5] figures follow the rows, no reload (nothing hard-coded)');
+console.log('\n[4] the board follows the rows, no reload (nothing hard-coded)');
+check('before: M1 total 2,504.7 m EGP · P2 running 2 / ending 1 / past 1 / no date 1 · R1 1, R2 1',
+  (await total()) === '2,504.7 m EGP' && (await acRows('status')) === 'running=2,endingSoon=1,pastEnd=1,noDate=1'
+  && (await evalJS(`window.__txt(document.querySelector('[data-ac-tile="R1"] [data-ac-value]')) + '|' + window.__txt(document.querySelector('[data-ac-tile="R2"] [data-ac-value]'))`)) === '1|1',
+  `${await total()} | ${await acRows('status')}`);
 await evalJS(`(() => {
   __seed('bdControl/dataIssues/rows', 'Client-Contracts_5', { table: 'Client Contracts', record: 'R5', issue: 'another' });
   const m = __store.get('bdControl/clientContracts/rows');
@@ -804,19 +661,24 @@ await evalJS(`(() => {
   __emit();
 })()`);
 await sleep(200);
-check('issues 6 -> 7', (await tile('issues')) === '7');
-check('renewed-on-paper line moves: renewals 3 -> 4, overdue 2 -> 1, lines "None expired on paper"',
-  (await tile('renewals')) === '4' && (await text('[data-bd="overdue"]')) === 'Already past their date: 1' && (await sub('lines')) === 'None expired on paper');
-check('ceiling edit flows in: 2,350.5', (await tile('ceiling')) === '2,350.5', await tile('ceiling'));
-check('… and into chart 3: ALPHA 1,550 m EGP', (await text('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"] [data-bdc-value]')) === '1,550 m EGP');
-check('… and chart 4: past-their-date bucket 2 -> 1, within 30 days 1 -> 2', (await bucket('overdue')) === '1' && (await bucket('d30')) === '2');
-check('… and chart 11: Client Contracts 4 -> 5', (await text('[data-bdc-row="issue"][data-bdc-key="Client Contracts"] [data-bdc-value]')) === '5');
-check('… and chart 6: BETA now renews within 6 months',(await evalJS(`${q('[data-bdc-row="reprice"][data-bdc-key="BETA"] [data-bdc-window]')}.dataset.bdcWindow`)) === 'within180');
+const hl = id => evalJS(`window.__txt(document.querySelector('[data-ac-tile="${id}"] [data-ac-value]'))`);
+check('renewed-on-paper line moves: P2 ending soon 1 -> 2, past end 1 -> 0', (await acRows('status')) === 'running=2,endingSoon=2,pastEnd=0,noDate=1', await acRows('status'));
+check('… and the headline: R1 2 with "Within 30 days: 1" (warn), R2 0 (no warn)', (await hl('R1')) === '2' && (await text('[data-ac-tile="R1"] [data-ac-sub]')) === 'Within 30 days: 1'
+  && (await has('[data-ac-tile="R1"].ac-tile-warn')) && (await hl('R2')) === '0' && !(await has('[data-ac-tile="R2"].ac-tile-warn')), `${await hl('R1')} ${await hl('R2')}`);
+check('… and R2 says nothing is past its end', (await text('[data-ac-q="R2"] [data-ac-empty="pastEnd"]')) === 'No project is past its end date.');
+check('ceiling edit flows in: M1 total 2,604.7, ALPHA 1,550 m EGP; P6 ALPHA CSA 1,300', (await total()) === '2,604.7 m EGP'
+  && (await text('[data-ac-row="values"][data-ac-key="ALPHA"] [data-bdc-value]')) === '1,550 m EGP'
+  && (await acRows('biggest')).startsWith('ALPHA_1_CSA=1,300 m EGP'), `${await total()} | ${await acRows('biggest')}`);
+await click('[data-bd-tab="quality"]');
+check('… and the new data issue is on the Data quality tab: 6 -> 7', (await evalJS(`document.querySelectorAll('[data-bdc-row="dq"]').length`)) === 7);
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
 await evalJS(`(() => { const m = __store.get('bdControl/clientContracts/rows'); m.delete('GAMMA_4_O-M'); __emit(); })()`);
 await sleep(200);
-check('no monthly-value line left -> that tile goes away', !(await has('[data-bd-kpi="monthly"]')) && (await tile('lines')) === '4');
+check('no monthly-paid line left -> P6 drops its "paid by the month" line, P1 counts 4 projects', !(await has('[data-ac-q="P6"] [data-ac-foot="monthly"]'))
+  && (await acStats()).startsWith('projects=4,'), await acStats());
 
-console.log('\n[6] stale data');
+console.log('\n[5] stale data');
 await evalJS(`(() => { __seed('bdControl', 'meta', { asof: window.__iso(-40), loadedAt: window.__ago(39).toISOString() }); __emit(); })()`);
 await sleep(200);
 check('40-day-old data: warning with the age', (await text('[data-bd="stale"]')) === 'The Excel data is 40 days old. Ask BD to refresh it.', await text('[data-bd="stale"]'));
@@ -824,16 +686,18 @@ check('no loadedBy -> "Loaded <when>" alone', /^Loaded .+/.test(await text('[dat
 check('both stamped rows are after a 39-day-old load -> 2 edits', (await text('[data-bd="edits"]')) === 'Records edited in eTaske since the last load: 2', await text('[data-bd="edits"]'));
 await shot('2-stale');
 
-console.log('\n[6b] chart 3 with many clients: top 10, then show all');
+console.log('\n[6] M1 with many clients: top 10, then show all');
 await evalJS(`(() => { for (let i = 1; i <= 11; i++) __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: 'X' + String(i).padStart(2, '0'), contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500) }); __emit(); })()`);
 await sleep(200);
-check('10 bars + "Show all 13"', (await evalJS(`document.querySelectorAll('[data-bdc-row="ceiling"]').length`)) === 10
-  && (await text('[data-bdc-more="ceiling"]')) === 'Show all 13', await text('[data-bdc-more="ceiling"]'));
-await click('[data-bdc-more="ceiling"]');
-check('show all -> 13, smallest last; again -> 10', (await evalJS(`document.querySelectorAll('[data-bdc-row="ceiling"]').length`)) === 13
-  && (await keys('ceiling')).endsWith(',X01') && (await click('[data-bdc-more="ceiling"]'), (await evalJS(`document.querySelectorAll('[data-bdc-row="ceiling"]').length`)) === 10));
+const nValues = () => evalJS(`document.querySelectorAll('[data-ac-row="values"]').length`);
+check('M1: 10 bars + "Show all 13"; P6 lists the 10 biggest lines', (await nValues()) === 10 && (await text('[data-ac-more="values"]')) === 'Show all 13'
+  && (await evalJS(`document.querySelectorAll('[data-ac-row="biggest"]').length`)) === 10, `${await nValues()} | ${await text('[data-ac-more="values"]')}`);
+await click('[data-ac-more="values"]');
+const allKeys = await evalJS(`[...document.querySelectorAll('[data-ac-row="values"]')].map(e => e.dataset.acKey).join(',')`);
+await click('[data-ac-more="values"]');
+check('show all -> 13, smallest last; again -> 10', allKeys.split(',').length === 13 && allKeys.endsWith(',X01') && (await nValues()) === 10, allKeys);
 
-console.log('\n[6c] browse tabs (queue E6a): Contracts + client page, Pricing, Suppliers, Data quality');
+console.log('\n[6b] browse tabs (queue E6a): Contracts + client page, Pricing, Suppliers, Data quality');
 const typeIn = (sel, v) => evalJS(`(() => { const e = ${q(sel)}; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
   set.call(e, ${JSON.stringify(v)}); e.dispatchEvent(new Event('input', { bubbles: true })); })()`).then(() => sleep(150));
 const count = sel => evalJS(`document.querySelectorAll(${JSON.stringify(sel)}).length`);
@@ -854,14 +718,14 @@ check('issueTarget: client line / day-rate column -> client page, supplier / SO 
 
 await evalJS(`window.__seedAll()`);
 await remount();
-await waitFor(q('[data-bd="tiles"]'), 'tiles');
+await waitFor(q('[data-ac="board"]'), 'board');
 check('tab bar: Overview · Contracts · Pricing · Suppliers · Data quality, Overview selected',
   (await texts('[data-bd-tab]')) === 'Overview|Contracts|Pricing|Suppliers|Data quality'
   && (await evalJS(`${q('[data-bd-tab="overview"]')}.getAttribute('aria-selected')`)) === 'true');
 
 // Contracts
 await click('[data-bd-tab="contracts"]');
-check('Contracts: tiles and charts give way to the list', !(await has('[data-bd="tiles"]')) && !(await has('[data-bd="charts"]')) && (await has('[data-bdc-tab="contracts"]'))
+check('Contracts: the board and headline give way to the list', !(await has('[data-ac="board"]')) && !(await has('[data-ac="headline"]')) && (await has('[data-bdc-tab="contracts"]'))
   && (await has('[data-bd="date-strip"]')));
 check('every line, soonest expiry first, no date last', (await keys('contract')) === 'BETA_3_TSA,BETA_2_CSA,GAMMA_4_O-M,ALPHA_1_CSA,ALPHA_5_TSA', await keys('contract'));
 check('chip counts: all 5 · expired 1 · ≤90 d 1 · ≤6 months 2 · no date 1',
@@ -963,29 +827,28 @@ check('search within the sheet', (await keys('dq')) === 'Day-Rates_1');
 await click('[data-bdc-row="dq"][data-bdc-key="Day-Rates_1"]');
 check('an issue opens its record: BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
 
-// Tiles and overview rows lead into the tabs
+// Board rows lead into the tabs (they replace the old tiles' and chart rows' links)
 await click('[data-bd-tab="overview"]');
-await click('[data-bd-kpi="renewals"]');
-check('Renewals tile -> Contracts, "within 90 days" chip on', (await has('[data-bdc-tab="contracts"]')) && (await pressed('[data-bdc-chip="contracts:d90"]')) === 'true'
+await click('[data-ac-row="status"][data-ac-key="noDate"]');
+check('P2 "no end date" -> Contracts, "no date" chip on', (await has('[data-bdc-tab="contracts"]')) && (await pressed('[data-bdc-chip="contracts:noDate"]')) === 'true'
+  && (await keys('contract')) === 'ALPHA_5_TSA');
+await click('[data-bd-tab="overview"]');
+// Last, so Contracts is left on "within 90 days" for the phone checks below.
+await click('[data-ac-row="status"][data-ac-key="endingSoon"]');
+check('P2 "ending soon" -> Contracts, "within 90 days" chip on (was the Renewals tile)', (await has('[data-bdc-tab="contracts"]')) && (await pressed('[data-bdc-chip="contracts:d90"]')) === 'true'
   && (await keys('contract')) === 'BETA_2_CSA');
 await click('[data-bd-tab="overview"]');
-await click('[data-bd-kpi="suppliers"]');
-check('Live suppliers tile -> Suppliers, running', (await has('[data-bdc-tab="suppliers"]')) && (await pressed('[data-bdc-chip="supfilter:live"]')) === 'true'
-  && (await pressed('[data-bdc-chip="supview:supplier"]')) === 'true');
+check('P2 "running" is not a link (no matching chip)', (await evalJS(`${q('[data-ac-row="status"][data-ac-key="running"]')}.tagName`)) === 'DIV');
+await click('[data-ac-row="values"][data-ac-key="ALPHA"]');
+check('M1 row -> ALPHA client page (was the ceiling chart row)', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'ALPHA');
 await click('[data-bd-tab="overview"]');
-await click('[data-bd-kpi="issues"]');
-check('Data issues tile -> Data quality, all sheets', (await has('[data-bdc-tab="quality"]')) && (await pressed('[data-bdc-chip="sheet:"]')) === 'true');
+await click('[data-ac-row="biggest"][data-ac-key="BETA_2_CSA"]');
+check('P6 row -> BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
 await click('[data-bd-tab="overview"]');
-await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
-check('ceiling chart row -> ALPHA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'ALPHA');
+await click('[data-ac-row="soon"][data-ac-key="d90"]');
+await click('[data-ac-row="soonLine"][data-ac-key="BETA_2_CSA"]');
+check('a line in R1’s opened window -> its client page (was "next to come up")', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
 await click('[data-bd-tab="overview"]');
-await click('[data-bdc-row="reprice"][data-bdc-key="BETA"]');
-check('reprice row -> BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
-await click('[data-bd-tab="overview"]');
-await click('[data-bdc-row="next"][data-bdc-key="BETA"]');
-check('a client in "next to come up" -> its page; supplier items are not clickable', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
-await click('[data-bd-tab="overview"]');
-check('… and a supplier item there has no button role', (await evalJS(`${q('[data-bdc-row="next"][data-bdc-key="S/1"]')}.getAttribute('role')`)) === null);
 await shot('7-tabs-en');
 
 // Phone width on the browse tabs
@@ -1008,6 +871,8 @@ await sleep(200);
 check('Arabic tab names', (await texts('[data-bd-tab]')) === 'نظرة عامة|العقود|التسعير|الموردون|جودة البيانات', await texts('[data-bd-tab]'));
 check('Arabic client page: Arabic name as title, flag in Arabic', (await text('.bdc-title')) === 'بيتا للتكرير'
   && (await text('[data-bdc-row="clientline"][data-bdc-key="BETA_3_TSA"] [data-bdc-flag]')) === 'انتهى على الورق');
+check('RTL: the "from → to" arrow in the client’s changes is flipped to point left', (await has('[data-bdc-row="clientchange"] .bdc-arrow'))
+  && (await evalJS(`getComputedStyle(${q('[data-bdc-row="clientchange"] .bdc-arrow')}).transform`)) !== 'none');
 await evalJS(`window.__setLang('en')`);
 await sleep(150);
 
@@ -1015,7 +880,7 @@ console.log('\n[7] Arabic + RTL, then a 390 px phone');
 await evalJS(`window.__seedAll()`);
 await evalJS(`window.__setLang('ar')`);
 await remount();
-await waitFor(q('[data-bd="tiles"]'), 'tiles (ar)');
+await waitFor(q('[data-ac="board"]'), 'board (ar)');
 check('page is RTL', (await evalJS(`document.documentElement.dir`)) === 'rtl');
 check('title «مركز التحليل»', (await text('h1')) === 'مركز التحليل');
 check('Arabic board: question title, fixed note, group name and grey box all in Arabic',
@@ -1025,36 +890,22 @@ check('Arabic board: question title, fixed note, group name and grey box all in 
   && (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')) === 'بيانات مطلوبة|التحصيلات والفواتير غير المسددة|الإدارة المالية'
   && (await text('[data-ac-stat="type:CSA"] .ac-stat-label')) === 'عقود الخدمات المستمرة',
   `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')}`);
-check('tile labels in Arabic', (await text('[data-bd-kpi="ceiling"] div')) === 'إجمالي الحدود القصوى'
-  && (await text('[data-bd-kpi="renewals"] div')) === 'تجديدات خلال تسعين يومًا' && (await text('[data-bd-kpi="suppliers"] div')) === 'عقود الموردين السارية');
-check('Western digits in Arabic too, like the rest of the app (ar-EG-u-nu-latn): 3 clients, 2,250.5 ceiling', (await tile('clients')) === '3' && (await tile('ceiling')) === '2,250.5', `${await tile('clients')} ${await tile('ceiling')}`);
-check('unit «مليون جنيه», edits line in Arabic', (await text('[data-bd-kpi="ceiling"]')).includes('مليون جنيه')
-  && (await text('[data-bd="edits"]')).startsWith('السجلات المعدَّلة في eTaske منذ آخر تحميل'));
-check('chart titles in Arabic', (await texts('[data-bdc] .bdc-h')) === 'الحد الأقصى للعقود لكل عميل|مواعيد تجديد العقود|الفئة اليومية لكل عميل|إعادة التسعير عند التجديد'
-  + '|تكلفة عقود الموردين|أكبر زيادة في القيمة عبر الملاحق|أوامر الخدمة في عجيبة|ما تغيّر بين تقريري عقود الخدمات|ملاحظات البيانات حسب الجدول|بيانات منتظَرة', await texts('[data-bdc] .bdc-h'));
-check('charts 7–12 in Arabic: cost type, SO status, sheet name, change period translated; contractor as written',
-  (await text('[data-bdc-row="costtype"][data-bdc-key="EPROM overhead"] .bdc-name > span')) === 'مصروفات إيبروم العامة'
-  && (await text('[data-bdc-row="sostatus"][data-bdc-key="In Progress"] .bdc-name')) === 'قيد التنفيذ'
-  && (await text('[data-bdc-row="issue"][data-bdc-key="Day Rates"] .bdc-name > span')) === 'الفئات اليومية'
-  && (await text('[data-bdc="changes"] .bdc-cap')).startsWith('من مارس 2026 إلى سبتمبر 2026')
-  && (await text('[data-bdc-row="socontractor"][data-bdc-key="Petro"] .bdc-name > span')) === 'Petro',
-  `${await text('[data-bdc-row="costtype"][data-bdc-key="EPROM overhead"] .bdc-name > span')} | ${await text('[data-bdc="changes"] .bdc-cap')}`);
-check('RTL: the "from → to" arrow is flipped to point left', (await evalJS(`getComputedStyle(${q('.bdc-arrow')}).transform`)) !== 'none');
-check('client names in Arabic on the charts (ANOPC has no Arabic name here -> its code)',
-  (await text('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"] .bdc-name > span')) === 'ألفا للغاز'
-  && (await text('[data-bdc-bench="anopc"]')) === 'ANOPC' && (await text('[data-bdc-grade="General Manager"]')) === 'مدير عام');
-check('Arabic list comma, signed gap −30.0%', (await text('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"] .bdc-sub')).startsWith('CSA، TSA')
-  && (await text('[data-bdc-row="rate"][data-bdc-key="BETA"] [data-bdc-gap]')) === '−30.0%');
-check('RTL: bars grow from the right, benchmark tick still on ANOPC\'s bar end', await evalJS(`(() => {
-  const r = document.querySelector('[data-bdc-row="rate"][data-bdc-key="ANOPC"]'), t = r.querySelector('.bdc-track').getBoundingClientRect();
+check('Western digits + unit «مليون جنيه» in Arabic, like the rest of the app (ar-EG-u-nu-latn): M1 total 2,504.7',
+  (await total()).startsWith('2,504.7') && (await total()).includes('مليون جنيه'), await total());
+check('edits line in Arabic', (await text('[data-bd="edits"]')).startsWith('السجلات المعدَّلة في eTaske منذ آخر تحميل'));
+check('client names in Arabic on the board (M1, P4)', (await text('[data-ac-row="values"][data-ac-key="ALPHA"] .bdc-name')).startsWith('ألفا للغاز')
+  && (await text('[data-ac-row="clients"][data-ac-key="BETA"]')).includes('بيتا للتكرير'), await text('[data-ac-row="values"][data-ac-key="ALPHA"] .bdc-name'));
+check('signed gaps in Arabic (H3): −12.5% · −7.0% · 0.0%', (await texts('[data-ac-row="grade"] [data-ac-gap]')) === '−12.5%|−7.0%|0.0%', await texts('[data-ac-row="grade"] [data-ac-gap]'));
+check('RTL: bars grow from the right, ANOPC tick still on the bar end (H3 Operator: median 3,000 = ANOPC)', await evalJS(`(() => {
+  const r = document.querySelector('[data-ac-row="grade"][data-ac-key="Operator"]'), t = r.querySelector('.bdc-track').getBoundingClientRect();
   const f = r.querySelector('.bdc-fill').getBoundingClientRect(), m = r.querySelector('.bdc-mark').getBoundingClientRect();
   return Math.abs(f.right - t.right) <= 1 && Math.abs((m.right - 1) - f.left) <= 2; })()`));
 await shot('3-ar');
 await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
 await sleep(250);
 check('390 px Arabic: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
-const cols = await evalJS(`new Set([...document.querySelectorAll('[data-bd-kpi]')].map(e => Math.round(e.getBoundingClientRect().left))).size`);
-check('390 px: tiles stack two per row at most', cols <= 2, String(cols));
+const cols = await evalJS(`new Set([...document.querySelectorAll('[data-ac-tile]')].map(e => Math.round(e.getBoundingClientRect().left))).size`);
+check('390 px: headline tiles stack two per row at most', cols >= 1 && cols <= 2, String(cols));
 await shot('4-ar-mobile');
 await evalJS(`window.__setLang('en')`);
 await sleep(200);
@@ -1062,7 +913,6 @@ check('390 px English: no sideways scroll', (await overflow()) <= 1, String(awai
 await shot('5-en-mobile');
 await evalJS(`document.documentElement.setAttribute('data-theme', 'dark')`);
 await sleep(150);
-check('dark: chart colours switch to the light-on-dark tokens', (await evalJS(`getComputedStyle(${q('.bdc')}).getPropertyValue('--bdc-supplier').trim()`)) === '#2dd4bf');
 check('dark: donut slices use the dark-stepped series colours', (await evalJS(`getComputedStyle(${q('.bdc')}).getPropertyValue('--ac-s1').trim()`)) === '#3987e5'
   && (await evalJS(`getComputedStyle(${q('[data-ac-slice="CSA"]')}).stroke`)) === 'rgb(57, 135, 229)');
 check('390 px: question cards fit the screen', (await evalJS(`[...document.querySelectorAll('[data-ac-q]')].every(e => e.getBoundingClientRect().width <= 390)`)));
@@ -1075,37 +925,34 @@ console.log('\n[8] nothing loaded yet');
 await evalJS(`(() => { for (const k of [...__store.keys()]) if (k.startsWith('bdControl')) __store.delete(k); })()`);
 await remount();
 await waitFor(q('[data-bd="empty"]'), 'empty card');
-check('empty: plain sentence, no tiles, no strip', (await text('[data-bd="empty"]')) === 'No Analysis center data has been loaded yet.'
-  && !(await has('[data-bd="tiles"]')) && !(await has('[data-bd="date-strip"]')) && !(await has('[data-bd="charts"]')));
+check('empty: plain sentence, no board, no strip', (await text('[data-bd="empty"]')) === 'No Analysis center data has been loaded yet.'
+  && !(await has('[data-ac="board"]')) && !(await has('[data-ac="headline"]')) && !(await has('[data-bd="date-strip"]')));
 await evalJS(`(() => { __seed('bdControl', 'meta', { asof: window.__iso(-1) }); __emit(); })()`);
-await waitFor(q('[data-bd="charts"]'), 'charts with meta only');
-check('meta but no rows: each chart says so in a sentence', (await text('[data-bdc-empty="ceiling"]')) === 'No client line has a ceiling on file.'
-  && (await text('[data-bdc-empty="next"]')) === 'Nothing is due from today on.'
-  && (await text('[data-bdc-empty="rates"]')) === 'No day-rate sheet has been loaded.'
-  && (await text('[data-bdc-empty="reprice"]')) === 'No client pays 10% or more below ANOPC.');
-check('… and charts 7–12 too (no awaited list on the meta = "no list on file")', (await text('[data-bdc-empty="suppliers"]')) === 'No live supplier contract on file.'
-  && (await text('[data-bdc-empty="growth"]')) === 'No live supplier contract has both an original and a current value.'
-  && (await text('[data-bdc-empty="agiba"]')) === 'No AGIBA service order on file.'
-  && (await text('[data-bdc-empty="changes"]')) === 'No changes between reports on file.'
-  && (await text('[data-bdc-empty="issues"]')) === 'No data issues — the files are clean.'
-  && (await text('[data-bdc-empty="awaited"]')) === 'No list of awaited data on file.');
+await waitFor(q('[data-ac="board"]'), 'board with meta only');
+const emptyOf = id => text(`[data-ac-q="${id}"] .bdc-empty`);
+check('meta but no rows: each chart says so in a sentence', (await emptyOf('P6')) === 'No client line has a ceiling on file.'
+  && (await emptyOf('M1')) === 'No project lines on file.' && (await emptyOf('R2')) === 'No project is past its end date.'
+  && (await emptyOf('H3')) === 'No day-rate sheet has been loaded.' && (await emptyOf('G1')) === 'No project lines on file.',
+  await texts('[data-ac-q] .bdc-empty'));
+check('… suppliers and amendments too', (await emptyOf('M5')) === 'No live supplier contract is tied to a client project.'
+  && (await emptyOf('S1')) === 'No live supplier contract on file.' && (await emptyOf('A1')) === 'No amendment on file for any project.');
 
 console.log('\n[9] someone the rules refuse');
 await evalJS(`window.__seedAll(); ['bdControl', ...window.__lib.BD_TABLES.map(t => 'bdControl/' + t + '/rows')].forEach(c => window.__denied.add(c))`);
 await remount();
 await waitFor(q('[data-bd="error"]'), 'the error card');
-check('permission-denied: managers-only explanation, no tiles', (await text('[data-bd="error"]')).startsWith('The Analysis center data could not be opened')
-  && !(await has('[data-bd="tiles"]')));
+check('permission-denied: managers-only explanation, no board', (await text('[data-bd="error"]')).startsWith('The Analysis center data could not be opened')
+  && !(await has('[data-ac="board"]')));
 await evalJS(`window.__denied = new Set(['bdControl/dataIssues/rows'])`);
 await remount();
 await waitFor(q('[data-bd="error"]'), 'error card (one table)');
-check('one table refused is enough to show the error (no half totals)', !(await has('[data-bd="tiles"]')));
+check('one table refused is enough to show the error (no half totals)', !(await has('[data-ac="board"]')));
 await evalJS(`window.__denied = new Set()`);
 
 console.log('\n[10] editing (E6b)');
 await evalJS(`window.__seedAll(); window.__writes.length = 0; window.__batches = 0; window.__batchFail = null`);
 await remount();
-await waitFor(q('[data-bd="tiles"]'), 'tiles (edit)');
+await waitFor(q('[data-ac="board"]'), 'board (edit)');
 const E = JSON.parse(await evalJS(`(() => { const E = window.__edit, i = window.__iso;
   const beta = window.__store.get('bdControl/clientContracts/rows').get('BETA_2_CSA');
   const row = { id: 'BETA_2_CSA', ...beta };
@@ -1144,7 +991,7 @@ const dlg = '[data-bdc-dialog]';
 const row = (t, id) => evalJS(`JSON.stringify(window.__store.get('bdControl/${t}/rows').get(${JSON.stringify(id)}))`).then(JSON.parse);
 const hist = (t, id) => evalJS(`JSON.stringify([...(window.__store.get('bdControl/${t}/rows/${id}/history') || new Map()).values()])`).then(JSON.parse);
 
-const ceil0 = await tile('ceiling');
+const ceil0 = await total();
 const edits0 = await text('[data-bd="edits"]');
 await click('[data-bd-tab="contracts"]');
 check('Contracts list: "Edited in eTaske" badge on the edited line only', (await keys('contract')).includes('BETA_2_CSA')
@@ -1196,11 +1043,11 @@ await evalJS(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape
 await sleep(150);
 check('Escape closes the form', !(await has(dlg)));
 await click('[data-bd-tab="overview"]');
-check('figures follow the edit: total ceiling 2,250.5 -> 2,350.5 m, edits line counts it', ceil0 === '2,250.5' && (await tile('ceiling')) === '2,350.5'
-  && (await text('[data-bd="edits"]')) !== edits0, `${ceil0} -> ${await tile('ceiling')} | ${await text('[data-bd="edits"]')}`);
+check('figures follow the edit: M1 total 2,504.7 -> 2,604.7 m, edits line counts it', ceil0 === '2,504.7 m EGP' && (await total()) === '2,604.7 m EGP'
+  && (await text('[data-bd="edits"]')) !== edits0, `${ceil0} -> ${await total()} | ${await text('[data-bd="edits"]')}`);
 
 // A day-rate
-await click('[data-bdc-row="ceiling"][data-bdc-key="BETA"]');
+await click('[data-ac-row="clients"][data-ac-key="BETA"]');
 await click('[data-bdc-edit="dayRates:BETA_General-Manager"]');
 await waitFor(q(dlg), 'day-rate dialog');
 check('day-rate form: one field, title names client and grade', (await count('[data-bdc-field]')) === 1 && (await text('#bdc-edit-title')) === 'Edit BETA day rate · GM', await text('#bdc-edit-title'));
@@ -1346,10 +1193,10 @@ check('… one write only (a set, not a batch)', (await evalJS(`window.__writes.
 check('… and it is in the Contracts list with an "Added in eTaske" badge', (await keys('contract')).split(',').includes('app_ALPHA_6_CSA')
   && (await text('[data-bdc-row="contract"][data-bdc-key="app_ALPHA_6_CSA"] [data-bdc-added]')) === 'Added in eTaske');
 await click('[data-bd-tab="overview"]');
-check('the figures take it in at once: total ceiling 2,350.5 -> 2,850.5 m', (await tile('ceiling')) === '2,850.5', await tile('ceiling'));
+check('the figures take it in at once: M1 total 2,604.7 -> 3,104.7 m', (await total()) === '3,104.7 m EGP', await total());
 
 // The client page: add a line + a day rate for this client (client filled in)
-await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
+await click('[data-ac-row="clients"][data-ac-key="ALPHA"]');
 check('client page: Add buttons on the lines and the day-rates', (await has('[data-bdc-client="lines"] [data-bdc-add="clientContracts"]'))
   && (await has('[data-bdc-client="rates"] [data-bdc-add="dayRates"]')));
 check('… the added line shows there with its badge and an Edit button', (await has('[data-bdc-row="clientline"][data-bdc-key="app_ALPHA_6_CSA"] [data-bdc-added]'))
@@ -1430,8 +1277,8 @@ check('canEditBdControl: managers + admin, Approved only', J(await evalJS(`[{ ro
   { role: 'Employee', status: 'Approved' }, { role: 'Manager', status: 'Pending' }].map(window.__access.canEditBdControl)`)) === J([true, true, false, false]));
 await evalJS(`window.__user = { ...window.__user, role: 'Employee' }`);
 await remount();
-await waitFor(q('[data-bd="tiles"]'), 'tiles (employee)');
-await click('[data-bdc-row="ceiling"][data-bdc-key="ALPHA"]');
+await waitFor(q('[data-ac="board"]'), 'board (employee)');
+await click('[data-ac-row="clients"][data-ac-key="ALPHA"]');
 check('no Edit button without edit rights; badges still shown', (await count('[data-bdc-edit]')) === 0 && (await has('[data-bdc-edited]')));
 check('… and no Add button either; "Added in eTaske" badges still shown', (await count('[data-bdc-add]')) === 0 && (await has('[data-bdc-added]')));
 await evalJS(`window.__user = { ...window.__user, role: 'Manager' }`);
