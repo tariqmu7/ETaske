@@ -2593,6 +2593,13 @@ const ar: Record<keyof typeof en, string> = {
   "Latest start: {{date}}": "بدأ أحدث عمل: {{date}}",
   "No start date on file: {{list}}": "بلا تاريخ بدء مسجل: {{list}}",
   "where a client’s contract has no start date, its newest work = the newest supplier contract we signed for that client": "إذا خلا عقد العميل من تاريخ البدء، فأحدث عمل له = أحدث عقد مورد أبرمناه لخدمته",
+  "Add a site contract": "إضافة عقد موقع",
+  "Contracts signed for the AGIBA site, soonest end first": "العقود المبرمة لموقع عجيبة، الأقرب انتهاءً أولًا",
+  "Search a contract number, company or subject": "ابحث برقم العقد أو الشركة أو الموضوع",
+  "No AGIBA site contract on file.": "لا عقد مسجلًا لموقع عجيبة.",
+  "site contracts": "عقود موقع",
+  "service orders still open": "أوامر خدمة ما زالت مفتوحة",
+  "AGIBA site contracts and service orders are on the AGIBA page": "تجد عقود موقع عجيبة وأوامر الخدمة في صفحة عجيبة",
 };
 
 export default ar;

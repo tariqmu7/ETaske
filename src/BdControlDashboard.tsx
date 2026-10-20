@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Gauge } from 'lucide-react';
 import { useBdControl } from './hooks/useBdControl';
-import { BD_TABS, dataDate, hasData, todayISO, type BdTab, type Benchmark, type IssueTarget } from './lib/bdControl';
+import { AGIBA_CLIENT, BD_TABS, dataDate, hasData, todayISO, type BdTab, type Benchmark, type IssueTarget } from './lib/bdControl';
+import type { AgibaFocus } from './components/bdcontrol/AgibaSections';
 import { useFormat, DATE_MEDIUM, DATETIME_SHORT } from './lib/format';
 import QuestionBoard from './components/bdcontrol/QuestionBoard';
 import ContractsTab, { type ContractsState } from './components/bdcontrol/ContractsTab';
@@ -30,7 +31,8 @@ const TAB_LABEL: Record<BdTab, string> = {
  * (components/bdcontrol/QuestionBoard.tsx): one chart per question, grey
  * "data needed" boxes for the rest, under a headline strip of the top figures.
  * The earlier KPI tiles and charts 3–12 were removed in queue A4b: each one now
- * has a question card (or a browse tab) of its own.
+ * has a question card (or a browse tab) of its own. AGIBA's site contracts and
+ * service orders sit on the AGIBA client page (queue A5), not in Suppliers.
  *
  * BD control (queue E5a) — the CEO page over every client contract, supplier
  * contract and AGIBA site contract loaded from BD's Excel files. Every figure
@@ -52,17 +54,21 @@ export default function BdControlDashboard({ appUser }: Props) {
   // Where the reader is. Each tab keeps its search and filters while you move between tabs.
   const [tab, setTab] = useState<BdTab>('overview');
   const [client, setClient] = useState<string | null>(null);
+  // The AGIBA site contract / SO a data issue opened the AGIBA page on (queue A5).
+  const [focus, setFocus] = useState<AgibaFocus | null>(null);
   const [contracts, setContracts] = useState<ContractsState>({ filter: 'all', q: '' });
   const [bench, setBench] = useState<Benchmark>('anopc');
-  const [sup, setSup] = useState<SuppliersState>({ view: 'supplier', filter: 'live', soOpen: true, q: '' });
+  const [sup, setSup] = useState<SuppliersState>({ filter: 'live', q: '' });
   const [quality, setQuality] = useState<QualityState>({ sheet: '', q: '' });
   const top = useRef<HTMLDivElement>(null);
   const toTop = () => requestAnimationFrame(() => top.current?.scrollIntoView?.({ block: 'start' }));
-  const openTab = (x: BdTab) => { setTab(x); setClient(null); toTop(); };
-  const openClient = (code: string) => { setTab('contracts'); setClient(code); toTop(); };
+  const openTab = (x: BdTab) => { setTab(x); setClient(null); setFocus(null); toTop(); };
+  const openClient = (code: string, f: AgibaFocus | null = null) => { setTab('contracts'); setClient(code); setFocus(f); toTop(); };
   const openContracts = (filter: ContractsState['filter']) => { setContracts({ filter, q: '' }); openTab('contracts'); };
-  const openSuppliers = (p: Partial<SuppliersState>) => { setSup(s => ({ ...s, filter: 'all', soOpen: false, q: '', ...p })); openTab('suppliers'); };
-  const openTarget = (tg: Exclude<IssueTarget, null>) => (tg.kind === 'client' ? openClient(tg.code) : openSuppliers({ view: tg.kind, q: tg.query }));
+  const openSuppliers = (p: Partial<SuppliersState>) => { setSup(s => ({ ...s, filter: 'all', q: '', ...p })); openTab('suppliers'); };
+  const openTarget = (tg: Exclude<IssueTarget, null>) => (tg.kind === 'client' ? openClient(tg.code)
+    : tg.kind === 'supplier' ? openSuppliers({ q: tg.query })
+    : openClient(AGIBA_CLIENT, { kind: tg.kind, query: tg.query }));
 
   const warn = 'var(--surface-warn-text)';
 
@@ -126,13 +132,13 @@ export default function BdControlDashboard({ appUser }: Props) {
 
           <BdEditProvider data={data} canEdit={canEditBdControl(appUser)} who={who}>
           {tab === 'contracts' ? (client
-            ? <ClientPage key={client} data={data} today={today} code={client} onBack={() => openTab('contracts')}
-                onSupplier={no => openSuppliers({ view: 'supplier', q: no })} />
-            : <ContractsTab data={data} today={today} state={contracts} onState={setContracts} onClient={openClient} />)
-          : tab === 'pricing' ? <PricingTab data={data} today={today} bench={bench} onBench={setBench} onClient={openClient} />
-          : tab === 'suppliers' ? <SuppliersTab data={data} today={today} state={sup} onState={setSup} onClient={openClient} />
+            ? <ClientPage key={`${client}|${focus?.kind ?? ''}|${focus?.query ?? ''}`} data={data} today={today} code={client} focus={focus}
+                onBack={() => openTab('contracts')} onSupplier={no => openSuppliers({ q: no })} />
+            : <ContractsTab data={data} today={today} state={contracts} onState={setContracts} onClient={c => openClient(c)} />)
+          : tab === 'pricing' ? <PricingTab data={data} today={today} bench={bench} onBench={setBench} onClient={c => openClient(c)} />
+          : tab === 'suppliers' ? <SuppliersTab data={data} today={today} state={sup} onState={setSup} onClient={c => openClient(c)} />
           : tab === 'quality' ? <DataQualityTab data={data} state={quality} onState={setQuality} onTarget={openTarget} />
-          : <QuestionBoard data={data} today={today} onClient={openClient} onContracts={openContracts} />}
+          : <QuestionBoard data={data} today={today} onClient={c => openClient(c)} onContracts={openContracts} />}
           </BdEditProvider>
         </>
       )}

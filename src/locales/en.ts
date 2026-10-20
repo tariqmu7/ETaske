@@ -2651,6 +2651,13 @@ const en = {
   "Latest start: {{date}}": "Latest start: {{date}}",
   "No start date on file: {{list}}": "No start date on file: {{list}}",
   "where a client’s contract has no start date, its newest work = the newest supplier contract we signed for that client": "where a client’s contract has no start date, its newest work = the newest supplier contract we signed for that client",
+  "Add a site contract": "Add a site contract",
+  "Contracts signed for the AGIBA site, soonest end first": "Contracts signed for the AGIBA site, soonest end first",
+  "Search a contract number, company or subject": "Search a contract number, company or subject",
+  "No AGIBA site contract on file.": "No AGIBA site contract on file.",
+  "site contracts": "site contracts",
+  "service orders still open": "service orders still open",
+  "AGIBA site contracts and service orders are on the AGIBA page": "AGIBA site contracts and service orders are on the AGIBA page",
 } as const;
 
 export default en;

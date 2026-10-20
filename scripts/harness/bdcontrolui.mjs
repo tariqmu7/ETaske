@@ -803,15 +803,29 @@ check('ended: the On Hold one first (still listed live), then completed / cancel
 await click('[data-bdc-chip="supfilter:live"]');
 check('running: soonest end first, the USD one shows its note not an EGP value', (await keys('supplier')) === 'S/5,S/2,S/1,S/4'
   && (await text('[data-bdc-row="supplier"][data-bdc-key="S/4"] .bdc-sub')).includes('20,000 USD'), await keys('supplier'));
-await click('[data-bdc-chip="supview:agibaSite"]');
+// A5: AGIBA site contracts + SOs live on the AGIBA client page, not as Suppliers views
+check('A5: Suppliers has no AGIBA views (supplier contracts only)', !(await has('[data-bdc-chip^="supview:"]')) && !(await has('[data-bdc-row="so"]'))
+  && !(await has('[data-bdc-row="site"]')));
+await click('[data-bdc="to-agiba"]');
+check('A5: the link opens the AGIBA page with a site-contract card and an SO card', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'AGIBA'
+  && (await has('[data-bdc-client="sites"]')) && (await has('[data-bdc-client="sos"]')));
+check('A5: AGIBA head figures: 3 site contracts, 4 SOs still open', (await text('[data-bdc-fig="sites"]')) === '3' && (await text('[data-bdc-fig="sos"]')) === '4',
+  `${await text('[data-bdc-fig="sites"]')} | ${await text('[data-bdc-fig="sos"]')}`);
 check('AGIBA site contracts, soonest end first, no date last', (await keys('site')) === 'A/1,A/2,A/3', await keys('site'));
-await click('[data-bdc-chip="supview:agibaSO"]');
-await click('[data-bdc-chip="soopen:open"]');
 check('open AGIBA SOs (cancelled + completed left out), past-date one first and red',
-  (await keys('so')) === 'SO 3-2026,SO 1-2026,SO 6-2026,SO 4-2026'
+  (await pressed('[data-bdc-chip="soopen:open"]')) === 'true' && (await keys('so')) === 'SO 3-2026,SO 1-2026,SO 6-2026,SO 4-2026'
   && (await evalJS(`${q('[data-bdc-row="so"][data-bdc-key="SO 3-2026"] [data-bdc-so]')}.className`)).includes('bdc-pill-lo'), await keys('so'));
 await click('[data-bdc-chip="soopen:all"]');
 check('all SOs: 6, open ones first', (await count('[data-bdc-row="so"]')) === 6 && (await keys('so')).endsWith('SO 2-2026,SO 5-2026'), await keys('so'));
+await typeIn('[data-bdc-search="sos"]', 'lift');
+check('A5: SO search on the AGIBA page (contractor Lift)', (await keys('so')) === 'SO 3-2026,SO 4-2026', await keys('so'));
+await typeIn('[data-bdc-search="sos"]', '');
+check('A5: 3 site contracts -> no site search box', !(await has('[data-bdc-search="sites"]')));
+await shot('7b-agiba-en');
+await click('[data-bd-tab="contracts"]');
+await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
+check('A5: other client pages carry no AGIBA cards', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA'
+  && !(await has('[data-bdc-client="sos"]')) && !(await has('[data-bdc-fig="sos"]')));
 
 // Data quality
 await click('[data-bd-tab="quality"]');
@@ -826,6 +840,22 @@ await typeIn('[data-bdc-search="quality"]', 'lower grade');
 check('search within the sheet', (await keys('dq')) === 'Day-Rates_1');
 await click('[data-bdc-row="dq"][data-bdc-key="Day-Rates_1"]');
 check('an issue opens its record: BETA client page', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'BETA');
+// A5: an AGIBA SO / site issue opens the AGIBA page, its card searched for the record (and listed on that page)
+await evalJS(`(() => { __seed('bdControl/dataIssues/rows', 'AGIBA-SOs_1', { table: 'AGIBA SOs', record: 'SO 2-2026', issue: 'no completion certificate' });
+  __seed('bdControl/dataIssues/rows', 'AGIBA-Site-Contracts_1', { table: 'AGIBA Site Contracts', record: 'A/2 B', issue: 'end dates disagree' }); __emit(); })()`);
+await click('[data-bd-tab="quality"]');
+await click('[data-bdc-chip="sheet:"]');
+await typeIn('[data-bdc-search="quality"]', '');
+await click('[data-bdc-row="dq"][data-bdc-key="AGIBA-SOs_1"]');
+check('A5: SO issue -> AGIBA page, SO search filled, the closed SO shown and opened (All on)', (await evalJS(`${q('[data-bdc-tab="client"]')}?.dataset.bdcCode`)) === 'AGIBA'
+  && (await evalJS(`${q('[data-bdc-search="sos"]')}.value`)) === 'SO 2-2026' && (await keys('so')) === 'SO 2-2026'
+  && (await pressed('[data-bdc-chip="soopen:all"]')) === 'true' && (await evalJS(`${q('[data-bdc-row="so"]')}.open`)) === true, await keys('so'));
+check('A5: the AGIBA page lists both AGIBA issues', (await count('[data-bdc-row="clientissue"]')) === 2, String(await count('[data-bdc-row="clientissue"]')));
+await click('[data-bd-tab="quality"]');
+await click('[data-bdc-row="dq"][data-bdc-key="AGIBA-Site-Contracts_1"]');
+check('A5: site issue -> AGIBA page, site search shown with A/2, that one opened; SO search empty again', (await evalJS(`${q('[data-bdc-search="sites"]')}?.value`)) === 'A/2'
+  && (await keys('site')) === 'A/2' && (await evalJS(`${q('[data-bdc-row="site"]')}.open`)) === true && (await evalJS(`${q('[data-bdc-search="sos"]')}.value`)) === '', await keys('site'));
+await evalJS(`window.__seedAll(); __emit()`);
 
 // Board rows lead into the tabs (they replace the old tiles' and chart rows' links)
 await click('[data-bd-tab="overview"]');
@@ -856,13 +886,19 @@ await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, devi
 await sleep(250);
 for (const tb of ['contracts', 'pricing', 'suppliers', 'quality']) {
   await click(`[data-bd-tab="${tb}"]`);
-  if (tb === 'suppliers') await click('[data-bdc-chip="supview:supplier"]');
   check(`390 px ${tb}: no sideways scroll (the grid scrolls inside its box)`, (await overflow()) <= 1, String(await overflow()));
 }
 await click('[data-bd-tab="contracts"]');
 await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
 check('390 px client page: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
 await shot('8-client-mobile');
+await click('[data-bd-tab="suppliers"]');
+await click('[data-bdc="to-agiba"]');
+await evalJS(`${q('[data-bdc-row="so"][data-bdc-key="SO 1-2026"]')}.open = true`);
+check('A5: 390 px AGIBA page with an SO opened: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
+await shot('8b-agiba-mobile');
+await click('[data-bd-tab="contracts"]');
+await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
 await send('Emulation.clearDeviceMetricsOverride');
 
 // Arabic labels on the tabs
@@ -873,6 +909,14 @@ check('Arabic client page: Arabic name as title, flag in Arabic', (await text('.
   && (await text('[data-bdc-row="clientline"][data-bdc-key="BETA_3_TSA"] [data-bdc-flag]')) === 'انتهى على الورق');
 check('RTL: the "from → to" arrow in the client’s changes is flipped to point left', (await has('[data-bdc-row="clientchange"] .bdc-arrow'))
   && (await evalJS(`getComputedStyle(${q('[data-bdc-row="clientchange"] .bdc-arrow')}).transform`)) !== 'none');
+await click('[data-bd-tab="suppliers"]');
+check('A5 Arabic: the Suppliers link to the AGIBA page', (await text('[data-bdc="to-agiba"]')) === 'تجد عقود موقع عجيبة وأوامر الخدمة في صفحة عجيبة', await text('[data-bdc="to-agiba"]'));
+await click('[data-bdc="to-agiba"]');
+check('A5 Arabic: AGIBA cards and head figures in Arabic', (await text('[data-bdc-client="sos"] .bdc-h')) === 'أوامر الخدمة في عجيبة'
+  && (await text('[data-bdc-client="sites"] .bdc-h')) === 'عقود موقع عجيبة' && (await text('[data-bdc="clientfigs"]')).includes('أوامر خدمة ما زالت مفتوحة'),
+  await text('[data-bdc="clientfigs"]'));
+await click('[data-bd-tab="contracts"]');
+await click('[data-bdc-row="contract"][data-bdc-key="BETA_2_CSA"]');
 await evalJS(`window.__setLang('en')`);
 await sleep(150);
 
@@ -1063,7 +1107,6 @@ check('Pricing grid: the edited cell shows 7,500 with a ✎ mark and the legend 
 
 // A supplier contract: closing it moves it out of "running"
 await click('[data-bd-tab="suppliers"]');
-await click('[data-bdc-chip="supview:supplier"]');
 await click('[data-bdc-chip="supfilter:live"]');
 check('S/1 already carries the badge (edited before the load)', await has('[data-bdc-row="supplier"][data-bdc-key="S/1"] summary [data-bdc-edited]'));
 await evalJS(`${q('[data-bdc-row="supplier"][data-bdc-key="S/2"]')}.open = true`);
@@ -1078,8 +1121,8 @@ await click('[data-bdc="save"]');
 await waitFor(`!${q(dlg)}`, 'supplier saved');
 check('closed in eTaske -> no longer running', !(await keys('supplier')).split(',').includes('S/2') && (await row('supplierContracts', 'S-2')).appEdits.status.excelValue === 'In Progress', await keys('supplier'));
 
-// An AGIBA SO and a site contract
-await click('[data-bdc-chip="supview:agibaSO"]');
+// An AGIBA SO and a site contract (on the AGIBA page since A5)
+await click('[data-bdc="to-agiba"]');
 await click('[data-bdc-chip="soopen:all"]');
 await evalJS(`${q('[data-bdc-row="so"][data-bdc-key="SO 1-2026"]')}.open = true`);
 await click('[data-bdc-edit="agibaSOs:SO-1-2026"]');
@@ -1091,7 +1134,6 @@ await waitFor(`!${q(dlg)}`, 'SO saved');
 const so1 = await row('agibaSOs', 'SO-1-2026');
 check('SO saved (date + long text), badge on the SO row', so1.expiry === await evalJS(`window.__iso(120)`) && so1.remarks === 'Extended by site'
   && (await has('[data-bdc-row="so"][data-bdc-key="SO 1-2026"] [data-bdc-edited]')));
-await click('[data-bdc-chip="supview:agibaSite"]');
 await evalJS(`${q('[data-bdc-row="site"][data-bdc-key="A/3"]')}.open = true`);
 await click('[data-bdc-edit="agibaSiteContracts:A-3"]');
 await waitFor(q(dlg), 'site dialog');
@@ -1226,9 +1268,8 @@ check('new day rate saved and listed on the client page', (await row('dayRates',
 
 // Suppliers tab: one Add button per list
 await click('[data-bd-tab="suppliers"]');
-await click('[data-bdc-chip="supview:supplier"]');
 await click('[data-bdc-chip="supfilter:live"]');
-check('Suppliers: the Add button follows the list shown', (await count('[data-bdc-add]')) === 1 && (await has('[data-bdc-add="supplierContracts"]')));
+check('Suppliers: one Add button, for supplier contracts', (await count('[data-bdc-add]')) === 1 && (await has('[data-bdc-add="supplierContracts"]')));
 await click('[data-bdc-add="supplierContracts"]');
 await waitFor(q('[data-bdc-dialog="add:supplierContracts"]'), 'add supplier dialog');
 await setVal('[data-bdc-field="contractNo"]', 'S/1');
@@ -1242,7 +1283,7 @@ await click('[data-bdc="save"]');
 await waitFor(`!${q('[data-bdc-dialog]')}`, 'supplier added');
 check('new supplier contract app_S-10 is running and badged', (await row('supplierContracts', 'app_S-10'))?.contractNo === 'S/10'
   && (await keys('supplier')).split(',').includes('S/10') && (await has('[data-bdc-row="supplier"][data-bdc-key="S/10"] summary [data-bdc-added]')), await keys('supplier'));
-await click('[data-bdc-chip="supview:agibaSO"]');
+await click('[data-bdc="to-agiba"]');
 await click('[data-bdc-add="agibaSOs"]');
 await waitFor(q('[data-bdc-dialog="add:agibaSOs"]'), 'add SO dialog');
 check('SO add form: SO number first, title', (await evalJS(`${q('[data-bdc-field]')}.dataset.bdcField`)) === 'so' && (await text('#bdc-edit-title')) === 'Add an AGIBA service order');
@@ -1253,8 +1294,7 @@ await click('[data-bdc="save"]');
 await waitFor(`!${q('[data-bdc-dialog]')}`, 'SO added');
 check('new SO saved (id app_SO-9-2026) and listed as still open', (await row('agibaSOs', 'app_SO-9-2026'))?.so === 'SO 9-2026'
   && (await has('[data-bdc-row="so"][data-bdc-key="SO 9-2026"] [data-bdc-so="open"]')));
-await click('[data-bdc-chip="supview:agibaSite"]');
-check('AGIBA site list has its own Add button', await has('[data-bdc-add="agibaSiteContracts"]'));
+check('AGIBA site card has its own Add button', await has('[data-bdc-client="sites"] [data-bdc-add="agibaSiteContracts"]'));
 
 // Arabic + phone
 await evalJS(`window.__setLang('ar')`);

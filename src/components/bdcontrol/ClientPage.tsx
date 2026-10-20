@@ -1,9 +1,10 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, ArrowRight, ChevronRight } from 'lucide-react';
-import { BENCHMARK_CLIENT, clientProfile, rateGrid, type BdData } from '../../lib/bdControl';
+import { AGIBA_CLIENT, BENCHMARK_CLIENT, clientProfile, rateGrid, soLines, type BdData } from '../../lib/bdControl';
 import { Fields, GRADE_SHORT, useBdWords, useMasonry } from './shared';
 import { AddButton, EditButton, EditedBadge } from './EditRecord';
+import AgibaSections, { type AgibaFocus } from './AgibaSections';
 
 interface Props {
   data: BdData;
@@ -11,6 +12,8 @@ interface Props {
   code: string;
   onBack: () => void;
   onSupplier: (contractNo: string) => void;
+  /** AGIBA page only: the site contract / SO a data issue points at. */
+  focus?: AgibaFocus | null;
 }
 
 /**
@@ -19,9 +22,10 @@ interface Props {
  * data issues that touch it. Reached from the Contracts tab, the Pricing grid,
  * the Overview ceiling / reprice charts and the Data quality list. Lines and
  * day-rates carry an Edit button for managers (E6b), and both sections an Add
- * button that opens the form with this client filled in (E6c).
+ * button that opens the form with this client filled in (E6c). The AGIBA page
+ * also holds AGIBA's site contracts and service orders (queue A5).
  */
-export default function ClientPage({ data, today, code, onBack, onSupplier }: Props) {
+export default function ClientPage({ data, today, code, onBack, onSupplier, focus }: Props) {
   const w = useBdWords(data);
   const packed = useMasonry<HTMLDivElement>();
   const { t } = useTranslation();
@@ -33,6 +37,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
   const val = (v: unknown) => (v == null || v === '' ? null : w.bidi(w.word(v)));
   const rateRow = useMemo(() => new Map(data.dayRates.filter(r => r.client === code).map(r => [r.grade, r])), [data.dayRates, code]);
   const gradeName = (g: string) => (GRADE_SHORT[g] ? t(GRADE_SHORT[g]) : g);
+  const agiba = code === AGIBA_CLIENT;
+  const openSOs = useMemo(() => (agiba ? soLines(data, today, true).length : 0), [agiba, data, today]);
 
   const section = (title: string, attr: string, body: React.ReactNode, sub?: string, action?: React.ReactNode) => (
     <section className="card bdc-card" data-bdc-client={attr}>
@@ -57,6 +63,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
           {p.ceilingEgp > 0 && <span><b data-bdc-fig="ceiling">{w.egpM(p.ceilingEgp)}</b>{t('total ceiling')}</span>}
           {p.monthlyEgp > 0 && <span><b data-bdc-fig="monthly">{w.egp(p.monthlyEgp)}</b>{t('a month')}</span>}
           <span><b data-bdc-fig="suppliers">{F.number(p.liveSuppliers)}</b>{t('live supplier contracts')}</span>
+          {agiba && data.agibaSiteContracts.length > 0 && <span><b data-bdc-fig="sites">{F.number(data.agibaSiteContracts.length)}</b>{t('site contracts')}</span>}
+          {agiba && data.agibaSOs.length > 0 && <span><b data-bdc-fig="sos">{F.number(openSOs)}</b>{t('service orders still open')}</span>}
           {p.avgGap != null && code !== BENCHMARK_CLIENT && (
             <span><b data-bdc-fig="gap" className={`bdc-gap-${w.gapTone(p.avgGap)}`}>{w.pct(p.avgGap)}</b>{t('day-rates against {{name}}', { name: w.nameOf(BENCHMARK_CLIENT) })}</span>
           )}
@@ -91,6 +99,8 @@ export default function ClientPage({ data, today, code, onBack, onSupplier }: Pr
               ))}
             </div>, undefined,
           <AddButton table="clientContracts" label={t('Add a line')} title={t('Add a contract line for {{client}}', { client: w.nameOf(code) })} preset={{ client: code }} />)}
+
+        {agiba && <AgibaSections data={data} today={today} focus={focus} />}
 
         {section(t('Day-rates'), 'rates', p.rates.length === 0
           ? <p className="bdc-empty" data-bdc-empty="clientrates">{t('This client has no column on the day-rate sheet.')}</p>

@@ -722,6 +722,12 @@ export function supplierCounts(data: BdData, today: string): Record<SupplierFilt
   return Object.fromEntries(SUPPLIER_FILTERS.map(f => [f, supplierLines(data, today, f).length])) as Record<SupplierFilter, number>;
 }
 
+/**
+ * The client code whose page holds the AGIBA site contracts and service orders
+ * (queue A5: AGIBA sits inside its own project, not as a Suppliers view).
+ */
+export const AGIBA_CLIENT = 'AGIBA';
+
 export interface SiteLine { row: BdAgibaSiteContract; days: number | null; flag: ExpiryFlag; edited: boolean }
 
 /** AGIBA site contracts, soonest end first. */
@@ -764,7 +770,8 @@ export function pricingRows(grid: RateGrid, b: Benchmark): { base: { grade: stri
 
 /**
  * Where a data issue points: a client page (client line / day-rate column), a supplier
- * contract, an AGIBA SO or site contract — or nowhere (a whole-sheet note such as "9 rows").
+ * contract, an AGIBA SO or site contract (both on the AGIBA page) — or nowhere (a
+ * whole-sheet note such as "9 rows").
  */
 export type IssueTarget =
   | { kind: 'client'; code: string }
@@ -825,7 +832,8 @@ export function clientProfile(data: BdData, code: string, today: string, grid: R
   const supNos = new Set(suppliers.map(l => txt(l.row.contractNo)));
   const issues = issueRows(data.dataIssues.filter(i => {
     const tg = issueTarget(i, codes);
-    return (tg?.kind === 'client' && tg.code === code) || (txt(i.table) === 'Supplier Contracts' && supNos.has(txt(i.record)));
+    return (tg?.kind === 'client' && tg.code === code) || (txt(i.table) === 'Supplier Contracts' && supNos.has(txt(i.record)))
+      || (code === AGIBA_CLIENT && (tg?.kind === 'agibaSO' || tg?.kind === 'agibaSite'));
   }));
   return {
     code, client: data.clients.find(c => c.code === code) || null, lines,
