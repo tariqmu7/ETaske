@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CircleDashed } from 'lucide-react';
 import { useFormat } from '../../lib/format';
-import { endingSoon, pastEnd, projectGrowth, projectStatus, projectTotals } from '../../lib/analysisCenter';
+import { endingSoon, moneyLastYear, owedByAge, pastEnd, projectGrowth, projectStatus, projectTotals } from '../../lib/analysisCenter';
 import { CEO_QUESTIONS, OWNER_LABEL, pick } from '../../lib/ceoQuestions';
 import { useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
@@ -27,7 +27,7 @@ interface Fig { value: string; sub?: string; tone?: 'warn' }
 export default function Headline({ data, today }: ChartCtx) {
   const { t, i18n } = useTranslation();
   const F = useFormat();
-  const { nameOf } = useBdWords(data);
+  const { nameOf, egpM } = useBdWords(data);
   const ar = i18n.language === 'ar';
   const sep = ar ? '، ' : ', ';
 
@@ -41,7 +41,14 @@ export default function Headline({ data, today }: ChartCtx) {
     const g = projectGrowth(data, Infinity);
     const top = g.rows[0];
     const ap = g.rows.some(r => r.assumed) ? '≈ ' : '';
+    // M9 / M3 are assumed figures (queue A7a) — always "≈", same rules as their cards.
+    const billed = moneyLastYear(data, today).rows.filter(r => r.invoicedEgp > 0);
+    const profit = billed.reduce((a, r) => a + r.profitEgp, 0), losing = billed.filter(r => r.profitEgp < 0).length;
+    const owed = owedByAge(data, today);
+    const over90 = owed.bands.find(b => b.band === 'over90')!.egp;
     return {
+      ...(billed.length ? { M9: { value: `≈ ${egpM(profit)}`, sub: t('Losing money: {{n}}', { n: F.number(losing) }), tone: losing > 0 || profit < 0 ? 'warn' as const : undefined } } : {}),
+      ...(owed.owedEgp > 0 ? { M3: { value: `≈ ${egpM(owed.owedEgp)}`, sub: t('Over 90 days: {{v}}', { v: `≈ ${egpM(over90)}` }) } } : {}),
       P1: { value: F.number(tot.projects), sub: t('Amendments: {{n}}', { n: F.number(tot.amendments) }) },
       P2: { value: F.number(st.running + st.endingSoon), sub: t('Of {{n}} on file', { n: F.number(tot.projects) }) },
       R1: { value: F.number(n90), sub: t('Within 30 days: {{n}}', { n: F.number(n30) }), tone: n30 > 0 ? 'warn' : undefined },
@@ -51,7 +58,7 @@ export default function Headline({ data, today }: ChartCtx) {
         sub: top ? t('Biggest: {{pct}} · {{name}}', { pct: `${top.assumed ? '≈ ' : ''}+${F.number(top.value, { maximumFractionDigits: 0 })}%`, name: nameOf(top.client) }) : undefined,
       },
     };
-  }, [data, today, t, F, nameOf]);
+  }, [data, today, t, F, nameOf, egpM]);
 
   const go = (id: string) => document.getElementById(`ac-q-${id}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
 

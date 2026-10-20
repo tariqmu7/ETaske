@@ -378,14 +378,14 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: 22 answered from today’s data (P1–P4, P6, M1, M5, A1–A5, H3, R1–R3, S1–S3, G1, G4, O2) · 28 waiting for data', (await text('[data-ac="summary"]')) === '22 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('board summary: 31 answered from today’s data (P1–P4, P6, M1–M11, A1–A5, H3, R1–R3, S1–S3, G1, G4, O2) · 19 waiting for data', (await text('[data-ac="summary"]')) === '31 questions answered from today’s data · 19 waiting for data from other departments', await text('[data-ac="summary"]'));
 check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
 check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
 check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
   && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
-check('grey box: "Data needed", what is missing, who has it', (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd')) === 'Data needed|What is missing|Collections and open invoices|Who has it|Finance', await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dt, [data-ac-q="M3"] dd'));
-check('… two owners joined', (await text('[data-ac-q="M4"] [data-ac-need] dd:last-child')) === 'HR, Finance', await text('[data-ac-q="M4"] [data-ac-need] dd:last-child'));
+check('grey box: "Data needed", what is missing, who has it', (await texts('[data-ac-q="R5"] .ac-need-tag, [data-ac-q="R5"] dt, [data-ac-q="R5"] dd')) === 'Data needed|What is missing|Guarantee list with expiry dates|Who has it|Finance', await texts('[data-ac-q="R5"] .ac-need-tag, [data-ac-q="R5"] dt, [data-ac-q="R5"] dd'));
+check('… two owners joined', (await text('[data-ac-q="H4"] [data-ac-need] dd:last-child')) === 'HR, Finance', await text('[data-ac-q="H4"] [data-ac-need] dd:last-child'));
 check('a "part" chart says what was requested and from whom (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Requested from BD: A project type for every project (decision D1)', await text('[data-ac-q="P3"] [data-ac-still]'));
 const acStats = () => evalJS(`[...document.querySelectorAll('[data-ac-q="P1"] [data-ac-stat]')].map(e => e.dataset.acStat + '=' + window.__txt(e.querySelector('[data-ac-value]'))).join(',')`);
 check('P1 one number per tile: projects 5, CSA 2, TSA 2, O&M 1, amendments 0', (await acStats()) === 'projects=5,type:CSA=2,type:TSA=2,type:O&M=1,amendments=0', await acStats());
@@ -505,13 +505,15 @@ check('A2 with no dated amendment: one line, no empty columns', (await text('[da
 
 console.log('\n[2d] Analysis center: renewals R1–R3, suppliers S1–S3, headline strip (queue A3)');
 await sleep(200);
-const tiles8 = () => evalJS(`[...document.querySelectorAll('[data-ac-tile]')].map(e => e.dataset.acTile + '=' + (e.hasAttribute('data-ac-wait') ? 'wait' : window.__txt(e.querySelector('[data-ac-value]')))).join(',')`);
-check('headline strip sits above the board summary, 8 tiles in the D5 order; M9, M3, G2 wait for data',
+// M9 / M3 are assumed money figures (A7a) that move with today's date — shown here as "≈" when they start with it.
+const tiles8 = () => evalJS(`[...document.querySelectorAll('[data-ac-tile]')].map(e => { const v = e.hasAttribute('data-ac-wait') ? 'wait' : window.__txt(e.querySelector('[data-ac-value]'));
+  return e.dataset.acTile + '=' + (/^M(9|3)$/.test(e.dataset.acTile) && v.startsWith('≈ ') ? '≈' : v); }).join(',')`);
+check('headline strip sits above the board summary, 8 tiles in the D5 order; M9 + M3 assumed (≈), G2 waits for data',
   (await evalJS(`(() => { const h = document.querySelector('[data-ac="headline"]'), s = document.querySelector('[data-ac="summary"]'); return !!h && !!s && !!(h.compareDocumentPosition(s) & 4); })()`))
-  && (await tiles8()) === 'P1=5,P2=3,M9=wait,M3=wait,R1=1,R2=1,A3=0,G2=wait', await tiles8());
-check('headline subs: amendments, "of 5 on file", within 30 days; waiting tiles name who it was requested from',
+  && (await tiles8()) === 'P1=5,P2=3,M9=≈,M3=≈,R1=1,R2=1,A3=0,G2=wait', await tiles8());
+check('headline subs: amendments, "of 5 on file", 1 project losing money, within 30 days; a waiting tile names who it was requested from',
   (await texts('[data-ac-tile="P1"] [data-ac-sub], [data-ac-tile="P2"] [data-ac-sub], [data-ac-tile="R1"] [data-ac-sub], [data-ac-tile="M9"] [data-ac-sub], [data-ac-tile="G2"] [data-ac-sub]'))
-  === 'Amendments: 0|Of 5 on file|Requested from Finance|Within 30 days: 0|Requested from BD', await texts('[data-ac-tile] [data-ac-sub]'));
+  === 'Amendments: 0|Of 5 on file|Losing money: 1|Within 30 days: 0|Requested from BD', await texts('[data-ac-tile] [data-ac-sub]'));
 check('R2 tile is marked as a warning (a line is past its end); R1 is not (nothing within 30 days)',
   (await has('[data-ac-tile="R2"].ac-tile-warn')) && !(await has('[data-ac-tile="R1"].ac-tile-warn')));
 check('the six new cards show as charts; R4, R5 stay grey', (await evalJS(`['R1','R2','R3','S1','S2','S3','R4','R5'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
@@ -543,7 +545,7 @@ await evalJS(`(() => { const p = 'bdControl/clientContracts/rows', s = __store.g
   __emit(); })()`);
 await sleep(250);
 check('rows change → headline follows (no reload): R1 2 with 1 within 30 days (warn), A3 1 real (+25 % ALPHA)',
-  (await tiles8()) === 'P1=5,P2=3,M9=wait,M3=wait,R1=2,R2=1,A3=1,G2=wait' && (await text('[data-ac-tile="R1"] [data-ac-sub]')) === 'Within 30 days: 1'
+  (await tiles8()) === 'P1=5,P2=3,M9=≈,M3=≈,R1=2,R2=1,A3=1,G2=wait' &&(await text('[data-ac-tile="R1"] [data-ac-sub]')) === 'Within 30 days: 1'
   && (await has('[data-ac-tile="R1"].ac-tile-warn')) && (await text('[data-ac-tile="A3"] [data-ac-sub]')) === 'Biggest: +25% · ALPHA', await tiles8());
 check('S3 with 6 contractors: top 5 listed + "All others (1)"', (await evalJS(`document.querySelectorAll('[data-ac-row="reliance"]').length`)) === 6
   && (await text('[data-ac-row="reliance"][data-ac-key="others"] .bdc-name')) === 'All others (1)', await acRows('reliance'));
@@ -632,6 +634,98 @@ await shot('a4-ar');
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await evalJS(`window.__seedAll(); __emit()`);
 await sleep(200);
+
+console.log('\n[2f] Analysis center: money M2–M4, M6–M11 from assumed rules (queue A7a)');
+// Pure maths on a fixed, made-up set and a fixed today, so every figure is exact:
+// X: CSA 300 m, real start 2024-10-20 → end 2027-10-20 (1,095 days), supplier P-1 36.5 m over the last 365 days.
+// Z: O&M paid 1 m a month, supplier P-2 20 m over the last 365 days (more than its budget → a loss).
+// Y: CSA 30 m that ended 2025-06-30 (no billing in the last year) with supplier P-3 3.65 m → named apart.
+// W internal, V supplier-side and a Completed contract never count.
+const M = await evalJS(`(() => { const A = window.__ac, T = '2026-10-20';
+  const F = { meta: null, changes: [], dayRates: [], supplierAmendments: [], agibaSOs: [], agibaSiteContracts: [], dataIssues: [],
+    clients: [{ id: 'X', code: 'X', kind: 'client' }, { id: 'Y', code: 'Y', kind: 'client' }, { id: 'Z', code: 'Z', kind: 'client' },
+      { id: 'W', code: 'W', kind: 'internal' }, { id: 'V', code: 'V', kind: 'supplier-side only' }],
+    clientContracts: [
+      { id: 'X1', client: 'X', contractType: 'CSA', ceilingEgp: 300e6, startDate: '2024-10-20', expiryDate: '2027-10-20' },
+      { id: 'Y1', client: 'Y', contractType: 'CSA', ceilingEgp: 30e6, expiryDate: '2025-06-30' },
+      { id: 'Z1', client: 'Z', contractType: 'O&M', monthlyValueEgp: 1e6, expiryDate: '2027-06-30' }],
+    supplierContracts: [
+      { id: 'P-1', contractNo: 'P/1', client: 'X', status: 'In Progress', currentValueEgp: 36.5e6, originalStart: '2025-10-20', currentEnd: '2026-10-20' },
+      { id: 'P-2', contractNo: 'P/2', client: 'Z', status: 'In Progress', currentValueEgp: 20e6, originalStart: '2025-10-20', currentEnd: '2026-10-20' },
+      { id: 'P-3', contractNo: 'P/3', client: 'Y', status: null, currentValueEgp: 3.65e6, originalStart: '2025-10-20', currentEnd: '2026-10-20' },
+      { id: 'P-4', contractNo: 'P/4', client: 'W', status: 'In Progress', currentValueEgp: 9e6, currentEnd: '2027-01-01' },
+      { id: 'P-5', contractNo: 'P/5', client: 'V', status: 'In Progress', currentValueEgp: 9e6, currentEnd: '2027-01-01' },
+      { id: 'P-6', contractNo: 'P/6', client: 'X', status: 'Completed', currentValueEgp: 9e6, currentEnd: '2027-01-01' }] };
+  const r = x => Math.round(x);
+  const y = A.moneyLastYear(F, T), by = Object.fromEntries(y.rows.map(e => [e.client, e]));
+  const pick = e => [r(e.invoicedEgp), r(e.plannedEgp), r(e.subcontractEgp), r(e.ownEgp), r(e.staffEgp), r(e.allowancesEgp), r(e.travelEgp), r(e.costEgp), r(e.overheadEgp), r(e.profitEgp)];
+  const o = A.owedByAge(F, T), u = A.ceilingUsed(F, T), q = A.billingByQuarter(F, T), c = A.cashByQuarter(F, T);
+  return {
+    sup: A.moneyModel(F).suppliers.map(s => s.id).join(','), X: pick(by.X), Z: pick(by.Z), Y: pick(by.Y),
+    span: [A.quarterSpan('2026-Q4'), A.quarterSpan('2026-Q1')],
+    owed: o.bands.map(b => b.band + '=' + r(b.egp)).join(','), owedTotal: r(o.owedEgp), collected: r(o.collectedEgp),
+    used: u.rows.map(x => x.id + '=' + x.usedPct.toFixed(2) + (x.startAssumed ? '≈' : '')).join(','), noCeiling: u.noCeiling,
+    qs: q.map(x => x.quarter).join(','), q3: [r(q[5].plannedEgp), r(q[5].invoicedEgp)], c3: [r(c[5].inEgp), r(c[5].outEgp)],
+  }; })()`);
+{
+  const X = 240e6 / 1095, Xp = 300e6 / 1095, Z = 12e6 / 365, r = Math.round;
+  const own = 80e6 / 1.6875 - 36.5e6, costX = 80e6 / 1.6875;
+  check('money model: supplier P-1/P-2/P-3 only (EPROM’s own needs, supplier-side codes and Completed contracts left out)', M.sup === 'P-1,P-2,P-3', M.sup);
+  check('X last 12 months: billed 80 m (80% of 300 m over 3 years), should be paid 100 m, subcontract 36.5 m, own = 80 ÷ 1.6875 − 36.5, split 75/20/5, overhead 25%, profit',
+    J(M.X) === J([80e6, 100e6, 36.5e6, r(own), r(own * 0.75), r(own * 0.2), r(own * 0.05), r(costX), r(costX * 0.25), r(80e6 - costX * 1.25)]), J(M.X));
+  check('Z: monthly line bills 12 m in full; supplier 20 m is over its budget → own cost 0, loss of 13 m', J(M.Z) === J([12e6, 12e6, 20e6, 0, 0, 0, 0, 20e6, 5e6, -13e6]), J(M.Z));
+  check('Y: nothing billed after its end date — only its supplier cost', M.Y[0] === 0 && M.Y[2] === 3650000 && M.Y[9] === r(-3650000 * 1.25), J(M.Y));
+  check('quarterSpan: Q4 2026 = 1 Oct → 1 Jan; Q1 = 1 Jan → 1 Apr', J(M.span) === J([['2026-10-01', '2027-01-01'], ['2026-01-01', '2026-04-01']]), J(M.span));
+  check('M2/M11: the 6 COMPLETED quarters, oldest first (today in Q4 2026 → Q2 2025 … Q3 2026)', M.qs === '2025-Q2,2025-Q3,2025-Q4,2026-Q1,2026-Q2,2026-Q3', M.qs);
+  check('M2 Q3 2026: should be paid (X 300 m + Z) and billed (X 240 m + Z) over 92 days', J(M.q3) === J([r((Xp + Z) * 92), r((X + Z) * 92)]), J(M.q3));
+  const subQ3 = 92 * 100000, ownX = Math.max(0, (X * 92) / 1.6875 - subQ3);
+  check('M11 Q3 2026: cash in = bills of 90 days earlier; cash out = cost + 25% overhead of the quarter (X, Z over budget, Y supplier only)',
+    J(M.c3) === J([r((X + Z) * 92), r(((subQ3 + ownX) + (92 * 20e6 / 365) + 920000) * 1.25)]), J(M.c3));
+  const d30 = r((X + Z) * 30);
+  check('M3: the last 90 days of bills are owed (3 × 30 days), nothing over 90 days; collected = the 12 months before that',
+    M.owed === `d30=${d30},d60=${d30},d90=${d30},over90=0` && M.owedTotal === r((X + Z) * 90) && M.collected === 92e6, `${M.owed} | ${M.owedTotal} | ${M.collected}`);
+  check('M10: Y used 80% (term over, assumed start ≈), X 53.33% (2 of 3 years, real start); the monthly line has no ceiling',
+    M.used === 'Y1=80.00≈,X1=53.33' && M.noCeiling === 1, `${M.used} | ${M.noCeiling}`);
+}
+// On the page, with the shared made-up rows (dates move with today, so order and labels are checked, not amounts).
+const money = ['M2', 'M3', 'M4', 'M6', 'M7', 'M8', 'M9', 'M10', 'M11'];
+check('the nine money cards show as charts, each hatched with its rules and a "Requested from" line',
+  (await evalJS(`${J(money)}.every(k => { const c = document.querySelector('[data-ac-q="' + k + '"]');
+    return c && c.dataset.acShow === 'chart' && c.querySelector('[data-ac-assumed]') && c.querySelector('[data-ac-still]') && c.querySelector('[data-ac-assumed-seg]'); })`)),
+  await evalJS(`${J(money)}.map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`));
+check('M9 loss-makers first: GAMMA (monthly fee below its USD subcontract) in red, then BETA, ALPHA; "Losing money" 1',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="M9"]')].map(e => e.dataset.acKey).join(',')`)) === 'GAMMA,BETA,ALPHA'
+  && (await has('[data-ac-row="M9"][data-ac-key="GAMMA"] .bdc-num.bdc-red')) && (await has('[data-ac-row="M9"][data-ac-key="GAMMA"] .ac-hatch-lo'))
+  && (await text('[data-ac-q="M9"] [data-ac-fig="losing"]')) === '1' && !(await has('[data-ac-q="M9"] [data-ac-foot="unbilled"]')),
+  await evalJS(`[...document.querySelectorAll('[data-ac-row="M9"]')].map(e => e.dataset.acKey + '=' + window.__txt(e.querySelector('[data-bdc-value]'))).join(',')`));
+check('M9 key spells out all four rules, requested from Finance', (await text('[data-ac-q="M9"] [data-ac-assumed]')).includes('our own direct cost = billing ÷ 1.6875 (EPROM’s price build-up) less subcontractors')
+  && (await text('[data-ac-q="M9"] [data-ac-assumed]')).includes('head-office overhead = 25% of direct cost')
+  && (await text('[data-ac-q="M9"] [data-ac-still]')) === 'Requested from Finance: Needs invoices (M2) and total cost (M8)', await text('[data-ac-q="M9"] [data-ac-assumed]'));
+check('M4 own staff: only projects with own cost (GAMMA’s budget all went to its subcontract); 75/20/5 split stated; HR + Finance',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="M4"]')].map(e => e.dataset.acKey).join(',')`)) === 'ALPHA,BETA'
+  && (await text('[data-ac-q="M4"] [data-ac-assumed]')).includes('own cost split 75% salaries and benefits, 20% allowances, 5% travel and transport')
+  && (await text('[data-ac-q="M4"] [data-ac-still]')) === 'Requested from HR, Finance: Staff cost per project (payroll totals, no names)', await text('[data-ac-q="M4"] [data-ac-still]'));
+check('M8 GAMMA: all subcontract (USD at 50), none of our own', (await text('[data-ac-row="M8"][data-ac-key="GAMMA"] .bdc-sub')) === 'Subcontractors ≈ 8.3 m EGP · our own ≈ 0 m EGP',
+  await text('[data-ac-row="M8"][data-ac-key="GAMMA"] .bdc-sub'));
+check('M3 four age bands, over 90 days ≈ 0 (greyed); M2 + M11 six quarter pairs with a two-series legend',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="owed"]')].map(e => e.dataset.acKey).join(',')`)) === 'd30,d60,d90,over90'
+  && (await text('[data-ac-row="owed"][data-ac-key="over90"] [data-bdc-value]')) === '≈ 0 m EGP' && (await has('[data-ac-row="owed"][data-ac-key="over90"] .bdc-zero'))
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="M2"] [data-ac-row="moneyQuarters"] .ac-pair > span').length`)) === 12
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="M11"] [data-ac-row="moneyQuarters"]').length`)) === 6
+  && (await texts('[data-ac-q="M11"] .bdc-legend li')) === 'Cash in|Cash out|Figures in m EGP', await texts('[data-ac-q="M11"] .bdc-legend li'));
+check('M10 per line, most used first (BETA CSA ends in 45 days); 3 lines with no ceiling or no end date',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-row="used"]')].map(e => e.dataset.acKey).join(',')`)) === 'BETA_2_CSA,ALPHA_1_CSA'
+  && (await text('[data-ac-q="M10"] [data-ac-foot="noCeiling"]')) === 'Lines with no ceiling or no end date on file: 3', await text('[data-ac-q="M10"] [data-ac-foot="noCeiling"]'));
+check('headline: Profit tile assumed (≈) and amber-red because a project loses money; Owed tile names the over-90-days part',
+  (await has('[data-ac-tile="M9"].ac-tile-warn')) && (await text('[data-ac-tile="M3"] [data-ac-sub]')) === 'Over 90 days: ≈ 0 m EGP', await text('[data-ac-tile="M3"] [data-ac-sub]'));
+await click('[data-ac-row="M9"][data-ac-key="GAMMA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from M9');
+check('an M9 row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('GAMMA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="board"]'), 'board again');
+await sleep(300);
+check('no tall empty space between charts with the Money group filled (desktop)', (await holes()) === '', await holes());
+await shot('a7a-money');
 
 console.log('\n[3] the data-date strip');
 await waitFor(q('[data-ac="board"]'), 'board');
@@ -931,9 +1025,12 @@ check('Arabic board: question title, fixed note, group name and grey box all in 
   (await text('[data-ac-q="P4"] [data-ac-title]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
   && (await text('[data-ac-q="P6"] [data-ac-note]')).startsWith('أكبر عشرة بنود وفق الحد الأقصى للعقد')
   && (await text('[data-ac-jump="opportunity"]')).startsWith('تكلفة الفرصة البديلة')
-  && (await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')) === 'بيانات مطلوبة|التحصيلات والفواتير غير المسددة|الإدارة المالية'
+  && (await texts('[data-ac-q="R5"] .ac-need-tag, [data-ac-q="R5"] dd')) === 'بيانات مطلوبة|قائمة خطابات الضمان بتواريخ انتهائها|الإدارة المالية'
   && (await text('[data-ac-stat="type:CSA"] .ac-stat-label')) === 'عقود الخدمات المستمرة',
-  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await texts('[data-ac-q="M3"] .ac-need-tag, [data-ac-q="M3"] dd')}`);
+  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await texts('[data-ac-q="R5"] .ac-need-tag, [data-ac-q="R5"] dd')}`);
+check('Arabic money chart (A7a): M9 title, figure label, the cost rule', (await text('[data-ac-q="M9"] [data-ac-title]')) === 'ما ربح كل مشروع، وأي المشروعات يحقق خسارة؟'
+  && (await text('[data-ac-q="M9"] [data-ac-figs] span')).startsWith('الربح خلال آخر 12 شهرًا')
+  && (await text('[data-ac-q="M9"] [data-ac-assumed]')).includes('تكلفتنا المباشرة = الفوترة ÷ 1.6875'), await text('[data-ac-q="M9"] [data-ac-assumed]'));
 check('Western digits + unit «مليون جنيه» in Arabic, like the rest of the app (ar-EG-u-nu-latn): M1 total 2,504.7',
   (await total()).startsWith('2,504.7') && (await total()).includes('مليون جنيه'), await total());
 check('edits line in Arabic', (await text('[data-bd="edits"]')).startsWith('السجلات المعدَّلة في eTaske منذ آخر تحميل'));
@@ -980,6 +1077,11 @@ check('meta but no rows: each chart says so in a sentence', (await emptyOf('P6')
   await texts('[data-ac-q] .bdc-empty'));
 check('… suppliers and amendments too', (await emptyOf('M5')) === 'No live supplier contract is tied to a client project.'
   && (await emptyOf('S1')) === 'No live supplier contract on file.' && (await emptyOf('A1')) === 'No amendment on file for any project.');
+check('… and the money charts (A7a): one sentence each, no empty columns or zero bars',
+  (await emptyOf('M2')) === 'No contract line with an end date and a value on file.'
+  && (await emptyOf('M3')) === 'No contract line with an end date and a value on file.' && (await emptyOf('M11')) === 'No contract line with an end date and a value on file.'
+  && (await emptyOf('M9')) === 'No project bills anything in the last 12 months.' && (await emptyOf('M10')) === 'No contract line with a ceiling and an end date on file.'
+  && !(await has('[data-ac-q="M2"] .ac-cols')) && !(await has('[data-ac-q="M3"] [data-ac-row="owed"]')), await texts('[data-ac-q^="M"] .bdc-empty'));
 
 console.log('\n[9] someone the rules refuse');
 await evalJS(`window.__seedAll(); ['bdControl', ...window.__lib.BD_TABLES.map(t => 'bdControl/' + t + '/rows')].forEach(c => window.__denied.add(c))`);

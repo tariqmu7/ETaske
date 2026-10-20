@@ -144,23 +144,30 @@ export interface ProjectValue {
  * line with no value at all is assumed at the median ceiling of the other lines
  * of the same contract form (or of all lines when the form has none).
  */
+const ceilingOf = (r: BdClientContract) => { const c = num(r.ceilingEgp); return c != null && c > 0 ? c : null; };
+
+/** A line with no ceiling and no monthly value: the median ceiling of its contract form (or of all lines). */
+function typeMedianValue(lines: BdClientContract[]): (r: BdClientContract) => number | null {
+  const all = lines.map(ceilingOf).filter((c): c is number => c != null);
+  const byType = new Map<string, number[]>();
+  for (const r of lines) { const c = ceilingOf(r); if (c != null) byType.set(typeOf(r), [...(byType.get(typeOf(r)) || []), c]); }
+  return r => medianOf(byType.get(typeOf(r)) || []) ?? medianOf(all);
+}
+
 export function projectValues(data: BdData): { rows: ProjectValue[]; realEgp: number; assumedEgp: number; assumedLines: number } {
   const lines = projectLines(data);
-  const ceil = (r: BdClientContract) => { const c = num(r.ceilingEgp); return c != null && c > 0 ? c : null; };
-  const all = lines.map(ceil).filter((c): c is number => c != null);
-  const byType = new Map<string, number[]>();
-  for (const r of lines) { const c = ceil(r); if (c != null) byType.set(typeOf(r), [...(byType.get(typeOf(r)) || []), c]); }
+  const median = typeMedianValue(lines);
   const m = new Map<string, ProjectValue>();
   let assumedLines = 0;
   for (const r of lines) {
     const e = m.get(r.client) || { client: r.client, lines: 0, realEgp: 0, assumedEgp: 0, totalEgp: 0, basis: [] };
     e.lines++;
-    const c = ceil(r), monthly = num(r.monthlyValueEgp);
+    const c = ceilingOf(r), monthly = num(r.monthlyValueEgp);
     if (c != null) e.realEgp += c;
     else {
       const [v, b]: [number | null, AssumeBasis] = monthly != null && monthly > 0
         ? [monthly * ASSUMED_MONTHS, 'monthly']
-        : [medianOf(byType.get(typeOf(r)) || []) ?? medianOf(all), 'typeMedian'];
+        : [median(r), 'typeMedian'];
       if (v != null) { e.assumedEgp += v; assumedLines++; if (!e.basis.includes(b)) e.basis.push(b); }
     }
     e.totalEgp = e.realEgp + e.assumedEgp;
@@ -609,4 +616,220 @@ export function lastNewWork(data: BdData, today: string): { rows: LastWork[]; re
   }
   rows.sort((a, b) => b.months - a.months || a.client.localeCompare(b.client));
   return { rows, recent, noDate: noDate.sort(), clients: clients.length };
+}
+
+// ── Money (queue A7a) ────────────────────────────────────────────────────────
+//
+// Finance has sent no invoices, costs, collections or cash yet, so every money
+// figure in M2–M4 and M6–M11 is ASSUMED by the rules below (agreed with Tariq,
+// 20 Oct 2026) and drawn hatched. What is real: the ceilings, monthly values and
+// end dates of the client lines, and the live supplier contracts. Every rule reads
+// those rows, so an edit or a new load moves every figure; a start date on a line
+// (`startDate`) or a supplier contract (`originalStart`) replaces the assumed one.
+
+/** A contract runs this long, ending on its end date, until its start date is on file. */
+export const ASSUMED_TERM_YEARS = 3;
+/** Share of a ceiling the client ends up paying (a ceiling is a maximum). A monthly line is billed in full. */
+export const ASSUMED_CEILING_USED = 0.8;
+/** EPROM's own price build-up (Discovery Brief, ANOPC tender): direct cost × 1.35 (overheads 25 % + contingency 10 %) × 1.25 (profit). */
+export const PRICE_BUILDUP = 1.35 * 1.25;
+/** Head-office overhead on top of direct cost (same build-up). */
+export const OVERHEAD_OF_DIRECT = 0.25;
+/** How our own direct cost (everything but subcontractors) splits. */
+export const OWN_COST_SPLIT = { staff: 0.75, allowances: 0.2, travel: 0.05 } as const;
+/** Days a client takes to pay an invoice. */
+export const ASSUMED_PAY_DAYS = 90;
+/** M2 / M11 show this many completed quarters. */
+export const MONEY_QUARTERS = 6;
+
+const DAY = 86400000;
+const dayOf = (iso: string) => Date.parse(`${iso}T00:00:00Z`) / DAY;
+const plusDays = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
+const plusYears = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCFullYear(d.getUTCFullYear() + n); return d.toISOString().slice(0, 10); };
+/** Days of [a, b) that fall inside [from, to). */
+const overlap = (a: string, b: string, from: string, to: string) => Math.max(0, Math.min(dayOf(b), dayOf(to)) - Math.max(dayOf(a), dayOf(from)));
+
+/** "2026-Q3" → its first day and the next quarter's first day. */
+export function quarterSpan(q: string): [string, string] {
+  const y = Number(q.slice(0, 4)), n = Number(q.slice(-1));
+  const from = `${y}-${String(3 * (n - 1) + 1).padStart(2, '0')}-01`;
+  return [from, n === 4 ? `${y + 1}-01-01` : `${y}-${String(3 * n + 1).padStart(2, '0')}-01`];
+}
+
+/** So much money a day between two dates (`to` = the end date, not counted). */
+interface Stream { id: string; client: string; type: string; from: string; to: string; perDay: number }
+
+export interface BillingLine extends Stream { ceilingEgp: number | null; planPerDay: number; startAssumed: boolean }
+
+export interface MoneyModel {
+  lines: BillingLine[];
+  suppliers: Stream[];
+  /** Client lines with no end date (or no value anywhere to assume one from). */
+  linesLeftOut: number;
+  /** Live supplier contracts on a client project with no value, no end date or another currency. */
+  suppliersLeftOut: number;
+}
+
+/**
+ * The streams every money chart reads. A client line bills from its start date
+ * (assumed ASSUMED_TERM_YEARS before its end) to its end date: a line paid by the
+ * month its monthly value in full; any other line ASSUMED_CEILING_USED of its
+ * ceiling (no value at all: M1's median rule), spread evenly — `planPerDay` is
+ * the whole ceiling spread the same way. A live supplier contract on a client
+ * project costs its current value (USD at ASSUMED_USD_EGP, as M5) spread from
+ * its original start (assumed the same way) to its current end. EPROM's own
+ * needs and supplier-side codes are not a client project and are left out. A
+ * line bills nothing after its end date, even while it is still in the report
+ * (R2) — its supplier costs still count, so the profit chart names it apart.
+ */
+export function moneyModel(data: BdData): MoneyModel {
+  const all = projectLines(data);
+  const median = typeMedianValue(all);
+  const lines: BillingLine[] = [];
+  let linesLeftOut = 0;
+  for (const r of all) {
+    const to = isoOf(r.expiryDate);
+    if (!to) { linesLeftOut++; continue; }
+    const real = isoOf(r.startDate);
+    const startAssumed = !(real && real < to);
+    const from = startAssumed ? plusYears(to, -ASSUMED_TERM_YEARS) : (real as string);
+    const c = ceilingOf(r), monthly = num(r.monthlyValueEgp);
+    let plan: number, bill: number;
+    if (c == null && monthly != null && monthly > 0) plan = bill = (monthly * 12) / 365;
+    else {
+      const v = c ?? median(r);
+      if (v == null) { linesLeftOut++; continue; }
+      plan = v / (dayOf(to) - dayOf(from)); bill = plan * ASSUMED_CEILING_USED;
+    }
+    lines.push({ id: r.id, client: r.client, type: typeOf(r), from, to, perDay: bill, planPerDay: plan, ceilingEgp: c, startAssumed });
+  }
+  const kind = new Map(data.clients.map(c => [c.code, c.kind]));
+  const suppliers: Stream[] = [];
+  let suppliersLeftOut = 0;
+  for (const s of data.supplierContracts.filter(isLiveSupplier)) {
+    const client = txt(s.client), k = kind.get(client);
+    if (k != null && k !== 'client') continue;
+    const v = num(s.currentValueEgp);
+    const value = v == null ? null : isEgpSupplier(s) ? v : isUsd(s) ? v * ASSUMED_USD_EGP : null;
+    const to = isoOf(s.currentEnd);
+    if (!client || value == null || value <= 0 || !to) { suppliersLeftOut++; continue; }
+    const real = isoOf(s.originalStart);
+    const from = real && real < to ? real : plusYears(to, -ASSUMED_TERM_YEARS);
+    suppliers.push({ id: s.id, client, type: txt(s.costType), from, to, perDay: value / (dayOf(to) - dayOf(from)) });
+  }
+  return { lines, suppliers, linesLeftOut, suppliersLeftOut };
+}
+
+export interface ClientMoney {
+  client: string;
+  invoicedEgp: number;
+  /** The whole ceiling spread over the term (M2's "should be paid"). */
+  plannedEgp: number;
+  subcontractEgp: number;
+  /** Own direct cost = invoiced ÷ PRICE_BUILDUP − subcontractors, not below zero; split by OWN_COST_SPLIT. */
+  ownEgp: number;
+  staffEgp: number;
+  allowancesEgp: number;
+  travelEgp: number;
+  /** Subcontractors + own direct cost (M8). */
+  costEgp: number;
+  overheadEgp: number;
+  /** Invoiced − cost − overhead (M9). */
+  profitEgp: number;
+}
+
+const blankMoney = (client: string): ClientMoney => ({
+  client, invoicedEgp: 0, plannedEgp: 0, subcontractEgp: 0, ownEgp: 0, staffEgp: 0, allowancesEgp: 0, travelEgp: 0, costEgp: 0, overheadEgp: 0, profitEgp: 0,
+});
+
+/** Billing, cost and profit per client project between two dates, plus the total. */
+export function moneyBetween(m: MoneyModel, from: string, to: string): { rows: ClientMoney[]; total: ClientMoney } {
+  const at = new Map<string, ClientMoney>();
+  const get = (c: string) => { const e = at.get(c) || blankMoney(c); at.set(c, e); return e; };
+  for (const l of m.lines) {
+    const d = overlap(l.from, l.to, from, to);
+    if (d > 0) { const e = get(l.client); e.invoicedEgp += l.perDay * d; e.plannedEgp += l.planPerDay * d; }
+  }
+  for (const s of m.suppliers) {
+    const d = overlap(s.from, s.to, from, to);
+    if (d > 0) get(s.client).subcontractEgp += s.perDay * d;
+  }
+  const total = blankMoney('');
+  for (const e of at.values()) {
+    e.ownEgp = Math.max(0, e.invoicedEgp / PRICE_BUILDUP - e.subcontractEgp);
+    e.staffEgp = e.ownEgp * OWN_COST_SPLIT.staff;
+    e.allowancesEgp = e.ownEgp * OWN_COST_SPLIT.allowances;
+    e.travelEgp = e.ownEgp * OWN_COST_SPLIT.travel;
+    e.costEgp = e.subcontractEgp + e.ownEgp;
+    e.overheadEgp = e.costEgp * OVERHEAD_OF_DIRECT;
+    e.profitEgp = e.invoicedEgp - e.costEgp - e.overheadEgp;
+    for (const k of Object.keys(total) as (keyof ClientMoney)[]) if (k !== 'client') (total[k] as number) += e[k] as number;
+  }
+  return { rows: [...at.values()], total };
+}
+
+/** M4, M6–M9 — per client project over the last 12 months up to today. */
+export function moneyLastYear(data: BdData, today: string): { rows: ClientMoney[]; total: ClientMoney; model: MoneyModel } {
+  const model = moneyModel(data);
+  return { ...moneyBetween(model, plusDays(today, -365), today), model };
+}
+
+/** The last `n` COMPLETED quarters, oldest first. */
+const doneQuarters = (today: string, n: number) => lastQuarters(today, n + 1).slice(0, n);
+
+/** M2 — per completed quarter: what the ceilings say we should bill vs what we billed. */
+export function billingByQuarter(data: BdData, today: string, n = MONEY_QUARTERS): { quarter: string; plannedEgp: number; invoicedEgp: number }[] {
+  const model = moneyModel(data);
+  return doneQuarters(today, n).map(q => {
+    const [from, to] = quarterSpan(q);
+    const t = moneyBetween(model, from, to).total;
+    return { quarter: q, plannedEgp: t.plannedEgp, invoicedEgp: t.invoicedEgp };
+  });
+}
+
+/** M11 — per completed quarter: cash in (bills paid ASSUMED_PAY_DAYS later) vs cash out (cost + overhead, paid when incurred). */
+export function cashByQuarter(data: BdData, today: string, n = MONEY_QUARTERS): { quarter: string; inEgp: number; outEgp: number }[] {
+  const model = moneyModel(data);
+  return doneQuarters(today, n).map(q => {
+    const [from, to] = quarterSpan(q);
+    const paid = moneyBetween(model, plusDays(from, -ASSUMED_PAY_DAYS), plusDays(to, -ASSUMED_PAY_DAYS)).total;
+    const spent = moneyBetween(model, from, to).total;
+    return { quarter: q, inEgp: paid.invoicedEgp, outEgp: spent.costEgp + spent.overheadEgp };
+  });
+}
+
+/** M3 — the age bands of money owed, in days since the invoice: [band, from, to]. */
+export const OWED_BANDS = [['d30', 0, 30], ['d60', 30, 60], ['d90', 60, 90], ['over90', 90, Infinity]] as const;
+export type OwedBand = typeof OWED_BANDS[number][0];
+
+/**
+ * M3 — what clients still owe us, by age: every bill of the last ASSUMED_PAY_DAYS
+ * is unpaid, everything older is paid; plus what we collected over the last 12
+ * months (the bills of the 12 months before those).
+ */
+export function owedByAge(data: BdData, today: string): { bands: { band: OwedBand; egp: number }[]; owedEgp: number; collectedEgp: number } {
+  const model = moneyModel(data);
+  const billed = (from: string, to: string) => (from < to ? moneyBetween(model, from, to).total.invoicedEgp : 0);
+  const oldest = plusDays(today, -ASSUMED_PAY_DAYS);
+  const bands = OWED_BANDS.map(([band, lo, hi]) => {
+    const start = hi === Infinity ? oldest : plusDays(today, -hi);
+    return { band, egp: billed(start > oldest ? start : oldest, plusDays(today, -lo)) };
+  });
+  return { bands, owedEgp: bands.reduce((a, b) => a + b.egp, 0), collectedEgp: billed(plusDays(oldest, -365), oldest) };
+}
+
+export interface UsedLine { id: string; client: string; type: string; ceilingEgp: number; usedEgp: number; usedPct: number; startAssumed: boolean }
+
+/** M10 — per line with a ceiling: billed from its start to today against the ceiling, most used first. */
+export function ceilingUsed(data: BdData, today: string): { rows: UsedLine[]; noCeiling: number } {
+  const model = moneyModel(data);
+  const rows: UsedLine[] = [];
+  let noCeiling = model.linesLeftOut;
+  for (const l of model.lines) {
+    if (l.ceilingEgp == null) { noCeiling++; continue; }
+    const usedEgp = l.perDay * overlap(l.from, l.to, l.from, today);
+    rows.push({ id: l.id, client: l.client, type: l.type, ceilingEgp: l.ceilingEgp, usedEgp, usedPct: (usedEgp / l.ceilingEgp) * 100, startAssumed: l.startAssumed });
+  }
+  rows.sort((a, b) => b.usedPct - a.usedPct || b.ceilingEgp - a.ceilingEgp || a.client.localeCompare(b.client));
+  return { rows, noCeiling };
 }
