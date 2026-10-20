@@ -199,13 +199,13 @@ export const CEO_QUESTIONS: CeoQuestion[] = [
   // 5 — Renewals & risks
   Q('R1', 'renewals', 'have',
     { en: 'Which contracts end in the next 30, 90 and 180 days?', ar: 'أي العقود تنتهي خلال 30 و90 و180 يومًا القادمة؟' },
-    { en: 'Client contract lines counted by days left from today. Click a bucket for the list.', ar: 'بنود عقود العملاء مصنفة حسب الأيام المتبقية من اليوم، واضغط أي فئة لعرض قائمتها.' }),
+    { en: 'Client contract lines counted by days left from today. Click a bar to open its list; click a line to open the client.', ar: 'بنود عقود العملاء مصنفة حسب الأيام المتبقية من اليوم. اضغط أي شريط لفتح قائمته، ثم اضغط البند لفتح صفحة العميل.' }),
   Q('R2', 'renewals', 'have',
     { en: 'Which contracts are already past their end date and still running?', ar: 'أي العقود تجاوزت تاريخ انتهائها وما زال العمل فيها مستمرًا؟' },
     { en: 'Lines whose end date has passed but are still in the report. Each one needs a renewal or an amendment on paper.', ar: 'بنود انقضى تاريخها وما زالت مدرجة في التقرير، ويحتاج كل منها إلى تجديد أو ملحق موثق.' }),
   Q('R3', 'renewals', 'part',
     { en: 'Which supplier contracts end before the client contract they support?', ar: 'أي عقود الموردين تنتهي قبل عقد العميل الذي تخدمه؟' },
-    { en: 'Supplier contracts matched to the same client’s contract; those that end first are listed.', ar: 'تُطابَق عقود الموردين مع عقد العميل نفسه، ويظهر ما ينتهي منها قبل عقد العميل.' },
+    { en: 'Live supplier contracts matched to their client’s contract; those that end first are listed, soonest first. The bar is the months the client contract runs on without the supplier.', ar: 'نطابق عقود الموردين السارية مع عقد العميل الذي تخدمه، ونعرض ما ينتهي منها قبله بدءًا بالأقرب. يمثل الشريط عدد الأشهر التي يستمر فيها عقد العميل دون المورد.' },
     { en: 'Which supplier serves which project', ar: 'ربط كل مورد بالمشروع الذي يخدمه' }, ['contracts']),
   Q('R4', 'renewals', 'missing',
     { en: 'Which projects have the most open risks?', ar: 'أي المشروعات تحمل أكبر عدد من المخاطر المفتوحة؟' },
@@ -219,13 +219,13 @@ export const CEO_QUESTIONS: CeoQuestion[] = [
   // 6 — Suppliers
   Q('S1', 'suppliers', 'have',
     { en: 'How much do we spend through subcontractors, and with whom?', ar: 'كم ننفق عبر مقاولي الباطن، ومع من؟' },
-    { en: 'Live supplier contracts at their current value, by contractor. EGP only; contracts in another currency are left out.', ar: 'عقود الموردين السارية بقيمتها الحالية حسب المقاول، بالجنيه فقط، وتُستبعد العقود المبرمة بعملة أخرى.' }),
+    { en: 'Live supplier contracts at their current value, by contractor. A contract in US dollars is converted at an assumed rate; any other currency is left out.', ar: 'عقود الموردين السارية بقيمتها الحالية حسب المقاول. نحوّل العقد المبرم بالدولار الأمريكي بسعر صرف مفترض، ونستبعد العقود المبرمة بأي عملة أخرى.' }),
   Q('S2', 'suppliers', 'have',
     { en: 'Which supplier contracts grew the most through amendments?', ar: 'أي عقود الموردين زادت قيمتها أكثر من غيرها بفضل الملاحق؟' },
     { en: 'Top 10 live EGP contracts by growth from the value when signed to the current value.', ar: 'أعلى عشرة عقود سارية بالجنيه في نسبة الزيادة من قيمة التوقيع إلى القيمة الحالية.' }),
   Q('S3', 'suppliers', 'have',
     { en: 'Do we rely too much on one supplier?', ar: 'هل نعتمد على مورد واحد أكثر من اللازم؟' },
-    { en: 'Share of live EGP supplier spend held by the top 5 contractors.', ar: 'حصة أكبر خمسة مقاولين من إنفاقنا على عقود الموردين السارية بالجنيه.' }),
+    { en: 'Share of live supplier spend held by the top 5 contractors, and by all the others together.', ar: 'حصة أكبر خمسة مقاولين من إنفاقنا على عقود الموردين السارية، مقابل حصة بقية المقاولين مجتمعين.' }),
 
   // 7 — Growth
   Q('G1', 'growth', 'part',

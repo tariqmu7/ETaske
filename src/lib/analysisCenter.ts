@@ -6,7 +6,7 @@
 // project like any other (Tariq, 19 Oct 2026) — no special case here.
 
 import {
-  daysUntil, isEgpSupplier, isLiveSupplier, periodDate, type BdClientContract, type BdData, type BdSupplierContract,
+  daysUntil, isEgpSupplier, isLiveSupplier, periodDate, supplierFlag, type BdClientContract, type BdData, type BdSupplierContract,
 } from './bdControl';
 
 /** Lines that are a real client's (the CSA report also carries no other kind, but a supplier-side code must never count). */
@@ -364,4 +364,127 @@ export function extensionsByProject(data: BdData, top = 10): { rows: ExtensionRo
   }
   rows.sort((a, b) => b.value - a.value || (b.movedMonths ?? -1) - (a.movedMonths ?? -1) || a.client.localeCompare(b.client));
   return { rows: rows.slice(0, top), y, flat };
+}
+
+// ── Renewals + suppliers (queue A3) ──────────────────────────────────────────
+
+/** R1 — the three windows the CEO asked for, in days left from today. */
+export const SOON_WINDOWS = ['d30', 'd90', 'd180'] as const;
+export type SoonWindow = typeof SOON_WINDOWS[number];
+const soonWindow = (days: number): SoonWindow | null => (days < 0 ? null : days <= 30 ? 'd30' : days <= 90 ? 'd90' : days <= 180 ? 'd180' : null);
+
+export interface EndLine { id: string; client: string; type: string; end: string; days: number }
+
+/**
+ * R1 — project lines ending in 0–30, 31–90 and 91–180 days, soonest first in
+ * each window. Lines past their end are R2's; lines with no end date are counted.
+ */
+export function endingSoon(data: BdData, today: string): { windows: { w: SoonWindow; lines: EndLine[] }[]; noDate: number; later: number } {
+  const at = new Map(SOON_WINDOWS.map(w => [w, [] as EndLine[]]));
+  let noDate = 0, later = 0;
+  for (const r of projectLines(data)) {
+    const days = daysUntil(r.expiryDate, today);
+    if (days == null) { noDate++; continue; }
+    const w = soonWindow(days);
+    if (w) at.get(w)!.push({ id: r.id, client: r.client, type: typeOf(r), end: String(r.expiryDate).slice(0, 10), days });
+    else if (days > 180) later++;
+  }
+  for (const xs of at.values()) xs.sort((a, b) => a.days - b.days || a.client.localeCompare(b.client));
+  return { windows: SOON_WINDOWS.map(w => ({ w, lines: at.get(w)! })), noDate, later };
+}
+
+/**
+ * R2 — project lines still in the report although their end date has passed,
+ * longest overdue first; plus how many live supplier contracts are in the same
+ * state (still In Progress past their end).
+ */
+export function pastEnd(data: BdData, today: string): { lines: EndLine[]; suppliers: number } {
+  const lines: EndLine[] = [];
+  for (const r of projectLines(data)) {
+    const days = daysUntil(r.expiryDate, today);
+    if (days != null && days < 0) lines.push({ id: r.id, client: r.client, type: typeOf(r), end: String(r.expiryDate).slice(0, 10), days });
+  }
+  lines.sort((a, b) => a.days - b.days || a.client.localeCompare(b.client));
+  const suppliers = data.supplierContracts.filter(s => isLiveSupplier(s) && supplierFlag(s, today) === 'Expired on paper').length;
+  return { lines, suppliers };
+}
+
+export interface SupplierGap {
+  id: string; contractNo: string; contractor: string; client: string;
+  /** The client line it is matched to. */
+  lineId: string; lineType: string;
+  supplierEnd: string; clientEnd: string;
+  /** Months the client line runs on after the supplier contract ends. */
+  months: number;
+  /** True when the client has several lines and the match is the assumed one. */
+  assumed: boolean;
+}
+
+/**
+ * R3 — live supplier contracts that end before the client contract they
+ * support. Until Contracts says which supplier serves which project, a supplier
+ * is matched by its client: one line = that line (certain); several lines = the
+ * one that runs longest (assumed — the stated rule). EPROM's own needs and
+ * contracts with no client or no end date are counted, not matched.
+ */
+export function suppliersEndingFirst(data: BdData, today: string): { rows: SupplierGap[]; matched: number; unmatched: number } {
+  const kind = new Map(data.clients.map(c => [c.code, c.kind]));
+  const byClient = new Map<string, BdClientContract[]>();
+  for (const r of projectLines(data)) if (isoOf(r.expiryDate)) byClient.set(r.client, [...(byClient.get(r.client) || []), r]);
+  const rows: SupplierGap[] = [];
+  let matched = 0, unmatched = 0;
+  for (const s of data.supplierContracts) {
+    if (!isLiveSupplier(s) || supplierFlag(s, today) === 'Ended') continue;
+    const client = txt(s.client), end = isoOf(s.currentEnd), lines = byClient.get(client);
+    if (!end || !lines || kind.get(client) === 'internal') { unmatched++; continue; }
+    matched++;
+    const line = [...lines].sort((a, b) => String(b.expiryDate).localeCompare(String(a.expiryDate)))[0];
+    const clientEnd = isoOf(line.expiryDate) as string;
+    if (end >= clientEnd) continue;
+    rows.push({
+      id: s.id, contractNo: txt(s.contractNo), contractor: txt(s.contractor), client, lineId: line.id, lineType: typeOf(line),
+      supplierEnd: end, clientEnd, months: Math.max(0, Math.round(monthsBetween(end, clientEnd))), assumed: lines.length > 1,
+    });
+  }
+  rows.sort((a, b) => a.supplierEnd.localeCompare(b.supplierEnd) || b.months - a.months || a.contractNo.localeCompare(b.contractNo));
+  return { rows, matched, unmatched };
+}
+
+export interface ContractorSpend { contractor: string; count: number; realEgp: number; assumedEgp: number; totalEgp: number }
+
+/**
+ * S1 / S3 — live supplier spend per contractor. EGP lines are real, USD lines
+ * assumed at ASSUMED_USD_EGP (as M5), any other currency left out and counted.
+ */
+export function spendByContractor(data: BdData): { rows: ContractorSpend[]; realEgp: number; assumedEgp: number; usdLines: number; leftOut: number } {
+  const m = new Map<string, ContractorSpend>();
+  let usdLines = 0, leftOut = 0;
+  for (const s of data.supplierContracts.filter(isLiveSupplier)) {
+    const v = num(s.currentValueEgp);
+    let real = 0, assumed = 0;
+    if (isEgpSupplier(s)) real = v ?? 0;
+    else if (isUsd(s) && v != null) { assumed = v * ASSUMED_USD_EGP; usdLines++; }
+    else { leftOut++; continue; }
+    const contractor = txt(s.contractor);
+    const e = m.get(contractor) || { contractor, count: 0, realEgp: 0, assumedEgp: 0, totalEgp: 0 };
+    e.count++; e.realEgp += real; e.assumedEgp += assumed; e.totalEgp = e.realEgp + e.assumedEgp;
+    m.set(contractor, e);
+  }
+  const rows = [...m.values()].sort((a, b) => b.totalEgp - a.totalEgp || a.contractor.localeCompare(b.contractor));
+  return { rows, realEgp: rows.reduce((a, x) => a + x.realEgp, 0), assumedEgp: rows.reduce((a, x) => a + x.assumedEgp, 0), usdLines, leftOut };
+}
+
+/** S3 — how much of the live supplier spend the biggest `top` contractors hold. */
+export function topContractorShare(data: BdData, top = 5): {
+  rows: (ContractorSpend & { pct: number })[]; topPct: number; others: { count: number; pct: number }; totalEgp: number; assumed: boolean;
+} {
+  const s = spendByContractor(data);
+  const total = s.realEgp + s.assumedEgp;
+  const pct = (x: number) => (total > 0 ? (x / total) * 100 : 0);
+  const rows = s.rows.slice(0, top).map(r => ({ ...r, pct: pct(r.totalEgp) }));
+  const rest = s.rows.slice(top);
+  return {
+    rows, topPct: rows.reduce((a, r) => a + r.pct, 0), totalEgp: total, assumed: s.assumedEgp > 0,
+    others: { count: rest.length, pct: pct(rest.reduce((a, r) => a + r.totalEgp, 0)) },
+  };
 }

@@ -16,7 +16,7 @@ import type { ChartCtx } from './ProjectCharts';
 const FIRST = 10;
 
 /** One bar: the real part solid, the assumed part hatched. */
-function Bar({ real, assumed, max }: { real: number; assumed: number; max: number }) {
+export function Bar({ real, assumed, max }: { real: number; assumed: number; max: number }) {
   return (
     <span className="bdc-track">
       <span className="bdc-stack" style={{ width: `${((real + assumed) / Math.max(1e-9, max)) * 100}%` }}>
@@ -28,7 +28,7 @@ function Bar({ real, assumed, max }: { real: number; assumed: number; max: numbe
 }
 
 /** The hatched swatch + the rule behind the assumed figures on this chart. */
-function AssumedKey({ rules }: { rules: string[] }) {
+export function AssumedKey({ rules }: { rules: string[] }) {
   const { t, i18n } = useTranslation();
   const sep = i18n.language === 'ar' ? '، ' : ', ';
   if (!rules.length) return null;

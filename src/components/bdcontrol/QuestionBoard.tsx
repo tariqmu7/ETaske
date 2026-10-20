@@ -7,10 +7,12 @@ import {
 } from '../../lib/ceoQuestions';
 import { PROJECT_CHARTS, type ChartCtx } from './ProjectCharts';
 import { MONEY_AMEND_CHARTS } from './MoneyAmendCharts';
+import { RENEW_SUPPLY_CHARTS } from './RenewSupplyCharts';
+import Headline from './Headline';
 import { useMasonry } from './shared';
 
 /** Every question chart built so far, by question id. */
-const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS };
+const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS };
 
 /** How a question shows today: its chart, a grey "data needed" box, or not yet (chart still to be built). */
 export type QShow = 'chart' | 'need' | null;
@@ -72,6 +74,7 @@ export default function QuestionBoard(ctx: ChartCtx) {
 
   return (
     <div className="ac-board" data-ac="board">
+      <Headline {...ctx} />
       <p className="ac-summary" data-ac="summary">
         {t('{{a}} questions answered from today’s data · {{w}} waiting for data from other departments', { a: F.number(answered), w: F.number(waiting) })}
       </p>

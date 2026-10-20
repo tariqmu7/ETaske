@@ -381,8 +381,8 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: 12 answered from today’s data (P1–P4, P6, M1, M5, A1–A5) · 28 waiting for data', (await text('[data-ac="summary"]')) === '12 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
-check('group chips in order; Suppliers hidden (no chart or grey box yet)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,growth,opportunity');
+check('board summary: 18 answered from today’s data (P1–P4, P6, M1, M5, A1–A5, R1–R3, S1–S3) · 28 waiting for data', (await text('[data-ac="summary"]')) === '18 questions answered from today’s data · 28 waiting for data from other departments', await text('[data-ac="summary"]'));
+check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
 check('group 1: charts P1 P2 P3 P4 P6 first, then grey boxes P5 P7 P8', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P6:chart,P5:need,P7:need,P8:need');
 check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
@@ -502,6 +502,65 @@ await evalJS(`window.__seedAll(); __emit()`);
 await sleep(200);
 check('A2 with no dated amendment: one line, no empty columns', (await text('[data-ac-q="A2"] [data-ac-empty="quarters"]')) === 'No amendment starts in the last 8 quarters.'
   && !(await has('[data-ac-q="A2"] .ac-cols')) && (await text('[data-ac-q="A2"] [data-ac-foot="quarters"]')) === 'No date on file: 5');
+
+console.log('\n[2d] Analysis center: renewals R1–R3, suppliers S1–S3, headline strip (queue A3)');
+await sleep(200);
+const tiles8 = () => evalJS(`[...document.querySelectorAll('[data-ac-tile]')].map(e => e.dataset.acTile + '=' + (e.hasAttribute('data-ac-wait') ? 'wait' : window.__txt(e.querySelector('[data-ac-value]')))).join(',')`);
+check('headline strip sits above the board summary, 8 tiles in the D5 order; M9, M3, G2 wait for data',
+  (await evalJS(`(() => { const h = document.querySelector('[data-ac="headline"]'), s = document.querySelector('[data-ac="summary"]'); return !!h && !!s && !!(h.compareDocumentPosition(s) & 4); })()`))
+  && (await tiles8()) === 'P1=5,P2=3,M9=wait,M3=wait,R1=1,R2=1,A3=0,G2=wait', await tiles8());
+check('headline subs: amendments, "of 5 on file", within 30 days; waiting tiles name who it was requested from',
+  (await texts('[data-ac-tile="P1"] [data-ac-sub], [data-ac-tile="P2"] [data-ac-sub], [data-ac-tile="R1"] [data-ac-sub], [data-ac-tile="M9"] [data-ac-sub], [data-ac-tile="G2"] [data-ac-sub]'))
+  === 'Amendments: 0|Of 5 on file|Requested from Finance|Within 30 days: 0|Requested from BD', await texts('[data-ac-tile] [data-ac-sub]'));
+check('R2 tile is marked as a warning (a line is past its end); R1 is not (nothing within 30 days)',
+  (await has('[data-ac-tile="R2"].ac-tile-warn')) && !(await has('[data-ac-tile="R1"].ac-tile-warn')));
+check('the six new cards show as charts; R4, R5 stay grey', (await evalJS(`['R1','R2','R3','S1','S2','S3','R4','R5'].map(k => k + ':' + document.querySelector('[data-ac-q="' + k + '"]')?.dataset.acShow).join(',')`))
+  === 'R1:chart,R2:chart,R3:chart,S1:chart,S2:chart,S3:chart,R4:need,R5:need');
+check('R1 windows from today: ≤30 d 0 · 31–90 d 1 · 91–180 d 1; 1 line with no end date', (await acRows('soon')) === 'd30=0,d90=1,d180=1'
+  && (await text('[data-ac-q="R1"] [data-ac-foot="nodate"]')) === 'No end date on file: 1', await acRows('soon'));
+await click('[data-ac-row="soon"][data-ac-key="d90"]');
+check('R1: a bar opens its list (BETA CSA, 45 days left)', (await evalJS(`[...document.querySelectorAll('[data-ac-row="soonLine"]')].map(e => e.dataset.acKey).join(',')`)) === 'BETA_2_CSA'
+  && (await text('[data-ac-row="soonLine"]')).includes('days remaining: 45') && (await has('[data-ac-row="soon"][data-ac-key="d90"][aria-expanded="true"]')), await text('[data-ac-list]'));
+await click('[data-ac-row="soon"][data-ac-key="d90"]');
+check('R1: clicking the bar again closes it', !(await has('[data-ac-list]')));
+check('R2 past end: BETA TSA 10 days; foot counts the 1 supplier still In Progress past its end (On Hold one = ended)',
+  (await acRows('pastEnd')) === 'BETA_3_TSA=10 d' && (await text('[data-ac-q="R2"] [data-ac-foot="suppliers"]')) === 'Supplier contracts still in progress past their end date: 1', await acRows('pastEnd'));
+check('R3: S/2 ends ≈2 months before BETA’s longest line (assumed: BETA has 2 lines) · S/1 6 months before ALPHA’s only dated line (certain); S/4 outlasts GAMMA',
+  (await acRows('supplierFirst')) === 'S-2=≈ 2 mo,S-1=6 mo' && (await texts('[data-ac-q="R3"] [data-ac-fig]')) === '2|3'
+  && (await evalJS(`document.querySelectorAll('[data-ac-q="R3"] [data-ac-assumed-seg]').length`)) === 1, `${await acRows('supplierFirst')} | ${await texts('[data-ac-q="R3"] [data-ac-fig]')}`);
+check('R3: the matching rule is stated + "requested from Contracts"', (await text('[data-ac-q="R3"] [data-ac-assumed]')).endsWith('where the client has several contracts, the supplier is matched to the one that runs longest')
+  && (await text('[data-ac-q="R3"] [data-ac-still]')) === 'Requested from Contracts: Which supplier serves which project', await text('[data-ac-q="R3"] [data-ac-still]'));
+check('S1 spend per contractor: no contractor ≈27.3 (incl. USD line × 50) · Acme 1; total ≈28.3 m EGP, 2 contractors; completed/cancelled left out',
+  (await acRows('spend')) === '=≈ 27.3 m EGP,Acme=1 m EGP' && (await texts('[data-ac-q="S1"] [data-ac-fig]')) === '≈ 28.3 m EGP|2', `${await acRows('spend')} | ${await texts('[data-ac-q="S1"] [data-ac-fig]')}`);
+check('S2 grew most: Acme S/1 +150 % · S/2 +25 %; S/5 flat counted', (await acRows('supplierGrowth')) === 'S-1=+150%,S-2=+25%'
+  && (await text('[data-ac-q="S2"] [data-ac-foot="flat"]')) === 'Live contracts with no growth: 1', await acRows('supplierGrowth'));
+check('S3 reliance: top 2 hold ≈100 % (no contractor ≈96 %, Acme ≈4 %), USD rule in the key', (await text('[data-ac-q="S3"] [data-ac-fig="top"]')) === '≈ 100%'
+  && (await acRows('reliance')) === '=≈ 96%,Acme=≈ 4%' && (await text('[data-ac-q="S3"] [data-ac-assumed]')).endsWith('a contract in US dollars at 50 EGP per dollar'), await acRows('reliance'));
+await evalJS(`(() => { const p = 'bdControl/clientContracts/rows', s = __store.get(p), i = window.__iso;
+  __seed(p, 'ALPHA_5_TSA', { ...s.get('ALPHA_5_TSA'), originalValueEgp: 200000000 });
+  __seed(p, 'GAMMA_4_O-M', { ...s.get('GAMMA_4_O-M'), expiryDate: i(12) });
+  for (let k = 1; k <= 4; k++) __seed('bdControl/supplierContracts/rows', 'S-X' + k, { contractNo: 'S/X' + k, status: 'In Progress', currentEnd: i(500), currentValueEgp: 100000 * k, contractor: 'Firm ' + k });
+  __emit(); })()`);
+await sleep(250);
+check('rows change → headline follows (no reload): R1 2 with 1 within 30 days (warn), A3 1 real (+25 % ALPHA)',
+  (await tiles8()) === 'P1=5,P2=3,M9=wait,M3=wait,R1=2,R2=1,A3=1,G2=wait' && (await text('[data-ac-tile="R1"] [data-ac-sub]')) === 'Within 30 days: 1'
+  && (await has('[data-ac-tile="R1"].ac-tile-warn')) && (await text('[data-ac-tile="A3"] [data-ac-sub]')) === 'Biggest: +25% · ALPHA', await tiles8());
+check('S3 with 6 contractors: top 5 listed + "All others (1)"', (await evalJS(`document.querySelectorAll('[data-ac-row="reliance"]').length`)) === 6
+  && (await text('[data-ac-row="reliance"][data-ac-key="others"] .bdc-name')) === 'All others (1)', await acRows('reliance'));
+await click('[data-ac-row="pastEnd"][data-ac-key="BETA_3_TSA"]');
+await waitFor(q('[data-bdc-tab="client"]'), 'client page from R2');
+check('an R2 row opens that client’s page', (await text('[data-bdc-tab="client"]')).includes('BETA'));
+await click('[data-bd-tab="overview"]');
+await waitFor(q('[data-ac="headline"]'), 'board again');
+await sleep(300);
+check('no tall empty space between charts with the new groups (desktop)', (await holes()) === '', await holes());
+await evalJS(`window.__setLang('ar')`); await sleep(250);
+check('Arabic: strip heading + tile label + an R3 rule in Arabic', (await text('.ac-headline-h')) === 'الموقف باختصار'
+  && (await text('[data-ac-tile="R2"] .ac-tile-label')) === 'تجاوزت تاريخ انتهائها' && (await text('[data-ac-q="R1"] [data-ac-title]')) === 'أي العقود تنتهي خلال 30 و90 و180 يومًا القادمة؟');
+await shot('a3-ar');
+await evalJS(`window.__setLang('en')`); await sleep(250);
+await evalJS(`window.__seedAll(); __emit()`);
+await sleep(200);
 
 console.log('\n[3] the tiles, from the made-up rows');
 await waitFor(q('[data-bd="tiles"]'), 'tiles');
