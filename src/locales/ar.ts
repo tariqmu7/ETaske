@@ -2747,6 +2747,11 @@ const ar: Record<keyof typeof en, string> = {
   "Gas, pipelines and terminals": "الغاز والأنابيب والموانئ",
   "Refining and petrochemicals": "التكرير والبتروكيماويات",
   "How to read this chart": "طريقة قراءة هذا الرسم",
+  "Owed to us by age": "المستحق لنا حسب عمر الدين",
+  "m EGP owed": "مليون جنيه مستحقة",
+  "Project lines per area": "المشروعات حسب قطاع النشاط",
+  "staff": "فردًا",
+  "Open bids by stage": "العطاءات المفتوحة حسب المرحلة",
 };
 
 export default ar;

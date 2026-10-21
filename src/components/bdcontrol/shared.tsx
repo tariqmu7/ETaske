@@ -175,6 +175,62 @@ export function niceScale(max: number, target = 4): { top: number; step: number 
   return { top: Math.ceil(max / step - 1e-9) * step, step };
 }
 
+/** One part of a whole for `Donut`: `tone` 1–4 picks the colour, `assumed` is how much of `value` is assumed (drawn pale). */
+export type DonutPart = { key: string; name: string; sub?: string; value: number; text: string; tone: number; assumed?: number; title?: string };
+
+/**
+ * Parts of a whole as a donut with its legend (queue L3b2; the P3 donut made
+ * shared). Each legend line keeps `data-ac-row` / `data-ac-key`, its name in
+ * `.bdc-name > span` and its figure in `data-bdc-value`, like a list row.
+ * The centre shows `centre` over `centreLabel`; `centreAttr` names it `data-ac-fig`.
+ */
+export function Donut({ parts, centre, centreLabel, centreAttr, label, attr }: {
+  parts: DonutPart[]; centre: string; centreLabel: string; centreAttr?: string; label: string; attr: string;
+}) {
+  const F = useFormat();
+  const total = parts.reduce((a, p) => a + Math.max(0, p.value), 0);
+  const R = 15.9155; // circumference 100, so a slice's length is its %
+  const gap = parts.filter(p => p.value > 0).length > 1 ? 0.8 : 0;
+  const share = (v: number) => (total ? (Math.max(0, v) / total) * 100 : 0);
+  let at = 0;
+  const arcs: React.ReactNode[] = [];
+  for (const p of parts) {
+    const len = Math.max(0, share(p.value) - gap);
+    const pale = p.value > 0 ? len * Math.min(1, Math.max(0, p.assumed || 0) / p.value) : 0;
+    [[len - pale, false], [pale, true]].forEach(([l, a], i) => {
+      const off = at + (a ? len - pale : 0);
+      if ((l as number) > 0) arcs.push(
+        <circle key={`${p.key}-${i}`} cx="21" cy="21" r={R} className={`ac-slice ac-s${p.tone}${a ? ' ac-pale' : ''}`}
+          strokeDasharray={`${l} ${100 - (l as number)}`} strokeDashoffset={25 - off} data-ac-part={p.key} {...(a ? { 'data-ac-assumed-seg': '' } : {})}>
+          <title>{`${p.name}: ${p.text}`}</title>
+        </circle>,
+      );
+    });
+    at += share(p.value);
+  }
+  return (
+    <div className="ac-donut-wrap">
+      <svg viewBox="0 0 42 42" className="ac-donut" role="img" aria-label={label}>
+        <circle cx="21" cy="21" r={R} className="ac-donut-hole" />
+        {arcs}
+        <text x="21" y="20.5" textAnchor="middle" className="ac-donut-n" style={centre.length > 5 ? { fontSize: centre.length > 7 ? 5 : 6.4 } : undefined}
+          {...(centreAttr ? { 'data-ac-fig': centreAttr } : {})}>{centre}</text>
+        <text x="21" y="26" textAnchor="middle" className="ac-donut-l">{centreLabel}</text>
+      </svg>
+      <ul className="ac-legend">
+        {parts.map(p => (
+          <li key={p.key} data-ac-row={attr} data-ac-key={p.key} title={p.title}>
+            <span className={`bdc-key ac-s${p.tone}-bg${p.assumed && p.assumed >= p.value ? ' ac-pale' : ''}`} />
+            <span className="bdc-name ac-legend-name"><span>{p.name}</span>{p.sub && <span className="bdc-sub">{p.sub}</span>}</span>
+            <b data-bdc-value className={p.value ? undefined : 'bdc-zero'}>{p.text}</b>
+            <span className="ac-legend-pct">{F.number(share(p.value), { maximumFractionDigits: 0 })}%</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** One bar of a quarter column: its parts bottom first, and the figure printed on top of it. */
 export type QuarterBar = { segs: { v: number; cls: string; assumed?: boolean }[]; label: string; zero?: boolean };
 

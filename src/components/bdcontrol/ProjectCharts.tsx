@@ -4,7 +4,7 @@ import { millions, type BdData, type ContractFilter } from '../../lib/bdControl'
 import {
   projectTotals, projectStatus, projectsByType, projectsByClient, projectsByValue, type ProjectState,
 } from '../../lib/analysisCenter';
-import { ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { Donut, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ClosedBid } from '../../lib/analysisCenter';
 
 /** What every question chart gets from the board. */
@@ -87,38 +87,9 @@ export function P3Types({ data }: ChartCtx) {
     type: 'Other', count: all.slice(3).reduce((a, x) => a + x.count, 0), pct: all.slice(3).reduce((a, x) => a + x.pct, 0),
   }];
   if (!total) return <p className="bdc-empty">{t('No project lines on file.')}</p>;
-  const R = 15.9155; // circumference 100, so a slice's length is its %
-  let at = 0;
-  const gap = slices.length > 1 ? 0.8 : 0;
   return (
-    <div className="ac-donut-wrap">
-      <svg viewBox="0 0 42 42" className="ac-donut" role="img" aria-label={t('Projects by contract form')}>
-        <circle cx="21" cy="21" r={R} className="ac-donut-hole" />
-        {slices.map((s, i) => {
-          const len = Math.max(0, s.pct - gap);
-          const el = (
-            <circle key={s.type} cx="21" cy="21" r={R} className={`ac-slice ac-s${i + 1}`} strokeDasharray={`${len} ${100 - len}`}
-              strokeDashoffset={25 - at} data-ac-slice={s.type}>
-              <title>{`${t(TYPE_LABEL[s.type] || s.type)}: ${F.number(s.count)}`}</title>
-            </circle>
-          );
-          at += s.pct;
-          return el;
-        })}
-        <text x="21" y="20.5" textAnchor="middle" className="ac-donut-n">{F.number(total)}</text>
-        <text x="21" y="26" textAnchor="middle" className="ac-donut-l">{t('projects')}</text>
-      </svg>
-      <ul className="ac-legend">
-        {slices.map((s, i) => (
-          <li key={s.type} data-ac-legend={s.type}>
-            <span className={`bdc-key ac-s${i + 1}-bg`} />
-            <span className="ac-legend-name">{t(TYPE_LABEL[s.type] || s.type)}</span>
-            <b>{F.number(s.count)}</b>
-            <span className="ac-legend-pct">{F.number(s.pct, { maximumFractionDigits: 0 })}%</span>
-          </li>
-        ))}
-      </ul>
-    </div>
+    <Donut attr="type" label={t('Projects by contract form')} centre={F.number(total)} centreLabel={t('projects')}
+      parts={slices.map((s, i) => ({ key: s.type, name: t(TYPE_LABEL[s.type] || s.type), value: s.count, text: F.number(s.count), tone: i + 1 }))} />
   );
 }
 

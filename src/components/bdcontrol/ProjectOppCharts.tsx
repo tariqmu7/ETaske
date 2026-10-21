@@ -7,7 +7,7 @@ import {
   underPlacement, valuePerPerson,
   type Area, type ClosedBid, type LevelStaff, type PaperKind, type StaffCategory,
 } from '../../lib/analysisCenter';
-import { GRADE_SHORT, QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { Donut, GRADE_SHORT, QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import { AssumedKey, Bar } from './MoneyAmendCharts';
 import { HatchBar, useMoneyRules } from './MoneyCharts';
 import { useStaffRules } from './PeopleRiskCharts';
@@ -46,25 +46,17 @@ function QuarterStack({ data, rows, label, attr }: {
 const AREA_NAME: Record<Area, string> = { upstream: 'Upstream', midstream: 'Midstream', downstream: 'Downstream' };
 const AREA_LABEL: Record<Area, string> = { upstream: 'Exploration and production', midstream: 'Gas, pipelines and terminals', downstream: 'Refining and petrochemicals' };
 
-/** P5 — project lines per area. */
+/** P5 — project lines per area, as parts of the whole. */
+const AREA_TONE: Record<Area, number> = { upstream: 1, midstream: 2, downstream: 3 };
 export function P5Areas({ data }: ChartCtx) {
   const { t, F, nameOf, sep } = useBdWords(data);
   const v = useMemo(() => projectsByArea(data), [data]);
-  const max = Math.max(1, ...v.rows.map(r => r.count));
   if (!v.total) return <p className="bdc-empty">{t('No project lines on file.')}</p>;
   return (
     <>
-      <div className="bdc-list">
-        {v.rows.map(r => (
-          <div key={r.area} className="bdc-row" data-ac-row="area" data-ac-key={r.area}>
-            <span className="bdc-name"><span>{t(AREA_NAME[r.area])}</span>
-              <span className="bdc-sub ac-wrap">{t(AREA_LABEL[r.area])} · {t('{{pct}}% of projects', { pct: F.number(v.total ? (r.count / v.total) * 100 : 0, { maximumFractionDigits: 0 }) })}</span>
-            </span>
-            <Bar real={r.count - r.assumed} assumed={r.assumed} max={max} />
-            <span className={`bdc-num${r.count ? '' : ' bdc-zero'}`} data-bdc-value>{r.assumed ? '≈ ' : ''}{F.number(r.count)}</span>
-          </div>
-        ))}
-      </div>
+      <Donut attr="area" label={t('Project lines per area')} centre={F.number(v.total)} centreLabel={t('projects')}
+        parts={v.rows.map(r => ({ key: r.area, name: t(AREA_NAME[r.area]), sub: t(AREA_LABEL[r.area]), value: r.count, assumed: r.assumed,
+          text: `${r.assumed ? '≈ ' : ''}${F.number(r.count)}`, tone: AREA_TONE[r.area] }))} />
       {v.unknown.length > 0 && <TileFoot attr="unknown">{t('Area not known (works across the chain, or not read from the name): {{list}}', { list: v.unknown.map(nameOf).join(sep) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) ? [t('a project takes its client’s main business: refining and petrochemicals = downstream; gas, pipelines and terminals = midstream; exploration and production = upstream')] : []} />
     </>
@@ -111,27 +103,16 @@ export function P7WinLoss({ data, today, bids }: ChartCtx) {
 
 const CATEGORY_LABEL: Record<StaffCategory, string> = { operation: 'Operation', maintenance: 'Maintenance', inspection: 'Inspection', engineering: 'Engineering and support' };
 
-/** P8 — all our staff, and per category. */
+/** P8 — all our staff (the donut's centre), split per category. */
 export function P8Categories({ data, today }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const v = useMemo(() => staffByCategory(data, today), [data, today]);
   const rules = useStaffRules(false);
-  const max = Math.max(1, ...v.rows.map(r => r.staff));
   const split = (Object.keys(STAFF_CATEGORY_SPLIT) as StaffCategory[]).map(c => `${t(CATEGORY_LABEL[c])} ${F.number(pct(STAFF_CATEGORY_SPLIT[c]))}%`).join(' · ');
   return (
     <>
-      <div className="bdc-figs" data-ac-figs="P8">
-        <span>{t('All our staff')}<b data-ac-fig="total">≈ {F.number(v.total)}</b></span>
-      </div>
-      <div className="bdc-list">
-        {v.rows.map(r => (
-          <div key={r.category} className="bdc-row" data-ac-row="category" data-ac-key={r.category}>
-            <span className="bdc-name"><span>{t(CATEGORY_LABEL[r.category])}</span><span className="bdc-sub">{t('{{pct}}% of staff', { pct: F.number(pct(r.share)) })}</span></span>
-            <HatchBar value={r.staff} max={max} />
-            <span className="bdc-num" data-bdc-value>≈ {F.number(r.staff)}</span>
-          </div>
-        ))}
-      </div>
+      <Donut attr="category" label={t('All our staff')} centre={`≈ ${F.number(v.total)}`} centreLabel={t('staff')} centreAttr="total"
+        parts={v.rows.map((r, i) => ({ key: r.category, name: t(CATEGORY_LABEL[r.category]), value: r.staff, assumed: r.staff, text: `≈ ${F.number(r.staff)}`, tone: i + 1 }))} />
       <AssumedKey rules={[...rules, t('all our staff = staff on projects plus the bench ({{pct}}%)', { pct: F.number(pct(ASSUMED_BENCH_SHARE)) }), t('split by category: {{split}}', { split })]} />
     </>
   );

@@ -277,12 +277,12 @@ export function G2Pipeline({ data, bids }: ChartCtx) {
       </div>
       {v.open === 0
         ? <p className="bdc-empty" data-ac-empty="pipeline">{t('No open bid in the bid register.')}</p>
-        : <div className="bdc-list ac-funnel">
+        : <div className="bdc-list ac-funnel" role="img" aria-label={t('Open bids by stage')}>
             {v.stages.map(s => (
               <div key={s.stage} className="bdc-row" data-ac-row="stage" data-ac-key={s.stage}
                 title={t('Value {{v}} · weighted {{w}}', { v: egpM(s.valueEgp), w: `${s.chanceAssumed ? '≈ ' : ''}${egpM(s.weightedEgp)}` })}>
-                <span className="bdc-name"><span>{t(s.stage)}</span></span>
-                <span className="bdc-track"><span className="bdc-fill bdc-fill-base" style={{ width: `${(s.count / max) * 100}%` }} /></span>
+                <span className="bdc-name"><span>{t(s.stage)}</span>{s.count > 0 && <span className="bdc-sub">{egpM(s.valueEgp)}</span>}</span>
+                <span className="ac-funnel-track"><span className={`ac-funnel-bar${s.count ? '' : ' is-zero'}`} style={{ width: `${(s.count / max) * 100}%` }} /></span>
                 <span className={`bdc-num${s.count ? '' : ' bdc-zero'}`} data-bdc-value>{F.number(s.count)}</span>
               </div>
             ))}

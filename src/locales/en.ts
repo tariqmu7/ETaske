@@ -2805,6 +2805,11 @@ const en = {
   "Gas, pipelines and terminals": "Gas, pipelines and terminals",
   "Refining and petrochemicals": "Refining and petrochemicals",
   "How to read this chart": "How to read this chart",
+  "Owed to us by age": "Owed to us by age",
+  "m EGP owed": "m EGP owed",
+  "Project lines per area": "Project lines per area",
+  "staff": "staff",
+  "Open bids by stage": "Open bids by stage",
 } as const;
 
 export default en;

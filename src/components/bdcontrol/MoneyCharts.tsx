@@ -7,7 +7,7 @@ import {
 } from '../../lib/analysisCenter';
 import { millions } from '../../lib/bdControl';
 import { AssumedKey } from './MoneyAmendCharts';
-import { QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { Donut, QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A7a: Money M2–M4 and M6–M11. Finance has sent no
@@ -115,13 +115,14 @@ export function M2Billing({ data, today }: ChartCtx) {
 }
 
 const BAND_LABEL: Record<OwedBand, string> = { d30: '0–30 days', d60: '31–60 days', d90: '61–90 days', over90: 'Over 90 days' };
+/** Older debt reads warmer: teal, charcoal, yellow, then coral for over 90 days. */
+const BAND_TONE: Record<OwedBand, number> = { d30: 1, d60: 2, d90: 4, over90: 3 };
 
 /** M3 — owed to us by age, and collected over the last 12 months. */
 export function M3Owed({ data, today }: ChartCtx) {
-  const { t, egpM } = useBdWords(data);
+  const { t, F, egpM } = useBdWords(data);
   const r = useMoneyRules();
   const v = useMemo(() => owedByAge(data, today), [data, today]);
-  const max = Math.max(1e-9, ...v.bands.map(b => b.egp));
   if (!v.owedEgp && !v.collectedEgp) return <p className="bdc-empty">{t('No contract line with an end date and a value on file.')}</p>;
   return (
     <>
@@ -129,15 +130,8 @@ export function M3Owed({ data, today }: ChartCtx) {
         <span>{t('Owed to us now')}<b data-ac-fig="owed">≈ {egpM(v.owedEgp)}</b></span>
         <span>{t('Collected in the last 12 months')}<b data-ac-fig="collected">≈ {egpM(v.collectedEgp)}</b></span>
       </div>
-      <div className="bdc-list">
-        {v.bands.map(b => (
-          <div key={b.band} className="bdc-row" data-ac-row="owed" data-ac-key={b.band}>
-            <span className="bdc-name">{t(BAND_LABEL[b.band])}</span>
-            <HatchBar value={b.egp} max={max} />
-            <span className={`bdc-num${b.egp ? '' : ' bdc-zero'}`} data-bdc-value>≈ {egpM(b.egp)}</span>
-          </div>
-        ))}
-      </div>
+      <Donut attr="owed" label={t('Owed to us by age')} centre={`≈ ${F.number(millions(v.owedEgp), { maximumFractionDigits: 0 })}`} centreLabel={t('m EGP owed')}
+        parts={v.bands.map(b => ({ key: b.band, name: t(BAND_LABEL[b.band]), value: b.egp, assumed: b.egp, text: `≈ ${egpM(b.egp)}`, tone: BAND_TONE[b.band] }))} />
       <AssumedKey rules={[r.billing, r.pay]} />
     </>
   );

@@ -396,7 +396,7 @@ const acRows = (r, sel = '[data-bdc-value]') => evalJS(`[...document.querySelect
 // queue B2c: a row's second line is its hover note (title)
 const acTitles = r => evalJS(`[...document.querySelectorAll('[data-ac-row="${r}"]')].map(e => e.dataset.acKey + '=' + e.title).join(',')`);
 check('P2 status from today: running 2, ending ≤90 d 1, past end 1, no date 1', (await acRows('status')) === 'running=2,endingSoon=1,pastEnd=1,noDate=1', await acRows('status'));
-check('P3 donut: 3 slices CSA / TSA / O&M, centre total 5, legend 40% / 40% / 20%', (await evalJS(`[...document.querySelectorAll('[data-ac-slice]')].map(e => e.dataset.acSlice).join(',')`)) === 'CSA,TSA,O&M'
+check('P3 donut: 3 slices CSA / TSA / O&M, centre total 5, legend 40% / 40% / 20%', (await evalJS(`[...document.querySelectorAll('[data-ac-q="P3"] [data-ac-part]')].map(e => e.dataset.acPart).join(',')`)) === 'CSA,TSA,O&M'
   && (await text('[data-ac-q="P3"] .ac-donut-n')) === '5' && (await texts('[data-ac-q="P3"] .ac-legend-pct')) === '40%|40%|20%', await texts('[data-ac-q="P3"] .ac-legend-pct'));
 check('P4 projects per client: ALPHA 2, BETA 2, GAMMA 1 (supplier-side code left out)', (await acRows('clients')) === 'ALPHA=2,BETA=2,GAMMA=1', await acRows('clients'));
 check('P6 biggest by ceiling: ALPHA CSA 1,200 · BETA CSA 800.5 · ALPHA TSA 250 (m EGP)', (await acRows('biggest')) === 'ALPHA_1_CSA=1,200 m EGP,BETA_2_CSA=800.5 m EGP,ALPHA_5_TSA=250 m EGP', await acRows('biggest'));
@@ -820,6 +820,12 @@ await sleep(250);
 check('G2 reads the bid register: 2 open bids the manager may see (the lost and the private one left out), 5 stages earliest first',
   (await acRows('stage')) === 'Identified=1,Prequalification=0,Bid Preparation=0,Submitted=1,Under Evaluation=0'
   && (await texts('[data-ac-q="G2"] [data-ac-fig]')) === '2|5 m EGP|≈ 2.1 m EGP', `${await acRows('stage')} | ${await texts('[data-ac-q="G2"] [data-ac-fig]')}`);
+check('L3b2 G2 funnel: Identified + Submitted bars full width, empty stages a thin stub, stage value under the name',
+  (await evalJS(`[...document.querySelectorAll('[data-ac-q="G2"] .ac-funnel-bar')].map(e => e.classList.contains('is-zero') ? 0 : e.style.width).join(',')`)) === '100%,0,0,100%,0'
+  && (await text('[data-ac-row="stage"][data-ac-key="Identified"] .bdc-sub')).endsWith('m EGP'),
+  await evalJS(`[...document.querySelectorAll('[data-ac-q="G2"] .ac-funnel-bar')].map(e => e.style.width).join(',')`));
+if (SHOT) { const was = await evalJS(`[...document.querySelectorAll('[data-ac-group]')].find(e => !e.hidden)?.dataset.acGroup || ''`);
+  await click('[data-ac-jump="growth"]'); await sleep(150); await shot('l3b2-funnel'); if (was) { await click(`[data-ac-jump="${was}"]`); await sleep(100); } }
 check('G2 states the stage-chance rule (a bid had none) and asks BD for the chances; headline Pipeline tile 2 · value 5 m',
   (await text('[data-ac-q="G2"] [data-ac-assumed]')).includes('a bid with no win chance typed in takes its stage’s: Identified 10%, Prequalification 20%')
   && (await text('[data-ac-q="G2"] [data-ac-still]')) === 'Requested from BD: A win chance on every open bid'
@@ -933,6 +939,14 @@ check('P7 + O6 with no closed bids: their empty sentences; O7 still draws bench 
 check('P5 three areas on the page, upstream first; P8 total tile ≈; O1 rule names the pyramid',
   (await evalJS(`[...document.querySelectorAll('[data-ac-row="area"]')].map(e => e.dataset.acKey).join(',')`)) === 'upstream,midstream,downstream'
   && (await text('[data-ac-q="P8"] [data-ac-fig="total"]')).startsWith('≈ ') && (await text('[data-ac-q="O1"] [data-ac-assumed]')).includes('as a pyramid'), await text('[data-ac-q="P8"] [data-ac-fig="total"]'));
+// queue L3b2: parts of a whole as donuts (legend rows keep data-ac-row), every assumed part pale
+check('L3b2 donuts: P5 areas, P8 categories (centre ≈ total), M3 owed by age (over 90 = 0, no arc), legend % adds to ~100',
+  (await evalJS(`['P5','P8','M3'].every(k => document.querySelector('[data-ac-q="' + k + '"] svg.ac-donut'))`))
+  && (await evalJS(`[...document.querySelectorAll('[data-ac-row="category"]')].map(e => e.dataset.acKey).join(',')`)) === 'operation,maintenance,inspection,engineering'
+  && (await evalJS(`!!document.querySelector('[data-ac-q="P8"] .ac-donut-n[data-ac-fig="total"]') && [...document.querySelectorAll('[data-ac-q="P8"] .ac-slice')].every(e => e.classList.contains('ac-pale'))`))
+  && (await evalJS(`!document.querySelector('[data-ac-q="M3"] [data-ac-part="over90"]') && document.querySelectorAll('[data-ac-q="M3"] .ac-slice.ac-pale').length > 0`))
+  && (await evalJS(`['P5','P8'].every(k => { const s = [...document.querySelectorAll('[data-ac-q="' + k + '"] .ac-legend-pct')].reduce((a, e) => a + parseFloat(e.textContent), 0); return s >= 98 && s <= 102; })`)),
+  await texts('[data-ac-q="P8"] .ac-legend-pct'));
 check('A6 on the page: BETA’s line past its end date is listed as still open, in red',
   (await evalJS(`[...document.querySelectorAll('[data-ac-row="paper"]')].some(e => e.querySelector('[data-ac-kind="pastEnd"]') && e.querySelector('.bdc-num.bdc-red') && e.textContent.includes('BETA'))`)),
   await acRows('paper'));
@@ -1360,7 +1374,7 @@ await shot('5-en-mobile');
 await evalJS(`document.documentElement.setAttribute('data-theme', 'dark')`);
 await sleep(150);
 check('dark: donut slices use the dark-stepped series colours', (await evalJS(`getComputedStyle(${q('.bdc')}).getPropertyValue('--ac-s1').trim()`)) === '#2fd1c2'
-  && (await evalJS(`getComputedStyle(${q('[data-ac-slice="CSA"]')}).stroke`)) === 'rgb(47, 209, 194)');
+  && (await evalJS(`getComputedStyle(${q('[data-ac-q="P3"] [data-ac-part="CSA"]')}).stroke`)) === 'rgb(47, 209, 194)');
 check('390 px: question cards fit the screen', (await evalJS(`[...document.querySelectorAll('[data-ac-q]')].every(e => e.getBoundingClientRect().width <= 390)`)));
 check('390 px dark: no sideways scroll', (await overflow()) <= 1, String(await overflow()));
 await shot('6-en-mobile-dark');
