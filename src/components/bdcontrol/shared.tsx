@@ -166,3 +166,56 @@ export function MoreButton({ shown, total, onMore, attr }: { shown: number; tota
     </button>
   );
 }
+
+/** A round axis top at or above `max` and its step, so 3–5 gridlines fall on easy numbers (1, 2, 2.5, 5 × 10ⁿ). */
+export function niceScale(max: number, target = 4): { top: number; step: number } {
+  if (!(max > 0)) return { top: 1, step: 0.25 };
+  const raw = max / target, pow = 10 ** Math.floor(Math.log10(raw));
+  const step = ([1, 2, 2.5, 5, 10].find(m => m * pow >= raw) ?? 10) * pow;
+  return { top: Math.ceil(max / step - 1e-9) * step, step };
+}
+
+/** One bar of a quarter column: its parts bottom first, and the figure printed on top of it. */
+export type QuarterBar = { segs: { v: number; cls: string; assumed?: boolean }[]; label: string; zero?: boolean };
+
+/**
+ * Quarter columns as one plot (queue L3b, Tariq's Power BI photo): a value axis
+ * with light gridlines behind every column, each figure on top of its own bar.
+ * One bar per quarter, or two side by side (`ac-pair`). Every column keeps
+ * `data-ac-row` / `data-ac-key`; its figures together are its `data-bdc-value`.
+ */
+export function QuarterPlot({ rows, label, attr, tick }: {
+  rows: { quarter: string; bars: QuarterBar[] }[]; label: string; attr: string; tick: (v: number) => string;
+}) {
+  const { t } = useTranslation();
+  const F = useFormat();
+  const sum = (b: QuarterBar) => b.segs.reduce((a, s) => a + Math.max(0, s.v), 0);
+  const { top, step } = niceScale(Math.max(0, ...rows.flatMap(r => r.bars.map(sum))));
+  const k = Math.round(top / step);
+  const pct = (v: number) => `${(v / top) * 100}%`;
+  return (
+    <div className="ac-cols ac-plot" style={{ ['--ac-n' as string]: rows.length, ['--ac-k' as string]: k }} role="img" aria-label={label}>
+      <div className="ac-yaxis" aria-hidden="true">
+        {Array.from({ length: k + 1 }, (_, i) => <span key={i} style={{ bottom: pct(i * step) }}>{tick(i * step)}</span>)}
+      </div>
+      {rows.map(r => (
+        <div key={r.quarter} className="ac-col" data-ac-row={attr} data-ac-key={r.quarter}>
+          <span className={`ac-col-bar${r.bars.length > 1 ? ' ac-pair' : ''}`} data-bdc-value>
+            {r.bars.map((b, i) => {
+              const n = sum(b);
+              return (
+                <span key={i} className="ac-bar" style={{ height: pct(n) }}>
+                  <b className={`ac-bar-v${b.zero ? ' bdc-zero' : ''}`}>{b.label}</b>
+                  {[...b.segs].reverse().map((s, j) => s.v > 0 && (
+                    <span key={j} className={s.cls} style={{ height: `${(s.v / n) * 100}%` }} {...(s.assumed ? { 'data-ac-assumed-seg': '' } : {})} />
+                  ))}
+                </span>
+              );
+            })}
+          </span>
+          <span className="ac-col-l">{t('Q{{q}}', { q: F.number(Number(r.quarter.slice(-1))) })}<br />{r.quarter.slice(0, 4)}</span>
+        </div>
+      ))}
+    </div>
+  );
+}

@@ -6,7 +6,7 @@ import {
   ASSUMED_MONTHS, ASSUMED_USD_EGP, amendmentsByProject, amendmentsByQuarter, extensionsByProject, monthsAdded,
   projectGrowth, projectValues, subcontractByProject, type ProjectChange, type Yardstick,
 } from '../../lib/analysisCenter';
-import { InfoSlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { InfoSlot, QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A2: Money (M1, M5) and Changes & amendments (A1–A5).
@@ -137,7 +137,6 @@ export function A1PerProject({ data, onClient, onContracts }: ChartCtx) {
 export function A2PerQuarter({ data, today }: ChartCtx) {
   const { t, F, sep } = useBdWords(data);
   const v = useMemo(() => amendmentsByQuarter(data, today), [data, today]);
-  const max = Math.max(1, ...v.rows.map(r => r.real + r.assumed));
   const qLabel = (k: string) => `${t('Q{{q}}', { q: F.number(Number(k.slice(-1))) })} ${k.slice(0, 4)}`;
   const foot = [
     v.earlier > 0 ? t('Before {{q}}: {{n}}', { q: qLabel(v.rows[0].quarter), n: F.number(v.earlier) }) : '',
@@ -148,21 +147,10 @@ export function A2PerQuarter({ data, today }: ChartCtx) {
   return (
     <>
       {!any && <p className="bdc-empty" data-ac-empty="quarters">{t('No amendment starts in the last 8 quarters.')}</p>}
-      {any && <div className="ac-cols" style={{ ['--ac-n' as string]: v.rows.length }} role="img" aria-label={t('Supplier amendments per quarter')}>
-        {v.rows.map(r => {
-          const n = r.real + r.assumed;
-          return (
-            <div key={r.quarter} className="ac-col" data-ac-row="quarters" data-ac-key={r.quarter}>
-              <b className={`ac-col-n${n ? '' : ' bdc-zero'}`} data-bdc-value>{r.assumed > 0 ? '≈ ' : ''}{F.number(n)}</b>
-              <span className="ac-col-bar">
-                {r.assumed > 0 && <span className="ac-hatch" style={{ height: `${(r.assumed / max) * 100}%` }} data-ac-assumed-seg />}
-                {r.real > 0 && <span className="bdc-client" style={{ height: `${(r.real / max) * 100}%` }} />}
-              </span>
-              <span className="ac-col-l">{t('Q{{q}}', { q: F.number(Number(r.quarter.slice(-1))) })}<br />{r.quarter.slice(0, 4)}</span>
-            </div>
-          );
-        })}
-      </div>}
+      {any && <QuarterPlot attr="quarters" label={t('Supplier amendments per quarter')} tick={n => F.number(n)}
+        rows={v.rows.map(r => { const n = r.real + r.assumed; return { quarter: r.quarter, bars: [{
+          segs: [{ v: r.real, cls: 'bdc-client' }, { v: r.assumed, cls: 'ac-hatch', assumed: true }],
+          label: `${r.assumed > 0 ? '≈ ' : ''}${F.number(n)}`, zero: !n }] }; })} />}
       {foot.length > 0 && <TileFoot attr="quarters">{foot.join(sep)}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed > 0) ? [t('no start date on file, so taken as the day after the end date it extends')] : []} />
     </>

@@ -7,7 +7,7 @@ import {
   underPlacement, valuePerPerson,
   type Area, type ClosedBid, type LevelStaff, type PaperKind, type StaffCategory,
 } from '../../lib/analysisCenter';
-import { GRADE_SHORT, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { GRADE_SHORT, QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import { AssumedKey, Bar } from './MoneyAmendCharts';
 import { HatchBar, useMoneyRules } from './MoneyCharts';
 import { useStaffRules } from './PeopleRiskCharts';
@@ -29,31 +29,17 @@ function useBidState(bids: ChartCtx['bids']) {
   return null;
 }
 
-/** Columns per quarter, each a stack of parts (bottom part first), the total on top in m EGP. */
+/** Columns per quarter on one value axis, each a stack of parts (bottom part first), the total on top in m EGP. */
 function QuarterStack({ data, rows, label, attr }: {
   data: ChartCtx['data']; rows: { quarter: string; parts: { v: number; cls: string }[]; approx: boolean }[]; label: string; attr: string;
 }) {
-  const { t, F } = useBdWords(data);
-  const sum = (r: (typeof rows)[number]) => r.parts.reduce((a, p) => a + p.v, 0);
-  const max = Math.max(1e-9, ...rows.map(sum));
+  const { F } = useBdWords(data);
   const m1 = (x: number) => F.number(millions(x), { maximumFractionDigits: 1 });
   return (
-    <div className="ac-cols" style={{ ['--ac-n' as string]: rows.length }} role="img" aria-label={label}>
-      {rows.map(r => {
-        const n = sum(r);
-        return (
-          <div key={r.quarter} className="ac-col" data-ac-row={attr} data-ac-key={r.quarter}>
-            <b className={`ac-col-n${n ? '' : ' bdc-zero'}`} data-bdc-value>{r.approx && n ? '≈ ' : ''}{m1(n)}</b>
-            <span className="ac-col-bar">
-              {[...r.parts].reverse().map((p, i) => p.v > 0 && (
-                <span key={i} className={p.cls} style={{ height: `${(p.v / max) * 100}%` }} {...(p.cls.includes('ac-hatch') ? { 'data-ac-assumed-seg': '' } : {})} />
-              ))}
-            </span>
-            <span className="ac-col-l">{t('Q{{q}}', { q: F.number(Number(r.quarter.slice(-1))) })}<br />{r.quarter.slice(0, 4)}</span>
-          </div>
-        );
-      })}
-    </div>
+    <QuarterPlot attr={attr} label={label} tick={m1} rows={rows.map(r => {
+      const n = r.parts.reduce((a, p) => a + p.v, 0);
+      return { quarter: r.quarter, bars: [{ segs: r.parts.map(p => ({ ...p, assumed: p.cls.includes('ac-hatch') })), label: `${r.approx && n ? '≈ ' : ''}${m1(n)}`, zero: !n }] };
+    })} />
   );
 }
 
@@ -91,7 +77,6 @@ export function P7WinLoss({ data, today, bids }: ChartCtx) {
   const v = useMemo(() => (Array.isArray(bids) ? bidsWonLost(bids as ClosedBid[], today) : null), [bids, today]);
   const wait = useBidState(bids);
   if (wait || !v) return wait;
-  const max = Math.max(1, ...v.rows.flatMap(r => [r.won, r.lost]));
   const closed = v.won + v.lost;
   const foot = [
     v.earlier > 0 ? t('Decided before these quarters: {{n}}', { n: F.number(v.earlier) }) : '',
@@ -113,18 +98,10 @@ export function P7WinLoss({ data, today, bids }: ChartCtx) {
               <li><span className="bdc-key bdc-fill-lo" />{t('Lost')}</li>
               <li>{t('Number of bids')}</li>
             </ul>
-            <div className="ac-cols" style={{ ['--ac-n' as string]: v.rows.length }} role="img" aria-label={t('Bids won and lost per quarter')}>
-              {v.rows.map(r => (
-                <div key={r.quarter} className="ac-col" data-ac-row="winLoss" data-ac-key={r.quarter}>
-                  <b className="ac-col-n ac-col-pair-n" data-bdc-value>{r.assumed ? '≈ ' : ''}{F.number(r.won)}<span>{F.number(r.lost)}</span></b>
-                  <span className="ac-col-bar ac-pair">
-                    <span className="bdc-client" style={{ height: `${(r.won / max) * 100}%` }} />
-                    <span className="bdc-fill-lo" style={{ height: `${(r.lost / max) * 100}%` }} />
-                  </span>
-                  <span className="ac-col-l">{t('Q{{q}}', { q: F.number(Number(r.quarter.slice(-1))) })}<br />{r.quarter.slice(0, 4)}</span>
-                </div>
-              ))}
-            </div>
+            <QuarterPlot attr="winLoss" label={t('Bids won and lost per quarter')} tick={n => F.number(n)} rows={v.rows.map(r => ({ quarter: r.quarter, bars: [
+              { segs: [{ v: r.won, cls: 'bdc-client' }], label: `${r.assumed ? '≈ ' : ''}${F.number(r.won)}`, zero: !r.won },
+              { segs: [{ v: r.lost, cls: 'bdc-fill-lo' }], label: F.number(r.lost), zero: !r.lost },
+            ] }))} />
           </>}
       {foot.length > 0 && <TileFoot attr="winLoss">{foot.join(sep)}</TileFoot>}
       <AssumedKey rules={v.assumed ? [t('a closed bid with no decision date is placed in the quarter it was last changed')] : []} />

@@ -2211,6 +2211,26 @@ h1, h2, h3, h4, p, span, div {
 .bdc .ac-legend li { color: var(--pbi-mute); }
 .bdc .ac-legend b { font-weight: 600; color: var(--pbi-ink); }
 
+/* Queue L3b: quarter columns as ONE plot (QuarterPlot) — a value axis on the start side, light gridlines running
+   across every column, each figure sitting on its own bar. Columns share rows with the axis through subgrid. */
+.ac-cols.ac-plot { grid-template-columns: 38px repeat(var(--ac-n, 6), minmax(0, 1fr)); grid-template-rows: auto auto; gap: 0; align-items: stretch; padding-top: 18px; }
+.ac-plot .ac-col { display: grid; grid-row: 1 / span 2; grid-template-rows: subgrid; }
+.ac-plot .ac-yaxis { grid-row: 1; grid-column: 1; position: relative; }
+.ac-plot .ac-yaxis > span { position: absolute; inset-inline-end: 6px; transform: translateY(50%); font-size: 10.5px; line-height: 1; color: var(--pbi-faint, var(--text-muted)); white-space: nowrap; }
+.ac-plot .ac-col-bar, .ac-card .ac-plot .ac-col-bar {
+  position: relative; height: 120px; margin: 0; gap: 0; flex-direction: row; align-items: flex-end; justify-content: center;
+  background-image: linear-gradient(to bottom, var(--pbi-grid, var(--border)) 0 1px, transparent 1px);
+  background-size: 100% calc(100% / var(--ac-k, 4));
+}
+.ac-plot .ac-col-bar.ac-pair { gap: 4px; }
+.ac-plot .ac-col-bar > .ac-bar { position: relative; display: flex; flex-direction: column; justify-content: flex-end; min-height: 0; }
+.ac-plot .ac-col-bar.ac-pair > .ac-bar { flex: 0 1 26px; max-width: 26px; }
+.ac-plot .ac-bar > span { display: block; flex: none; }
+.ac-plot .ac-bar-v { position: absolute; bottom: 100%; left: 50%; transform: translateX(-50%); padding-bottom: 2px; font-size: 11px; font-weight: 600; line-height: 1.2; color: var(--pbi-ink, var(--text-primary)); white-space: nowrap; }
+.ac-plot .ac-pair .ac-bar-v { font-size: 10.5px; }
+.ac-plot .ac-bar-v.bdc-zero { color: var(--pbi-faint, var(--text-muted)); font-weight: 400; }
+.ac-plot .ac-col-l { margin-top: 4px; }
+
 /* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
    Quiet: shown only for Managers only / Private — an "Everyone" bid says nothing. */
 .opp-row-private { display: inline-flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 11px; font-weight: 700; color: var(--text-secondary); }

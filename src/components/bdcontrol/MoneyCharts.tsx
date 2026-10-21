@@ -7,7 +7,7 @@ import {
 } from '../../lib/analysisCenter';
 import { millions } from '../../lib/bdControl';
 import { AssumedKey } from './MoneyAmendCharts';
-import { ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
+import { QuarterPlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A7a: Money M2–M4 and M6–M11. Finance has sent no
@@ -73,12 +73,11 @@ function ClientList({ data, onClient, onContracts, rows, value, attr, sub }: Pic
   );
 }
 
-/** Two hatched columns per quarter (first series navy, second teal), oldest on the start side. */
+/** Two tinted columns per quarter (first series teal, second charcoal) on one value axis, oldest on the start side. */
 function PairColumns({ data, rows, label, keys }: {
   data: ChartCtx['data']; rows: { quarter: string; a: number; b: number }[]; label: string; keys: [string, string];
 }) {
   const { t, F } = useBdWords(data);
-  const max = Math.max(1e-9, ...rows.flatMap(r => [r.a, r.b]));
   const m0 = (x: number) => F.number(millions(x), { maximumFractionDigits: 0 });
   return (
     <>
@@ -87,18 +86,10 @@ function PairColumns({ data, rows, label, keys }: {
         <li><span className="bdc-key ac-hatch ac-hatch-2" />{keys[1]}</li>
         <li>{t('Figures in m EGP')}</li>
       </ul>
-      <div className="ac-cols" style={{ ['--ac-n' as string]: rows.length }} role="img" aria-label={label}>
-        {rows.map(r => (
-          <div key={r.quarter} className="ac-col" data-ac-row="moneyQuarters" data-ac-key={r.quarter}>
-            <b className="ac-col-n ac-col-pair-n" data-bdc-value>≈ {m0(r.a)}<span>{m0(r.b)}</span></b>
-            <span className="ac-col-bar ac-pair">
-              <span className="ac-hatch" style={{ height: `${(r.a / max) * 100}%` }} data-ac-assumed-seg />
-              <span className="ac-hatch ac-hatch-2" style={{ height: `${(r.b / max) * 100}%` }} data-ac-assumed-seg />
-            </span>
-            <span className="ac-col-l">{t('Q{{q}}', { q: F.number(Number(r.quarter.slice(-1))) })}<br />{r.quarter.slice(0, 4)}</span>
-          </div>
-        ))}
-      </div>
+      <QuarterPlot attr="moneyQuarters" label={label} tick={m0} rows={rows.map(r => ({ quarter: r.quarter, bars: [
+        { segs: [{ v: r.a, cls: 'ac-hatch', assumed: true }], label: m0(r.a) },
+        { segs: [{ v: r.b, cls: 'ac-hatch ac-hatch-2', assumed: true }], label: m0(r.b) },
+      ] }))} />
     </>
   );
 }
