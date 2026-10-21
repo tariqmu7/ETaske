@@ -21,6 +21,13 @@ const FLAG_TONE: Record<ExpiryFlag, string> = {
   'Expired on paper': 'lo', 'Within 90 days': 'mid', 'Within 180 days': 'mid', OK: 'ok', 'No date': 'flat', Ended: 'flat',
 };
 
+/**
+ * The ⓘ panel of the Analysis center tile a chart sits in (queue B1). A chart's
+ * reading notes (AssumedKey) are drawn there instead of under the chart; with
+ * no tile around (null) they stay under the chart.
+ */
+export const InfoSlot = React.createContext<HTMLElement | null>(null);
+
 /** Grid row unit for useMasonry, px (matches `.is-masonry` in index.css). */
 const MASONRY_ROW = 4;
 

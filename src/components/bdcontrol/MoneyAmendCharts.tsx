@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useContext, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useFormat } from '../../lib/format';
 import {
   ASSUMED_MONTHS, ASSUMED_USD_EGP, amendmentsByProject, amendmentsByQuarter, extensionsByProject, monthsAdded,
   projectGrowth, projectValues, subcontractByProject, type ProjectChange, type Yardstick,
 } from '../../lib/analysisCenter';
-import { useBdWords } from './shared';
+import { InfoSlot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A2: Money (M1, M5) and Changes & amendments (A1–A5).
@@ -31,13 +32,16 @@ export function Bar({ real, assumed, max }: { real: number; assumed: number; max
 export function AssumedKey({ rules }: { rules: string[] }) {
   const { t, i18n } = useTranslation();
   const sep = i18n.language === 'ar' ? '، ' : ', ';
+  const slot = useContext(InfoSlot);
   if (!rules.length) return null;
-  return (
+  const key = (
     <p className="ac-assumed" data-ac-assumed>
       <span className="bdc-key ac-hatch" aria-hidden="true" />
       <span>{t('Hatched and ≈ = assumed')}: {rules.join(sep)}</span>
     </p>
   );
+  // Inside a dashboard tile the rule goes behind its ⓘ button (queue B1).
+  return slot ? createPortal(key, slot) : key;
 }
 
 const pct0 = (x: number) => Math.round(x * 100);

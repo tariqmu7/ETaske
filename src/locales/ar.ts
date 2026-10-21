@@ -2746,6 +2746,7 @@ const ar: Record<keyof typeof en, string> = {
   "Exploration and production": "الاستكشاف والإنتاج",
   "Gas, pipelines and terminals": "الغاز والأنابيب والموانئ",
   "Refining and petrochemicals": "التكرير والبتروكيماويات",
+  "How to read this chart": "طريقة قراءة هذا الرسم",
 };
 
 export default ar;

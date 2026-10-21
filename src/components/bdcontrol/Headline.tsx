@@ -24,7 +24,13 @@ const TILE_LABEL: Record<string, string> = {
 
 interface Fig { value: string; sub?: string; tone?: 'warn' }
 
-export default function Headline({ data, today, bids }: ChartCtx) {
+/** "≈ 148.8 m EGP" → the number big, the unit small (queue B1), so a money tile stays on one line. */
+function unitSplit(v: string) {
+  const m = /^(≈ )?([-−]?[\d٠-٩.,٫٬]+)(\s+\S.*)$/.exec(v);
+  return m ? <>{m[1]}{m[2]}<small className="ac-tile-unit">{m[3]}</small></> : v;
+}
+
+export default function Headline({ data, today, bids, onOpen }: ChartCtx & { onOpen?: (id: string) => void }) {
   const { t, i18n } = useTranslation();
   const F = useFormat();
   const { nameOf, egpM } = useBdWords(data);
@@ -63,7 +69,7 @@ export default function Headline({ data, today, bids }: ChartCtx) {
     };
   }, [data, today, bids, t, F, nameOf, egpM]);
 
-  const go = (id: string) => document.getElementById(`ac-q-${id}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  const go = (id: string) => (onOpen ? onOpen(id) : document.getElementById(`ac-q-${id}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }));
 
   return (
     <section className="ac-headline" data-ac="headline" aria-label={t('At a glance')}>
@@ -78,7 +84,7 @@ export default function Headline({ data, today, bids }: ChartCtx) {
               onClick={() => go(id)} title={q ? pick(q.q, ar) : undefined} data-ac-tile={id} data-ac-wait={f ? undefined : ''}>
               <span className="ac-tile-label">{t(TILE_LABEL[id])}</span>
               {f
-                ? <b className="ac-tile-n" data-ac-value>{f.value}</b>
+                ? <b className="ac-tile-n" data-ac-value>{unitSplit(f.value)}</b>
                 : <span className="ac-tile-wait-tag"><CircleDashed size={13} aria-hidden="true" />{t('Data needed')}</span>}
               {f?.sub && <span className="ac-tile-sub" data-ac-sub>{f.sub}</span>}
               {!f && who && <span className="ac-tile-sub" data-ac-sub>{t('Requested from {{who}}', { who })}</span>}

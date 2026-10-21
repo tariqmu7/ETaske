@@ -79,13 +79,10 @@ export default function BdControlDashboard({ appUser }: Props) {
 
   return (
     <div ref={top} className="bdc" style={{ maxWidth: 'var(--page-max)', margin: '0 auto', padding: '24px 16px', scrollMarginTop: 72 }} data-testid="bd-control-page">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
         <Gauge className="w-6 h-6" style={{ color: 'var(--accent)' }} />
         <h1 style={{ fontSize: 24, fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>{t('Analysis center')}</h1>
       </div>
-      <p style={{ fontSize: 13.5, color: 'var(--text-muted)', margin: '0 0 16px', lineHeight: 1.55 }}>
-        {t('The CEO’s questions on our projects, each answered by one chart from BD’s Excel files as of today. A grey box marks data we still have to collect.')}
-      </p>
 
       {error ? (
         <div className="card" style={{ padding: 18, fontSize: 13.5, color: 'var(--text-secondary)', lineHeight: 1.6 }} data-bd="error">

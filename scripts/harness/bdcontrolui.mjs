@@ -378,14 +378,15 @@ check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(
 
 await waitFor(q('[data-ac="board"]'), 'question board');
 check('page title is "Analysis center"', (await text('h1')) === 'Analysis center', await text('h1'));
-check('board summary: all 50 answered from today’s data (since A7c), the hatched-means-assumed reminder instead of a waiting count', (await text('[data-ac="summary"]')) === '50 questions answered from today’s data (hatched figures are assumed until the real data arrives)', await text('[data-ac="summary"]'));
+check('no filler text (queue B1): no intro paragraph, no board summary line, no per-group counters', !(await has('[data-ac="summary"]')) && !(await has('.ac-group-sub'))
+  && !(await evalJS(`document.body.textContent.includes('A grey box marks') || document.body.textContent.includes('questions answered from today')`)));
 check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
 check('group 1: all eight as charts, in question order (P5, P7, P8 since A7c)', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P5:chart,P6:chart,P7:chart,P8:chart');
 check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
   && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
-check('no grey "data needed" box left on the board; every group says data needed: 0', (await evalJS(`document.querySelectorAll('[data-ac-need], [data-ac-show="need"]').length`)) === 0
-  && (await evalJS(`[...document.querySelectorAll('.ac-group-sub')].every(e => e.textContent.endsWith('data needed: 0'))`)), await evalJS(`document.querySelectorAll('[data-ac-need]').length`));
+check('no grey "data needed" box left on the board', (await evalJS(`document.querySelectorAll('[data-ac-need], [data-ac-show="need"]').length`)) === 0
+  , await evalJS(`document.querySelectorAll('[data-ac-need]').length`));
 check('a former grey box (P7) says what is still requested and from whom', (await text('[data-ac-q="P7"] [data-ac-still]')) === 'Requested from BD, Tenders: A decision date and value on every closed bid', await text('[data-ac-q="P7"] [data-ac-still]'));
 check('… two owners joined (a part chart, H4)', (await text('[data-ac-q="H4"] [data-ac-still]')) === 'Requested from HR, Finance: Average cost per grade (no names)', await text('[data-ac-q="H4"] [data-ac-still]'));
 check('a "part" chart says what was requested and from whom (P3)', (await text('[data-ac-q="P3"] [data-ac-still]')) === 'Requested from BD: A project type for every project (decision D1)', await text('[data-ac-q="P3"] [data-ac-still]'));
@@ -497,7 +498,19 @@ const holes = () => evalJS(`(() => { const out = [];
     }
   }
   return out.join(','); })()`);
-check('grids are packed (masonry on): every question grid', (await evalJS(`(() => { const g = [...document.querySelectorAll('.ac-grid')]; return g.length > 0 && g.every(x => x.classList.contains('is-masonry')); })()`)));
+check('dashboard tabs (queue B1): one group shown at a time, the first selected', (await evalJS(`[...document.querySelectorAll('[data-ac-group]')].filter(e => !e.hidden).map(e => e.dataset.acGroup).join(',')`)) === 'projects'
+  && (await evalJS(`document.querySelector('[data-ac-jump="projects"]').getAttribute('aria-selected')`)) === 'true');
+check('dashboard tiles: every tile in the shown group is the same height (330 px), 3 to a row on desktop', (await evalJS(`(() => { const cs = [...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')]; const tops = new Set(cs.map(c => Math.round(c.getBoundingClientRect().top))); return cs.every(c => Math.round(c.getBoundingClientRect().height) === 330) && cs.length / tops.size >= 2.5; })()`)),
+  await evalJS(`[...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')].map(c => c.dataset.acQ + ':' + Math.round(c.getBoundingClientRect().height)).join(',')`));
+check('notes sit behind ⓘ: hidden at first; a click shows the note and the assumed rule, the chart steps aside; a 2nd click closes', (await evalJS(`document.querySelector('[data-ac-q="M1"] [data-ac-info-panel]').hidden`)) === true
+  && (await evalJS(`!!document.querySelector('[data-ac-q="M1"] [data-ac-info-panel] [data-ac-assumed]') && !document.querySelector('[data-ac-q="M1"] .ac-body [data-ac-assumed]')`))
+  && await (async () => { await click('[data-ac-info="M1"]'); const open = await evalJS(`(() => { const c = document.querySelector('[data-ac-q="M1"]'); return !c.querySelector('[data-ac-info-panel]').hidden && getComputedStyle(c.querySelector('.ac-body')).display === 'none' && c.querySelector('[data-ac-info]').getAttribute('aria-expanded') === 'true'; })()`);
+    await click('[data-ac-info="M1"]'); return open && (await evalJS(`document.querySelector('[data-ac-q="M1"] [data-ac-info-panel]').hidden`)) === true; })());
+check('≈ badge in the title row only on a tile with assumed figures (M1 yes, P1 no)', (await evalJS(`getComputedStyle(document.querySelector('[data-ac-q="M1"] .ac-badge')).display`)) !== 'none'
+  && (await evalJS(`getComputedStyle(document.querySelector('[data-ac-q="P1"] .ac-badge')).display`)) === 'none');
+check('a headline tile opens its question’s tab (M9 → Money), a group tab goes back', await (async () => { await click('[data-ac-tile="M9"]'); await sleep(100);
+  const ok = (await evalJS(`[...document.querySelectorAll('[data-ac-group]')].filter(e => !e.hidden).map(e => e.dataset.acGroup).join(',')`)) === 'money';
+  await click('[data-ac-jump="projects"]'); return ok && (await evalJS(`document.getElementById('ac-group-projects').hidden`)) === false; })());
 check('no tall empty space between charts (desktop): every card ≤ 16 px below the card above it', (await holes()) === '', await holes());
 await shot('a2-desktop');
 await evalJS(`window.__seedAll(); __emit()`);
@@ -510,8 +523,8 @@ await sleep(200);
 // M9 / M3 are assumed money figures (A7a) that move with today's date — shown here as "≈" when they start with it.
 const tiles8 = () => evalJS(`[...document.querySelectorAll('[data-ac-tile]')].map(e => { const v = e.hasAttribute('data-ac-wait') ? 'wait' : window.__txt(e.querySelector('[data-ac-value]'));
   return e.dataset.acTile + '=' + (/^M(9|3)$/.test(e.dataset.acTile) && v.startsWith('≈ ') ? '≈' : v); }).join(',')`);
-check('headline strip sits above the board summary, 8 tiles in the D5 order; M9 + M3 assumed (≈), G2 from the bid register (none seeded)',
-  (await evalJS(`(() => { const h = document.querySelector('[data-ac="headline"]'), s = document.querySelector('[data-ac="summary"]'); return !!h && !!s && !!(h.compareDocumentPosition(s) & 4); })()`))
+check('headline strip sits above the group tabs, 8 tiles in the D5 order; M9 + M3 assumed (≈), G2 from the bid register (none seeded)',
+  (await evalJS(`(() => { const h = document.querySelector('[data-ac="headline"]'), s = document.querySelector('[data-ac="jump"]'); return !!h && !!s && !!(h.compareDocumentPosition(s) & 4); })()`))
   && (await tiles8()) === 'P1=5,P2=3,M9=≈,M3=≈,R1=1,R2=1,A3=0,G2=0', await tiles8());
 check('headline subs: amendments, "of 5 on file", 1 project losing money, within 30 days; G2 names the pipeline value',
   (await texts('[data-ac-tile="P1"] [data-ac-sub], [data-ac-tile="P2"] [data-ac-sub], [data-ac-tile="R1"] [data-ac-sub], [data-ac-tile="M9"] [data-ac-sub], [data-ac-tile="G2"] [data-ac-sub]'))
@@ -791,7 +804,7 @@ check('the eight assumed cards show as charts, each hatched (or an empty sentenc
   (await evalJS(`${J(a7b)}.every(k => { const c = document.querySelector('[data-ac-q="' + k + '"]');
     return c && c.dataset.acShow === 'chart' && c.querySelector('[data-ac-assumed]') && c.querySelector('[data-ac-still]') && (c.querySelector('[data-ac-assumed-seg]') || c.querySelector('.bdc-empty') || k === 'H2'); })`)),
   await evalJS(`${J(a7b)}.map(k => { const c = document.querySelector('[data-ac-q="' + k + '"]'); return k + ':' + !!c?.querySelector('[data-ac-assumed]') + !!c?.querySelector('[data-ac-still]') + !!c?.querySelector('[data-ac-assumed-seg]') + !!c?.querySelector('.bdc-empty'); }).join(',')`));
-check('board summary after A7b + A7c: 50 answered', (await text('[data-ac="summary"]')).startsWith('50 questions answered from today’s data'), await text('[data-ac="summary"]'));
+check('after A7b + A7c: still no summary line, 8 tabs', !(await has('[data-ac="summary"]')) && (await evalJS(`document.querySelectorAll('[data-ac-jump]').length`)) === 8);
 check('G2 with no bids in the register: empty sentence, headline tile 0', (await has('[data-ac-q="G2"] [data-ac-empty="pipeline"]')) && (await text('[data-ac-tile="G2"] [data-ac-value]')) === '0',
   await text('[data-ac-tile="G2"] [data-ac-value]'));
 await evalJS(`(() => {
@@ -941,9 +954,10 @@ await sleep(300);
 check('no tall empty space between charts with every group filled (desktop)', (await holes()) === '', await holes());
 if (SHOT) {
   for (const g of ['projects', 'opportunity']) {
-    await evalJS(`document.getElementById('ac-group-${g}').scrollIntoView({ block: 'start' })`); await sleep(200);
+    await click(`[data-ac-jump="${g}"]`); await sleep(200);
     await shot(`a7c-${g}`);
   }
+  await click('[data-ac-jump="projects"]');
 }
 await evalJS(`(() => { for (const id of ['o1', 'o2', 'o3']) __store.get('opportunities')?.delete(id); window.__seedAll(); __emit(); })()`);
 await sleep(200);
@@ -1242,14 +1256,14 @@ await remount();
 await waitFor(q('[data-ac="board"]'), 'board (ar)');
 check('page is RTL', (await evalJS(`document.documentElement.dir`)) === 'rtl');
 check('title «مركز التحليل»', (await text('h1')) === 'مركز التحليل');
-check('Arabic board: question title, fixed note, group name, "Requested from" line and summary all in Arabic',
+check('Arabic board: question title, fixed note, group name, "Requested from" line and the ⓘ label all in Arabic',
   (await text('[data-ac-q="P4"] [data-ac-title]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
   && (await text('[data-ac-q="P6"] [data-ac-note]')).startsWith('أكبر عشرة بنود وفق الحد الأقصى للعقد')
   && (await text('[data-ac-jump="opportunity"]')).startsWith('تكلفة الفرصة البديلة')
   && (await text('[data-ac-q="P7"] [data-ac-still]')).endsWith('تاريخ القرار وقيمة كل عطاء مغلق')
-  && (await text('[data-ac="summary"]')).startsWith('أسئلة أُجيب عنها من بيانات اليوم: 50')
+  && (await evalJS(`document.querySelector('[data-ac-info="P4"]').getAttribute('aria-label')`)) === 'طريقة قراءة هذا الرسم'
   && (await text('[data-ac-stat="type:CSA"] .ac-stat-label')) === 'عقود الخدمات المستمرة',
-  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await text('[data-ac-q="P7"] [data-ac-still]')} | ${await text('[data-ac="summary"]')}`);
+  `${await text('[data-ac-q="P4"] [data-ac-title]')} | ${await text('[data-ac-q="P7"] [data-ac-still]')}`);
 check('Arabic A7c: P5 area name, O7 legend, A6 figure label',
   (await text('[data-ac-row="area"][data-ac-key="downstream"] .bdc-name > span')) === 'أنشطة المصب'
   && (await texts('[data-ac-q="O7"] .bdc-legend li')).startsWith('أيام عمل غير مفوترة|موضوعون دون مستواهم|أعمال مرفوضة')

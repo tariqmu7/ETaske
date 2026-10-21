@@ -2804,6 +2804,7 @@ const en = {
   "Exploration and production": "Exploration and production",
   "Gas, pipelines and terminals": "Gas, pipelines and terminals",
   "Refining and petrochemicals": "Refining and petrochemicals",
+  "How to read this chart": "How to read this chart",
 } as const;
 
 export default en;

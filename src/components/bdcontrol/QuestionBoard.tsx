@@ -1,9 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CircleDashed } from 'lucide-react';
-import { useFormat } from '../../lib/format';
+import { CircleDashed, Info, X } from 'lucide-react';
 import {
-  GROUP_LABEL, OWNER_LABEL, QUESTION_GROUPS, pick, questionsIn, type CeoQuestion, type QGroup,
+  CEO_QUESTIONS, GROUP_LABEL, OWNER_LABEL, QUESTION_GROUPS, pick, questionsIn, type CeoQuestion, type QGroup,
 } from '../../lib/ceoQuestions';
 import { PROJECT_CHARTS, type ChartCtx } from './ProjectCharts';
 import { MONEY_AMEND_CHARTS } from './MoneyAmendCharts';
@@ -13,7 +12,7 @@ import { MONEY_CHARTS } from './MoneyCharts';
 import { PEOPLE_RISK_CHARTS } from './PeopleRiskCharts';
 import { PROJECT_OPP_CHARTS } from './ProjectOppCharts';
 import Headline from './Headline';
-import { useMasonry } from './shared';
+import { InfoSlot } from './shared';
 
 /** Every question chart built so far, by question id. */
 const CHARTS: Record<string, (c: ChartCtx) => React.ReactElement> = { ...PROJECT_CHARTS, ...MONEY_AMEND_CHARTS, ...RENEW_SUPPLY_CHARTS, ...PEOPLE_GROWTH_CHARTS, ...MONEY_CHARTS, ...PEOPLE_RISK_CHARTS, ...PROJECT_OPP_CHARTS };
@@ -23,46 +22,80 @@ export type QShow = 'chart' | 'need' | null;
 export const showOf = (q: CeoQuestion): QShow => (CHARTS[q.id] ? 'chart' : q.data === 'missing' ? 'need' : null);
 
 /**
- * Analysis center Overview (queue A1): the CEO's questions (lib/ceoQuestions.ts)
- * in their 8 groups. Each card is titled by its question and carries a fixed
- * note on how to read it. A question whose data we do not hold yet is a grey
- * "data needed" box naming what is missing and who has it — so the page is
- * also BD's data to-do list. Figures come from the live rows only.
+ * Analysis center Overview, laid out as a dashboard (queue B1, Tariq: "no text
+ * unrelated to the charts", modelled on a Power BI report): the headline tiles
+ * on top, then one tab per question group, each a grid of same-height chart
+ * tiles. A tile carries only its question as title; how to read it, the rule
+ * behind any assumed (hatched, ≈) figure and who the real data was requested
+ * from sit behind the ⓘ button. Every group stays rendered (the inactive ones
+ * `hidden`) so a tab keeps its state. Figures come from the live rows only.
  */
 export default function QuestionBoard(ctx: ChartCtx) {
   const { t, i18n } = useTranslation();
-  const F = useFormat();
   const ar = i18n.language === 'ar';
-  const sep = ar ? '، ' : ', ';
 
   const groups = useMemo(() => QUESTION_GROUPS.map(g => {
     const qs = questionsIn(g).filter(q => showOf(q));
-    return { g, qs, charts: qs.filter(q => showOf(q) === 'chart').length, needs: qs.filter(q => showOf(q) === 'need').length };
+    // Answered questions first, grey boxes after them.
+    return { g, qs: [...qs.filter(q => showOf(q) === 'chart'), ...qs.filter(q => showOf(q) === 'need')] };
   }).filter(x => x.qs.length), []);
-  const answered = groups.reduce((a, x) => a + x.charts, 0);
-  const waiting = groups.reduce((a, x) => a + x.needs, 0);
+  const [active, setActive] = useState<QGroup>(groups[0]?.g ?? 'projects');
 
-  const jump = (g: QGroup) => document.getElementById(`ac-group-${g}`)?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  const scrollTo = (el: HTMLElement | null) => el?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  const jump = (g: QGroup) => setActive(g);
+  /** A headline tile opens its question: switch to that group's tab, then bring the tile into view. */
+  const openQuestion = (id: string) => {
+    const g = CEO_QUESTIONS.find(q => q.id === id)?.group;
+    if (g) setActive(g);
+    requestAnimationFrame(() => scrollTo(document.getElementById(`ac-q-${id}`)));
+  };
 
-  const card = (q: CeoQuestion) => {
-    const show = showOf(q);
-    const who = (q.who || []).map(w => pick(OWNER_LABEL[w], ar)).join(sep);
-    return (
-      <section key={q.id} id={`ac-q-${q.id}`} className={`card ac-card${show === 'need' ? ' ac-need' : ''}`} data-ac-q={q.id} data-ac-show={show}>
-        <header className="ac-head">
-          <span className="ac-id" aria-hidden="true">{q.id}</span>
-          <h3 className="ac-q" data-ac-title>{pick(q.q, ar)}</h3>
-        </header>
-        <p className="ac-note" data-ac-note>{pick(q.note, ar)}</p>
+  return (
+    <div className="ac-board" data-ac="board">
+      <Headline {...ctx} onOpen={openQuestion} />
+      <nav className="ac-tabs" role="tablist" aria-label={t('Question groups')} data-ac="jump">
+        {groups.map(x => (
+          <button key={x.g} type="button" role="tab" aria-selected={x.g === active} className="ac-tab" onClick={() => jump(x.g)} data-ac-jump={x.g}>
+            {pick(GROUP_LABEL[x.g], ar)}
+          </button>
+        ))}
+      </nav>
+      {groups.map(x => (
+        <section key={x.g} id={`ac-group-${x.g}`} className="ac-group" data-ac-group={x.g} hidden={x.g !== active} aria-label={pick(GROUP_LABEL[x.g], ar)}>
+          <div className="ac-grid">
+            {x.qs.map(q => <QuestionTile key={q.id} q={q} ctx={ctx} />)}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+}
+
+/** One question as a dashboard tile: title row, chart, and the reading notes behind ⓘ. */
+function QuestionTile({ q, ctx }: { q: CeoQuestion; ctx: ChartCtx }) {
+  const { t, i18n } = useTranslation();
+  const ar = i18n.language === 'ar';
+  const sep = ar ? '، ' : ', ';
+  const show = showOf(q);
+  const who = (q.who || []).map(w => pick(OWNER_LABEL[w], ar)).join(sep);
+  const [open, setOpen] = useState(false);
+  // The chart's "assumed" rule (AssumedKey) is portalled into this panel.
+  const [slot, setSlot] = useState<HTMLDivElement | null>(null);
+  const infoId = `ac-info-${q.id}`;
+
+  return (
+    <section id={`ac-q-${q.id}`} className={`card ac-card${show === 'need' ? ' ac-need' : ''}${open ? ' is-info' : ''}`} data-ac-q={q.id} data-ac-show={show}>
+      <header className="ac-head">
+        <h3 className="ac-q" data-ac-title>{pick(q.q, ar)}</h3>
+        <span className="ac-badge" aria-hidden="true" title={t('Hatched and ≈ = assumed')}>≈</span>
+        <button type="button" className="ac-info-btn" aria-expanded={open} aria-controls={infoId} onClick={() => setOpen(o => !o)}
+          aria-label={open ? t('Close') : t('How to read this chart')} title={open ? t('Close') : t('How to read this chart')} data-ac-info={q.id}>
+          {open ? <X size={15} /> : <Info size={15} />}
+        </button>
+      </header>
+      <div className="ac-body">
         {show === 'chart' ? (
-          <>
-            {CHARTS[q.id](ctx)}
-            {q.data === 'part' && q.missing && (
-              <p className="ac-still" data-ac-still>
-                {who ? t('Requested from {{who}}: {{what}}', { who, what: pick(q.missing, ar) }) : t('Requested: {{what}}', { what: pick(q.missing, ar) })}
-              </p>
-            )}
-          </>
+          <InfoSlot.Provider value={slot}>{CHARTS[q.id](ctx)}</InfoSlot.Provider>
         ) : (
           <div className="ac-need-box" data-ac-need>
             <span className="ac-need-tag"><CircleDashed size={14} aria-hidden="true" />{t('Data needed')}</span>
@@ -72,46 +105,17 @@ export default function QuestionBoard(ctx: ChartCtx) {
             </dl>
           </div>
         )}
-      </section>
-    );
-  };
-
-  return (
-    <div className="ac-board" data-ac="board">
-      <Headline {...ctx} />
-      <p className="ac-summary" data-ac="summary">
-        {waiting
-          ? t('{{a}} questions answered from today’s data · {{w}} waiting for data from other departments', { a: F.number(answered), w: F.number(waiting) })
-          : t('{{a}} questions answered from today’s data (hatched figures are assumed until the real data arrives)', { a: F.number(answered) })}
-      </p>
-      <nav className="bdc-chips ac-jump" aria-label={t('Question groups')} data-ac="jump">
-        {groups.map(x => (
-          <button key={x.g} type="button" className="bdc-chip" onClick={() => jump(x.g)} data-ac-jump={x.g}>
-            {pick(GROUP_LABEL[x.g], ar)}<span className="bdc-chip-n">{F.number(x.qs.length)}</span>
-          </button>
-        ))}
-      </nav>
-      {groups.map((x, i) => (
-        <section key={x.g} id={`ac-group-${x.g}`} className="ac-group" data-ac-group={x.g}>
-          <h2 className="ac-group-h">
-            <span className="ac-group-no">{F.number(QUESTION_GROUPS.indexOf(x.g) + 1)}</span>
-            {pick(GROUP_LABEL[x.g], ar)}
-            <span className="ac-group-sub">
-              {t('Answered: {{a}} · data needed: {{w}}', { a: F.number(x.charts), w: F.number(x.needs) })}
-            </span>
-          </h2>
-          <Grid order={i}>
-            {/* Answered questions first, grey boxes after them. */}
-            {[...x.qs.filter(q => showOf(q) === 'chart'), ...x.qs.filter(q => showOf(q) === 'need')].map(card)}
-          </Grid>
-        </section>
-      ))}
-    </div>
+      </div>
+      <div id={infoId} className="ac-info" hidden={!open} data-ac-info-panel>
+        <span className="ac-id">{q.id}</span>
+        <p className="ac-note" data-ac-note>{pick(q.note, ar)}</p>
+        <div ref={setSlot} />
+        {show === 'chart' && q.data === 'part' && q.missing && (
+          <p className="ac-still" data-ac-still>
+            {who ? t('Requested from {{who}}: {{what}}', { who, what: pick(q.missing, ar) }) : t('Requested: {{what}}', { what: pick(q.missing, ar) })}
+          </p>
+        )}
+      </div>
+    </section>
   );
-}
-
-/** One group's cards, packed with no tall holes between them. */
-function Grid({ order, children }: { order: number; children: React.ReactNode }) {
-  const ref = useMasonry<HTMLDivElement>();
-  return <div ref={ref} className="ac-grid" data-ac-order={order}>{children}</div>;
 }
