@@ -2144,6 +2144,72 @@ h1, h2, h3, h4, p, span, div {
 .ac-sublist { margin: 6px 0 0; padding-inline-start: 10px; border-inline-start: 2px solid var(--border); }
 .ac-sublist .ac-subrow { grid-template-columns: minmax(0, 1fr); }
 .bdc-sub.ac-wrap { white-space: normal; overflow: visible; text-overflow: clip; }
+/* Queue L3a: Power BI look (Tariq 22 Oct: "font bad, bar charts bad, rigid, hard for the eyes" + his Power BI sales photo).
+   Segoe UI at normal weights, the classic Power BI colours (teal, charcoal, coral, yellow), solid bars, an assumed figure
+   as a pale tint of its bar colour instead of stripes, no rule under every row, light big numbers, quiet tiles. */
+.bdc {
+  font-family: 'Segoe UI', 'Inter', 'Cairo', system-ui, sans-serif;
+  --pbi-ink: #252423; --pbi-mute: #605e5c; --pbi-faint: #8a8886; --pbi-grid: #edebe9;
+  --bdc-client: #01a99c; --bdc-supplier: #374649; --bdc-agibaSite: #fd625e; --bdc-bar: #7f8c8d;
+  --bdc-lo: #d64550; --bdc-mid: #e8a317; --bdc-hi: #1a9e5c;
+  --ac-s1: #01a99c; --ac-s2: #374649; --ac-s3: #fd625e; --ac-s4: #f2c80f;
+}
+[data-theme="dark"] .bdc {
+  --pbi-ink: #f3f2f1; --pbi-mute: #c8c6c4; --pbi-faint: #979593; --pbi-grid: rgba(255,255,255,.08);
+  --bdc-client: #2fd1c2; --bdc-supplier: #b8c4c6; --bdc-agibaSite: #ff8580; --bdc-bar: #9aa5a6;
+  --bdc-lo: #ff6b73; --bdc-mid: #f5c04a; --bdc-hi: #4cc98a;
+  --ac-s1: #2fd1c2; --ac-s2: #b8c4c6; --ac-s3: #ff8580; --ac-s4: #f5d33f;
+}
+[dir="rtl"] .bdc { font-family: 'Cairo', 'Segoe UI', system-ui, sans-serif; }
+.bdc .ac-grid { gap: 10px; }
+.bdc .ac-card { border: 0; padding: 12px 14px 10px; box-shadow: 0 0 0 1px rgba(0,0,0,.05), 0 1px 4px rgba(0,0,0,.07); }
+.bdc .ac-card:hover { border-color: transparent; }
+.bdc .ac-q { font-size: 14px; font-weight: 400; line-height: 1.3; color: var(--pbi-ink); }
+.bdc .ac-badge { background-image: none; border: 0; background: var(--pbi-grid); font-weight: 600; color: var(--pbi-mute); }
+.bdc .ac-tab { font-weight: 400; color: var(--pbi-mute); }
+.bdc .ac-tab[aria-selected="true"] { font-weight: 600; color: var(--pbi-ink); border-bottom-color: var(--bdc-client); }
+/* Rows: no rule under each one, plain names, a thicker solid bar. */
+.bdc .ac-card .bdc-row, .bdc .ac-card .bdc-click, .bdc .ac-card .bdc-await li, .bdc .ac-card .bdc-issues li,
+.bdc .ac-card .bdc-changes, .bdc .ac-card .bdc-item-d > summary, .bdc .ac-card .bdc-item-body { border-bottom: 0; }
+.bdc .ac-card .bdc-row { padding-block: 4px; }
+.bdc .ac-card .bdc-click:hover { background: var(--pbi-grid); }
+.bdc .ac-card .bdc-name { font-size: 13px; font-weight: 400; color: var(--pbi-ink); }
+.bdc .ac-card .bdc-sub { font-size: 11px; font-weight: 400; color: var(--pbi-faint); }
+.bdc .ac-card .bdc-num, .bdc .ac-card .bdc-gap { font-size: 12.5px; font-weight: 600; color: var(--pbi-ink); }
+.bdc .ac-card .bdc-gap-lo, .bdc .ac-card .bdc-num.bdc-red { color: var(--bdc-lo); }
+.bdc .ac-card .bdc-track { height: 16px; }
+.bdc .ac-card .bdc-fill { min-width: 2px; }
+.bdc .ac-card .bdc-fill-base, .bdc .ac-card .bdc-fill-hi { background: var(--bdc-client); }
+.bdc .ac-card .bdc-legend { color: var(--pbi-mute); }
+.bdc .ac-card .bdc-window, .bdc .ac-card .bdc-pill, .bdc .ac-need-tag { font-weight: 600; }
+.bdc .ac-card .ac-more { font-weight: 600; color: var(--bdc-client); }
+/* Assumed figures: the bar's own colour, paler — no stripes to tire the eye. The ≈ on the number stays. */
+.bdc .ac-hatch, .bdc .ac-hatch-2, .bdc .ac-hatch-lo { background-image: none; box-shadow: none; }
+.bdc .ac-hatch { background: color-mix(in srgb, var(--bdc-client) 55%, transparent); }
+.bdc .ac-hatch-2 { background: color-mix(in srgb, var(--bdc-supplier) 55%, transparent); }
+.bdc .ac-hatch-lo { background: color-mix(in srgb, var(--bdc-lo) 55%, transparent); }
+/* Figures: light big numbers, as Power BI cards. */
+.bdc .ac-card .bdc-figs { font-size: 11.5px; color: var(--pbi-mute); }
+.bdc .ac-card .bdc-figs b { font-size: 22px; font-weight: 300; color: var(--pbi-ink); }
+.bdc .ac-stat-label { font-weight: 400; color: var(--pbi-mute); border-bottom-color: var(--pbi-grid); }
+.bdc .ac-stat b { font-size: 15px; font-weight: 600; color: var(--pbi-ink); border-bottom-color: var(--pbi-grid); }
+.bdc .ac-stat-sub { border-bottom-color: var(--pbi-grid); }
+.bdc .ac-stat:first-child > b { font-size: 44px; font-weight: 300; border-bottom: 0; padding-bottom: 6px; }
+.bdc .ac-headline-grid { border: 0; box-shadow: 0 0 0 1px rgba(0,0,0,.05), 0 1px 4px rgba(0,0,0,.07); }
+.bdc .ac-tile { border-inline-start-color: var(--pbi-grid); }
+.bdc .ac-tile-label { font-weight: 400; color: var(--pbi-mute); }
+.bdc .ac-tile-n { font-size: 34px; font-weight: 300; color: var(--pbi-ink); }
+.bdc .ac-tile-warn .ac-tile-n { color: var(--bdc-lo); }
+.bdc .ac-tile-unit { font-weight: 400; color: var(--pbi-mute); }
+.bdc .ac-tile-sub { color: var(--pbi-faint); }
+/* Columns and donut: lighter labels. */
+.bdc .ac-col-n { font-weight: 600; color: var(--pbi-ink); }
+.bdc .ac-col-l { color: var(--pbi-faint); }
+.bdc .ac-col-bar { border-bottom-color: var(--pbi-faint); }
+.bdc .ac-donut-n { font-weight: 300; fill: var(--pbi-ink); }
+.bdc .ac-donut-l { font-weight: 400; }
+.bdc .ac-legend li { color: var(--pbi-mute); }
+.bdc .ac-legend b { font-weight: 600; color: var(--pbi-ink); }
 
 /* ── Bid privacy badge (queue M6) ──────────────────────────────────────────
    Quiet: shown only for Managers only / Private — an "Everyone" bid says nothing. */
