@@ -15,6 +15,8 @@ export interface ChartCtx {
   onContracts: (f: ContractFilter) => void;
   /** Opens the Suppliers browse tab on the live supplier contracts ("Show all" under a supplier list). */
   onSuppliers?: () => void;
+  /** Opens the Pricing browse tab, the whole day-rate grid ("Show all" under a grade list). */
+  onPricing?: () => void;
   /** The app’s open and closed bids the viewer may see (G2, P7, O6); null while loading, 'error' when the read failed. */
   bids?: ClosedBid[] | null | 'error';
 }

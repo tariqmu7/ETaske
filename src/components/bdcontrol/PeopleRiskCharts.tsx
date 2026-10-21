@@ -7,7 +7,7 @@ import {
   benchStaff, gradeCosts, guaranteesByExpiry, incomePerStaffDay, keyPersonProjects, pipelineByStage, risksByProject, staffByProject, vacancies,
   type GuaranteeWindow, type RiskSign,
 } from '../../lib/analysisCenter';
-import { GRADE_SHORT, useBdWords } from './shared';
+import { GRADE_SHORT, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import { AssumedKey } from './MoneyAmendCharts';
 import { HatchBar, useMoneyRules } from './MoneyCharts';
 import type { ChartCtx } from './ProjectCharts';
@@ -40,14 +40,13 @@ export function useStaffRules(anyRateAssumed: boolean) {
   ];
 }
 
-/** H1 — staff per client project, most first. */
-export function H1StaffPerProject({ data, today, onClient }: ChartCtx) {
+/** H1 — staff per client project, most first: the top 5, then "Show all" on the Contracts tab. */
+export function H1StaffPerProject({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi } = useBdWords(data);
   const v = useMemo(() => staffByProject(data, today), [data, today]);
   const rules = useStaffRules(v.rows.some(r => r.rateAssumed));
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.staff));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="H1">
@@ -58,17 +57,16 @@ export function H1StaffPerProject({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty">{t('No project bills anything in the last 12 months.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="staff" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap">{t('≈ {{days}} man-days · day rate {{rate}}', { days: F.number(r.manDays, { maximumFractionDigits: 0 }), rate: `${r.rateAssumed ? '≈ ' : ''}${F.number(r.rate, { maximumFractionDigits: 0 })}` })}</span>
-                </span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="staff" data-ac-key={r.client}
+                title={t('≈ {{days}} man-days · day rate {{rate}}', { days: F.number(r.manDays, { maximumFractionDigits: 0 }), rate: `${r.rateAssumed ? '≈ ' : ''}${F.number(r.rate, { maximumFractionDigits: 0 })}` })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.staff} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {F.number(r.staff)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="staff" />
-      {v.noRate > 0 && <p className="bdc-foot" data-ac-foot="noRate">{t('Projects with no day rate to count from: {{n}}', { n: F.number(v.noRate) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="staff" />
+      {v.noRate > 0 && <TileFoot attr="noRate">{t('Projects with no day rate to count from: {{n}}', { n: F.number(v.noRate) })}</TileFoot>}
       <AssumedKey rules={rules} />
     </>
   );
@@ -91,8 +89,8 @@ export function H2Bench({ data, today }: ChartCtx) {
   );
 }
 
-/** H4 — per grade: what the client pays for a man-day against what it costs us. */
-export function H4GradeCost({ data }: ChartCtx) {
+/** H4 — per grade: what the client pays for a man-day against what it costs us; the first 5 grades, then "Show all" on the Pricing tab. */
+export function H4GradeCost({ data, onPricing }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const rows = useMemo(() => gradeCosts(rateGrid(data.dayRates)), [data.dayRates]);
   const max = Math.max(1, ...rows.map(r => r.rate));
@@ -107,11 +105,9 @@ export function H4GradeCost({ data }: ChartCtx) {
         <li>{t('EGP per man-day')}</li>
       </ul>
       <div className="bdc-list">
-        {rows.map(r => (
-          <div key={r.grade} className="bdc-row" data-ac-row="gradeCost" data-ac-key={r.grade}>
-            <span className="bdc-name"><span>{gradeName(r.grade)}</span>
-              <span className="bdc-sub ac-wrap">{t('Client pays {{rate}} · clients: {{n}}', { rate: n0(r.rate), n: F.number(r.clients) })}</span>
-            </span>
+        {rows.slice(0, TILE_FIRST).map(r => (
+          <div key={r.grade} className="bdc-row" data-ac-row="gradeCost" data-ac-key={r.grade} title={t('Client pays {{rate}} · clients: {{n}}', { rate: n0(r.rate), n: F.number(r.clients) })}>
+            <span className="bdc-name">{gradeName(r.grade)}</span>
             <span className="bdc-track">
               <span className="bdc-stack" style={{ width: `${(r.rate / max) * 100}%` }}>
                 <span className="bdc-seg ac-hatch" style={{ flex: r.cost }} data-ac-assumed-seg />
@@ -122,18 +118,18 @@ export function H4GradeCost({ data }: ChartCtx) {
           </div>
         ))}
       </div>
+      {onPricing && <ShowAll total={rows.length} onOpen={onPricing} attr="gradeCost" />}
       <AssumedKey rules={[t('our cost of a man-day = the median day rate ÷ {{k}} (EPROM’s price build-up)', { k: F.number(PRICE_BUILDUP, { maximumFractionDigits: 4 }) })]} />
     </>
   );
 }
 
-/** H5 — projects small enough to hang on one key person, smallest first. */
-export function H5KeyPerson({ data, today, onClient }: ChartCtx) {
+/** H5 — projects small enough to hang on one key person, smallest first: the top 5, then "Show all" on the Contracts tab. */
+export function H5KeyPerson({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM } = useBdWords(data);
   const v = useMemo(() => keyPersonProjects(data, today), [data, today]);
   const rules = useStaffRules(v.rows.some(r => r.rateAssumed));
-  const [all, setAll] = useState(false);
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="H5">
@@ -144,29 +140,27 @@ export function H5KeyPerson({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="keyPerson">{t('Every project has more than {{n}} people on it.', { n: F.number(KEY_PERSON_MAX_STAFF) })}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="keyPerson" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap">{t('Billed ≈ {{v}} in 12 months · key person: to be named by the project manager', { v: egpM(r.billedEgp) })}</span>
-                </span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="keyPerson" data-ac-key={r.client}
+                title={t('Billed ≈ {{v}} in 12 months · key person: to be named by the project manager', { v: egpM(r.billedEgp) })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.staff} max={KEY_PERSON_MAX_STAFF} />
                 <span className="bdc-num" data-bdc-value>{t('≈ {{n}} people', { n: F.number(r.staff) })}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="keyPerson" />
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="keyPerson" />
       <AssumedKey rules={[...rules, t('a project with {{n}} people or fewer hangs on one key person', { n: F.number(KEY_PERSON_MAX_STAFF) })]} />
     </>
   );
 }
 
-/** H6 — open positions per project. */
-export function H6Vacancies({ data, today, onClient }: ChartCtx) {
+/** H6 — open positions per project: the top 5, then "Show all" on the Contracts tab. */
+export function H6Vacancies({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi } = useBdWords(data);
   const v = useMemo(() => vacancies(data, today), [data, today]);
   const rules = useStaffRules(false);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.open));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="H6">
@@ -177,14 +171,15 @@ export function H6Vacancies({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="vacancies">{t('No project has {{n}} people or more, so none carries an open position under this rule.', { n: F.number(STAFF_PER_VACANCY) })}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="vacancy" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}<span className="bdc-sub ac-wrap">{t('≈ {{n}} staff · open ≈ {{days}} days', { n: F.number(r.staff), days: F.number(r.days) })}</span></span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="vacancy" data-ac-key={r.client}
+                title={t('≈ {{n}} staff · open ≈ {{days}} days', { n: F.number(r.staff), days: F.number(r.days) })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.open} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {F.number(r.open)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="vacancy" />
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="vacancy" />
       <AssumedKey rules={[...rules, t('one open position per {{n}} staff on a project, each open {{days}} days', { n: F.number(STAFF_PER_VACANCY), days: F.number(ASSUMED_VACANCY_DAYS) })]} />
     </>
   );

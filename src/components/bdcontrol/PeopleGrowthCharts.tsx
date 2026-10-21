@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { BENCHMARK_CLIENT, gradeChart, rateGrid, rateWarnings } from '../../lib/bdControl';
 import { NO_NEW_WORK_MONTHS, lastNewWork, levelValues, ratesVsMarket, serviceGaps } from '../../lib/analysisCenter';
-import { GRADE_SHORT, useBdWords } from './shared';
+import { GRADE_SHORT, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import { AssumedKey, Bar } from './MoneyAmendCharts';
 import type { ChartCtx } from './ProjectCharts';
 
@@ -22,8 +22,12 @@ function ShowMore({ total, all, onToggle, attr }: { total: number; all: boolean;
   );
 }
 
-/** H3 — per grade, our clients' median day rate against the reference client; a grade opens its clients. */
-export function H3RatesVsMarket({ data, onClient }: ChartCtx) {
+/**
+ * H3 — per grade, our clients' median day rate against the reference client:
+ * the first 5 grades, then "Show all" on the Pricing tab. A grade opens its
+ * clients in place of the grade list (both lists would overflow the tile).
+ */
+export function H3RatesVsMarket({ data, onClient, onPricing }: ChartCtx) {
   const { t, F, nameOf, bidi, sep, pct, gapTone } = useBdWords(data);
   const grid = useMemo(() => rateGrid(data.dayRates), [data.dayRates]);
   const v = useMemo(() => ratesVsMarket(data, grid), [data, grid]);
@@ -39,7 +43,7 @@ export function H3RatesVsMarket({ data, onClient }: ChartCtx) {
   return (
     <>
       <div className="bdc-list">
-        {v.rows.map(r => (
+        {(open ? v.rows.filter(r => r.grade === open) : v.rows.slice(0, TILE_FIRST)).map(r => (
           <button key={r.grade} type="button" className="bdc-row bdc-row-rate bdc-click" aria-expanded={open === r.grade}
             onClick={() => setOpen(o => (o === r.grade ? null : r.grade))} data-ac-row="grade" data-ac-key={r.grade}>
             <span className="bdc-name">{bidi(gradeName(r.grade))}
@@ -61,7 +65,7 @@ export function H3RatesVsMarket({ data, onClient }: ChartCtx) {
       </div>
       {per && (
         <div className="bdc-list ac-sublist" data-ac-list={open}>
-          {per.rows.map(r => {
+          {per.rows.slice(0, TILE_FIRST).map(r => {
             const isRef = r.client === BENCHMARK_CLIENT;
             return (
               <button key={r.client} type="button" className="bdc-row bdc-row-rate bdc-click ac-subrow" onClick={() => onClient(r.client)} data-ac-row="gradeClient" data-ac-key={r.client}>
@@ -77,13 +81,14 @@ export function H3RatesVsMarket({ data, onClient }: ChartCtx) {
           })}
         </div>
       )}
+      {onPricing && <ShowAll total={per ? per.rows.length : v.rows.length} onOpen={onPricing} attr={per ? 'gradeClient' : 'grade'} />}
       <ul className="bdc-legend">
         <li><span className="bdc-key bdc-key-mark" aria-hidden />{ref}</li>
         <li><span className="bdc-key bdc-fill-lo" aria-hidden />{t('25%+ below')}</li>
         <li><span className="bdc-key bdc-fill-mid" aria-hidden />{t('10–25% below')}</li>
       </ul>
       {v.below.length > 0 && (
-        <p className="bdc-foot" data-ac-foot="below">{t('Paying 10%+ below {{name}} on average — reprice at renewal: {{list}}', { name: ref, list: v.below.map(nameOf).join(sep) })}</p>
+        <TileFoot attr="below">{t('Paying 10%+ below {{name}} on average — reprice at renewal: {{list}}', { name: ref, list: v.below.map(nameOf).join(sep) })}</TileFoot>
       )}
     </>
   );

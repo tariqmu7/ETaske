@@ -7,7 +7,7 @@ import {
   underPlacement, valuePerPerson,
   type Area, type ClosedBid, type LevelStaff, type PaperKind, type StaffCategory,
 } from '../../lib/analysisCenter';
-import { GRADE_SHORT, TileFoot, useBdWords } from './shared';
+import { GRADE_SHORT, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import { AssumedKey, Bar } from './MoneyAmendCharts';
 import { HatchBar, useMoneyRules } from './MoneyCharts';
 import { useStaffRules } from './PeopleRiskCharts';
@@ -177,13 +177,16 @@ const PAPER_LABEL: Record<PaperKind, string> = {
   assumed: 'Amendments with no dates on file',
 };
 
-/** A6 — days of work without a signed paper, per line, longest first. */
-export function A6Paper({ data, today, onClient }: ChartCtx) {
+/**
+ * A6 — days of work without a signed paper, per line, longest first: the top 5,
+ * then "Show all" on the Contracts tab. Contract form and kind of delay are the
+ * row's hover note; a line still past its end shows its days in red.
+ */
+export function A6Paper({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi } = useBdWords(data);
   const v = useMemo(() => paperDelays(data, today), [data, today]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.days));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   const open = v.rows.filter(r => r.kind === 'pastEnd').length, late = v.rows.filter(r => r.kind === 'signedLate').length;
   const days = (r: { kind: PaperKind; days: number }) => (r.kind === 'signedLate' ? t('at least {{n}} days', { n: F.number(r.days) })
     : r.kind === 'assumed' ? `≈ ${t('{{n}} days', { n: F.number(r.days) })}` : t('{{n}} days', { n: F.number(r.days) }));
@@ -198,17 +201,15 @@ export function A6Paper({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="paper">{t('Every line is within its end date and no extension came late.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.id} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="paper" data-ac-key={r.id}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap" data-ac-kind={r.kind}>{t(r.type)} · {t(PAPER_LABEL[r.kind])}</span>
-                </span>
+              <button key={r.id} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} title={`${t(r.type)} · ${t(PAPER_LABEL[r.kind])}`} data-ac-row="paper" data-ac-key={r.id}>
+                <span className="bdc-name" data-ac-kind={r.kind}>{bidi(nameOf(r.client))}</span>
                 <Bar real={r.kind === 'assumed' ? 0 : r.days} assumed={r.kind === 'assumed' ? r.days : 0} max={max} />
                 <span className={`bdc-num${r.kind === 'pastEnd' ? ' bdc-red' : ''}`} data-bdc-value>{days(r)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="paper" />
-      {v.noDates > 0 && <p className="bdc-foot" data-ac-foot="noDates">{t('Lines with amendments but no dates to count from: {{n}}', { n: F.number(v.noDates) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="paper" />
+      {v.noDates > 0 && <TileFoot attr="noDates">{t('Lines with amendments but no dates to count from: {{n}}', { n: F.number(v.noDates) })}</TileFoot>}
       <AssumedKey rules={v.median != null && v.rows.some(r => r.kind === 'assumed')
         ? [t('a line with amendments but no dates takes the median delay of the late extensions we can see ({{n}} days)', { n: F.number(Math.round(v.median)) })] : []} />
     </>

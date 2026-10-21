@@ -1015,10 +1015,11 @@ check('no loadedBy -> "Loaded <when>" alone', /^Loaded .+/.test(await text('[dat
 check('both stamped rows are after a 39-day-old load -> 2 edits', (await text('[data-bd="edits"]')) === 'Records edited in eTaske since the last load: 2', await text('[data-bd="edits"]'));
 await shot('2-stale');
 
-console.log('\n[6] many clients (queue B2a): top 5 in the tile, "Show all" opens the browse tab; every Projects + Money chart fits its tile');
+console.log('\n[6] many clients (queue B2a/B2b): top 5 in the tile, "Show all" opens the browse tab; every Projects, Money, Changes and People chart fits its tile');
 await evalJS(`(() => { for (let i = 1; i <= 11; i++) {
   const c = 'X' + String(i).padStart(2, '0');
-  __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: c, contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500) });
+  __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: c, contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500),
+    amendment: 'Amend. ' + i, originalValueEgp: i * 8e5, originalExpiryDate: window.__iso(500 - 30 * i) });
   if (i <= 6) __seed('bdControl/supplierContracts/rows', 'XS-' + i, { contractNo: 'XS/' + i, status: 'In Progress', currentEnd: window.__iso(200), currentValueEgp: i * 1e5, client: c, costType: 'Client project', originalValueEgp: i * 1e5 });
 } __emit(); })()`);
 await sleep(200);
@@ -1035,21 +1036,36 @@ await click('[data-ac-jump="money"]'); await sleep(100);
 await click('[data-ac-more="subcontract"]');
 check('M5 "Show all" opens the Suppliers tab on the live contracts', (await has('[data-bd-tab="suppliers"][aria-selected="true"]')) && (await has('[data-bdc-chip="supfilter:live"][aria-pressed="true"]')));
 await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+// queue B2b: Changes & amendments + People lists
+const lists2 = ['amendments', 'growth', 'months', 'extensions', 'paper', 'staff', 'keyPerson', 'vacancy', 'grade', 'gradeCost'];
+const list2Info = async () => (await Promise.all(lists2.map(async k => `${k}=${await nRows(k)}/${await text(`[data-ac-more="${k}"]`)}`))).join(',');
+const full2 = ['amendments', 'growth', 'months', 'extensions', 'staff'];
+check('A1–A6, H1, H3–H6 show at most 5 rows; A1, A3, A4, A5, H1 (11+ rows) = top 5 + "Show all N"',
+  (await Promise.all(lists2.map(async k => (await nRows(k)) <= 5))).every(Boolean)
+  && (await Promise.all(full2.map(async k => (await nRows(k)) === 5 && /^Show all \d+$/.test(await text(`[data-ac-more="${k}"]`))))).every(Boolean), await list2Info());
+await click('[data-ac-jump="amendments"]'); await sleep(100);
+await click('[data-ac-more="extensions"]');
+check('A5 "Show all" opens the Contracts tab on every line', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:all"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+await click('[data-ac-jump="people"]'); await sleep(100);
+await click('[data-ac-more="staff"]');
+check('H1 "Show all" opens the Contracts tab on every line', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:all"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
 const spills = async g => { await click(`[data-ac-jump="${g}"]`); await sleep(150);
   return evalJS(`[...document.querySelectorAll('[data-ac-group="${g}"] [data-ac-q]')].map(c => { const b = c.querySelector('.ac-body');
     const dy = b.scrollHeight - b.clientHeight, dx = b.scrollWidth - b.clientWidth; return dy > 1 || dx > 1 ? c.dataset.acQ + ':' + dy + '/' + dx : ''; }).filter(Boolean).join(',')`); };
-for (const g of ['projects', 'money']) {
+for (const g of ['projects', 'money', 'amendments', 'people']) {
   const s = await spills(g);
   check(`every ${g} chart fits its 330 px tile with no scrolling inside (desktop)`, s === '', s);
   check(`${g}: side lines (left out, no date…) sit behind ⓘ, none under the charts`, (await evalJS(`document.querySelectorAll('[data-ac-group="${g}"] .ac-body .bdc-foot').length`)) === 0
     && (g !== 'projects' || (await has('[data-ac-q="P6"] [data-ac-info-panel] [data-ac-foot]'))));
-  if (SHOT) await shot(`b2a-${g}`);
+  if (SHOT) await shot(`b2-${g}`);
 }
 await evalJS(`window.__setLang('ar')`); await sleep(250);
-for (const g of ['projects', 'money']) {
+for (const g of ['projects', 'money', 'amendments', 'people']) {
   const s = await spills(g);
   check(`Arabic: every ${g} chart fits its tile too`, s === '', s);
-  if (SHOT && g === 'money') await shot('b2a-ar-money');
+  if (SHOT && (g === 'money' || g === 'people')) await shot(`b2-ar-${g}`);
 }
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await click('[data-ac-jump="projects"]');

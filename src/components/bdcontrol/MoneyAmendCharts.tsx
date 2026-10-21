@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { useFormat } from '../../lib/format';
@@ -13,8 +13,6 @@ import type { ChartCtx } from './ProjectCharts';
 // A figure we do not hold yet is still drawn, worked out by the rule in
 // lib/analysisCenter.ts, hatched and marked "≈"; the key under the chart says the
 // rule, and the board adds who the real figure was requested from.
-
-const FIRST = 10;
 
 /** One bar: the real part solid, the assumed part hatched. */
 export function Bar({ real, assumed, max }: { real: number; assumed: number; max: number }) {
@@ -109,13 +107,12 @@ export function M5Subcontract({ data, onClient, onContracts, onSuppliers }: Char
   );
 }
 
-/** A1 — amendments per project line. */
-export function A1PerProject({ data, onClient }: ChartCtx) {
+/** A1 — amendments per project line: the top 5, then "Show all" on the Contracts tab. */
+export function A1PerProject({ data, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi } = useBdWords(data);
   const v = useMemo(() => amendmentsByProject(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.n));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       {v.rows.length === 0
@@ -129,12 +126,8 @@ export function A1PerProject({ data, onClient }: ChartCtx) {
               </button>
             ))}
           </div>}
-      {v.rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={() => setAll(x => !x)} data-ac-more="amendments">
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: v.rows.length })}
-        </button>
-      )}
-      {v.none > 0 && <p className="bdc-foot" data-ac-foot="none">{t('Projects with no amendment on file: {{n}}', { n: F.number(v.none) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="amendments" />
+      {v.none > 0 && <TileFoot attr="none">{t('Projects with no amendment on file: {{n}}', { n: F.number(v.none) })}</TileFoot>}
       <AssumedKey rules={v.assumed > 0 ? [t('a line marked “Amend.” with no number counts as one')] : []} />
     </>
   );
@@ -170,31 +163,35 @@ export function A2PerQuarter({ data, today }: ChartCtx) {
           );
         })}
       </div>}
-      {foot.length > 0 && <p className="bdc-foot" data-ac-foot="quarters">{foot.join(sep)}</p>}
+      {foot.length > 0 && <TileFoot attr="quarters">{foot.join(sep)}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed > 0) ? [t('no start date on file, so taken as the day after the end date it extends')] : []} />
     </>
   );
 }
 
-/** The ranked list A3–A5 share: one bar per project line, assumed rows hatched. */
-function ChangeList({ data, onClient, rows, attr, fmt, extra }: Pick<ChartCtx, 'data' | 'onClient'> & {
+/**
+ * The ranked list A3–A5 share: one bar per project line, assumed rows hatched;
+ * the top 5, then "Show all" on the Contracts tab. The contract form and the
+ * amendment count are the row's hover note (two-line rows overflow the tile).
+ */
+function ChangeList({ data, onClient, onContracts, rows, attr, fmt, extra }: Pick<ChartCtx, 'data' | 'onClient' | 'onContracts'> & {
   rows: ProjectChange[]; attr: string; fmt: (r: ProjectChange) => string; extra?: (r: ProjectChange) => React.ReactNode;
 }) {
   const { t, F, nameOf, bidi } = useBdWords(data);
   const max = Math.max(1e-9, ...rows.map(r => r.value));
   return (
-    <div className="bdc-list">
-      {rows.map(r => (
-        <button key={r.id} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row={attr} data-ac-key={r.id}>
-          <span className="bdc-name">{bidi(nameOf(r.client))}
-            <span className="bdc-sub">{t(r.type)} · {t('Amendments: {{n}}', { n: F.number(r.amendments) })}</span>
-            {extra?.(r)}
-          </span>
-          <Bar real={r.assumed ? 0 : r.value} assumed={r.assumed ? r.value : 0} max={max} />
-          <span className="bdc-num" data-bdc-value>{r.assumed ? '≈ ' : ''}{fmt(r)}</span>
-        </button>
-      ))}
-    </div>
+    <>
+      <div className="bdc-list">
+        {rows.slice(0, TILE_FIRST).map(r => (
+          <button key={r.id} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} title={`${t(r.type)} · ${t('Amendments: {{n}}', { n: F.number(r.amendments) })}`} data-ac-row={attr} data-ac-key={r.id}>
+            <span className="bdc-name">{bidi(nameOf(r.client))}{extra?.(r)}</span>
+            <Bar real={r.assumed ? 0 : r.value} assumed={r.assumed ? r.value : 0} max={max} />
+            <span className="bdc-num" data-bdc-value>{r.assumed ? '≈ ' : ''}{fmt(r)}</span>
+          </button>
+        ))}
+      </div>
+      <ShowAll total={rows.length} onOpen={() => onContracts('all')} attr={attr} />
+    </>
   );
 }
 
@@ -210,7 +207,7 @@ function useYardstickRule(y: Yardstick, kind: 'value' | 'time') {
 }
 
 /** A3 — growth in value per project, %. */
-export function A3Growth({ data, onClient }: ChartCtx) {
+export function A3Growth({ data, onClient, onContracts }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const v = useMemo(() => projectGrowth(data), [data]);
   const rule = useYardstickRule(v.y, 'value');
@@ -218,15 +215,15 @@ export function A3Growth({ data, onClient }: ChartCtx) {
     <>
       {v.rows.length === 0
         ? <p className="bdc-empty">{t('No project shows a growth in value yet.')}</p>
-        : <ChangeList data={data} onClient={onClient} rows={v.rows} attr="growth" fmt={r => `+${F.number(r.value, { maximumFractionDigits: 0 })}%`} />}
-      {v.flat > 0 && <p className="bdc-foot" data-ac-foot="flat">{t('Projects with no growth to show: {{n}}', { n: F.number(v.flat) })}</p>}
+        : <ChangeList data={data} onClient={onClient} onContracts={onContracts} rows={v.rows} attr="growth" fmt={r => `+${F.number(r.value, { maximumFractionDigits: 0 })}%`} />}
+      {v.flat > 0 && <TileFoot attr="flat">{t('Projects with no growth to show: {{n}}', { n: F.number(v.flat) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) && rule ? [rule] : []} />
     </>
   );
 }
 
 /** A4 — months added per project. */
-export function A4Months({ data, onClient }: ChartCtx) {
+export function A4Months({ data, onClient, onContracts }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const v = useMemo(() => monthsAdded(data), [data]);
   const rule = useYardstickRule(v.y, 'time');
@@ -234,15 +231,15 @@ export function A4Months({ data, onClient }: ChartCtx) {
     <>
       {v.rows.length === 0
         ? <p className="bdc-empty">{t('No project shows months added yet.')}</p>
-        : <ChangeList data={data} onClient={onClient} rows={v.rows} attr="months" fmt={r => `+${F.number(r.value)}`} />}
-      {v.flat > 0 && <p className="bdc-foot" data-ac-foot="flat">{t('Projects with no months added to show: {{n}}', { n: F.number(v.flat) })}</p>}
+        : <ChangeList data={data} onClient={onClient} onContracts={onContracts} rows={v.rows} attr="months" fmt={r => `+${F.number(r.value)}`} />}
+      {v.flat > 0 && <TileFoot attr="flat">{t('Projects with no months added to show: {{n}}', { n: F.number(v.flat) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) && rule ? [rule] : []} />
     </>
   );
 }
 
 /** A5 — projects ranked by time extensions, with the real "extended lately" tag. */
-export function A5Extensions({ data, onClient }: ChartCtx) {
+export function A5Extensions({ data, onClient, onContracts }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const v = useMemo(() => extensionsByProject(data), [data]);
   const rule = useYardstickRule(v.y, 'time');
@@ -251,11 +248,11 @@ export function A5Extensions({ data, onClient }: ChartCtx) {
     <>
       {v.rows.length === 0
         ? <p className="bdc-empty">{t('No project shows a time extension yet.')}</p>
-        : <ChangeList data={data} onClient={onClient} rows={v.rows} attr="extensions" fmt={r => F.number(r.value)}
+        : <ChangeList data={data} onClient={onClient} onContracts={onContracts} rows={v.rows} attr="extensions" fmt={r => F.number(r.value)}
             extra={r => moved.get(r.id) != null && (
               <span className="bdc-pill bdc-pill-mid ac-tag" data-ac-moved>{t('Extended in the latest report (months: +{{n}})', { n: F.number(moved.get(r.id) as number) })}</span>
             )} />}
-      {v.flat > 0 && <p className="bdc-foot" data-ac-foot="flat">{t('Projects with no extension to show: {{n}}', { n: F.number(v.flat) })}</p>}
+      {v.flat > 0 && <TileFoot attr="flat">{t('Projects with no extension to show: {{n}}', { n: F.number(v.flat) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) && rule ? [rule] : []} />
     </>
   );
