@@ -1,4 +1,5 @@
-import React, { useLayoutEffect, useMemo, useRef } from 'react';
+import React, { useContext, useLayoutEffect, useMemo, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 import { Search, X } from 'lucide-react';
 import { millions, type BdData, type ExpiryFlag } from '../../lib/bdControl';
@@ -27,6 +28,31 @@ const FLAG_TONE: Record<ExpiryFlag, string> = {
  * no tile around (null) they stay under the chart.
  */
 export const InfoSlot = React.createContext<HTMLElement | null>(null);
+
+/** A list in an Analysis center tile shows this many rows; "Show all" opens the browse tab with every row (queue B2). */
+export const TILE_FIRST = 5;
+
+/**
+ * A side line about a chart (what is left out, what has no date…). Inside a
+ * dashboard tile it goes behind the ⓘ button with the reading notes, so the
+ * chart keeps the whole tile (queue B2); with no tile it stays under the chart.
+ */
+export function TileFoot({ attr, children }: { attr: string; children: React.ReactNode }) {
+  const slot = useContext(InfoSlot);
+  const foot = <p className="bdc-foot" data-ac-foot={attr}>{children}</p>;
+  return slot ? createPortal(foot, slot) : foot;
+}
+
+/** "Show all N" under a tile's first rows: opens the browse tab that lists every row. */
+export function ShowAll({ total, onOpen, attr }: { total: number; onOpen: () => void; attr: string }) {
+  const { t } = useTranslation();
+  if (total <= TILE_FIRST) return null;
+  return (
+    <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={onOpen} data-ac-more={attr}>
+      {t('Show all {{count}}', { count: total })}
+    </button>
+  );
+}
 
 /** Grid row unit for useMasonry, px (matches `.is-masonry` in index.css). */
 const MASONRY_ROW = 4;

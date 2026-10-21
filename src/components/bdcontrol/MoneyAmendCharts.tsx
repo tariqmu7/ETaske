@@ -6,7 +6,7 @@ import {
   ASSUMED_MONTHS, ASSUMED_USD_EGP, amendmentsByProject, amendmentsByQuarter, extensionsByProject, monthsAdded,
   projectGrowth, projectValues, subcontractByProject, type ProjectChange, type Yardstick,
 } from '../../lib/analysisCenter';
-import { InfoSlot, useBdWords } from './shared';
+import { InfoSlot, ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A2: Money (M1, M5) and Changes & amendments (A1–A5).
@@ -46,13 +46,12 @@ export function AssumedKey({ rules }: { rules: string[] }) {
 
 const pct0 = (x: number) => Math.round(x * 100);
 
-/** M1 — contract value of every project, per client. */
-export function M1Values({ data, onClient }: ChartCtx) {
+/** M1 — contract value of every project, per client: the top 5, then "Show all" on the Contracts tab. */
+export function M1Values({ data, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM } = useBdWords(data);
   const v = useMemo(() => projectValues(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.totalEgp));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   const bases = new Set(v.rows.flatMap(r => r.basis));
   const rules = [
     ...(bases.has('monthly') ? [t('a line paid by the month = {{n}} × its monthly value', { n: F.number(ASSUMED_MONTHS) })] : []),
@@ -67,30 +66,25 @@ export function M1Values({ data, onClient }: ChartCtx) {
       </div>
       <div className="bdc-list">
         {shown.map(r => (
-          <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="values" data-ac-key={r.client}>
-            <span className="bdc-name">{bidi(nameOf(r.client))}<span className="bdc-sub">{t('Contract lines: {{n}}', { n: F.number(r.lines) })}</span></span>
+          <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} title={t('Contract lines: {{n}}', { n: F.number(r.lines) })} data-ac-row="values" data-ac-key={r.client}>
+            <span className="bdc-name">{bidi(nameOf(r.client))}</span>
             <Bar real={r.realEgp} assumed={r.assumedEgp} max={max} />
             <span className="bdc-num" data-bdc-value>{r.assumedEgp > 0 ? '≈ ' : ''}{egpM(r.totalEgp)}</span>
           </button>
         ))}
       </div>
-      {v.rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={() => setAll(x => !x)} data-ac-more="values">
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: v.rows.length })}
-        </button>
-      )}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="values" />
       <AssumedKey rules={rules} />
     </>
   );
 }
 
-/** M5 — what subcontractors cost us on each client project. */
-export function M5Subcontract({ data, onClient }: ChartCtx) {
+/** M5 — what subcontractors cost us on each client project: the top 5, then "Show all" on the Suppliers tab. */
+export function M5Subcontract({ data, onClient, onContracts, onSuppliers }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM } = useBdWords(data);
   const v = useMemo(() => subcontractByProject(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.totalEgp));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="M5">
@@ -100,20 +94,16 @@ export function M5Subcontract({ data, onClient }: ChartCtx) {
         ? <p className="bdc-empty">{t('No live supplier contract is tied to a client project.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client || '-'} type="button" className="bdc-row bdc-click" onClick={() => r.client && onClient(r.client)} data-ac-row="subcontract" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(r.client ? nameOf(r.client) : t('No client on file'))}<span className="bdc-sub">{t('Supplier contracts: {{n}}', { n: F.number(r.count) })}</span></span>
+              <button key={r.client || '-'} type="button" className="bdc-row bdc-click" onClick={() => r.client && onClient(r.client)} title={t('Supplier contracts: {{n}}', { n: F.number(r.count) })} data-ac-row="subcontract" data-ac-key={r.client}>
+                <span className="bdc-name">{bidi(r.client ? nameOf(r.client) : t('No client on file'))}</span>
                 <Bar real={r.realEgp} assumed={r.assumedEgp} max={max} />
                 <span className="bdc-num" data-bdc-value>{r.assumedEgp > 0 ? '≈ ' : ''}{egpM(r.totalEgp)}</span>
               </button>
             ))}
           </div>}
-      {v.rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={() => setAll(x => !x)} data-ac-more="subcontract">
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: v.rows.length })}
-        </button>
-      )}
-      {v.own.count > 0 && <p className="bdc-foot" data-ac-foot="own">{t('EPROM’s own needs, not a client project: {{value}} · contracts: {{n}}', { n: F.number(v.own.count), value: egpM(v.own.egp) })}</p>}
-      {v.leftOut > 0 && <p className="bdc-foot" data-ac-foot="currency">{t('In another currency, left out: {{n}}', { n: F.number(v.leftOut) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => (onSuppliers ? onSuppliers() : onContracts('all'))} attr="subcontract" />
+      {v.own.count > 0 && <TileFoot attr="own">{t('EPROM’s own needs, not a client project: {{value}} · contracts: {{n}}', { n: F.number(v.own.count), value: egpM(v.own.egp) })}</TileFoot>}
+      {v.leftOut > 0 && <TileFoot attr="currency">{t('In another currency, left out: {{n}}', { n: F.number(v.leftOut) })}</TileFoot>}
       <AssumedKey rules={v.usdLines > 0 ? [t('a contract in US dollars at {{rate}} EGP per dollar', { rate: F.number(ASSUMED_USD_EGP) })] : []} />
     </>
   );

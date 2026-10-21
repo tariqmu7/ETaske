@@ -720,8 +720,8 @@ check('M4 own staff: only projects with own cost (GAMMA’s budget all went to i
   (await evalJS(`[...document.querySelectorAll('[data-ac-row="M4"]')].map(e => e.dataset.acKey).join(',')`)) === 'ALPHA,BETA'
   && (await text('[data-ac-q="M4"] [data-ac-assumed]')).includes('own cost split 75% salaries and benefits, 20% allowances, 5% travel and transport')
   && (await text('[data-ac-q="M4"] [data-ac-still]')) === 'Requested from HR, Finance: Staff cost per project (payroll totals, no names)', await text('[data-ac-q="M4"] [data-ac-still]'));
-check('M8 GAMMA: all subcontract (USD at 50), none of our own', (await text('[data-ac-row="M8"][data-ac-key="GAMMA"] .bdc-sub')) === 'Subcontractors ≈ 8.3 m EGP · our own ≈ 0 m EGP',
-  await text('[data-ac-row="M8"][data-ac-key="GAMMA"] .bdc-sub'));
+check('M8 GAMMA: all subcontract (USD at 50), none of our own (the row\'s hover note, queue B2a)', (await evalJS(`document.querySelector('[data-ac-row="M8"][data-ac-key="GAMMA"]').title`)) === 'Subcontractors ≈ 8.3 m EGP · our own ≈ 0 m EGP',
+  await evalJS(`document.querySelector('[data-ac-row="M8"][data-ac-key="GAMMA"]').title`));
 check('M3 four age bands, over 90 days ≈ 0 (greyed); M2 + M11 six quarter pairs with a two-series legend',
   (await evalJS(`[...document.querySelectorAll('[data-ac-row="owed"]')].map(e => e.dataset.acKey).join(',')`)) === 'd30,d60,d90,over90'
   && (await text('[data-ac-row="owed"][data-ac-key="over90"] [data-bdc-value]')) === '≈ 0 m EGP' && (await has('[data-ac-row="owed"][data-ac-key="over90"] .bdc-zero'))
@@ -1015,16 +1015,44 @@ check('no loadedBy -> "Loaded <when>" alone', /^Loaded .+/.test(await text('[dat
 check('both stamped rows are after a 39-day-old load -> 2 edits', (await text('[data-bd="edits"]')) === 'Records edited in eTaske since the last load: 2', await text('[data-bd="edits"]'));
 await shot('2-stale');
 
-console.log('\n[6] M1 with many clients: top 10, then show all');
-await evalJS(`(() => { for (let i = 1; i <= 11; i++) __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: 'X' + String(i).padStart(2, '0'), contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500) }); __emit(); })()`);
+console.log('\n[6] many clients (queue B2a): top 5 in the tile, "Show all" opens the browse tab; every Projects + Money chart fits its tile');
+await evalJS(`(() => { for (let i = 1; i <= 11; i++) {
+  const c = 'X' + String(i).padStart(2, '0');
+  __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: c, contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500) });
+  if (i <= 6) __seed('bdControl/supplierContracts/rows', 'XS-' + i, { contractNo: 'XS/' + i, status: 'In Progress', currentEnd: window.__iso(200), currentValueEgp: i * 1e5, client: c, costType: 'Client project', originalValueEgp: i * 1e5 });
+} __emit(); })()`);
 await sleep(200);
-const nValues = () => evalJS(`document.querySelectorAll('[data-ac-row="values"]').length`);
-check('M1: 10 bars + "Show all 13"; P6 lists the 10 biggest lines', (await nValues()) === 10 && (await text('[data-ac-more="values"]')) === 'Show all 13'
-  && (await evalJS(`document.querySelectorAll('[data-ac-row="biggest"]').length`)) === 10, `${await nValues()} | ${await text('[data-ac-more="values"]')}`);
+const nRows = k => evalJS(`document.querySelectorAll('[data-ac-row="${k}"]').length`);
+const lists = ['clients', 'biggest', 'values', 'subcontract', 'M4', 'M8', 'M9', 'used'];
+const listInfo = async () => (await Promise.all(lists.map(async k => `${k}=${await nRows(k)}/${await text(`[data-ac-more="${k}"]`)}`))).join(',');
+check('top 5 + "Show all N" on every long list: P4, P6, M1, M5, M4, M8, M9, M10',
+  (await Promise.all(lists.map(async k => (await nRows(k)) === 5 && /^Show all \d+$/.test(await text(`[data-ac-more="${k}"]`))))).every(Boolean)
+  && (await text('[data-ac-more="values"]')) === 'Show all 13' && (await evalJS(`document.querySelector('[data-ac-row="values"]:last-of-type')?.dataset.acKey`)) !== 'X01', await listInfo());
 await click('[data-ac-more="values"]');
-const allKeys = await evalJS(`[...document.querySelectorAll('[data-ac-row="values"]')].map(e => e.dataset.acKey).join(',')`);
-await click('[data-ac-more="values"]');
-check('show all -> 13, smallest last; again -> 10', allKeys.split(',').length === 13 && allKeys.endsWith(',X01') && (await nValues()) === 10, allKeys);
+check('M1 "Show all" opens the Contracts tab on every line', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:all"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+await click('[data-ac-jump="money"]'); await sleep(100);
+await click('[data-ac-more="subcontract"]');
+check('M5 "Show all" opens the Suppliers tab on the live contracts', (await has('[data-bd-tab="suppliers"][aria-selected="true"]')) && (await has('[data-bdc-chip="supfilter:live"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+const spills = async g => { await click(`[data-ac-jump="${g}"]`); await sleep(150);
+  return evalJS(`[...document.querySelectorAll('[data-ac-group="${g}"] [data-ac-q]')].map(c => { const b = c.querySelector('.ac-body');
+    const dy = b.scrollHeight - b.clientHeight, dx = b.scrollWidth - b.clientWidth; return dy > 1 || dx > 1 ? c.dataset.acQ + ':' + dy + '/' + dx : ''; }).filter(Boolean).join(',')`); };
+for (const g of ['projects', 'money']) {
+  const s = await spills(g);
+  check(`every ${g} chart fits its 330 px tile with no scrolling inside (desktop)`, s === '', s);
+  check(`${g}: side lines (left out, no date…) sit behind ⓘ, none under the charts`, (await evalJS(`document.querySelectorAll('[data-ac-group="${g}"] .ac-body .bdc-foot').length`)) === 0
+    && (g !== 'projects' || (await has('[data-ac-q="P6"] [data-ac-info-panel] [data-ac-foot]'))));
+  if (SHOT) await shot(`b2a-${g}`);
+}
+await evalJS(`window.__setLang('ar')`); await sleep(250);
+for (const g of ['projects', 'money']) {
+  const s = await spills(g);
+  check(`Arabic: every ${g} chart fits its tile too`, s === '', s);
+  if (SHOT && g === 'money') await shot('b2a-ar-money');
+}
+await evalJS(`window.__setLang('en')`); await sleep(250);
+await click('[data-ac-jump="projects"]');
 
 console.log('\n[6b] browse tabs (queue E6a): Contracts + client page, Pricing, Suppliers, Data quality');
 const typeIn = (sel, v) => evalJS(`(() => { const e = ${q(sel)}; const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;

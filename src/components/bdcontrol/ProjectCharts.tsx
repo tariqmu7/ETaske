@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { millions, type BdData, type ContractFilter } from '../../lib/bdControl';
 import {
   projectTotals, projectStatus, projectsByType, projectsByClient, projectsByValue, type ProjectState,
 } from '../../lib/analysisCenter';
-import { useBdWords } from './shared';
+import { ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ClosedBid } from '../../lib/analysisCenter';
 
 /** What every question chart gets from the board. */
@@ -13,11 +13,11 @@ export interface ChartCtx {
   today: string;
   onClient: (code: string) => void;
   onContracts: (f: ContractFilter) => void;
+  /** Opens the Suppliers browse tab on the live supplier contracts ("Show all" under a supplier list). */
+  onSuppliers?: () => void;
   /** The app’s open and closed bids the viewer may see (G2, P7, O6); null while loading, 'error' when the read failed. */
   bids?: ClosedBid[] | null | 'error';
 }
-
-const FIRST = 10;
 
 /** Contract forms as the CSA report writes them; anything else is shown as written. */
 const TYPE_LABEL: Record<string, string> = { CSA: 'CSA contracts', 'O&M': 'O&M contracts', TSA: 'TSA contracts', 'Farm-in': 'Farm-in contracts' };
@@ -120,13 +120,12 @@ export function P3Types({ data }: ChartCtx) {
   );
 }
 
-/** P4 — projects per client. */
-export function P4Clients({ data, onClient }: ChartCtx) {
+/** P4 — projects per client, the top 5 then "Show all" on the Contracts tab. */
+export function P4Clients({ data, onClient, onContracts }: ChartCtx) {
   const { t, F, sep, nameOf, bidi } = useBdWords(data);
   const rows = useMemo(() => projectsByClient(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...rows.map(r => r.count));
-  const shown = all ? rows : rows.slice(0, FIRST);
+  const shown = rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-list">
@@ -138,20 +137,16 @@ export function P4Clients({ data, onClient }: ChartCtx) {
           </button>
         ))}
       </div>
-      {rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAll(v => !v)} data-ac-more="clients" style={{ marginTop: 6 }}>
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: rows.length })}
-        </button>
-      )}
+      <ShowAll total={rows.length} onOpen={() => onContracts('all')} attr="clients" />
     </>
   );
 }
 
-/** P6 — the 10 biggest lines by ceiling. */
-export function P6Biggest({ data, onClient }: ChartCtx) {
+/** P6 — the 5 biggest lines by ceiling, then "Show all" on the Contracts tab. */
+export function P6Biggest({ data, onClient, onContracts }: ChartCtx) {
   const { t, F, sep, nameOf, bidi } = useBdWords(data);
   const v = useMemo(() => projectsByValue(data), [data]);
-  const rows = v.rows.slice(0, FIRST);
+  const rows = v.rows.slice(0, TILE_FIRST);
   const max = Math.max(1, ...rows.map(r => r.ceilingEgp));
   const label = (r: { client: string; contractType?: string }) => [nameOf(r.client), r.contractType ? t(r.contractType) : ''].filter(Boolean).join(' · ');
   return (
@@ -167,8 +162,9 @@ export function P6Biggest({ data, onClient }: ChartCtx) {
               </button>
             ))}
           </div>}
-      {v.monthlyOnly.length > 0 && <p className="bdc-foot" data-ac-foot="monthly">{t('Paid by the month, not in this chart: {{list}}', { list: v.monthlyOnly.map(label).join(sep) })}</p>}
-      {v.noValue.length > 0 && <p className="bdc-foot" data-ac-foot="novalue">{t('No ceiling or value on file: {{list}}', { list: v.noValue.map(label).join(sep) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="biggest" />
+      {v.monthlyOnly.length > 0 && <TileFoot attr="monthly">{t('Paid by the month, not in this chart: {{list}}', { list: v.monthlyOnly.map(label).join(sep) })}</TileFoot>}
+      {v.noValue.length > 0 && <TileFoot attr="novalue">{t('No ceiling or value on file: {{list}}', { list: v.noValue.map(label).join(sep) })}</TileFoot>}
     </>
   );
 }

@@ -7,7 +7,7 @@ import {
   underPlacement, valuePerPerson,
   type Area, type ClosedBid, type LevelStaff, type PaperKind, type StaffCategory,
 } from '../../lib/analysisCenter';
-import { GRADE_SHORT, useBdWords } from './shared';
+import { GRADE_SHORT, TileFoot, useBdWords } from './shared';
 import { AssumedKey, Bar } from './MoneyAmendCharts';
 import { HatchBar, useMoneyRules } from './MoneyCharts';
 import { useStaffRules } from './PeopleRiskCharts';
@@ -90,7 +90,7 @@ export function P5Areas({ data }: ChartCtx) {
           </div>
         ))}
       </div>
-      {v.unknown.length > 0 && <p className="bdc-foot" data-ac-foot="unknown">{t('Area not known (works across the chain, or not read from the name): {{list}}', { list: v.unknown.map(nameOf).join(sep) })}</p>}
+      {v.unknown.length > 0 && <TileFoot attr="unknown">{t('Area not known (works across the chain, or not read from the name): {{list}}', { list: v.unknown.map(nameOf).join(sep) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) ? [t('a project takes its client’s main business: refining and petrochemicals = downstream; gas, pipelines and terminals = midstream; exploration and production = upstream')] : []} />
     </>
   );
@@ -137,7 +137,7 @@ export function P7WinLoss({ data, today, bids }: ChartCtx) {
               ))}
             </div>
           </>}
-      {foot.length > 0 && <p className="bdc-foot" data-ac-foot="winLoss">{foot.join(sep)}</p>}
+      {foot.length > 0 && <TileFoot attr="winLoss">{foot.join(sep)}</TileFoot>}
       <AssumedKey rules={v.assumed ? [t('a closed bid with no decision date is placed in the quarter it was last changed')] : []} />
     </>
   );
@@ -154,8 +154,8 @@ export function P8Categories({ data, today }: ChartCtx) {
   const split = (Object.keys(STAFF_CATEGORY_SPLIT) as StaffCategory[]).map(c => `${t(CATEGORY_LABEL[c])} ${F.number(pct(STAFF_CATEGORY_SPLIT[c]))}%`).join(' · ');
   return (
     <>
-      <div className="ac-stats" data-ac-figs="P8">
-        <div className="ac-stat" data-ac-stat="total"><span className="ac-stat-label">{t('All our staff')}</span><b data-ac-fig="total">≈ {F.number(v.total)}</b></div>
+      <div className="bdc-figs" data-ac-figs="P8">
+        <span>{t('All our staff')}<b data-ac-fig="total">≈ {F.number(v.total)}</b></span>
       </div>
       <div className="bdc-list">
         {v.rows.map(r => (

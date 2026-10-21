@@ -140,7 +140,7 @@ export default function BdControlDashboard({ appUser }: Props) {
           : tab === 'pricing' ? <PricingTab data={data} today={today} bench={bench} onBench={setBench} onClient={c => openClient(c)} />
           : tab === 'suppliers' ? <SuppliersTab data={data} today={today} state={sup} onState={setSup} onClient={c => openClient(c)} />
           : tab === 'quality' ? <DataQualityTab data={data} state={quality} onState={setQuality} onTarget={openTarget} />
-          : <QuestionBoard data={data} today={today} onClient={c => openClient(c)} onContracts={openContracts} bids={bids} />}
+          : <QuestionBoard data={data} today={today} onClient={c => openClient(c)} onContracts={openContracts} onSuppliers={() => openSuppliers({ filter: 'live' })} bids={bids} />}
           </BdEditProvider>
         </>
       )}

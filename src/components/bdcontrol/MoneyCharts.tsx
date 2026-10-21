@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFormat } from '../../lib/format';
 import {
@@ -7,7 +7,7 @@ import {
 } from '../../lib/analysisCenter';
 import { millions } from '../../lib/bdControl';
 import { AssumedKey } from './MoneyAmendCharts';
-import { useBdWords } from './shared';
+import { ShowAll, TILE_FIRST, TileFoot, useBdWords } from './shared';
 import type { ChartCtx } from './ProjectCharts';
 
 // Analysis center, queue A7a: Money M2–M4 and M6–M11. Finance has sent no
@@ -16,7 +16,6 @@ import type { ChartCtx } from './ProjectCharts';
 // "≈", the rules spelled out under each chart and the board's "Requested from"
 // line naming who the real figures were asked from.
 
-const FIRST = 10;
 const pct = (x: number) => Math.round(x * 100);
 
 /** The rule sentences, worded once for every money chart. */
@@ -48,33 +47,28 @@ export function HatchBar({ value, max, lo }: { value: number; max: number; lo?: 
   );
 }
 
-/** A ranked list of client projects, first 10 then "Show all". */
-function ClientList({ data, onClient, rows, value, attr, sub }: Pick<ChartCtx, 'data' | 'onClient'> & {
+/** A ranked list of client projects: the top 5, then "Show all" on the Contracts tab. `sub` is the row's hover note (one line per row keeps 5 in the tile). */
+function ClientList({ data, onClient, onContracts, rows, value, attr, sub }: Pick<ChartCtx, 'data' | 'onClient' | 'onContracts'> & {
   rows: ClientMoney[]; value: (r: ClientMoney) => number; attr: string; sub?: (r: ClientMoney) => string;
 }) {
-  const { t, nameOf, bidi, egpM } = useBdWords(data);
-  const [all, setAll] = useState(false);
+  const { nameOf, bidi, egpM } = useBdWords(data);
   const max = Math.max(1e-9, ...rows.map(r => Math.abs(value(r))));
-  const shown = all ? rows : rows.slice(0, FIRST);
+  const shown = rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-list">
         {shown.map(r => {
           const v = value(r);
           return (
-            <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row={attr} data-ac-key={r.client}>
-              <span className="bdc-name">{bidi(nameOf(r.client))}{sub && <span className="bdc-sub">{sub(r)}</span>}</span>
+            <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} title={sub?.(r)} data-ac-row={attr} data-ac-key={r.client}>
+              <span className="bdc-name">{bidi(nameOf(r.client))}</span>
               <HatchBar value={v} max={max} lo={v < 0} />
               <span className={`bdc-num${v < 0 ? ' bdc-red' : ''}`} data-bdc-value>≈ {egpM(v)}</span>
             </button>
           );
         })}
       </div>
-      {rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={() => setAll(x => !x)} data-ac-more={attr}>
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: rows.length })}
-        </button>
-      )}
+      <ShowAll total={rows.length} onOpen={() => onContracts('all')} attr={attr} />
     </>
   );
 }
@@ -159,7 +153,7 @@ export function M3Owed({ data, today }: ChartCtx) {
 }
 
 /** M4, M6, M7 — one own-cost item per client project, last 12 months. */
-function OwnCostChart({ data, today, onClient, field, id }: ChartCtx & { field: 'staffEgp' | 'allowancesEgp' | 'travelEgp'; id: string }) {
+function OwnCostChart({ data, today, onClient, onContracts, field, id }: ChartCtx & { field: 'staffEgp' | 'allowancesEgp' | 'travelEgp'; id: string }) {
   const { t, egpM } = useBdWords(data);
   const r = useMoneyRules();
   const v = useMemo(() => moneyLastYear(data, today), [data, today]);
@@ -171,14 +165,14 @@ function OwnCostChart({ data, today, onClient, field, id }: ChartCtx & { field: 
       </div>
       {rows.length === 0
         ? <p className="bdc-empty">{t('No project bills anything in the last 12 months.')}</p>
-        : <ClientList data={data} onClient={onClient} rows={rows} value={x => x[field]} attr={id} />}
+        : <ClientList data={data} onClient={onClient} onContracts={onContracts} rows={rows} value={x => x[field]} attr={id} />}
       <AssumedKey rules={[r.billing, r.own, r.split]} />
     </>
   );
 }
 
 /** M8 — total direct cost per client project, last 12 months. */
-export function M8TotalCost({ data, today, onClient }: ChartCtx) {
+export function M8TotalCost({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, egpM } = useBdWords(data);
   const r = useMoneyRules();
   const v = useMemo(() => moneyLastYear(data, today), [data, today]);
@@ -191,7 +185,7 @@ export function M8TotalCost({ data, today, onClient }: ChartCtx) {
       </div>
       {rows.length === 0
         ? <p className="bdc-empty">{t('No project bills anything in the last 12 months.')}</p>
-        : <ClientList data={data} onClient={onClient} rows={rows} value={x => x.costEgp} attr="M8"
+        : <ClientList data={data} onClient={onClient} onContracts={onContracts} rows={rows} value={x => x.costEgp} attr="M8"
             sub={x => t('Subcontractors ≈ {{sub}} · our own ≈ {{own}}', { sub: egpM(x.subcontractEgp), own: egpM(x.ownEgp) })} />}
       <AssumedKey rules={[r.billing, r.subcontract, r.own]} />
     </>
@@ -203,7 +197,7 @@ export function M8TotalCost({ data, today, onClient }: ChartCtx) {
  * with costs but no billing (its line is past its end date, or has no value) is
  * named under the chart rather than drawn as a loss.
  */
-export function M9Profit({ data, today, onClient }: ChartCtx) {
+export function M9Profit({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, sep, nameOf, egpM } = useBdWords(data);
   const r = useMoneyRules();
   const v = useMemo(() => moneyLastYear(data, today), [data, today]);
@@ -220,27 +214,26 @@ export function M9Profit({ data, today, onClient }: ChartCtx) {
       </div>
       {billed.length === 0
         ? <p className="bdc-empty">{t('No project bills anything in the last 12 months.')}</p>
-        : <ClientList data={data} onClient={onClient} rows={billed} value={x => x.profitEgp} attr="M9"
+        : <ClientList data={data} onClient={onClient} onContracts={onContracts} rows={billed} value={x => x.profitEgp} attr="M9"
             sub={x => t('Billed ≈ {{billed}} · cost and overhead ≈ {{cost}}', { billed: egpM(x.invoicedEgp), cost: egpM(x.costEgp + x.overheadEgp) })} />}
       {unbilled.length > 0 && (
-        <p className="bdc-foot" data-ac-foot="unbilled">
+        <TileFoot attr="unbilled">
           {t('Costs but no billing assumed (past the end date or no value on file): {{list}}', {
             list: unbilled.map(x => `${nameOf(x.client)} ≈ ${egpM(x.costEgp)}`).join(sep),
           })}
-        </p>
+        </TileFoot>
       )}
       <AssumedKey rules={[r.billing, r.subcontract, r.own, r.overhead]} />
     </>
   );
 }
 
-/** M10 — share of each ceiling billed to date, most used first. */
-export function M10Used({ data, today, onClient }: ChartCtx) {
+/** M10 — share of each ceiling billed to date, most used first: the top 5, then "Show all" on the Contracts tab. */
+export function M10Used({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM } = useBdWords(data);
   const r = useMoneyRules();
   const v = useMemo(() => ceilingUsed(data, today), [data, today]);
-  const [all, setAll] = useState(false);
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       {v.rows.length === 0
@@ -254,12 +247,8 @@ export function M10Used({ data, today, onClient }: ChartCtx) {
               </button>
             ))}
           </div>}
-      {v.rows.length > FIRST && (
-        <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={() => setAll(x => !x)} data-ac-more="used">
-          {all ? t('Show fewer') : t('Show all {{count}}', { count: v.rows.length })}
-        </button>
-      )}
-      {v.noCeiling > 0 && <p className="bdc-foot" data-ac-foot="noCeiling">{t('Lines with no ceiling or no end date on file: {{n}}', { n: F.number(v.noCeiling) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="used" />
+      {v.noCeiling > 0 && <TileFoot attr="noCeiling">{t('Lines with no ceiling or no end date on file: {{n}}', { n: F.number(v.noCeiling) })}</TileFoot>}
       <AssumedKey rules={[r.billing]} />
     </>
   );
