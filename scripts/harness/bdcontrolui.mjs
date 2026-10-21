@@ -502,8 +502,8 @@ const holes = () => evalJS(`(() => { const out = [];
   return out.join(','); })()`);
 check('dashboard tabs (queue B1): one group shown at a time, the first selected', (await evalJS(`[...document.querySelectorAll('[data-ac-group]')].filter(e => !e.hidden).map(e => e.dataset.acGroup).join(',')`)) === 'projects'
   && (await evalJS(`document.querySelector('[data-ac-jump="projects"]').getAttribute('aria-selected')`)) === 'true');
-check('dashboard tiles: every tile in the shown group is the same height (330 px), 3 to a row on desktop', (await evalJS(`(() => { const cs = [...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')]; const tops = new Set(cs.map(c => Math.round(c.getBoundingClientRect().top))); return cs.every(c => Math.round(c.getBoundingClientRect().height) === 330) && cs.length / tops.size >= 2.5; })()`)),
-  await evalJS(`[...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')].map(c => c.dataset.acQ + ':' + Math.round(c.getBoundingClientRect().height)).join(',')`));
+check('dashboard tiles (queue L1): widths follow the layout (P1 3, P2 5, P3 4 then P7 5 + P8 7 of 12), each row fills the width with no hole and its tiles share one height', (await evalJS(`(() => { const cs = [...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')]; const g = cs[0].parentElement.getBoundingClientRect(); const span = id => cs.find(c => c.dataset.acQ === id).dataset.acSpan; if (span('P1') !== '3' || span('P2') !== '5' || span('P7') !== '5' || span('P8') !== '7') return false; if (cs.map(c => c.dataset.acQ).join(',') !== 'P1,P2,P3,P4,P5,P6,P7,P8') return false; const rows = new Map(); for (const c of cs) { const r = c.getBoundingClientRect(); const k = Math.round(r.top); (rows.get(k) || rows.set(k, []).get(k)).push(r); } return rows.size === 3 && [...rows.values()].every(rs => new Set(rs.map(r => Math.round(r.height))).size === 1 && Math.abs(rs.reduce((a, r) => a + r.width, 0) + 12 * (rs.length - 1) - g.width) < 3); })()`)),
+  await evalJS(`[...document.querySelectorAll('[data-ac-group]:not([hidden]) [data-ac-q]')].map(c => c.dataset.acQ + ':' + c.dataset.acSpan + '@' + Math.round(c.getBoundingClientRect().top) + '/' + Math.round(c.getBoundingClientRect().height)).join(',')`));
 check('notes sit behind ⓘ: hidden at first; a click shows the note and the assumed rule, the chart steps aside; a 2nd click closes', (await evalJS(`document.querySelector('[data-ac-q="M1"] [data-ac-info-panel]').hidden`)) === true
   && (await evalJS(`!!document.querySelector('[data-ac-q="M1"] [data-ac-info-panel] [data-ac-assumed]') && !document.querySelector('[data-ac-q="M1"] .ac-body [data-ac-assumed]')`))
   && await (async () => { await click('[data-ac-info="M1"]'); const open = await evalJS(`(() => { const c = document.querySelector('[data-ac-q="M1"]'); return !c.querySelector('[data-ac-info-panel]').hidden && getComputedStyle(c.querySelector('.ac-body')).display === 'none' && c.querySelector('[data-ac-info]').getAttribute('aria-expanded') === 'true'; })()`);
@@ -1076,7 +1076,7 @@ const spills = async g => { await click(`[data-ac-jump="${g}"]`); await sleep(15
 const GROUPS = ['projects', 'money', 'amendments', 'people', 'renewals', 'suppliers', 'growth', 'opportunity'];
 for (const g of GROUPS) {
   const s = await spills(g);
-  check(`every ${g} chart fits its 330 px tile with no scrolling inside (desktop)`, s === '', s);
+  check(`every ${g} chart fits its tile with no scrolling inside (desktop)`, s === '', s);
   check(`${g}: side lines (left out, no date…) sit behind ⓘ, none under the charts`, (await evalJS(`document.querySelectorAll('[data-ac-group="${g}"] .ac-body .bdc-foot').length`)) === 0
     && (g !== 'projects' || (await has('[data-ac-q="P6"] [data-ac-info-panel] [data-ac-foot]'))));
   if (SHOT) await shot(`b2-${g}`);

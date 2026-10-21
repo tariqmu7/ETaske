@@ -2027,11 +2027,13 @@ h1, h2, h3, h4, p, span, div {
 .ac-tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); }
 .ac-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .ac-group { scroll-margin-top: 120px; }
-.ac-grid { display: grid; gap: 10px; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-flow: row dense; }
-.ac-card { grid-column: span 4; position: relative; display: flex; flex-direction: column; height: 330px; padding: 12px 14px 10px;
+/* Queue L1: each tile's width comes from QuestionBoard's LAYOUT (--ac-span, rows add up to 12) and its
+   height from its chart — a row is as tall as its tallest chart, no fixed 330 px box. */
+.ac-grid { display: grid; gap: 12px; grid-template-columns: repeat(12, minmax(0, 1fr)); align-items: stretch; }
+.ac-card { grid-column: span var(--ac-span, 4); position: relative; display: flex; flex-direction: column; padding: 14px 16px 12px;
   min-width: 0; scroll-margin-top: 120px; }
-@media (max-width: 1180px) { .ac-card { grid-column: span 6; } }
-@media (max-width: 760px) { .ac-card { grid-column: span 12; height: auto; max-height: 460px; } }
+@media (max-width: 1180px) { .ac-grid { grid-auto-flow: row dense; } .ac-card { grid-column: span 6; } .ac-card.ac-wide { grid-column: span 12; } }
+@media (max-width: 760px) { .ac-card, .ac-card.ac-wide { grid-column: span 12; max-height: 460px; } }
 .ac-head { display: flex; align-items: flex-start; gap: 6px; margin: 0 0 8px; }
 .ac-q { flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 700; line-height: 1.35; margin: 0; color: var(--text-primary); }
 .ac-badge { display: none; flex-shrink: 0; font-size: 12px; font-weight: 800; line-height: 1; padding: 3px 6px; color: var(--text-secondary);
@@ -2055,11 +2057,16 @@ h1, h2, h3, h4, p, span, div {
 .ac-need-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 10px; margin: 0; font-size: 12.5px; }
 .ac-need-dl dt { color: var(--text-muted); font-weight: 600; }
 .ac-need-dl dd { margin: 0; color: var(--text-primary); font-weight: 600; }
-.ac-stats { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); }
-.ac-stat { display: flex; flex-direction: column; padding: 10px 12px; border: 1px solid var(--border); min-width: 0; }
-.ac-stat-label { font-size: 12px; font-weight: 600; color: var(--text-muted); }
-.ac-stat b { font-size: 26px; font-weight: 800; line-height: 1.2; color: var(--text-primary); }
-.ac-stat-sub { font-size: 11.5px; color: var(--text-muted); line-height: 1.4; }
+/* Queue L1: a figure list, not a box per number — the first figure leads big, the rest are label · number rows. */
+.ac-stats { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; column-gap: 12px; }
+.ac-stat { display: contents; }
+.ac-stat-label { grid-column: 1; padding: 7px 0; font-size: 13px; font-weight: 600; color: var(--text-secondary); border-bottom: 1px solid var(--border); }
+.ac-stat b { grid-column: 2; padding: 7px 0; font-size: 17px; font-weight: 800; line-height: 1.2; text-align: end; color: var(--text-primary);
+  font-variant-numeric: tabular-nums; border-bottom: 1px solid var(--border); }
+.ac-stat-sub { grid-column: 1 / -1; margin-top: -2px; padding: 0 0 6px; font-size: 11.5px; color: var(--text-muted); line-height: 1.4; border-bottom: 1px solid var(--border); }
+.ac-stat:has(.ac-stat-sub) > .ac-stat-label, .ac-stat:has(.ac-stat-sub) > b { border-bottom: 0; }
+.ac-stat:first-child > .ac-stat-label { grid-column: 1 / -1; order: 0; padding: 0; border: 0; font-size: 12px; color: var(--text-muted); }
+.ac-stat:first-child > b { grid-column: 1 / -1; padding: 0 0 10px; font-size: 34px; text-align: start; letter-spacing: -.01em; border-bottom: 2px solid var(--accent); margin-bottom: 2px; }
 .ac-donut-wrap { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 20px; }
 .ac-donut { width: 150px; height: 150px; flex-shrink: 0; }
 .ac-donut-hole { fill: none; stroke: var(--border); stroke-width: 6; }
@@ -2098,6 +2105,8 @@ h1, h2, h3, h4, p, span, div {
 .ac-col-n { font-size: 13px; font-weight: 800; color: var(--text-primary); white-space: nowrap; }
 .ac-col-bar { display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; height: 120px; margin: 3px 0 4px; border-bottom: 1px solid var(--border); }
 .ac-col-bar > span { display: block; min-height: 3px; }
+/* Queue L1: in a wide tile a stacked column keeps a bar's width, not the whole column's. */
+.ac-col-bar:not(.ac-pair) > span { width: 100%; max-width: 64px; margin-inline: auto; }
 .ac-col-l { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
 /* Queue A7a: money charts — a second assumed series in teal, a loss in red, two columns side by side per quarter. */
 .ac-hatch-2 {
@@ -2115,9 +2124,11 @@ h1, h2, h3, h4, p, span, div {
 /* Queue A3: first-screen headline strip (one number per top question) + R1's opened window list. */
 .ac-headline { margin: 0 0 6px; }
 .ac-headline-h { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-.ac-headline-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 140px), 1fr)); gap: 10px; }
-.ac-tile { display: flex; flex-direction: column; gap: 4px; min-width: 0; min-height: 112px; padding: 12px 14px; text-align: start; font: inherit; color: inherit;
-  background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); cursor: pointer; }
+/* Queue L1: one KPI band (dividers between figures), not eight separate tall boxes. */
+.ac-headline-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 150px), 1fr)); gap: 0;
+  background: var(--surface); border: 1px solid var(--border); border-top: 3px solid var(--accent); overflow: hidden; }
+.ac-tile { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding: 12px 16px; text-align: start; font: inherit; color: inherit;
+  background: none; border: 0; border-inline-start: 1px solid var(--border); margin-inline-start: -1px; cursor: pointer; }
 .ac-tile:hover { background: var(--surface-2); }
 .ac-tile:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .ac-tile-label { font-size: 12.5px; font-weight: 700; color: var(--text-secondary); }
@@ -2125,10 +2136,10 @@ h1, h2, h3, h4, p, span, div {
 .ac-tile-unit { font-size: 12.5px; font-weight: 700; letter-spacing: 0; color: var(--text-secondary); }
 .ac-tile-warn .ac-tile-unit { color: inherit; }
 @media (max-width: 760px) { .ac-tile-n { white-space: normal; font-size: 26px; } }
-.ac-tile-warn { border-top-color: var(--bdc-lo); }
 .ac-tile-warn .ac-tile-n { color: var(--bdc-lo); }
+@media (max-width: 760px) { .ac-tile { border-bottom: 1px solid var(--border); margin-bottom: -1px; } }
 .ac-tile-sub { font-size: 11.5px; line-height: 1.4; color: var(--text-muted); overflow-wrap: anywhere; }
-.ac-tile-wait { background: var(--surface-2, var(--surface)); border-style: dashed; border-top: 3px dashed var(--text-muted); }
+.ac-tile-wait { background: var(--surface-2, var(--surface)); }
 .ac-tile-wait-tag { display: inline-flex; align-items: center; gap: 5px; margin: 6px 0 2px; font-size: 12.5px; font-weight: 800; color: var(--text-secondary); }
 .ac-sublist { margin: 6px 0 0; padding-inline-start: 10px; border-inline-start: 2px solid var(--border); }
 .ac-sublist .ac-subrow { grid-template-columns: minmax(0, 1fr); }
