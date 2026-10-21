@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { millions } from '../../lib/bdControl';
 import {
@@ -19,18 +19,7 @@ import type { ChartCtx } from './ProjectCharts';
 // lib/analysisCenter.ts (agreed with Tariq, 20 Oct 2026) — hatched, marked "≈",
 // the rules spelled out under each chart.
 
-const FIRST = 10;
 const pct = (x: number) => Math.round(x * 100);
-
-function ShowMore({ total, all, onToggle, attr }: { total: number; all: boolean; onToggle: () => void; attr: string }) {
-  const { t } = useTranslation();
-  if (total <= FIRST) return null;
-  return (
-    <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={onToggle} data-ac-more={attr}>
-      {all ? t('Show fewer') : t('Show all {{count}}', { count: total })}
-    </button>
-  );
-}
 
 /** The bid register's loading / error sentence, or null once the bids are in. */
 function useBidState(bids: ChartCtx['bids']) {
@@ -236,8 +225,8 @@ function useStepName() {
   };
 }
 
-/** O1 — staff per competency level, top first. */
-export function O1Levels({ data, today }: ChartCtx) {
+/** O1 — staff per competency level, top first: the first 5 levels, then "Show all" on the Pricing tab. */
+export function O1Levels({ data, today, onPricing }: ChartCtx) {
   const { t, F } = useBdWords(data);
   const v = useMemo(() => staffByLevel(data, today), [data, today]);
   const rules = useLevelRules();
@@ -251,7 +240,7 @@ export function O1Levels({ data, today }: ChartCtx) {
         <span>{t('Levels')}<b data-ac-fig="levels">{F.number(v.rows.length)}</b></span>
       </div>
       <div className="bdc-list">
-        {v.rows.map(r => (
+        {v.rows.slice(0, TILE_FIRST).map(r => (
           <div key={r.key} className="bdc-row" data-ac-row="levelStaff" data-ac-key={r.key}>
             <span className="bdc-name"><span>{stepName(r, n => F.number(n))}</span></span>
             <HatchBar value={r.staff} max={max} />
@@ -259,13 +248,14 @@ export function O1Levels({ data, today }: ChartCtx) {
           </div>
         ))}
       </div>
+      {onPricing && <ShowAll total={v.rows.length} onOpen={onPricing} attr="levelStaff" />}
       <AssumedKey rules={rules} />
     </>
   );
 }
 
-/** O3 — what one person at each level is worth in a year. */
-export function O3PersonValue({ data, today }: ChartCtx) {
+/** O3 — what one person at each level is worth in a year (staff and rate on hover): the first 5 levels, then "Show all" on the Pricing tab. */
+export function O3PersonValue({ data, today, onPricing }: ChartCtx) {
   const { t, F, egpM } = useBdWords(data);
   const v = useMemo(() => valuePerPerson(data, today), [data, today]);
   const rules = useLevelRules();
@@ -278,17 +268,17 @@ export function O3PersonValue({ data, today }: ChartCtx) {
         <span>{t('All staff, one year fully billed')}<b data-ac-fig="total">≈ {egpM(v.totalEgp)}</b></span>
       </div>
       <div className="bdc-list">
-        {v.rows.map(r => (
-          <div key={r.key} className="bdc-row" data-ac-row="personValue" data-ac-key={r.key}>
-            <span className="bdc-name"><span>{stepName(r, n => F.number(n))}</span>
-              <span className="bdc-sub ac-wrap">{t('≈ {{n}} staff · day rate {{rate}}', { n: F.number(r.staff), rate: F.number(r.rate as number, { maximumFractionDigits: 0 }) })}</span>
-            </span>
+        {v.rows.slice(0, TILE_FIRST).map(r => (
+          <div key={r.key} className="bdc-row" data-ac-row="personValue" data-ac-key={r.key}
+            title={t('≈ {{n}} staff · day rate {{rate}}', { n: F.number(r.staff), rate: F.number(r.rate as number, { maximumFractionDigits: 0 }) })}>
+            <span className="bdc-name"><span>{stepName(r, n => F.number(n))}</span></span>
             <HatchBar value={r.yearEgp} max={max} />
             <span className="bdc-num" data-bdc-value>≈ {egpM(r.yearEgp)}</span>
           </div>
         ))}
       </div>
-      <p className="bdc-foot" data-ac-foot="names">{t('Names for the CEO only, once HR sends the levels.')}</p>
+      {onPricing && <ShowAll total={v.rows.length} onOpen={onPricing} attr="personValue" />}
+      <TileFoot attr="names">{t('Names for the CEO only, once HR sends the levels.')}</TileFoot>
       <AssumedKey rules={[...rules, t('a person’s yearly value = the median day rate at the level × {{days}} billable days', { days: F.number(WORK_DAYS_PER_PERSON) })]} />
     </>
   );
@@ -320,15 +310,14 @@ function useUnderRule() {
     { pct: pct(UNDER_PLACED_SHARE) });
 }
 
-/** O5 — income lost to under-placement per client project, last 12 months. */
-export function O5Under({ data, today, onClient }: ChartCtx) {
+/** O5 — income lost to under-placement per client project, last 12 months: the top 5, then "Show all" on the Contracts tab. */
+export function O5Under({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM } = useBdWords(data);
   const v = useMemo(() => underPlacement(data, today), [data, today]);
   const rules = useStaffRules(false);
   const under = useUnderRule();
-  const [all, setAll] = useState(false);
   const max = Math.max(1e-9, ...v.rows.map(r => r.lostEgp));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="O5">
@@ -338,16 +327,15 @@ export function O5Under({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty">{t('No project bills anything in the last 12 months.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="under" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap">{t('≈ {{days}} man-days · grade step {{step}}', { days: F.number(r.manDays, { maximumFractionDigits: 0 }), step: `${r.stepAssumed ? '≈ ' : ''}${F.number(r.step, { maximumFractionDigits: 0 })}` })}</span>
-                </span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="under" data-ac-key={r.client}
+                title={t('≈ {{days}} man-days · grade step {{step}}', { days: F.number(r.manDays, { maximumFractionDigits: 0 }), step: `${r.stepAssumed ? '≈ ' : ''}${F.number(r.step, { maximumFractionDigits: 0 })}` })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.lostEgp} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {egpM(r.lostEgp)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="under" />
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="under" />
       <AssumedKey rules={[...rules, under]} />
     </>
   );
@@ -382,7 +370,7 @@ export function O6TurnedDown({ data, today, bids }: ChartCtx) {
             <ul className="bdc-legend" aria-hidden="true"><li><span className="bdc-key ac-hatch-lo" />{t('Work turned down')}</li><li>{t('Figures in m EGP')}</li></ul>
             <QuarterStack data={data} rows={v.rows.map(r => ({ quarter: r.quarter, parts: [{ v: r.egp, cls: 'ac-hatch ac-hatch-lo' }], approx: true }))} label={t('Value of work turned down per quarter')} attr="turnedDown" />
           </>}
-      {v.noValue > 0 && <p className="bdc-foot" data-ac-foot="noValue">{t('Bids with no value, or in a currency other than EGP or USD (counted, not added): {{n}}', { n: F.number(v.noValue) })}</p>}
+      {v.noValue > 0 && <TileFoot attr="noValue">{t('Bids with no value, or in a currency other than EGP or USD (counted, not added): {{n}}', { n: F.number(v.noValue) })}</TileFoot>}
       <AssumedKey rules={rules} />
     </>
   );
@@ -411,7 +399,7 @@ export function O7Total({ data, today, bids }: ChartCtx) {
       <QuarterStack data={data} attr="oppCost" label={t('Opportunity cost per quarter')}
         rows={v.map(x => ({ quarter: x.quarter, approx: true, parts: [
           { v: x.benchEgp, cls: 'ac-hatch' }, { v: x.underEgp, cls: 'ac-hatch ac-hatch-2' }, { v: x.turnedEgp ?? 0, cls: 'ac-hatch ac-hatch-lo' }] }))} />
-      {!list && <p className="bdc-foot" data-ac-foot="bids">{bids === 'error' ? t('The bid register could not be read. Reload the page.') : t('Reading the bid register…')}</p>}
+      {!list && <TileFoot attr="bids">{bids === 'error' ? t('The bid register could not be read. Reload the page.') : t('Reading the bid register…')}</TileFoot>}
       <AssumedKey rules={[money.billing,
         t('unbilled days: the bench ({{pct}}%) at the day rates of the staff placed', { pct: F.number(pct(ASSUMED_BENCH_SHARE)) }), under, ...turned]} />
     </>

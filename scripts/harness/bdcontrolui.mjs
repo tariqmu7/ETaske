@@ -393,6 +393,8 @@ check('a "part" chart says what was requested and from whom (P3)', (await text('
 const acStats = () => evalJS(`[...document.querySelectorAll('[data-ac-q="P1"] [data-ac-stat]')].map(e => e.dataset.acStat + '=' + window.__txt(e.querySelector('[data-ac-value]'))).join(',')`);
 check('P1 one number per tile: projects 5, CSA 2, TSA 2, O&M 1, amendments 0', (await acStats()) === 'projects=5,type:CSA=2,type:TSA=2,type:O&M=1,amendments=0', await acStats());
 const acRows = (r, sel = '[data-bdc-value]') => evalJS(`[...document.querySelectorAll('[data-ac-row="${r}"]')].map(e => e.dataset.acKey + '=' + window.__txt(e.querySelector('${sel}'))).join(',')`);
+// queue B2c: a row's second line is its hover note (title)
+const acTitles = r => evalJS(`[...document.querySelectorAll('[data-ac-row="${r}"]')].map(e => e.dataset.acKey + '=' + e.title).join(',')`);
 check('P2 status from today: running 2, ending ≤90 d 1, past end 1, no date 1', (await acRows('status')) === 'running=2,endingSoon=1,pastEnd=1,noDate=1', await acRows('status'));
 check('P3 donut: 3 slices CSA / TSA / O&M, centre total 5, legend 40% / 40% / 20%', (await evalJS(`[...document.querySelectorAll('[data-ac-slice]')].map(e => e.dataset.acSlice).join(',')`)) === 'CSA,TSA,O&M'
   && (await text('[data-ac-q="P3"] .ac-donut-n')) === '5' && (await texts('[data-ac-q="P3"] .ac-legend-pct')) === '40%|40%|20%', await texts('[data-ac-q="P3"] .ac-legend-pct'));
@@ -537,7 +539,7 @@ check('R1 windows from today: ≤30 d 0 · 31–90 d 1 · 91–180 d 1; 1 line w
   && (await text('[data-ac-q="R1"] [data-ac-foot="nodate"]')) === 'No end date on file: 1', await acRows('soon'));
 await click('[data-ac-row="soon"][data-ac-key="d90"]');
 check('R1: a bar opens its list (BETA CSA, 45 days left)', (await evalJS(`[...document.querySelectorAll('[data-ac-row="soonLine"]')].map(e => e.dataset.acKey).join(',')`)) === 'BETA_2_CSA'
-  && (await text('[data-ac-row="soonLine"]')).includes('days remaining: 45') && (await has('[data-ac-row="soon"][data-ac-key="d90"][aria-expanded="true"]')), await text('[data-ac-list]'));
+  && (await evalJS(`document.querySelector('[data-ac-row="soonLine"]').title`)).includes('days remaining: 45') &&(await has('[data-ac-row="soon"][data-ac-key="d90"][aria-expanded="true"]')), await text('[data-ac-list]'));
 await click('[data-ac-row="soon"][data-ac-key="d90"]');
 check('R1: clicking the bar again closes it', !(await has('[data-ac-list]')));
 check('R2 past end: BETA TSA 10 days; foot counts the 1 supplier still In Progress past its end (On Hold one = ended)',
@@ -605,7 +607,8 @@ check('an H3 client row opens that client’s page', (await text('[data-bdc-tab=
 await click('[data-bd-tab="overview"]');
 await waitFor(q('[data-ac="board"]'), 'board again');
 check('O2 per level, highest first: Level 10 ≈9,500 EGP (7,000–12,000, 5 clients) · Level 6 ≈4,800; both hatched',
-  (await acRows('level')) === '10=≈ 9,500 EGP,6=≈ 4,800 EGP' && (await text('[data-ac-row="level"][data-ac-key="10"] .bdc-name')) === 'Level 10 · GMLowest 7,000 · highest 12,000 · clients: 5'
+  (await acRows('level')) === '10=≈ 9,500 EGP,6=≈ 4,800 EGP' && (await text('[data-ac-row="level"][data-ac-key="10"] .bdc-name')) === 'Level 10 · GM'
+  && (await evalJS(`document.querySelector('[data-ac-row="level"][data-ac-key="10"]').title`)) === 'Lowest 7,000 · highest 12,000 · clients: 5'
   && (await evalJS(`document.querySelectorAll('[data-ac-q="O2"] [data-ac-assumed-seg]').length`)) === 2, `${await acRows('level')} | ${await text('[data-ac-row="level"][data-ac-key="10"] .bdc-name')}`);
 check('O2: a grade with no level named apart, the matching rule stated, requested from HR + BD',
   (await text('[data-ac-q="O2"] [data-ac-foot="noLevel"]')) === 'Grades with no level on the rate sheet: Operator'
@@ -613,7 +616,7 @@ check('O2: a grade with no level named apart, the matching rule stated, requeste
   && (await text('[data-ac-q="O2"] [data-ac-still]')) === 'Requested from HR, BD: Each grade matched to a competency level', await text('[data-ac-q="O2"] [data-ac-still]'));
 check('G1 service list ≈3 (CSA, TSA, O&M — most held first); GAMMA could add 2, ALPHA and BETA 1 each',
   (await acRows('serviceGap')) === 'GAMMA=≈ 2,ALPHA=≈ 1,BETA=≈ 1' && (await texts('[data-ac-q="G1"] [data-ac-fig]')) === '≈ 3|3'
-  && (await text('[data-ac-row="serviceGap"][data-ac-key="GAMMA"] [data-ac-could]')) === 'Could add: CSA, TSA', `${await acRows('serviceGap')} | ${await texts('[data-ac-q="G1"] [data-ac-fig]')}`);
+  && (await evalJS(`document.querySelector('[data-ac-row="serviceGap"][data-ac-key="GAMMA"]').title.split('\\n')[0]`)) === 'Could add: CSA, TSA', `${await acRows('serviceGap')} | ${await texts('[data-ac-q="G1"] [data-ac-fig]')}`);
 check('G1: hatched, rule names the list, requested from BD', (await evalJS(`document.querySelectorAll('[data-ac-q="G1"] [data-ac-assumed-seg]').length`)) === 3
   && (await text('[data-ac-q="G1"] [data-ac-assumed]')).endsWith('our service list = the contract forms our clients hold today (CSA, TSA, O&M)')
   && (await text('[data-ac-q="G1"] [data-ac-still]')) === 'Requested from BD: Services list per client', await text('[data-ac-q="G1"] [data-ac-assumed]'));
@@ -825,8 +828,8 @@ check('G3 on the page: GAMMA (avg 7,150) then ALPHA, BETA', (await evalJS(`[...d
   && (await text('[data-ac-row="income"][data-ac-key="GAMMA"] [data-bdc-value]')) === '≈ 7,150 EGP', await acRows('income'));
 check('R4 on the page: BETA first with its four signs (S/2 is tied to BETA and ends first); ALPHA supplier, GAMMA loss',
   (await evalJS(`document.querySelector('[data-ac-row="risk"]')?.dataset.acKey`)) === 'BETA'
-  && (await text('[data-ac-row="risk"][data-ac-key="BETA"] [data-ac-signs]')) === 'Past its end date, Ending within 90 days, Supplier contract ends first, End date moved later'
-  && (await acRows('risk', '[data-ac-signs]')).endsWith('ALPHA=Supplier contract ends first,GAMMA=Losing money (assumed)'), await acRows('risk', '[data-ac-signs]'));
+  && (await evalJS(`document.querySelector('[data-ac-row="risk"][data-ac-key="BETA"][data-ac-signs]').title`)) === 'Past its end date, Ending within 90 days, Supplier contract ends first, End date moved later'
+  && (await acTitles('risk')).endsWith('ALPHA=Supplier contract ends first,GAMMA=Losing money (assumed)'), await acTitles('risk'));
 check('H2 one number + all staff; H4 legend + per-grade cost; H1 rule names the 220 days',
   (await text('[data-ac-q="H2"] [data-ac-fig="bench"]')).startsWith('≈ ') && (await has('[data-ac-q="H4"] [data-ac-row="gradeCost"]'))
   && (await text('[data-ac-q="H1"] [data-ac-assumed]')).includes('÷ 220 working days a person'), await text('[data-ac-q="H1"] [data-ac-assumed]'));
@@ -841,7 +844,7 @@ await sleep(300);
 check('no tall empty space between charts with People / Renewals / Growth filled (desktop)', (await holes()) === '', await holes());
 await evalJS(`window.__setLang('ar')`); await sleep(250);
 check('Arabic: H1 figure label, an R4 sign, a G2 stage', (await text('[data-ac-q="H1"] [data-ac-figs] span')).startsWith('العاملون في المشروعات')
-  && (await text('[data-ac-row="risk"][data-ac-key="BETA"] [data-ac-signs]')).startsWith('تجاوزت تاريخ انتهائها')
+  && (await evalJS(`document.querySelector('[data-ac-row="risk"][data-ac-key="BETA"][data-ac-signs]').title`)).startsWith('تجاوزت تاريخ انتهائها')
   && (await text('[data-ac-row="stage"][data-ac-key="Submitted"] .bdc-name > span')) === 'مُقدَّم', await text('[data-ac-row="risk"][data-ac-key="BETA"] [data-ac-signs]'));
 await shot('a7b-ar');
 await evalJS(`window.__setLang('en')`); await sleep(250);
@@ -1015,12 +1018,12 @@ check('no loadedBy -> "Loaded <when>" alone', /^Loaded .+/.test(await text('[dat
 check('both stamped rows are after a 39-day-old load -> 2 edits', (await text('[data-bd="edits"]')) === 'Records edited in eTaske since the last load: 2', await text('[data-bd="edits"]'));
 await shot('2-stale');
 
-console.log('\n[6] many clients (queue B2a/B2b): top 5 in the tile, "Show all" opens the browse tab; every Projects, Money, Changes and People chart fits its tile');
+console.log('\n[6] many clients (queue B2a/B2b/B2c): top 5 in the tile, "Show all" opens the browse tab; every chart in all 8 groups fits its tile');
 await evalJS(`(() => { for (let i = 1; i <= 11; i++) {
   const c = 'X' + String(i).padStart(2, '0');
   __seed('bdControl/clientContracts/rows', 'X' + i + '_CSA', { client: c, contractType: 'CSA', ceilingEgp: i * 1e6, expiryDate: window.__iso(500),
     amendment: 'Amend. ' + i, originalValueEgp: i * 8e5, originalExpiryDate: window.__iso(500 - 30 * i) });
-  if (i <= 6) __seed('bdControl/supplierContracts/rows', 'XS-' + i, { contractNo: 'XS/' + i, status: 'In Progress', currentEnd: window.__iso(200), currentValueEgp: i * 1e5, client: c, costType: 'Client project', originalValueEgp: i * 1e5 });
+  if (i <= 6) __seed('bdControl/supplierContracts/rows', 'XS-' + i, { contractNo: 'XS/' + i, status: 'In Progress', currentEnd: window.__iso(200), currentValueEgp: i * 1e5, client: c, costType: 'Client project', originalValueEgp: i * 1e5, contractor: 'Firm X' + i });
 } __emit(); })()`);
 await sleep(200);
 const nRows = k => evalJS(`document.querySelectorAll('[data-ac-row="${k}"]').length`);
@@ -1051,10 +1054,27 @@ await click('[data-ac-jump="people"]'); await sleep(100);
 await click('[data-ac-more="staff"]');
 check('H1 "Show all" opens the Contracts tab on every line', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:all"][aria-pressed="true"]')));
 await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+// queue B2c: Renewals, Suppliers, Growth + Opportunity cost lists
+const lists3 = ['pastEnd', 'supplierFirst', 'risk', 'spend', 'supplierGrowth', 'reliance', 'serviceGap', 'income', 'noNewWork', 'level', 'levelStaff', 'personValue', 'under'];
+const list3Info = async () => (await Promise.all(lists3.map(async k => `${k}=${await nRows(k)}/${await text(`[data-ac-more="${k}"]`)}`))).join(',');
+const full3 = ['supplierFirst', 'risk', 'spend', 'serviceGap', 'under'];
+check('R2–R4, S1–S3, G1, G3, G4, O1–O3, O5 show at most 5 rows (S3 5 + "All others"); R3, R4, S1, G1, O5 (6+ rows) = top 5 + "Show all N"',
+  (await Promise.all(lists3.map(async k => (await nRows(k)) <= (k === 'reliance' ? 6 : 5)))).every(Boolean)
+  && (await Promise.all(full3.map(async k => (await nRows(k)) === 5 && /^Show all \d+$/.test(await text(`[data-ac-more="${k}"]`))))).every(Boolean), await list3Info());
+check('no "Show fewer" toggle left on the board', !(await evalJS(`[...document.querySelectorAll('[data-ac-more]')].some(e => /fewer/i.test(e.textContent))`)));
+await click('[data-ac-jump="renewals"]'); await sleep(100);
+await click('[data-ac-more="risk"]');
+check('R4 "Show all" opens the Contracts tab on every line', (await has('[data-bd-tab="contracts"][aria-selected="true"]')) && (await has('[data-bdc-chip="contracts:all"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
+await click('[data-ac-jump="renewals"]'); await sleep(100);
+await click('[data-ac-more="supplierFirst"]');
+check('R3 "Show all" opens the Suppliers tab on the live contracts', (await has('[data-bd-tab="suppliers"][aria-selected="true"]')) && (await has('[data-bdc-chip="supfilter:live"][aria-pressed="true"]')));
+await click('[data-bd-tab="overview"]'); await waitFor(q('[data-ac="board"]'), 'board again');
 const spills = async g => { await click(`[data-ac-jump="${g}"]`); await sleep(150);
   return evalJS(`[...document.querySelectorAll('[data-ac-group="${g}"] [data-ac-q]')].map(c => { const b = c.querySelector('.ac-body');
     const dy = b.scrollHeight - b.clientHeight, dx = b.scrollWidth - b.clientWidth; return dy > 1 || dx > 1 ? c.dataset.acQ + ':' + dy + '/' + dx : ''; }).filter(Boolean).join(',')`); };
-for (const g of ['projects', 'money', 'amendments', 'people']) {
+const GROUPS = ['projects', 'money', 'amendments', 'people', 'renewals', 'suppliers', 'growth', 'opportunity'];
+for (const g of GROUPS) {
   const s = await spills(g);
   check(`every ${g} chart fits its 330 px tile with no scrolling inside (desktop)`, s === '', s);
   check(`${g}: side lines (left out, no date…) sit behind ⓘ, none under the charts`, (await evalJS(`document.querySelectorAll('[data-ac-group="${g}"] .ac-body .bdc-foot').length`)) === 0
@@ -1062,10 +1082,10 @@ for (const g of ['projects', 'money', 'amendments', 'people']) {
   if (SHOT) await shot(`b2-${g}`);
 }
 await evalJS(`window.__setLang('ar')`); await sleep(250);
-for (const g of ['projects', 'money', 'amendments', 'people']) {
+for (const g of GROUPS) {
   const s = await spills(g);
   check(`Arabic: every ${g} chart fits its tile too`, s === '', s);
-  if (SHOT && (g === 'money' || g === 'people')) await shot(`b2-ar-${g}`);
+  if (SHOT && (g === 'money' || g === 'people' || g === 'opportunity')) await shot(`b2-ar-${g}`);
 }
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await click('[data-ac-jump="projects"]');

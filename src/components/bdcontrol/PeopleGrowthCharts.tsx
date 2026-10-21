@@ -10,18 +10,6 @@ import type { ChartCtx } from './ProjectCharts';
 // (O2). Same rules as A2/A3: figures from the live rows as of today; an assumed
 // figure is hatched and marked "≈", the key under the chart states the rule.
 
-const FIRST = 10;
-
-function ShowMore({ total, all, onToggle, attr }: { total: number; all: boolean; onToggle: () => void; attr: string }) {
-  const { t } = useTranslation();
-  if (total <= FIRST) return null;
-  return (
-    <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={onToggle} data-ac-more={attr}>
-      {all ? t('Show fewer') : t('Show all {{count}}', { count: total })}
-    </button>
-  );
-}
-
 /**
  * H3 — per grade, our clients' median day rate against the reference client:
  * the first 5 grades, then "Show all" on the Pricing tab. A grade opens its
@@ -94,8 +82,8 @@ export function H3RatesVsMarket({ data, onClient, onPricing }: ChartCtx) {
   );
 }
 
-/** O2 — the median day rate per competency level, with the lowest and highest. */
-export function O2LevelValue({ data }: ChartCtx) {
+/** O2 — the median day rate per competency level (lowest and highest on hover): the top 5, then "Show all" on the Pricing tab. */
+export function O2LevelValue({ data, onPricing }: ChartCtx) {
   const { t, F, sep } = useBdWords(data);
   const v = useMemo(() => levelValues(data.dayRates), [data.dayRates]);
   const max = Math.max(1, ...v.rows.map(r => r.median));
@@ -105,29 +93,28 @@ export function O2LevelValue({ data }: ChartCtx) {
   return (
     <>
       <div className="bdc-list">
-        {v.rows.map(r => (
-          <div key={r.level} className="bdc-row" data-ac-row="level" data-ac-key={r.level}>
-            <span className="bdc-name"><span>{t('Level {{n}}', { n: F.number(r.level) })} · {r.grades.map(gradeName).join(sep)}</span>
-              <span className="bdc-sub ac-wrap">{t('Lowest {{low}} · highest {{high}} · clients: {{n}}', { low: egpDay(r.low), high: egpDay(r.high), n: F.number(r.clients) })}</span>
-            </span>
+        {v.rows.slice(0, TILE_FIRST).map(r => (
+          <div key={r.level} className="bdc-row" data-ac-row="level" data-ac-key={r.level}
+            title={t('Lowest {{low}} · highest {{high}} · clients: {{n}}', { low: egpDay(r.low), high: egpDay(r.high), n: F.number(r.clients) })}>
+            <span className="bdc-name"><span>{t('Level {{n}}', { n: F.number(r.level) })} · {r.grades.map(gradeName).join(sep)}</span></span>
             <Bar real={r.assumed ? 0 : r.median} assumed={r.assumed ? r.median : 0} max={max} />
             <span className="bdc-num" data-bdc-value>{r.assumed ? '≈ ' : ''}{t('{{value}} EGP', { value: egpDay(r.median) })}</span>
           </div>
         ))}
       </div>
-      {v.noLevel.length > 0 && <p className="bdc-foot" data-ac-foot="noLevel">{t('Grades with no level on the rate sheet: {{list}}', { list: v.noLevel.map(gradeName).join(sep) })}</p>}
+      {onPricing && <ShowAll total={v.rows.length} onOpen={onPricing} attr="level" />}
+      {v.noLevel.length > 0 && <TileFoot attr="noLevel">{t('Grades with no level on the rate sheet: {{list}}', { list: v.noLevel.map(gradeName).join(sep) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) ? [t('each grade is taken as one competency level, by the level number on the day-rate sheet')] : []} />
     </>
   );
 }
 
-/** G1 — per client, the services on our list it does not buy from us yet. */
-export function G1ServiceGaps({ data, onClient }: ChartCtx) {
+/** G1 — per client, the services on our list it does not buy from us yet (named on hover): the top 5, then "Show all" on the Contracts tab. */
+export function G1ServiceGaps({ data, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, sep } = useBdWords(data);
   const v = useMemo(() => serviceGaps(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, v.list.length);
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   if (!v.list.length) return <p className="bdc-empty">{t('No project lines on file.')}</p>;
   return (
     <>
@@ -139,30 +126,27 @@ export function G1ServiceGaps({ data, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="serviceGaps">{t('Every client already buys every service on our list.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="serviceGap" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap" data-ac-could>{t('Could add: {{list}}', { list: r.couldAdd.map(x => t(x)).join(sep) })}</span>
-                  <span className="bdc-sub ac-wrap">{t('Buys today: {{list}}', { list: r.buys.length ? r.buys.map(x => t(x)).join(sep) : '—' })}</span>
-                </span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="serviceGap" data-ac-key={r.client}
+                title={`${t('Could add: {{list}}', { list: r.couldAdd.map(x => t(x)).join(sep) })}\n${t('Buys today: {{list}}', { list: r.buys.length ? r.buys.map(x => t(x)).join(sep) : '—' })}`}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <Bar real={0} assumed={r.couldAdd.length} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {F.number(r.couldAdd.length)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="serviceGap" />
-      {v.full > 0 && <p className="bdc-foot" data-ac-foot="full">{t('Clients who already buy every service on our list: {{n}}', { n: F.number(v.full) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="serviceGap" />
+      {v.full > 0 && <TileFoot attr="full">{t('Clients who already buy every service on our list: {{n}}', { n: F.number(v.full) })}</TileFoot>}
       <AssumedKey rules={[t('our service list = the contract forms our clients hold today ({{list}})', { list: v.list.map(x => t(x)).join(sep) })]} />
     </>
   );
 }
 
-/** G4 — clients whose newest work with us started 12+ months ago, longest first. */
-export function G4NoNewWork({ data, today, onClient }: ChartCtx) {
+/** G4 — clients whose newest work with us started 12+ months ago, longest first: the top 5, then "Show all" on the Contracts tab. */
+export function G4NoNewWork({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, sep, date } = useBdWords(data);
   const v = useMemo(() => lastNewWork(data, today), [data, today]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.months));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   return (
     <>
       <div className="bdc-figs" data-ac-figs="G4">
@@ -173,15 +157,16 @@ export function G4NoNewWork({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="noNewWork">{t('Every client with a start date on file gave us new work in the last {{n}} months.', { n: F.number(NO_NEW_WORK_MONTHS) })}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="noNewWork" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}<span className="bdc-sub ac-wrap">{t('Latest start: {{date}}', { date: date(r.start) })}</span></span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="noNewWork" data-ac-key={r.client}
+                title={t('Latest start: {{date}}', { date: date(r.start) })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <Bar real={r.assumed ? 0 : r.months} assumed={r.assumed ? r.months : 0} max={max} />
                 <span className="bdc-num" data-bdc-value>{r.assumed ? '≈ ' : ''}{t('{{n}} mo', { n: F.number(r.months) })}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="noNewWork" />
-      {v.noDate.length > 0 && <p className="bdc-foot" data-ac-foot="noDate">{t('No start date on file: {{list}}', { list: v.noDate.map(nameOf).join(sep) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="noNewWork" />
+      {v.noDate.length > 0 && <TileFoot attr="noDate">{t('No start date on file: {{list}}', { list: v.noDate.map(nameOf).join(sep) })}</TileFoot>}
       <AssumedKey rules={v.rows.some(r => r.assumed) ? [t('where a client’s contract has no start date, its newest work = the newest supplier contract we signed for that client')] : []} />
     </>
   );

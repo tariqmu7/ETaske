@@ -17,18 +17,6 @@ import type { ChartCtx } from './ProjectCharts';
 // G2's bids is ASSUMED by the rules in lib/analysisCenter.ts (agreed with Tariq,
 // 20 Oct 2026) — hatched, marked "≈", the rules spelled out under each chart.
 
-const FIRST = 10;
-
-function ShowMore({ total, all, onToggle, attr }: { total: number; all: boolean; onToggle: () => void; attr: string }) {
-  const { t } = useTranslation();
-  if (total <= FIRST) return null;
-  return (
-    <button type="button" className="btn btn-ghost btn-sm ac-more" onClick={onToggle} data-ac-more={attr}>
-      {all ? t('Show fewer') : t('Show all {{count}}', { count: total })}
-    </button>
-  );
-}
-
 /** The staff rule sentences shared by H1, H2, H5 and H6. */
 export function useStaffRules(anyRateAssumed: boolean) {
   const { t } = useTranslation();
@@ -190,13 +178,12 @@ const SIGN_LABEL: Record<RiskSign, string> = {
   extended: 'End date moved later', loss: 'Losing money (assumed)',
 };
 
-/** R4 — warning signs per client project, most first. */
-export function R4Risks({ data, today, onClient }: ChartCtx) {
+/** R4 — warning signs per client project, most first: the top 5 (signs on hover), then "Show all" on the Contracts tab. */
+export function R4Risks({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, sep } = useBdWords(data);
   const v = useMemo(() => risksByProject(data, today), [data, today]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.total));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   const label = (s: RiskSign) => t(SIGN_LABEL[s], { n: F.number(ENDING_SOON_DAYS) });
   return (
     <>
@@ -208,17 +195,16 @@ export function R4Risks({ data, today, onClient }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="risks">{t('No project shows a warning sign today.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="risk" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}
-                  <span className="bdc-sub ac-wrap" data-ac-signs>{r.signs.map(s => (s.n > 1 ? `${label(s.sign)} ×${F.number(s.n)}` : label(s.sign))).join(sep)}</span>
-                </span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="risk" data-ac-key={r.client}
+                title={r.signs.map(s => (s.n > 1 ? `${label(s.sign)} ×${F.number(s.n)}` : label(s.sign))).join(sep)} data-ac-signs>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.total} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {F.number(r.total)}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="risk" />
-      {v.clean > 0 && <p className="bdc-foot" data-ac-foot="clean">{t('Projects with no warning sign: {{n}}', { n: F.number(v.clean) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={() => onContracts('all')} attr="risk" />
+      {v.clean > 0 && <TileFoot attr="clean">{t('Projects with no warning sign: {{n}}', { n: F.number(v.clean) })}</TileFoot>}
       <AssumedKey rules={[t('a risk = a warning sign in the contract rows (past its end date, ending soon, a supplier contract ending first, an end date moved later, an assumed loss), until the risk log arrives')]} />
     </>
   );
@@ -226,8 +212,8 @@ export function R4Risks({ data, today, onClient }: ChartCtx) {
 
 const G_WINDOW_LABEL: Record<GuaranteeWindow, string> = { d30: 'Within 30 days', d90: 'In 31–90 days', d180: 'In 91–180 days', later: 'Later' };
 
-/** R5 — guarantees by time left to expiry; a window opens its lines. */
-export function R5Guarantees({ data, today, onClient }: ChartCtx) {
+/** R5 — guarantees by time left to expiry; a window opens its first 5 lines. */
+export function R5Guarantees({ data, today, onClient, onContracts }: ChartCtx) {
   const { t, F, nameOf, bidi, egpM, date } = useBdWords(data);
   const v = useMemo(() => guaranteesByExpiry(data, today), [data, today]);
   const [open, setOpen] = useState<GuaranteeWindow | null>(null);
@@ -244,29 +230,30 @@ export function R5Guarantees({ data, today, onClient }: ChartCtx) {
       <div className="bdc-list">
         {v.windows.map(x => {
           const inner = <>
-            <span className="bdc-name"><span>{t(G_WINDOW_LABEL[x.w])}</span><span className="bdc-sub">{t('Guarantees: {{n}}', { n: F.number(x.lines.length) })}</span></span>
+            <span className="bdc-name"><span>{t(G_WINDOW_LABEL[x.w])}</span></span>
             <HatchBar value={x.egp} max={max} lo={x.w === 'd30' && x.egp > 0} />
             <span className={`bdc-num${x.egp ? '' : ' bdc-zero'}`} data-bdc-value>≈ {egpM(x.egp)}</span>
           </>;
+          const count = t('Guarantees: {{n}}', { n: F.number(x.lines.length) });
           return x.lines.length > 0
             ? <button key={x.w} type="button" className="bdc-row bdc-click" aria-expanded={open === x.w} onClick={() => setOpen(o => (o === x.w ? null : x.w))}
-                data-ac-row="guarantee" data-ac-key={x.w}>{inner}</button>
-            : <div key={x.w} className="bdc-row" data-ac-row="guarantee" data-ac-key={x.w}>{inner}</div>;
+                title={count} data-ac-row="guarantee" data-ac-key={x.w}>{inner}</button>
+            : <div key={x.w} className="bdc-row" title={count} data-ac-row="guarantee" data-ac-key={x.w}>{inner}</div>;
         })}
       </div>
       {open && (
         <div className="bdc-list ac-sublist" data-ac-list={open}>
-          {shown.map(l => (
-            <button key={l.id} type="button" className="bdc-row bdc-click ac-subrow" onClick={() => onClient(l.client)} data-ac-row="guaranteeLine" data-ac-key={l.id}>
-              <span className="bdc-name">{bidi(nameOf(l.client))}
-                <span className="bdc-sub ac-wrap">{t(l.type)} · {t('≈ {{v}} · expires ≈ {{date}}', { v: egpM(l.valueEgp), date: date(l.expires) })}</span>
-              </span>
+          {shown.slice(0, TILE_FIRST).map(l => (
+            <button key={l.id} type="button" className="bdc-row bdc-click ac-subrow" onClick={() => onClient(l.client)} data-ac-row="guaranteeLine" data-ac-key={l.id}
+              title={`${t(l.type)} · ${t('≈ {{v}} · expires ≈ {{date}}', { v: egpM(l.valueEgp), date: date(l.expires) })}`}>
+              <span className="bdc-name">{bidi(nameOf(l.client))}</span>
             </button>
           ))}
         </div>
       )}
+      {open && <ShowAll total={shown.length} onOpen={() => onContracts('all')} attr="guaranteeLine" />}
       {(v.noCeiling > 0 || v.released > 0) && (
-        <p className="bdc-foot" data-ac-foot="guarantees">{t('No ceiling or end date on file: {{a}} · taken as released (expired): {{b}}', { a: F.number(v.noCeiling), b: F.number(v.released) })}</p>
+        <TileFoot attr="guarantees">{t('No ceiling or end date on file: {{a}} · taken as released (expired): {{b}}', { a: F.number(v.noCeiling), b: F.number(v.released) })}</TileFoot>
       )}
       <AssumedKey rules={[t('every contract line has a performance guarantee of {{pct}}% of its ceiling, expiring {{days}} days after its end date', { pct: F.number(ASSUMED_GUARANTEE_SHARE * 100), days: F.number(GUARANTEE_DAYS_AFTER_END) })]} />
     </>
@@ -292,16 +279,15 @@ export function G2Pipeline({ data, bids }: ChartCtx) {
         ? <p className="bdc-empty" data-ac-empty="pipeline">{t('No open bid in the bid register.')}</p>
         : <div className="bdc-list ac-funnel">
             {v.stages.map(s => (
-              <div key={s.stage} className="bdc-row" data-ac-row="stage" data-ac-key={s.stage}>
-                <span className="bdc-name"><span>{t(s.stage)}</span>
-                  <span className="bdc-sub ac-wrap">{t('Value {{v}} · weighted {{w}}', { v: egpM(s.valueEgp), w: `${s.chanceAssumed ? '≈ ' : ''}${egpM(s.weightedEgp)}` })}</span>
-                </span>
+              <div key={s.stage} className="bdc-row" data-ac-row="stage" data-ac-key={s.stage}
+                title={t('Value {{v}} · weighted {{w}}', { v: egpM(s.valueEgp), w: `${s.chanceAssumed ? '≈ ' : ''}${egpM(s.weightedEgp)}` })}>
+                <span className="bdc-name"><span>{t(s.stage)}</span></span>
                 <span className="bdc-track"><span className="bdc-fill bdc-fill-base" style={{ width: `${(s.count / max) * 100}%` }} /></span>
                 <span className={`bdc-num${s.count ? '' : ' bdc-zero'}`} data-bdc-value>{F.number(s.count)}</span>
               </div>
             ))}
           </div>}
-      {v.noValue > 0 && <p className="bdc-foot" data-ac-foot="noValue">{t('Bids with no value, or in a currency other than EGP or USD (counted, not added): {{n}}', { n: F.number(v.noValue) })}</p>}
+      {v.noValue > 0 && <TileFoot attr="noValue">{t('Bids with no value, or in a currency other than EGP or USD (counted, not added): {{n}}', { n: F.number(v.noValue) })}</TileFoot>}
       <AssumedKey rules={v.chanceAssumed ? [
         t('a bid with no win chance typed in takes its stage’s: {{list}}', { list: chance }),
         t('US dollars at {{rate}} EGP', { rate: F.number(ASSUMED_USD_EGP) }),
@@ -310,13 +296,12 @@ export function G2Pipeline({ data, bids }: ChartCtx) {
   );
 }
 
-/** G3 — income per staff-day, per client, highest first. */
-export function G3IncomePerDay({ data, onClient }: ChartCtx) {
+/** G3 — income per staff-day, per client, highest first: the top 5, then "Show all" on the Pricing tab. */
+export function G3IncomePerDay({ data, onClient, onContracts, onPricing }: ChartCtx) {
   const { t, F, nameOf, bidi, sep } = useBdWords(data);
   const v = useMemo(() => incomePerStaffDay(data), [data]);
-  const [all, setAll] = useState(false);
   const max = Math.max(1, ...v.rows.map(r => r.rate));
-  const shown = all ? v.rows : v.rows.slice(0, FIRST);
+  const shown = v.rows.slice(0, TILE_FIRST);
   const n0 = (x: number) => F.number(x, { maximumFractionDigits: 0 });
   return (
     <>
@@ -324,15 +309,16 @@ export function G3IncomePerDay({ data, onClient }: ChartCtx) {
         ? <p className="bdc-empty">{t('No day-rate sheet has been loaded.')}</p>
         : <div className="bdc-list">
             {shown.map(r => (
-              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="income" data-ac-key={r.client}>
-                <span className="bdc-name">{bidi(nameOf(r.client))}<span className="bdc-sub">{t('Average over {{n}} grades', { n: F.number(r.grades) })}</span></span>
+              <button key={r.client} type="button" className="bdc-row bdc-click" onClick={() => onClient(r.client)} data-ac-row="income" data-ac-key={r.client}
+                title={t('Average over {{n}} grades', { n: F.number(r.grades) })}>
+                <span className="bdc-name">{bidi(nameOf(r.client))}</span>
                 <HatchBar value={r.rate} max={max} />
                 <span className="bdc-num" data-bdc-value>≈ {t('{{value}} EGP', { value: n0(r.rate) })}</span>
               </button>
             ))}
           </div>}
-      <ShowMore total={v.rows.length} all={all} onToggle={() => setAll(x => !x)} attr="income" />
-      {v.noRate.length > 0 && <p className="bdc-foot" data-ac-foot="noRate">{t('No rates on the day-rate sheet: {{list}}', { list: v.noRate.map(nameOf).join(sep) })}</p>}
+      <ShowAll total={v.rows.length} onOpen={onPricing || (() => onContracts('all'))} attr="income" />
+      {v.noRate.length > 0 && <TileFoot attr="noRate">{t('No rates on the day-rate sheet: {{list}}', { list: v.noRate.map(nameOf).join(sep) })}</TileFoot>}
       <AssumedKey rules={[t('income per staff-day = the client’s average day rate over its grades on the rate sheet')]} />
     </>
   );
