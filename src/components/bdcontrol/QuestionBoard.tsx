@@ -45,7 +45,7 @@ const placeOf = (g: QGroup, id: string) => { const i = LAYOUT[g]?.findIndex(x =>
  * Analysis center Overview, laid out as a dashboard (queue B1, Tariq: "no text
  * unrelated to the charts", modelled on a Power BI report): the headline tiles
  * on top, then one tab per question group, each a grid of chart tiles sized
- * to their chart (LAYOUT). A tile carries only its question as title; how to read it, the rule
+ * to their chart (LAYOUT). A tile carries only its short title; the full question, how to read it, the rule
  * behind any assumed (hatched, ≈) figure and who the real data was requested
  * from sit behind the ⓘ button. Every group stays rendered (the inactive ones
  * `hidden`) so a tab keeps its state. Figures come from the live rows only.
@@ -108,7 +108,7 @@ function QuestionTile({ q, ctx, span }: { q: CeoQuestion; ctx: ChartCtx; span: n
     <section id={`ac-q-${q.id}`} className={`card ac-card${show === 'need' ? ' ac-need' : ''}${open ? ' is-info' : ''}${span >= 7 ? ' ac-wide' : ''}`}
       style={{ '--ac-span': span } as React.CSSProperties} data-ac-q={q.id} data-ac-show={show} data-ac-span={span}>
       <header className="ac-head">
-        <h3 className="ac-q" data-ac-title>{pick(q.q, ar)}</h3>
+        <h3 className="ac-q" title={pick(q.q, ar)} data-ac-title>{pick(q.title, ar)}</h3>
         <span className="ac-badge" aria-hidden="true" title={t('Hatched and ≈ = assumed')}>≈</span>
         <button type="button" className="ac-info-btn" aria-expanded={open} aria-controls={infoId} onClick={() => setOpen(o => !o)}
           aria-label={open ? t('Close') : t('How to read this chart')} title={open ? t('Close') : t('How to read this chart')} data-ac-info={q.id}>
@@ -130,6 +130,7 @@ function QuestionTile({ q, ctx, span }: { q: CeoQuestion; ctx: ChartCtx; span: n
       </div>
       <div id={infoId} className="ac-info" hidden={!open} data-ac-info-panel>
         <span className="ac-id">{q.id}</span>
+        <p className="ac-full-q" data-ac-question>{pick(q.q, ar)}</p>
         <p className="ac-note" data-ac-note>{pick(q.note, ar)}</p>
         <div ref={setSlot} />
         {show === 'chart' && q.data === 'part' && q.missing && (

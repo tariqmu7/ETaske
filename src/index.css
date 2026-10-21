@@ -2049,6 +2049,7 @@ h1, h2, h3, h4, p, span, div {
 .ac-info[hidden] { display: none; }
 .ac-id { display: inline-block; font-size: 11px; font-weight: 800; padding: 1px 6px; border: 1px solid var(--border); color: var(--text-muted); }
 .ac-note { font-size: 12.5px; line-height: 1.55; color: var(--text-secondary); margin: 8px 0 0; }
+.ac-full-q { font-size: 13px; font-weight: 600; line-height: 1.45; color: var(--text-primary); margin: 8px 0 0; }
 .ac-still { font-size: 12px; line-height: 1.5; color: var(--surface-warn-text); margin: 10px 0 0; }
 .ac-need { background: var(--surface-2, var(--surface)); border-style: dashed; }
 .ac-need .ac-q { color: var(--text-secondary); }

@@ -1,6 +1,6 @@
 // Analysis center (queue A1) — the CEO's questions. Every chart on the
-// Analysis center Overview answers one of these and is titled by it; the
-// fixed note under the title says how to read the figures (or, while the data
+// Analysis center Overview answers one of these and carries its short title
+// (the full question sits behind ⓘ); the fixed note says how to read the figures (or, while the data
 // is not in hand, what the chart will show). Source: BD's "CEO Questions"
 // workbook, Rev 1 of 20 Oct 2026 (50 questions in 8 groups) — keep the ids the
 // same as that workbook so BD and the page talk about the same question.
@@ -43,7 +43,9 @@ export interface CeoQuestion {
   id: string;
   group: QGroup;
   data: QData;
-  /** The chart title. */
+  /** The tile title: a few words (queue L3b3, Tariq: "short titles"). */
+  title: Bi;
+  /** The CEO's full question, shown behind ⓘ (and as the title's tooltip). */
   q: Bi;
   /** Fixed note under the title: how to read it, or "Will show: …" while the data is missing. */
   note: Bi;
@@ -52,8 +54,65 @@ export interface CeoQuestion {
   who?: QOwner[];
 }
 
+/**
+ * Short tile titles, Power BI style (queue L3b3): what the chart shows in a few
+ * words. The full question moves into the ⓘ panel.
+ */
+const TITLE: Record<string, Bi> = {
+  P1: { en: 'Totals at a glance', ar: 'إجماليات المشروعات' },
+  P2: { en: 'Projects by status', ar: 'المشروعات حسب الحالة' },
+  P3: { en: 'Projects by type', ar: 'المشروعات حسب النوع' },
+  P4: { en: 'Projects per client', ar: 'المشروعات لكل عميل' },
+  P5: { en: 'Projects by area', ar: 'المشروعات حسب القطاع' },
+  P6: { en: 'Biggest projects by value', ar: 'أكبر المشروعات قيمةً' },
+  P7: { en: 'Bids won and lost by quarter', ar: 'العطاءات الفائزة والخاسرة حسب ربع السنة' },
+  P8: { en: 'Staff by category', ar: 'الكوادر حسب الفئة' },
+  M1: { en: 'Contract value per client', ar: 'قيمة العقود لكل عميل' },
+  M2: { en: 'Due vs invoiced by quarter', ar: 'المستحق مقابل المفوتر حسب ربع السنة' },
+  M3: { en: 'Collected and owed', ar: 'المحصَّل والمستحق' },
+  M4: { en: 'Own staff cost per project', ar: 'تكلفة كوادرنا لكل مشروع' },
+  M5: { en: 'Subcontractor cost per client', ar: 'تكلفة مقاولي الباطن لكل عميل' },
+  M6: { en: 'Travel and transport cost', ar: 'تكلفة السفر والانتقالات' },
+  M7: { en: 'Allowances per project', ar: 'البدلات لكل مشروع' },
+  M8: { en: 'Total cost per project', ar: 'التكلفة الإجمالية لكل مشروع' },
+  M9: { en: 'Profit per project', ar: 'ربح كل مشروع' },
+  M10: { en: 'Contract value used', ar: 'المستهلك من قيمة العقود' },
+  M11: { en: 'Cash in and out by quarter', ar: 'المقبوضات والمدفوعات حسب ربع السنة' },
+  A1: { en: 'Amendments per project', ar: 'الملاحق لكل مشروع' },
+  A2: { en: 'Amendments by quarter', ar: 'الملاحق حسب ربع السنة' },
+  A3: { en: 'Value added by amendments', ar: 'القيمة المضافة بالملاحق' },
+  A4: { en: 'Months added by amendments', ar: 'الأشهر المضافة بالملاحق' },
+  A5: { en: 'Extended without a tender', ar: 'مدٌّ متكرر دون مناقصة' },
+  A6: { en: 'Work without signed paper', ar: 'العمل دون سند تعاقدي' },
+  H1: { en: 'Staff per project', ar: 'العاملون في كل مشروع' },
+  H2: { en: 'Staff on the bench', ar: 'الكوادر بلا مشروع' },
+  H3: { en: 'Day rates vs market', ar: 'الفئات اليومية مقابل السوق' },
+  H4: { en: 'Grade cost vs client rate', ar: 'تكلفة الدرجة مقابل فئة العميل' },
+  H5: { en: 'Key-person dependency', ar: 'الاعتماد على شخص واحد' },
+  H6: { en: 'Unfilled positions', ar: 'الوظائف الشاغرة' },
+  R1: { en: 'Contracts ending soon', ar: 'العقود الموشكة على الانتهاء' },
+  R2: { en: 'Past end date, still running', ar: 'عقود مستمرة بعد انتهاء مدتها' },
+  R3: { en: 'Supplier ends before client', ar: 'عقود موردين تنتهي قبل عقد العميل' },
+  R4: { en: 'Open risks per project', ar: 'المخاطر المفتوحة لكل مشروع' },
+  R5: { en: 'Guarantees expiring', ar: 'خطابات الضمان الموشكة على الانتهاء' },
+  S1: { en: 'Subcontractor spend by supplier', ar: 'الإنفاق على مقاولي الباطن' },
+  S2: { en: 'Supplier contract growth', ar: 'زيادة عقود الموردين' },
+  S3: { en: 'Supplier concentration', ar: 'تركّز الإنفاق على الموردين' },
+  G1: { en: 'Services to add', ar: 'خدمات يمكن إضافتها' },
+  G2: { en: 'Bid pipeline', ar: 'العطاءات المفتوحة' },
+  G3: { en: 'Income per staff-day', ar: 'الدخل لكل يوم عمل' },
+  G4: { en: 'No new work in 12 months', ar: 'عملاء بلا عمل جديد منذ 12 شهرًا' },
+  O1: { en: 'Staff by competency level', ar: 'الكوادر حسب مستوى الكفاءة' },
+  O2: { en: 'Day value per level', ar: 'القيمة اليومية لكل مستوى' },
+  O3: { en: 'Yearly value per person', ar: 'القيمة السنوية للفرد' },
+  O4: { en: 'Lost to unbilled days', ar: 'الدخل الضائع من أيام لم تُفوتَر' },
+  O5: { en: 'Lost to under-placement', ar: 'الدخل الضائع من التسكين دون المستوى' },
+  O6: { en: 'Work turned down', ar: 'الأعمال المرفوضة' },
+  O7: { en: 'Opportunity cost by quarter', ar: 'تكلفة الفرصة البديلة حسب ربع السنة' },
+};
+
 const Q = (id: string, group: QGroup, data: QData, q: Bi, note: Bi, missing?: Bi, who?: QOwner[]): CeoQuestion =>
-  ({ id, group, data, q, note, missing, who });
+  ({ id, group, data, title: TITLE[id], q, note, missing, who });
 
 export const CEO_QUESTIONS: CeoQuestion[] = [
   // 1 — Our projects today

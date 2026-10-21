@@ -364,14 +364,16 @@ const CQ = JSON.parse(await evalJS(`(() => { const C = window.__cq, A = window._
   return JSON.stringify({
     n: ids.length, unique: new Set(ids).size,
     perGroup: C.QUESTION_GROUPS.map(g => C.questionsIn(g).length),
-    complete: C.CEO_QUESTIONS.every(q => q.q.en && q.q.ar && q.note.en && q.note.ar && (q.data === 'have' || (q.missing && q.missing.en && q.missing.ar && q.who && q.who.length))),
-    noLatinComma: C.CEO_QUESTIONS.every(q => ![q.q.ar, q.note.ar, q.missing ? q.missing.ar : ''].some(s => /,|\\?/.test(s))),
+    complete: C.CEO_QUESTIONS.every(q => q.title && q.title.en && q.title.ar && q.q.en && q.q.ar && q.note.en && q.note.ar && (q.data === 'have' || (q.missing && q.missing.en && q.missing.ar && q.who && q.who.length))),
+    shortTitles: C.CEO_QUESTIONS.filter(q => q.title && (q.title.en.split(' ').length > 6 || q.title.ar.split(' ').length > 7)).map(q => q.id),
+    noLatinComma: C.CEO_QUESTIONS.every(q => ![q.title ? q.title.ar : '', q.q.ar, q.note.ar, q.missing ? q.missing.ar : ''].some(s => /,|\\?/.test(s))),
     am: ['Amend. 9', 'Amend.', 'مرسي السادات', null, 'ملحق 2'].map(v => A.amendmentCount(v)),
     st: [-1, 0, 90, 91, null].map(A.projectState),
   }); })()`));
 check('catalogue: 50 questions, ids unique, groups 8/11/6/6/5/3/4/7 like CEO Questions Rev 1', CQ.n === 50 && CQ.unique === 50 && J(CQ.perGroup) === J([8, 11, 6, 6, 5, 3, 4, 7]), J(CQ));
 check('catalogue: every question has EN + AR title and note; every part/missing one says what is missing (EN + AR) and who has it', CQ.complete);
 check('catalogue: Arabic text uses Arabic commas / question marks only', CQ.noLatinComma);
+check('catalogue (L3b3): every tile title is short — at most 6 words EN / 7 AR', CQ.shortTitles.length === 0, J(CQ.shortTitles));
 check('amendmentCount: "Amend. 9" = 9, bare "Amend." = 1 (unnumbered), a site name / blank = 0, Arabic «ملحق 2» = 2',
   J(CQ.am) === J([{ n: 9, numbered: true }, { n: 1, numbered: false }, { n: 0, numbered: false }, { n: 0, numbered: false }, { n: 2, numbered: true }]), J(CQ.am));
 check('projectState: past / today / 90 = ending soon, 91 = running, no date', J(CQ.st) === J(['pastEnd', 'endingSoon', 'endingSoon', 'running', 'noDate']), J(CQ.st));
@@ -383,8 +385,10 @@ check('no filler text (queue B1): no intro paragraph, no board summary line, no 
 check('group chips in order, all 8 groups (Suppliers shows from A3)', (await evalJS(`[...document.querySelectorAll('[data-ac-jump]')].map(e => e.dataset.acJump).join(',')`)) === 'projects,money,amendments,people,renewals,suppliers,growth,opportunity');
 check('group 1: all eight as charts, in question order (P5, P7, P8 since A7c)', (await evalJS(`[...document.querySelectorAll('[data-ac-group="projects"] [data-ac-q]')].map(e => e.dataset.acQ + ':' + e.dataset.acShow).join(',')`))
   === 'P1:chart,P2:chart,P3:chart,P4:chart,P5:chart,P6:chart,P7:chart,P8:chart');
-check('each card is titled by its question + carries its fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'How many projects are live, finishing soon, or closed?'
-  && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'));
+check('each card has a short title (L3b3); the full question is its tooltip and sits behind ⓘ with the fixed note', (await text('[data-ac-q="P2"] [data-ac-title]')) === 'Projects by status'
+  && (await evalJS(`document.querySelector('[data-ac-q="P2"] [data-ac-title]').title`)) === 'How many projects are live, finishing soon, or closed?'
+  && (await text('[data-ac-q="P2"] [data-ac-info-panel] [data-ac-question]')) === 'How many projects are live, finishing soon, or closed?'
+  && (await text('[data-ac-q="P2"] [data-ac-note]')).startsWith('Counted from today against each line’s end date'), await text('[data-ac-q="P2"] [data-ac-title]'));
 check('no grey "data needed" box left on the board', (await evalJS(`document.querySelectorAll('[data-ac-need], [data-ac-show="need"]').length`)) === 0
   , await evalJS(`document.querySelectorAll('[data-ac-need]').length`));
 check('a former grey box (P7) says what is still requested and from whom', (await text('[data-ac-q="P7"] [data-ac-still]')) === 'Requested from BD, Tenders: A decision date and value on every closed bid', await text('[data-ac-q="P7"] [data-ac-still]'));
@@ -575,7 +579,8 @@ await sleep(300);
 check('no tall empty space between charts with the new groups (desktop)', (await holes()) === '', await holes());
 await evalJS(`window.__setLang('ar')`); await sleep(250);
 check('Arabic: strip heading + tile label + an R3 rule in Arabic', (await text('.ac-headline-h')) === 'الموقف باختصار'
-  && (await text('[data-ac-tile="R2"] .ac-tile-label')) === 'تجاوزت تاريخ انتهائها' && (await text('[data-ac-q="R1"] [data-ac-title]')) === 'أي العقود تنتهي خلال 30 و90 و180 يومًا القادمة؟');
+  && (await text('[data-ac-tile="R2"] .ac-tile-label')) === 'تجاوزت تاريخ انتهائها' && (await text('[data-ac-q="R1"] [data-ac-title]')) === 'العقود الموشكة على الانتهاء'
+  && (await text('[data-ac-q="R1"] [data-ac-question]')) === 'أي العقود تنتهي خلال 30 و90 و180 يومًا القادمة؟');
 await shot('a3-ar');
 await evalJS(`window.__setLang('en')`); await sleep(250);
 await evalJS(`window.__seedAll(); __emit()`);
@@ -645,7 +650,7 @@ await waitFor(q('[data-ac="board"]'), 'board again');
 await sleep(300);
 check('no tall empty space between charts with People / Growth / Opportunity filled (desktop)', (await holes()) === '', await holes());
 await evalJS(`window.__setLang('ar')`); await sleep(250);
-check('Arabic: H3 title, an O2 level row, a G4 figure label', (await text('[data-ac-q="H3"] [data-ac-title]')) === 'كيف تقارن فئاتنا اليومية بالسوق لكل درجة وظيفية؟'
+check('Arabic: H3 title, an O2 level row, a G4 figure label', (await text('[data-ac-q="H3"] [data-ac-title]')) === 'الفئات اليومية مقابل السوق'
   && (await text('[data-ac-row="level"][data-ac-key="6"] .bdc-name > span')) === 'المستوى 6 · مهندس أول'
   && (await text('[data-ac-q="G4"] [data-ac-figs] span')).startsWith('بلا عمل جديد منذ 12 شهرًا'), await text('[data-ac-row="level"][data-ac-key="6"] .bdc-name > span'));
 await shot('a4-ar');
@@ -1335,7 +1340,8 @@ await waitFor(q('[data-ac="board"]'), 'board (ar)');
 check('page is RTL', (await evalJS(`document.documentElement.dir`)) === 'rtl');
 check('title «مركز التحليل»', (await text('h1')) === 'مركز التحليل');
 check('Arabic board: question title, fixed note, group name, "Requested from" line and the ⓘ label all in Arabic',
-  (await text('[data-ac-q="P4"] [data-ac-title]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
+  (await text('[data-ac-q="P4"] [data-ac-title]')) === 'المشروعات لكل عميل'
+  && (await text('[data-ac-q="P4"] [data-ac-question]')) === 'كم مشروعًا يسنده إلينا كل عميل؟'
   && (await text('[data-ac-q="P6"] [data-ac-note]')).startsWith('أكبر عشرة بنود وفق الحد الأقصى للعقد')
   && (await text('[data-ac-jump="opportunity"]')).startsWith('تكلفة الفرصة البديلة')
   && (await text('[data-ac-q="P7"] [data-ac-still]')).endsWith('تاريخ القرار وقيمة كل عطاء مغلق')
@@ -1347,7 +1353,7 @@ check('Arabic A7c: P5 area name, O7 legend, A6 figure label',
   && (await texts('[data-ac-q="O7"] .bdc-legend li')).startsWith('أيام عمل غير مفوترة|موضوعون دون مستواهم|أعمال مرفوضة')
   && (await text('[data-ac-q="A6"] [data-ac-figs] span')).startsWith('نعمل الآن دون سند'),
   `${await text('[data-ac-row="area"][data-ac-key="downstream"] .bdc-name > span')} | ${await texts('[data-ac-q="O7"] .bdc-legend li')}`);
-check('Arabic money chart (A7a): M9 title, figure label, the cost rule', (await text('[data-ac-q="M9"] [data-ac-title]')) === 'ما ربح كل مشروع، وأي المشروعات يحقق خسارة؟'
+check('Arabic money chart (A7a): M9 title, figure label, the cost rule', (await text('[data-ac-q="M9"] [data-ac-title]')) === 'ربح كل مشروع'
   && (await text('[data-ac-q="M9"] [data-ac-figs] span')).startsWith('الربح خلال آخر 12 شهرًا')
   && (await text('[data-ac-q="M9"] [data-ac-assumed]')).includes('تكلفتنا المباشرة = الفوترة ÷ 1.6875'), await text('[data-ac-q="M9"] [data-ac-assumed]'));
 check('Western digits + unit «مليون جنيه» in Arabic, like the rest of the app (ar-EG-u-nu-latn): M1 total 2,504.7',
