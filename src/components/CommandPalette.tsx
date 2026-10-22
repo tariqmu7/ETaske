@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { collection, getDocs } from 'firebase/firestore';
-import { Stethoscope, Gauge,
+import { Stethoscope,
   Search, CheckSquare, MailOpen, FolderKanban, CornerDownLeft,
   ArrowUp, ArrowDown, Home, BarChart3, Archive, Megaphone, Mail, Users, AlertCircle, Target, Building2, Hourglass, CalendarDays, Handshake,
   FolderOpen, Users2, Files, FileText,
@@ -12,7 +12,6 @@ import { getVisibleBids } from '../lib/bidReads';
 import { globalSearch } from '../utils';
 import { requestOpen } from '../lib/deepLink';
 import { canViewMedical } from '../lib/medicalAccess';
-import { canViewBdControl } from '../lib/bdControlAccess';
 import type { AppView } from '../App';
 import type { AppUser } from '../types';
 
@@ -99,7 +98,6 @@ export default function CommandPalette({ open, onClose, onNavigate, appUser }: P
     { kind: 'nav', id: 'calendar', label: t('Calendar'), alias: 'Calendar Deadlines Deadline calendar Tender deadlines Contract expiry Renewals Month', sub: t('Tender deadlines, contract ends and due dates by month'), icon: <CalendarDays className="w-4 h-4" /> },
     { kind: 'nav', id: 'opportunities', label: t('Opportunities'), alias: 'Opportunities', sub: t('Tenders, bids & deadlines'), icon: <Target className="w-4 h-4" /> },
     ...(canViewMedical(appUser) ? [{ kind: 'nav', id: 'medical-contracts', label: t('Medical contracts'), alias: 'Medical contracts Hospitals Pharmacies Labs Clinics العقود الطبية مستشفى صيدلية معمل', sub: t('Hospitals, pharmacies and labs by governorate'), icon: <Stethoscope className="w-4 h-4" /> } as Hit] : []),
-    ...(canViewBdControl(appUser) ? [{ kind: 'nav', id: 'bd-control', label: t('Analysis center'), alias: 'Analysis center BD control dashboard CEO questions charts contracts renewals ceilings suppliers AGIBA مركز التحليل لوحة متابعة تطوير الأعمال أسئلة الرئيس التنفيذي عقود تجديد موردين', sub: t('The CEO’s questions on our projects, answered in charts'), icon: <Gauge className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'duplicates', label: t('Duplicates'), alias: 'Duplicates Duplicate Twice Double entry Same tender Clash Conflict', sub: t('Records entered twice, and two people on one client'), icon: <Files className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'weekly-report', label: t('Weekly report'), alias: 'Weekly report Week Report Arabic report Department report Summary التقرير الأسبوعي تقرير', sub: t('The department’s week, written in Arabic'), icon: <FileText className="w-4 h-4" /> } as Hit] : []),
     ...(isManagerOrAdmin ? [{ kind: 'nav', id: 'bid-analytics', label: t('Bid Analytics'), alias: 'Bid Analytics', sub: t('Win rate & loss reasons'), icon: <BarChart3 className="w-4 h-4" /> } as Hit] : []),

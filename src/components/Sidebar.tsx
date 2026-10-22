@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Stethoscope, Gauge,
+import { Stethoscope,
   CheckSquare, Archive,
   LogOut, MailOpen, Users, Briefcase, BarChart3, Bell, CheckCircle2, AlertCircle, Megaphone,
   Download, BellOff, BellRing, Mail, Sun, Moon, FolderKanban, Home, Search, MoreHorizontal, Send, Target,
@@ -12,7 +12,6 @@ import { db } from '../lib/firebase';
 import { doc, updateDoc } from 'firebase/firestore';
 import { requestOpen } from '../lib/deepLink';
 import { canViewMedical } from '../lib/medicalAccess';
-import { canViewBdControl } from '../lib/bdControlAccess';
 import { usePWA } from '../hooks/usePWA';
 import { connectTelegram, disconnectTelegram } from '../lib/telegram';
 import { watchMyContact } from '../lib/userContact';
@@ -196,7 +195,6 @@ export default function TopNav({ appUser, activeView, onNavigate, notifications,
     // Queue M4 — only for people an admin switched on (lib/medicalAccess.ts), not by role.
     { id: 'medical-contracts', label: 'Medical contracts', icon: <Stethoscope className="w-4 h-4" />, show: canViewMedical(appUser) },
     // Queue E5 — contracts, renewals, ceilings and suppliers from BD's Excel files; managers + admin.
-    { id: 'bd-control', label: 'Analysis center', icon: <Gauge className="w-4 h-4" />, show: canViewBdControl(appUser) },
     // Badge counts bids at their submission deadline (7 days out or already
     // past), not the whole pipeline — the deadline is the part that can be
     // missed, and it now sits one level down, so the count rides the group too.
